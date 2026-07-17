@@ -1,0 +1,194 @@
+name: CI
+
+# Deterministic pre-merge gate: format, lint/typecheck, unit + integration
+# tests, and doctests — plus the iOS/Android companion tests, but only when
+# their code changes. Everything here is hermetic (no network, no devices): the
+# one live-network test (golem-email's Ethereal IMAP/SMTP) is `#[ignore]`d, and
+# the device-driven e2e TOML flows are a separate suite not run here.
+#
+# Shape: `classify` diffs the PR once and every downstream job is gated on what
+# actually changed, so a docs-only PR runs nothing heavy. The compile jobs fan
+# out in parallel; `gate` collates them into the single required status check
+# (see the "skipped-but-required" note on that job).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read # dorny/paths-filter reads the PR's changed-file list via the API
+
+concurrency:
+  # Supersede in-flight runs when a PR is force-pushed — the old result is moot.
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    # Bash + one API call only, no Rust → the cheapest tier is plenty. No
+    # checkout needed: on pull_request, paths-filter uses the GitHub API.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }} # Rust source / build inputs
+      data: ${{ steps.filter.outputs.data }} # non-.rs files embedded into the binary
+      ios: ${{ steps.filter.outputs.ios }}
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '**/*.rs'
+              - '**/Cargo.toml'
+              - 'Cargo.lock'
+              - 'rustfmt.toml'
+              - 'rust-toolchain.toml'
+              - '.config/nextest.toml'
+              - '.github/workflows/ci.yml'
+            # Data compiled into crates via include_str!/build.rs. Not .rs, so it
+            # never trips fmt/clippy, but a change here can break a runtime test —
+            # so it must still fire `cargo t`. `docs/actions-reference.md` is the
+            # odd one out: it's a doc file that a doc-consistency test reads, so it
+            # cannot ride the usual "docs-only = skip" path.
+            data:
+              - 'data/cards/**/*.json'
+              - 'data/geo/**/*.json'
+              - 'data/sentences/**/*.json'
+              - 'data/names.json'
+              - 'golem-driver/src/ios_display.toml'
+              - 'golem-driver/src/dom_traversal.js'
+              - 'golem-cli/templates/install-scripts/**/*.sh'
+              - 'docs/actions-reference.md'
+            ios:
+              - 'companions/ios/**'
+            android:
+              - 'companions/android/**'
+
+  fmt:
+    needs: classify
+    if: ${{ needs.classify.outputs.code == 'true' }}
+    # rustfmt only parses (no compile), but the runner still needs the toolchain,
+    # so keep it on the standard image alongside the other Rust jobs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      # rustup honours rust-toolchain.toml automatically; this installs the pinned
+      # channel + rustfmt/clippy components before the first cargo call.
+      - run: rustup show
+      - run: cargo fmt --all --check
+
+  clippy:
+    needs: classify
+    if: ${{ needs.classify.outputs.code == 'true' }}
+    # clippy compiles the whole workspace, so this doubles as the typecheck — a
+    # separate `cargo check` would be redundant.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      # Matches the documented gate. clippy fails on the workspace's
+      # `unwrap_used = deny`; plain warnings don't block (some are legitimately
+      # platform-specific, e.g. a cast that's redundant on Linux but needed on
+      # macOS). Add `-- -D warnings` later if the repo does a warning-clean pass.
+      - run: cargo clippy --workspace --all-targets
+
+  test:
+    needs: classify
+    # Embedded-data changes can only break behaviour, not lint/format — so `data`
+    # fires the tests but not fmt/clippy.
+    if: ${{ needs.classify.outputs.code == 'true' || needs.classify.outputs.data == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      # nextest = the project's `cargo t`; .config/nextest.toml applies
+      # automatically. The lone live-network test is `#[ignore]`d, so the default
+      # run stays hermetic.
+      - run: cargo nextest run --workspace
+
+  doctest:
+    needs: classify
+    if: ${{ needs.classify.outputs.code == 'true' || needs.classify.outputs.data == 'true' }}
+    # Separate job because nextest does NOT run doctests — they execute only under
+    # plain `cargo test --doc`.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --doc --workspace
+
+  ios-tests:
+    needs: classify
+    if: ${{ needs.classify.outputs.ios == 'true' }}
+    # Swift Testing logic tests via xcodebuild — needs a booted simulator, so a
+    # macOS runner is mandatory. The script boots its own sim (logic-only, no host
+    # app). macOS minutes bill 10x on private repos → fires on companion changes
+    # only.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: ./scripts/test-ios-companion.sh
+
+  android-tests:
+    needs: classify
+    if: ${{ needs.classify.outputs.android == 'true' }}
+    # Instrumented (androidTest) test → needs an emulator. Runs on Linux via KVM,
+    # which the standard runner exposes. NOTE: CompanionServerTest boots the
+    # companion server and registers with a golem host over HTTP; if that handshake
+    # needs the golem binary present, swap `connectedCheck` for
+    # `assembleDebugAndroidTest` (compile-only) until the host is wired up here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Run instrumented companion tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          working-directory: companions/android
+          script: ./gradlew connectedCheck
+
+  gate:
+    # The single REQUIRED status check. It always runs (independent of the path
+    # filter), so a docs-only PR — where every job above is skipped — still reports
+    # this one green. Making a path-filtered job itself "required" would deadlock:
+    # a skipped job never reports, so the PR could never merge. This collates
+    # instead: pass unless a dependency actually failed or was cancelled (skipped
+    # is fine).
+    needs: [classify, fmt, clippy, test, doctest, ios-tests, android-tests]
+    if: ${{ always() }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Verify no gate job failed
+        run: |
+          set -euo pipefail
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "job results: $results"
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::a required gate job failed ($r)"
+              exit 1
+            fi
+          done
+          echo "all gate jobs passed or were skipped"
