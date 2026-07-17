@@ -428,7 +428,11 @@ fn parse_version(text: &str) -> Option<String> {
     // Split on any char that isn't a digit or dot → maximal `[0-9.]` runs.
     for run in text.split(|c: char| !(c.is_ascii_digit() || c == '.')) {
         let comps: Vec<&str> = run.split('.').collect();
-        if comps.len() >= 2 && comps.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())) {
+        if comps.len() >= 2
+            && comps
+                .iter()
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+        {
             return Some(run.to_string());
         }
     }
@@ -556,7 +560,9 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
         };
         f.android_avds = count_avds_in(&avd_home());
         f.ios_sims = if f.simctl {
-            count_sim_devices(&stdout_of("xcrun", &["simctl", "list", "devices", "available"]).await)
+            count_sim_devices(
+                &stdout_of("xcrun", &["simctl", "list", "devices", "available"]).await,
+            )
         } else {
             0
         };
@@ -692,9 +698,20 @@ mod tests {
         f.xcrun = None;
         f.simctl = false;
         let checks = evaluate_runtime(&f);
-        assert_eq!(exit_code(&checks), 1, "no drivable platform SHALL exit non-zero");
-        let adb = checks.iter().find(|c| c.label == "adb (Android)").expect("adb line");
-        assert_eq!(adb.status, Status::Warn, "a single missing CLI is a warning");
+        assert_eq!(
+            exit_code(&checks),
+            1,
+            "no drivable platform SHALL exit non-zero"
+        );
+        let adb = checks
+            .iter()
+            .find(|c| c.label == "adb (Android)")
+            .expect("adb line");
+        assert_eq!(
+            adb.status,
+            Status::Warn,
+            "a single missing CLI is a warning"
+        );
         let drivable = checks
             .iter()
             .find(|c| c.label == "drivable platform")
@@ -733,7 +750,9 @@ mod tests {
     #[test]
     fn unwritable_state_dir_fails() {
         let mut f = base_facts();
-        f.golem_writable = Some(Err("cannot write to /root/.golem: permission denied".to_string()));
+        f.golem_writable = Some(Err(
+            "cannot write to /root/.golem: permission denied".to_string()
+        ));
         let checks = evaluate_runtime(&f);
         assert_eq!(exit_code(&checks), 1);
         let line = checks
@@ -775,7 +794,10 @@ mod tests {
         }];
 
         let plain = render_with_color(&sections, false);
-        assert!(!plain.contains('\x1b'), "no-color output SHALL be escape-free");
+        assert!(
+            !plain.contains('\x1b'),
+            "no-color output SHALL be escape-free"
+        );
         assert!(plain.contains("golem doctor"));
         assert!(
             plain.contains("android-platform-tools"),
@@ -783,7 +805,10 @@ mod tests {
         );
 
         let colored = render_with_color(&sections, true);
-        assert!(colored.contains('\x1b'), "color output SHALL contain ANSI escapes");
+        assert!(
+            colored.contains('\x1b'),
+            "color output SHALL contain ANSI escapes"
+        );
     }
 
     // 8. No device available is a WARNING, not a gate failure — golem boots one
@@ -800,19 +825,32 @@ mod tests {
             .find(|c| c.label == "device available")
             .expect("device line");
         assert_eq!(dev.status, Status::Warn, "no device SHALL warn, not fail");
-        assert_eq!(exit_code(&checks), 0, "device availability SHALL NOT gate the exit code");
+        assert_eq!(
+            exit_code(&checks),
+            0,
+            "device availability SHALL NOT gate the exit code"
+        );
     }
 
     // 9. Detected versions surface in the detail (e.g. "found 1.0.41").
     #[test]
     fn versions_render_in_detail() {
         let checks = evaluate_runtime(&base_facts());
-        let adb = checks.iter().find(|c| c.label == "adb (Android)").expect("adb line");
+        let adb = checks
+            .iter()
+            .find(|c| c.label == "adb (Android)")
+            .expect("adb line");
         assert_eq!(adb.detail, "found 1.0.41");
-        let ff = checks.iter().find(|c| c.label == "ffmpeg (optional)").expect("ffmpeg line");
+        let ff = checks
+            .iter()
+            .find(|c| c.label == "ffmpeg (optional)")
+            .expect("ffmpeg line");
         assert_eq!(ff.detail, "found 6.1.1");
         // xcrun present but no parsed version → plain "found".
-        let xc = checks.iter().find(|c| c.label == "xcrun (iOS)").expect("xcrun line");
+        let xc = checks
+            .iter()
+            .find(|c| c.label == "xcrun (iOS)")
+            .expect("xcrun line");
         assert_eq!(xc.detail, "found");
     }
 
@@ -820,7 +858,10 @@ mod tests {
     #[test]
     fn companion_sizes_render_in_detail() {
         let checks = evaluate_runtime(&base_facts());
-        let a = checks.iter().find(|c| c.label == "Android companion").expect("android line");
+        let a = checks
+            .iter()
+            .find(|c| c.label == "Android companion")
+            .expect("android line");
         assert_eq!(a.detail, "embedded (11.4 MiB)");
         assert_eq!(human_size(0), "0 B");
         assert_eq!(human_size(2048), "2 KiB");
@@ -831,9 +872,15 @@ mod tests {
     #[test]
     fn build_mode_healthy_all_ok() {
         let checks = evaluate_build(&base_facts());
-        assert!(checks.iter().all(|c| c.status == Status::Ok), "all build lines Ok");
+        assert!(
+            checks.iter().all(|c| c.status == Status::Ok),
+            "all build lines Ok"
+        );
         assert_eq!(exit_code(&checks), 0);
-        let b = checks.iter().find(|c| c.label == "buildable companion").expect("summary");
+        let b = checks
+            .iter()
+            .find(|c| c.label == "buildable companion")
+            .expect("summary");
         assert_eq!(b.detail, "android, ios");
     }
 
@@ -844,7 +891,10 @@ mod tests {
         f.cargo = None;
         let checks = evaluate_build(&f);
         assert_eq!(exit_code(&checks), 1);
-        let rust = checks.iter().find(|c| c.label == "Rust (cargo)").expect("rust line");
+        let rust = checks
+            .iter()
+            .find(|c| c.label == "Rust (cargo)")
+            .expect("rust line");
         assert_eq!(rust.status, Status::Fail);
     }
 
@@ -857,7 +907,10 @@ mod tests {
         let checks = evaluate_build(&f);
         assert_eq!(exit_code(&checks), 1);
         // On non-macOS the iOS build line is n/a (Ok), not a warning.
-        let ios = checks.iter().find(|c| c.label == "iOS build").expect("ios build line");
+        let ios = checks
+            .iter()
+            .find(|c| c.label == "iOS build")
+            .expect("ios build line");
         assert_eq!(ios.status, Status::Ok);
     }
 
@@ -880,7 +933,11 @@ mod tests {
                    R58N12345\tunauthorized\n\
                    emulator-5556\toffline\n\
                    192.168.0.2:5555\tdevice\n";
-        assert_eq!(count_adb_physical(out), 1, "only the physical device counts");
+        assert_eq!(
+            count_adb_physical(out),
+            1,
+            "only the physical device counts"
+        );
         assert_eq!(count_adb_physical("List of devices attached\n\n"), 0);
     }
 
@@ -913,13 +970,22 @@ mod tests {
     //     rejects non-versions.
     #[test]
     fn version_parser_extracts_dotted_versions() {
-        assert_eq!(parse_version("ffmpeg version 6.1.1 Copyright").as_deref(), Some("6.1.1"));
+        assert_eq!(
+            parse_version("ffmpeg version 6.1.1 Copyright").as_deref(),
+            Some("6.1.1")
+        );
         assert_eq!(
             parse_version("Android Debug Bridge version 1.0.41").as_deref(),
             Some("1.0.41")
         );
-        assert_eq!(parse_version("cargo 1.83.0 (abc 2024)").as_deref(), Some("1.83.0"));
-        assert_eq!(parse_version("openjdk version \"17.0.10\" 2024").as_deref(), Some("17.0.10"));
+        assert_eq!(
+            parse_version("cargo 1.83.0 (abc 2024)").as_deref(),
+            Some("1.83.0")
+        );
+        assert_eq!(
+            parse_version("openjdk version \"17.0.10\" 2024").as_deref(),
+            Some("17.0.10")
+        );
         // "xcrun version 66." — trailing dot ⇒ not a clean N.N version.
         assert_eq!(parse_version("xcrun version 66."), None);
         assert_eq!(parse_version("no version here"), None);
