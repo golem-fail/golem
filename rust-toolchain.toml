@@ -1,0 +1,7 @@
+# Pin the toolchain so every contributor and CI compile + lint against the exact
+# same rustc. clippy lints and rustfmt output drift between releases, so an
+# unpinned channel makes the gate non-deterministic (green locally, red in CI,
+# or the reverse) and poisons the CI cache key. Bump deliberately, on its own.
+[toolchain]
+channel = "1.90.0"
+components = ["rustfmt", "clippy"]

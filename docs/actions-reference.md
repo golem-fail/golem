@@ -2,7 +2,7 @@
 
 *Every word the golem knows.*
 
-← [Back to README](../README.md) · See [Test Structure](test-structure.md) for selectors, steps, and flow anatomy.
+← [Back to README](../README.md) · See also [Test Structure](test-structure.md) for selectors, steps, and flow anatomy.
 
 ## Contents
 
@@ -52,7 +52,7 @@
 - [Flow Control](#flow-control)
   - [fail](#fail--fail-the-flow-immediately)
 
-> The canonical list of action keywords is the dispatch match in [`golem-runner/src/actions.rs`](../golem-runner/src/actions.rs). If you add a handler there, document it here.
+<!-- The canonical list of action keywords is the dispatch match in [`golem-runner/src/actions.rs`](../golem-runner/src/actions.rs). If you add a handler there, document it here. -->
 
 ## Interaction
 

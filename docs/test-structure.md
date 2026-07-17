@@ -2,25 +2,23 @@
 
 *Anatomy of a flow.*
 
-← [Back to README](../README.md)
+← [Back to README](../README.md) · See also [Actions Reference](actions-reference.md)
 
 Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-level unit of execution.
 
 ## Contents
 
-- [Flow](#flow) — [Options](#flow-options), [Coverage strategies](#coverage-strategies), [Performance Monitoring](#performance-monitoring)
+- [Flow](#flow) — [Options](#flow-options), [Coverage Strategies](#coverage-strategies), [Performance Monitoring](#performance-monitoring)
 - [Block](#block) — [Platform-specific](#platform-specific-blocks), [Branching](#branching), [`next`](#block-next)
-- [Step](#step) — [Selectors](#selectors), [Grouped syntax](#grouped-selector-syntax), [Options](#step-options), [Timeout multipliers](#timeout-multipliers)
+- [Step](#step) — [Selectors](#selectors), [Options](#step-options), [Timeout multipliers](#timeout-multipliers)
 - [Subflow](#subflow)
-- [Reuse: subflow vs mixin vs fixture](#reuse-subflow-vs-mixin-vs-fixture)
-- [Lifecycle: setup & teardown](#lifecycle-setup--teardown)
+- [Reuse: Subflow vs Mixin vs Fixture](#reuse-subflow-vs-mixin-vs-fixture)
+- [Lifecycle: Setup & Teardown](#lifecycle-setup--teardown)
 - [Teardown](#teardown)
 - [Data-Driven Tests](#data-driven-tests)
 - [Variables](#variables)
 - [Fake Data Generators](#fake-data-generators)
 - [Multi-App Flows](#multi-app-flows)
-
-See also: [Actions Reference](actions-reference.md) for every action and its params.
 
 ## Flow
 
@@ -92,7 +90,7 @@ noise. Levels: `off`, `critical` (tree checks only), `relaxed` (default), `stric
 Full guide — the checks, per-level thresholds, the confidence model, and how to
 read the annotated screenshot — in **[accessibility.md](accessibility.md)**.
 
-### Coverage strategies
+### Coverage Strategies
 
 `coverage` controls how multi-valued `[[flow.apps.devices]]` axes expand into FlowRuns.
 
@@ -150,7 +148,7 @@ Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, pho
 
 **No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Virtual-only (sim/emulator) by default — physical devices are never picked implicitly. Fails fast if nothing is booted.
 
-#### Hardware axis (virtual / real)
+#### Hardware Axis (virtual / real)
 
 ```toml
 [[flow.apps.devices]]
@@ -172,7 +170,7 @@ Under `coverage = "one"` / `"smart"`, `hardware = ["virtual", "real"]` gives gra
 
 `hardware = "real"` + `create_if_missing = true` errors out — physical hardware cannot be auto-created.
 
-#### Pinning a specific device by name
+#### Pinning a Specific Device by Name
 
 ```toml
 [[flow.apps.devices]]
@@ -183,7 +181,7 @@ name = "iPhone 15"
 
 Under `create_if_missing = true`, a slot with `name = ...` that doesn't match any connected/booted device errors with an actionable message instead of auto-creating a mis-named sim — `name` is a user assertion that the device already exists; golem won't guess its configuration.
 
-#### Auto-boot behaviour
+#### Auto-Boot Behaviour
 
 When a slot's requirement matches a device that is **shutdown** (no booted match, but a compatible AVD/sim exists), golem boots it automatically and waits for it to be fully ready before continuing. The readiness gate is per-platform:
 
@@ -400,7 +398,7 @@ A subflow is a normal flow, so `golem run` (no path) would otherwise discover an
 
 In short: `explicit_only` suppresses only the tag-less discovery sweep. Tag it to include it in specific `--tag` runs; name its path to run it directly. Set `app_lifecycle = "manual"` so the child inherits the parent's already-launched app (see [Lifecycle](#lifecycle-setup--teardown)).
 
-## Reuse: subflow vs mixin vs fixture
+## Reuse: Subflow vs Mixin vs Fixture
 
 Three ways to share pieces across flows, by what they contain:
 
@@ -408,12 +406,12 @@ Three ways to share pieces across flows, by what they contain:
 |---|---|---|---|---|
 | **flow** | `x.test.toml` | `[flow]` + `[[block]]` | — (top-level unit) | a complete scenario |
 | **subflow** | `x.test.toml`, usually `explicit_only = true` | a full `[flow]` | `run_flow` on a `[[block]]`; `[block.save_to]` propagates results back | reusing a whole scenario as a child (e.g. `login`) |
-| **mixin** | `__mixins__/x.toml` | `[[step]]` only (no flow/block/vars) | [`load_mixin`](actions-reference.md#load_mixin) action; steps inline into the block, per-call `vars` | reusing a step fragment that runs inside the caller's block state |
-| **fixture** | `__fixtures__/x.toml` | `[vars]` only | [`load_fixture`](actions-reference.md#load_fixture) action; access as `${alias.key}` | reusing test **data** |
+| **mixin** | `__mixins__/x.toml` | `[[step]]` only (no flow/block/vars) | [`load_mixin`](actions-reference.md#load_mixin--inline-a-reusable-step-sequence) action; steps inline into the block, per-call `vars` | reusing a step fragment that runs inside the caller's block state |
+| **fixture** | `__fixtures__/x.toml` | `[vars]` only | [`load_fixture`](actions-reference.md#load_fixture--load-fixture-data) action; access as `${alias.key}` | reusing test **data** |
 
 `__mixins__/` and `__fixtures__/` are excluded from flow discovery, so their files never run as tests on their own.
 
-## Lifecycle: setup & teardown
+## Lifecycle: Setup & Teardown
 
 **There is no `[[setup]]` block.** A flow's setup is implicit and happens automatically before the first block:
 

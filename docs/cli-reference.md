@@ -2,7 +2,18 @@
 
 *The words you speak to it.*
 
-← [Back to README](../README.md)
+← [Back to README](../README.md) · See also [App Install](app-install.md) · [Test Structure](test-structure.md)
+
+## Contents
+
+- [`golem run`](#golem-run)
+- [`golem tree`](#golem-tree)
+- [`golem devices`](#golem-devices)
+- [`golem init`](#golem-init)
+- [`golem create <name>`](#golem-create-name)
+- [`golem install-script`](#golem-install-script)
+- [`golem a11y-extract <png>`](#golem-a11y-extract-png)
+- [`golem doctor`](#golem-doctor)
 
 ## `golem run`
 

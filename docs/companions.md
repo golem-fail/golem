@@ -2,20 +2,19 @@
 
 *The golem needs hands inside the device. Companions are those hands.*
 
+← [Back to README](../README.md) · See also [Architecture](architecture.md) · [Versioning](versioning.md)
+
 A **companion** is a small agent golem installs on the target device. The host-side driver
 cannot reach an app's UI directly — only the OS's own automation framework can. So golem ships
 one companion per platform that wraps that framework and exposes it over a tiny HTTP/JSON
 protocol. The driver speaks the same protocol to both, and the platform differences live inside
 the companion.
 
-See [`../README.md`](../README.md) for the CLI and [`cli-reference.md`](cli-reference.md) for
-flags; companion versioning is covered in [`versioning.md`](versioning.md).
-
 ## Overview
 
 Every action golem performs flows through three layers:
 
-```
+```text
 host driver  ⇄  on-device companion  ⇄  app under test
 (golem-driver)   (XCUITest / UiAutomation)   (your app)
 ```
@@ -196,7 +195,7 @@ The `version` field is carried specifically so the host can confirm the running 
 the host's version — a stale companion left over from a previous build would otherwise answer
 with an outdated protocol. The version string is **not** auto-derived from `Cargo.toml`; it is
 written into the companions by hand (in `RequestRouter.swift`'s `handleHealth`, `CompanionServer`'s
-`/health` handler, and the companion test files). [`versioning.md`](versioning.md) lists every
+`/health` handler, and the companion test files). [Versioning](versioning.md) lists every
 location and the bump script keeps them in sync.
 
 > The exact host↔companion version comparison lives in the health-check/runner layer, not in
@@ -219,5 +218,5 @@ location and the bump script keeps them in sync.
    ./scripts/bump-version.sh --patch
    ```
 4. **Run the matrix.** Companion changes require running e2e on the affected platform(s) and a
-   version bump — see the change-type matrix in [`contributing.md`](contributing.md) for exactly
+   version bump — see the change-type matrix in [Contributing](contributing.md) for exactly
    what to run before committing.

@@ -1018,7 +1018,11 @@ mod tests {
             .await;
             assert!(result.is_ok());
             let got = std::fs::read_to_string(&out_file).expect("read");
-            assert_eq!(got.trim(), want, "GOLEM_REBUILD SHALL be {want} when rebuild={rebuild}");
+            assert_eq!(
+                got.trim(),
+                want,
+                "GOLEM_REBUILD SHALL be {want} when rebuild={rebuild}"
+            );
         }
     }
 
