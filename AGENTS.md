@@ -14,6 +14,15 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.
 - Sign off every commit: `git commit -s` (the DCO check fails unsigned commits — see `docs/contributing.md`). Author identity is the repo-local GitHub no-reply (auto); do NOT override it or reintroduce a personal/work email.
 
+## Where information belongs (How / What / Why / Why not)
+Put each fact where it lives; don't write it in the wrong place.
+- **Code = How** — mechanics. Code already states how; don't paraphrase it in comments (skip obvious what/how narration).
+- **Tests = What** — spec + expected behavior, via test names + assertions.
+- **Commit logs = Why** — why the change was made (background, context, intent). Rationale like "because it became X", "replaced Y", "previously it was Z" goes here, NOT in code comments (rots into a lie after later edits).
+- **Code comments = Why not** — why an alternative was rejected, non-obvious constraints, pitfalls avoided. Limit comments to "deliberately did it this way" reasons the code alone can't convey.
+
+Before adding a comment ask: "is this *why not*, or just *why* (excuse for a change)?" — if the latter, don't write it. Match surrounding comment density + style; don't annotate self-explanatory code when neighbors have none.
+
 ## Matrix — by change type
 | Change | unit+clippy | e2e | bump |
 |---|---|---|---|
