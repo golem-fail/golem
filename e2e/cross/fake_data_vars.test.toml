@@ -62,4 +62,16 @@ steps = [
   { action = "tap", on_text = "Reset fields" },
   { action = "type", on_text = "Search", input = "${jp_street_ascii}", auto_scroll = true },
   { action = "assert_visible", on_text = "${jp_street_ascii}" },
+
+  # 5. Single-device builtins resolve at step time. Typed and asserted via the
+  #    same builtin so the check is platform-agnostic (the device/os differ per
+  #    run) yet deterministic — a step-time builtin that failed to resolve would
+  #    error the type step outright.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${_device}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${_device}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "os-${_os}", auto_scroll = true },
+  { action = "assert_visible", on_text = "os-${_os}" },
 ]
