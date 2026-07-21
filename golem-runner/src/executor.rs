@@ -95,6 +95,62 @@ pub struct FlowResult {
     pub a11y_audits: Vec<golem_report::A11yAudit>,
 }
 
+/// Bounded attempts to clear a startup ANR dialog before giving up and
+/// letting the flow proceed (the step's own timeout then applies as before).
+const ANR_CLEAR_ATTEMPTS: u32 = 3;
+/// Wait between ANR-clear attempts — lets SystemUI recover / the dialog settle.
+const ANR_CLEAR_BACKOFF: Duration = Duration::from_millis(1500);
+
+/// Center tap-point of a clickable element whose text is exactly "wait"
+/// (case-insensitive) — the ANR dialog's dismiss-keep-app button. Never
+/// matches "Close app" (which would kill the target). `None` if not found
+/// (non-English locale, or a differently-structured dialog) — the caller
+/// then just waits the dialog out.
+fn find_wait_button(el: &golem_element::Element) -> Option<(i32, i32)> {
+    if el.clickable
+        && el
+            .text
+            .as_deref()
+            .is_some_and(|t| t.trim().eq_ignore_ascii_case("wait"))
+    {
+        let b = el.bounds;
+        return Some((b.x + b.width / 2, b.y + b.height / 2));
+    }
+    el.children.iter().find_map(find_wait_button)
+}
+
+/// Best-effort clear of a transient Android SystemUI ANR dialog occluding the
+/// app at flow start (cold-boot-under-load, #53). Android real devices only —
+/// iOS has no such dialog, and the stub device is skipped. Taps "Wait" if
+/// found (keeps the app), else waits the dialog out; polls until it clears or
+/// the attempt budget is spent, then returns so the flow proceeds regardless.
+async fn clear_startup_anr(driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) {
+    // Android only; skip the synthetic stub device (its os_version is "stub").
+    let is_android_device = ctx
+        .device
+        .is_some_and(|d| d.platform == golem_devices::Platform::Android && d.os_version != "stub");
+    if !is_android_device {
+        return;
+    }
+    for _ in 0..ANR_CLEAR_ATTEMPTS {
+        let Ok((root, _meta)) = driver.get_hierarchy().await else {
+            return; // transport error — not our problem to solve here
+        };
+        if !golem_driver::common::detect_anr(&root) {
+            return; // no ANR (the common case) — nothing to do
+        }
+        if let Some((x, y)) = find_wait_button(&root) {
+            let _ = driver.tap(x, y).await;
+        }
+        if let Some(e) = ctx.emitter {
+            e.substep(golem_events::SubstepEvent::DriverWarning {
+                message: "cleared a SystemUI 'isn't responding' dialog at flow start".to_string(),
+            });
+        }
+        tokio::time::sleep(ANR_CLEAR_BACKOFF).await;
+    }
+}
+
 /// Execute a parsed FlowFile by traversing blocks in order.
 ///
 /// Block traversal:
@@ -206,6 +262,11 @@ pub async fn execute_flow<'a>(
         }
         golem_parser::AppLifecycle::Manual => {}
     }
+
+    // Clear a transient Android SystemUI ANR dialog ("… isn't responding")
+    // that can occlude the app on a cold-booted-under-load emulator, before
+    // the first step races it (#53). Best-effort; no-op on iOS / when absent.
+    clear_startup_anr(driver, ctx).await;
 
     // Find starting block index
     let mut current_idx = match start_block {
@@ -1651,6 +1712,76 @@ mod tests {
     use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
+
+    // ── startup ANR clear ───────────────────────────────────────────
+    fn anr_button(text: &str, x: i32, clickable: bool) -> Element {
+        Element {
+            element_type: "Button".into(),
+            text: Some(text.into()),
+            accessibility_label: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable,
+            focused: false,
+            bounds: Bounds::new(x, 500, 100, 40),
+            visible_bounds: None,
+            hit_points: vec![],
+            drawing_order: None,
+            children: vec![],
+        }
+    }
+
+    fn anr_dialog(buttons: Vec<Element>) -> Element {
+        Element {
+            element_type: "FrameLayout".into(),
+            text: Some("System UI isn't responding".into()),
+            accessibility_label: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable: false,
+            focused: false,
+            bounds: Bounds::new(0, 400, 400, 200),
+            visible_bounds: None,
+            hit_points: vec![],
+            drawing_order: None,
+            children: buttons,
+        }
+    }
+
+    #[test]
+    fn find_wait_button_picks_wait_not_close() {
+        let d = anr_dialog(vec![
+            anr_button("Close app", 50, true),
+            anr_button("Wait", 250, true),
+        ]);
+        assert_eq!(
+            find_wait_button(&d),
+            Some((300, 520)),
+            "SHALL tap the Wait button's center (250+50, 500+20), never Close app"
+        );
+    }
+
+    #[test]
+    fn find_wait_button_none_when_only_close() {
+        let d = anr_dialog(vec![anr_button("Close app", 50, true)]);
+        assert_eq!(
+            find_wait_button(&d),
+            None,
+            "SHALL NOT fall back to any other button — better to wait the dialog out"
+        );
+    }
+
+    #[test]
+    fn find_wait_button_requires_clickable() {
+        let d = anr_dialog(vec![anr_button("Wait", 250, false)]);
+        assert_eq!(
+            find_wait_button(&d),
+            None,
+            "a non-clickable 'Wait' label SHALL NOT be tapped"
+        );
+    }
 
     // De-rate by factor: heuristic (<1.0) findings scale; deterministic (1.0)
     // findings are untouched; factor 1.0 is a no-op (clean live shot).
