@@ -164,7 +164,7 @@ mod tests {
             install_env: None,
             profile: None,
         }];
-        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -213,7 +213,7 @@ mod tests {
                 profile: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[f], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -239,7 +239,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None)
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert!(
@@ -266,7 +266,7 @@ mod tests {
             type = "tablet"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None)
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);

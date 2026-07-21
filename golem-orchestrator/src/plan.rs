@@ -133,6 +133,14 @@ pub struct ParseFailure {
 /// `coverage_override` forces every flow's coverage strategy when set —
 /// mirrors the CLI `--coverage` flag. Flow-level `[flow.options].coverage`
 /// is ignored while the override is in effect.
+///
+/// `stub` skips host device discovery and plans against an empty snapshot.
+/// Not "no devices found" — a deliberately device-free plan: the empty
+/// snapshot takes the abstract-fallback branch in `expand_*`, so a stub
+/// suite plans identically on any host (with or without sims/emulators
+/// installed) rather than tripping the coverage feasibility check against
+/// whatever the host happens to have booted. The `StubDriver` supplies the
+/// synthetic device downstream at slot-build time.
 pub async fn plan(
     flow_paths: &[PathBuf],
     project_apps: &[ProjectAppConfig],
@@ -141,6 +149,7 @@ pub async fn plan(
     coverage_override: Option<CoverageStrategy>,
     repeat: u32,
     active_profile: Option<&str>,
+    stub: bool,
 ) -> Result<ParsedSuite> {
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
     let mut parse_failures: Vec<ParseFailure> = Vec::new();
@@ -162,7 +171,11 @@ pub async fn plan(
         }
     }
 
-    let snapshot = device_snapshot().await;
+    let snapshot = if stub {
+        Vec::new()
+    } else {
+        device_snapshot().await
+    };
 
     let mut flow_runs: Vec<FlowRun> = Vec::new();
     let mut coverage_groups: Vec<CoverageGroup> = Vec::new();
@@ -726,6 +739,7 @@ mod tests {
             None,
             1,
             None,
+            false,
         )
         .await
         .expect("async operation SHALL succeed");
@@ -735,7 +749,7 @@ mod tests {
             "preflight: single-run plan SHALL emit at least one FlowRun"
         );
 
-        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None)
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -781,6 +795,7 @@ mod tests {
             None,
             1,
             None,
+            false,
         )
         .await
         .expect("async operation SHALL succeed");
@@ -791,7 +806,7 @@ mod tests {
             return;
         }
 
-        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None)
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -833,7 +848,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -844,6 +859,44 @@ mod tests {
             "'os = \"ios\"' alone SHALL have no specific version requirement"
         );
         assert_eq!(suite.flow_runs[0].slots[0].apps, vec!["app".to_string()]);
+    }
+
+    // A stub plan is device-free: it plans against an empty snapshot, never
+    // the host's real devices. A `coverage = "min"` flow whose requested
+    // shape the host lacks would otherwise trip the plan-time feasibility
+    // check; under stub the empty snapshot takes the abstract-fallback
+    // branch, so this SHALL yield an abstract FlowRun on any host.
+    #[tokio::test]
+    async fn plan_stub_ignores_host_snapshot() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        let flow = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
+            [flow]
+            name = "f"
+            [flow.options]
+            coverage = "min"
+            [[flow.apps]]
+            name = "app"
+            [[flow.apps.devices]]
+            os = "android:latest"
+            type = "phone"
+        "#,
+        );
+        let apps = vec![project_app("app", "com.app", None)];
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, true)
+            .await
+            .expect("stub plan SHALL succeed device-free regardless of host");
+        assert_eq!(
+            suite.flow_runs.len(),
+            1,
+            "stub plan SHALL emit one abstract FlowRun for the android:latest slot"
+        );
+        assert_eq!(
+            suite.flow_runs[0].slots[0].platform,
+            Some(Platform::Android)
+        );
     }
 
     #[tokio::test]
@@ -862,7 +915,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -892,7 +945,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -919,7 +972,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 2);
@@ -955,7 +1008,7 @@ mod tests {
             project_app("a", "com.a", None),
             project_app("b", "com.b", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -992,7 +1045,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -1030,7 +1083,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -1073,6 +1126,7 @@ mod tests {
             None,
             1,
             None,
+            false,
         )
         .await
         .expect("async operation SHALL succeed");
@@ -1103,7 +1157,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("a", "com.project.a", Some("scripts/a.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         let app = &suite.flows[0].flow.flow.apps[0];
@@ -1129,7 +1183,7 @@ mod tests {
             project_app("a", "com.a", Some("scripts/a.sh")),
             project_app("b", "com.b", Some("scripts/b.sh")),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         let bundles: Vec<_> = suite
@@ -1166,6 +1220,7 @@ mod tests {
             None,
             1,
             None,
+            false,
         )
         .await
         .expect("plan SHALL succeed even when some files fail to parse");
@@ -1201,7 +1256,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[flow], &[], tmp.path(), None, None, 1, None)
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1, None, false)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
