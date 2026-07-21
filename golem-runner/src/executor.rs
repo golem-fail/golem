@@ -563,8 +563,18 @@ pub async fn execute_flow<'a>(
                         &mut rng.lock().expect("flow rng mutex poisoned"),
                     )
                 };
+                // Single-device builtins (`${_device}` / `${_os}` / …). The
+                // step's own `app=` wins over the flow's primary app so `_app`
+                // names the app the step acts on.
+                let builtins = crate::interp::step_builtins(
+                    ctx.device,
+                    step.app
+                        .as_deref()
+                        .or_else(|| flow.flow.apps.first().map(|a| a.name.as_str())),
+                );
                 let mut ictx = golem_vars::interpolation::InterpolationContext::new(&*vars);
                 ictx.generator = Some(&generator);
+                ictx.builtins = Some(&builtins);
                 crate::interp::interpolate_step(step, &ictx)?
             };
             let step = &step_owned;
