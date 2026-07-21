@@ -196,6 +196,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         restart: step.restart,
         auto_scroll: step.auto_scroll,
         scroll_timeout: step.scroll_timeout,
+        visibility_percentage: step.visibility_percentage,
         within: step.within.clone(),
         start: step.start.clone(),
         end: step.end.clone(),

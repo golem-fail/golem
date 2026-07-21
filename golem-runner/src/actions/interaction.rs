@@ -533,6 +533,9 @@ pub(crate) async fn handle_scroll(
                 None,
                 None,
                 ctx.emitter,
+                // Bringing a container into view — first sighting is enough;
+                // the target's visibility goal applies to the final scroll.
+                0.0,
             )
             .await;
             // Nudge to get more of the container visible
@@ -573,6 +576,7 @@ pub(crate) async fn handle_scroll(
         step.scroll_timeout,
         container_bounds,
         ctx.emitter,
+        crate::scroll::target_fraction_from(step.visibility_percentage, container_bounds.is_some()),
     )
     .await?;
     Ok(())

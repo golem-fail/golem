@@ -242,6 +242,8 @@ pub async fn resolve_element(
                         None,
                         None,
                         emitter,
+                        // Container into view — first sighting suffices.
+                        0.0,
                     )
                     .await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
@@ -327,6 +329,10 @@ pub async fn resolve_element(
                 step.scroll_timeout,
                 container_bounds,
                 emitter,
+                crate::scroll::target_fraction_from(
+                    step.visibility_percentage,
+                    container_bounds.is_some(),
+                ),
             )
             .await
             {
