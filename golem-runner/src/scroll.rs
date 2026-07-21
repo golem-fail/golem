@@ -5,7 +5,7 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::{find_elements, Selector};
 #[cfg(test)]
 use golem_element::Element;
-use golem_element::{filter_viewport, FindResult, Viewport};
+use golem_element::{filter_viewport, Bounds, FindResult, Viewport};
 use tokio::time::Instant;
 
 use crate::resolution::wait_for_settle;
@@ -19,6 +19,88 @@ use geometry::{
 pub use geometry::{default_swipe_start, make_safe_viewport, swipe_from};
 
 // ── Main scroll algorithm ───────────────────────────────────────────
+
+/// Map a step's `visibility_percentage` to a `target_fraction`, given
+/// whether the scroll is bounded to a container.
+///
+/// An explicit value always wins. Unset, the default splits by scroll kind:
+/// - **page** scroll → `1.0` (reveal fully into the safe area — the smart
+///   out-of-the-box default).
+/// - **container** (`within`) scroll → `0.0` (first stable sighting). Inner
+///   lists/carousels have their own snap + momentum dynamics; chasing full
+///   visibility over-scrolls past snap points, so the historical
+///   first-sighting stop is the right default there. Opt in per step with
+///   `visibility_percentage` when a container target needs full reveal.
+pub(crate) fn target_fraction_from(pct: Option<u8>, in_container: bool) -> f64 {
+    match pct {
+        Some(p) => f64::from(p.min(100)) / 100.0,
+        None if in_container => 0.0,
+        None => 1.0,
+    }
+}
+
+/// Fraction (`0.0..=1.0`) of `bounds`'s own area that lies inside `vp`.
+/// An element larger than the viewport can never reach `1.0` — the cap is
+/// `vp_area / element_area` — which is exactly why `target_fraction` is a
+/// best-effort goal, not a gate.
+pub(crate) fn visible_fraction(bounds: &Bounds, vp: &Viewport) -> f64 {
+    let area = f64::from(bounds.width) * f64::from(bounds.height);
+    if area <= 0.0 {
+        return 0.0;
+    }
+    let ix = bounds.x.max(vp.x);
+    let iy = bounds.y.max(vp.y);
+    let ir = (bounds.x + bounds.width).min(vp.x + vp.width);
+    let ib = (bounds.y + bounds.height).min(vp.y + vp.height);
+    let iw = (ir - ix).max(0);
+    let ih = (ib - iy).max(0);
+    (f64::from(iw) * f64::from(ih)) / area
+}
+
+/// Decide what a fresh sighting means. `Some(found)` = the target meets
+/// `target` visibility, stop and return it. `None` = below goal; recorded
+/// as the running best (by fraction) so a later terminal can fall back to
+/// it. A `target` of `0.0` accepts every sighting (historical behaviour).
+fn consider(
+    found: FindResult,
+    safe_vp: &Viewport,
+    target: f64,
+    best: &mut Option<FindResult>,
+    best_frac: &mut f64,
+) -> Option<FindResult> {
+    let frac = visible_fraction(&found.element.bounds, safe_vp);
+    // `>=` with a tolerance so exact-fit (`frac == target`) accepts, and
+    // float noise near 1.0 doesn't force one wasted extra swipe.
+    if frac + 1e-9 >= target {
+        return Some(found);
+    }
+    if frac > *best_frac {
+        *best_frac = frac;
+        *best = Some(found);
+    }
+    None
+}
+
+/// Emit `ScrollFound` for a best-effort acceptance (the target was located
+/// but could not reach the visibility goal). Same event a clean find emits —
+/// downstream just sees "found here", which is true.
+fn emit_best_effort(
+    emitter: Option<&golem_events::emitter::DeviceEmitter>,
+    sel_label: &str,
+    found: &FindResult,
+    total_attempts: u32,
+) {
+    if let Some(e) = emitter {
+        e.substep(golem_events::SubstepEvent::ScrollFound {
+            selector: sel_label.to_string(),
+            position: golem_events::Point {
+                x: found.tap_x,
+                y: found.tap_y,
+            },
+            total_attempts,
+        });
+    }
+}
 
 /// Scroll through a view to find an element matching the given selector.
 ///
@@ -37,6 +119,19 @@ pub use geometry::{default_swipe_start, make_safe_viewport, swipe_from};
 /// The action's timeout is the only wall-clock bound. The number of
 /// swipe attempts is unbounded by design — long lists complete; broken
 /// trees are caught by stall detection.
+///
+/// `target_fraction` is how much of the matched element must be visible
+/// within the safe area before the scroll stops, in `0.0..=1.0`:
+/// - `0.0` — accept the first sighting (any overlap), the historical
+///   behaviour; used for internal "bring a container into view" scrolls.
+/// - `1.0` — the caller-facing default: keep revealing until the target is
+///   fully inside the safe area.
+///
+/// It is a *goal*, not a gate. Once the target has been seen, an
+/// unreachable goal (element larger than the safe area, a last list item,
+/// an absorber the gesture can't get past) is **not** a failure: when
+/// visibility stops improving, or a boundary/deadline is hit, the best
+/// sighting so far is returned. Only a target that was *never* seen fails.
 pub async fn scroll_to_element(
     selector: &Selector,
     driver: &dyn PlatformDriver,
@@ -44,7 +139,20 @@ pub async fn scroll_to_element(
     timeout_ms: Option<u64>,
     container: Option<golem_element::Bounds>,
     emitter: Option<&golem_events::emitter::DeviceEmitter>,
+    target_fraction: f64,
 ) -> Result<FindResult> {
+    let target_frac = target_fraction.clamp(0.0, 1.0);
+    // Best-effort fallback: the highest-visibility sighting seen so far, and
+    // its fraction. Returned at a terminal (deadline / boundary / no more
+    // progress) when the target never reaches `target_frac`.
+    let mut best: Option<FindResult> = None;
+    let mut best_frac: f64 = -1.0;
+    // Swipes that moved the page without improving `best_frac`. Once the
+    // target has been seen and this hits the cap, further scrolling is
+    // judged futile and the best sighting is accepted.
+    let mut no_improve: u32 = 0;
+    const NO_IMPROVE_LIMIT: u32 = 3;
+
     // Step 1: Check current viewport before any scrolling.
     let (mut root, meta, _initial_stats) = wait_for_settle(driver).await?;
     let mut viewport = Viewport::from_root(&root);
@@ -53,9 +161,10 @@ pub async fn scroll_to_element(
     }
     let safe_vp = make_safe_viewport(&viewport, &meta);
     let visible = filter_viewport(&root, &safe_vp);
-    let results = find_elements(&visible, selector);
-    if let Some(found) = results.into_iter().next() {
-        return Ok(found);
+    if let Some(found) = find_elements(&visible, selector).into_iter().next() {
+        if let Some(accepted) = consider(found, &safe_vp, target_frac, &mut best, &mut best_frac) {
+            return Ok(accepted);
+        }
     }
 
     let sel_label = selector
@@ -110,6 +219,12 @@ pub async fn scroll_to_element(
 
     loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
+            // Best-effort: the target was seen but never fully placed —
+            // return the best sighting rather than failing the step.
+            if let Some(found) = best.take() {
+                emit_best_effort(emitter, &sel_label, &found, scroll_attempt);
+                return Ok(found);
+            }
             crate::fail_code!(
                 golem_events::FailureCode::FlowElementOffscreen,
                 "Scroll timed out after {}ms ({scroll_attempt} swipes attempted): \
@@ -151,19 +266,40 @@ pub async fn scroll_to_element(
         }
         let safe_vp = make_safe_viewport(&vp, &settle_meta);
         let visible = filter_viewport(&root, &safe_vp);
-        let results = find_elements(&visible, selector);
-        if let Some(found) = results.into_iter().next() {
-            if let Some(e) = emitter {
-                e.substep(golem_events::SubstepEvent::ScrollFound {
-                    selector: sel_label.clone(),
-                    position: golem_events::Point {
-                        x: found.tap_x,
-                        y: found.tap_y,
-                    },
-                    total_attempts: scroll_attempt,
-                });
+        let prev_best_frac = best_frac;
+        if let Some(found) = find_elements(&visible, selector).into_iter().next() {
+            if let Some(accepted) =
+                consider(found, &safe_vp, target_frac, &mut best, &mut best_frac)
+            {
+                if let Some(e) = emitter {
+                    e.substep(golem_events::SubstepEvent::ScrollFound {
+                        selector: sel_label.clone(),
+                        position: golem_events::Point {
+                            x: accepted.tap_x,
+                            y: accepted.tap_y,
+                        },
+                        total_attempts: scroll_attempt,
+                    });
+                }
+                return Ok(accepted);
             }
-            return Ok(found);
+        }
+        // No-improvement guard: once the target has been seen, if this swipe
+        // moved the page (it did — we swiped) but the best visibility didn't
+        // improve, count it. After a few futile swipes, accept the best
+        // sighting rather than thrash a partially-placed / absorber-trapped
+        // target to the deadline.
+        if best.is_some() {
+            if best_frac > prev_best_frac {
+                no_improve = 0;
+            } else {
+                no_improve += 1;
+                if no_improve >= NO_IMPROVE_LIMIT {
+                    let found = best.take().expect("best is Some");
+                    emit_best_effort(emitter, &sel_label, &found, scroll_attempt);
+                    return Ok(found);
+                }
+            }
         }
 
         // Overshoot guard: the target may have passed through the viewport
@@ -208,6 +344,10 @@ pub async fn scroll_to_element(
                     dynamic_start_tried = false;
                     dynamic_start_override = None;
                     reversed = true;
+                    // An overshoot reversal means the target is about to swing
+                    // back into view — give it a fresh no-improve budget so we
+                    // don't accept the partial pre-reversal sighting.
+                    no_improve = 0;
                     continue;
                 }
             }
@@ -374,6 +514,14 @@ pub async fn scroll_to_element(
 
         // All strategies exhausted. Reverse direction.
         if reversed {
+            // Both directions have now hit a boundary — the whole scroll
+            // range has been searched. If the target was seen along the
+            // way, accept the best sighting rather than cycle to the
+            // deadline.
+            if let Some(found) = best.take() {
+                emit_best_effort(emitter, &sel_label, &found, scroll_attempt);
+                return Ok(found);
+            }
             if let Some(e) = emitter {
                 e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
                     to_direction: format!("{:?}", reverse_direction(direction)),
@@ -395,6 +543,9 @@ pub async fn scroll_to_element(
         reversed = true;
         stall_count = 0;
         strategy_idx = 0;
+        // Reversing to sweep the other way — the target may become more
+        // visible on the return leg, so restart the no-improve budget.
+        no_improve = 0;
         if let Some(e) = emitter {
             e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
                 to_direction: format!("{direction:?}"),
@@ -686,7 +837,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None, 0.0)
             .await
             .expect("should find element without scrolling");
 
@@ -725,7 +876,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None, 0.0)
             .await
             .expect("should find element after one scroll");
 
@@ -760,8 +911,16 @@ mod tests {
 
         // Tight timeout — driver returns ever-changing trees so stall
         // detection won't trigger; only timeout will.
-        let result =
-            scroll_to_element(&selector, &driver, Direction::Down, Some(50), None, None).await;
+        let result = scroll_to_element(
+            &selector,
+            &driver,
+            Direction::Down,
+            Some(50),
+            None,
+            None,
+            0.0,
+        )
+        .await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(err_msg.contains("Scroll timed out"), "got: {err_msg}");
@@ -807,8 +966,16 @@ mod tests {
         // cycle directions forever. 3s is enough for the test to reach
         // the first reversal across all 5 swipe strategies + stall
         // retries before bailing.
-        let _ =
-            scroll_to_element(&selector, &driver, Direction::Down, Some(3000), None, None).await;
+        let _ = scroll_to_element(
+            &selector,
+            &driver,
+            Direction::Down,
+            Some(3000),
+            None,
+            None,
+            0.0,
+        )
+        .await;
 
         let swipe_calls: Vec<_> = driver
             .get_calls()
@@ -863,9 +1030,17 @@ mod tests {
         // Test-only timeout — scroll loop without it would cycle
         // forever. ~20 swipes needed to exhaust the stall-cycle and
         // reach the target on the post-reversal pass; 6s leaves headroom.
-        let result = scroll_to_element(&selector, &driver, Direction::Down, Some(6000), None, None)
-            .await
-            .expect("should find element after direction reversal");
+        let result = scroll_to_element(
+            &selector,
+            &driver,
+            Direction::Down,
+            Some(6000),
+            None,
+            None,
+            0.0,
+        )
+        .await
+        .expect("should find element after direction reversal");
 
         assert_eq!(result.element.text.as_deref(), Some("Target"));
 
@@ -892,8 +1067,16 @@ mod tests {
         // Tight test-only timeout: with no element ever appearing, scroll
         // would stall-cycle directions until the timeout. 50ms is enough
         // to verify it errors without slowing the test suite.
-        let result =
-            scroll_to_element(&selector, &driver, Direction::Down, Some(50), None, None).await;
+        let result = scroll_to_element(
+            &selector,
+            &driver,
+            Direction::Down,
+            Some(50),
+            None,
+            None,
+            0.0,
+        )
+        .await;
         assert!(result.is_err());
     }
 
@@ -922,7 +1105,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Found");
 
-        scroll_to_element(&selector, &driver, direction, None, None, None)
+        scroll_to_element(&selector, &driver, direction, None, None, None, 0.0)
             .await
             .expect("should find element");
 
@@ -1841,6 +2024,148 @@ mod tests {
         assert!(
             rtx < rfx,
             "Right (finger left) SHALL produce a smaller end x"
+        );
+    }
+
+    // ── visibility_percentage / best-effort ─────────────────────────
+
+    #[test]
+    fn visible_fraction_full_partial_none() {
+        let vp = Viewport::new(375, 812);
+        assert_eq!(
+            visible_fraction(&Bounds::new(50, 100, 200, 40), &vp),
+            1.0,
+            "wholly-inside SHALL be 1.0"
+        );
+        // Half below the fold: y=792..832, viewport bottom 812 → 20 of 40 rows.
+        assert!(
+            (visible_fraction(&Bounds::new(50, 792, 200, 40), &vp) - 0.5).abs() < 1e-9,
+            "half-clipped SHALL be 0.5"
+        );
+        assert_eq!(
+            visible_fraction(&Bounds::new(0, 900, 100, 40), &vp),
+            0.0,
+            "wholly-offscreen SHALL be 0.0"
+        );
+    }
+
+    #[test]
+    fn visible_fraction_caps_below_one_for_oversized_element() {
+        let vp = Viewport::new(375, 812);
+        // Element twice the viewport height can never exceed ~0.5 visible.
+        let f = visible_fraction(&Bounds::new(0, 0, 375, 1624), &vp);
+        assert!(
+            f <= 0.5 + 1e-9 && f > 0.4,
+            "oversized element caps below 1.0; got {f}"
+        );
+    }
+
+    #[test]
+    fn target_fraction_from_maps_and_clamps() {
+        // Page scroll (not in a container): unset → full-visibility default.
+        assert_eq!(
+            target_fraction_from(None, false),
+            1.0,
+            "page default SHALL be full visibility"
+        );
+        // Container scroll: unset → first-sighting (historical) default.
+        assert_eq!(
+            target_fraction_from(None, true),
+            0.0,
+            "container default SHALL be first-sighting"
+        );
+        // An explicit value wins regardless of scroll kind.
+        assert!((target_fraction_from(Some(40), true) - 0.4).abs() < 1e-9);
+        assert!((target_fraction_from(Some(40), false) - 0.4).abs() < 1e-9);
+        assert_eq!(
+            target_fraction_from(Some(0), false),
+            0.0,
+            "0 SHALL accept any sighting"
+        );
+        assert_eq!(
+            target_fraction_from(Some(200), false),
+            1.0,
+            ">100 SHALL clamp to 1.0"
+        );
+    }
+
+    /// A root holding one text element at `bounds`, sized like a phone.
+    fn root_with_target(text: &str, bounds: Bounds) -> Element {
+        let mut root = make_element("root", default_bounds());
+        root.children = vec![make_element_with_text("StaticText", text, bounds)];
+        root
+    }
+
+    // Fully-visible-on-arrival target returns immediately under the smart
+    // default (1.0) — no swipe. This is the "common case unchanged" guarantee.
+    #[tokio::test]
+    async fn default_returns_immediately_when_fully_visible() {
+        let driver = SequenceMockDriver::new(vec![root_with_target(
+            "Dark Mode",
+            Bounds::new(40, 100, 200, 40),
+        )]);
+        let result = scroll_to_element(
+            &sel_with_text("Dark Mode"),
+            &driver,
+            Direction::Down,
+            None,
+            None,
+            None,
+            1.0,
+        )
+        .await
+        .expect("fully-visible target SHALL be found");
+        assert_eq!(result.element.text.as_deref(), Some("Dark Mode"));
+        assert!(
+            !driver.get_calls().iter().any(|(m, _)| m == "swipe_coords"),
+            "a fully-visible target SHALL NOT trigger any swipe"
+        );
+    }
+
+    // A target that stays only partially visible however much we scroll is a
+    // best-effort success, NOT an EF408 — the crux of #18/#19: unreachable
+    // full-visibility is not a failure once the target has been seen.
+    #[tokio::test]
+    async fn best_effort_returns_partial_sighting_instead_of_failing() {
+        // Target permanently clipped at the bottom edge (frac ~0.3), same tree
+        // every fetch → no scroll can improve it.
+        let tree = root_with_target("Dark Mode", Bounds::new(40, 784, 200, 100));
+        let driver = SequenceMockDriver::new(vec![tree.clone(), tree.clone(), tree.clone(), tree]);
+        let result = scroll_to_element(
+            &sel_with_text("Dark Mode"),
+            &driver,
+            Direction::Down,
+            None,
+            None,
+            None,
+            1.0,
+        )
+        .await
+        .expect("partial target SHALL be returned best-effort, not error");
+        assert_eq!(result.element.text.as_deref(), Some("Dark Mode"));
+    }
+
+    // target_fraction 0.0 preserves the historical "first sighting wins"
+    // behaviour used for internal container scrolls.
+    #[tokio::test]
+    async fn zero_target_accepts_first_partial_sighting() {
+        let tree = root_with_target("Row", Bounds::new(40, 784, 200, 100));
+        let driver = SequenceMockDriver::new(vec![tree]);
+        let result = scroll_to_element(
+            &sel_with_text("Row"),
+            &driver,
+            Direction::Down,
+            None,
+            None,
+            None,
+            0.0,
+        )
+        .await
+        .expect("target 0.0 SHALL accept the first sighting");
+        assert_eq!(result.element.text.as_deref(), Some("Row"));
+        assert!(
+            !driver.get_calls().iter().any(|(m, _)| m == "swipe_coords"),
+            "target 0.0 SHALL return without swiping"
         );
     }
 }

@@ -432,6 +432,10 @@ pub struct Step {
     pub restart: Option<bool>,
     pub auto_scroll: Option<bool>,
     pub scroll_timeout: Option<u64>,
+    /// How much of the target must be visible for auto-scroll to stop, 0–100.
+    /// Unset = the engine default (maximise visibility, best-effort). Lower it
+    /// to stop earlier on elements taller/wider than the viewport.
+    pub visibility_percentage: Option<u8>,
     /// Constrain scrolling to within a specific element's bounds.
     pub within: Option<SelectorGroup>,
     /// Swipe start position (selector with optional coordinates).
@@ -2059,6 +2063,7 @@ app = "other-app"
 restart = true
 auto_scroll = false
 scroll_timeout = 8000
+visibility_percentage = 40
 "#;
         let flow = parse_flow(toml_str).expect("misc step fields SHALL parse");
         let step = &flow.block[0].steps[0];
@@ -2067,6 +2072,7 @@ scroll_timeout = 8000
         assert_eq!(step.restart, Some(true));
         assert_eq!(step.auto_scroll, Some(false));
         assert_eq!(step.scroll_timeout, Some(8000));
+        assert_eq!(step.visibility_percentage, Some(40));
     }
 
     // ---------------------------------------------------------------
