@@ -4,7 +4,8 @@
 ## Release notes
 <!-- release-notes -->
 <!-- One line per change (keep the two markers, replace THIS comment). Prefix each
-     with a category — for the test-writer audience first:
+     with a category, e.g. `fixed: tap lands correctly under the keyboard`; a
+     leading `- ` bullet is optional. Categories — for the test-writer audience first:
        breaking:   an existing flow, or host/CI setup, may break
        added:      a new action, selector, matcher, fake generator, CLI cmd/flag, platform
        improved:   better/faster/wider existing behaviour, clearer errors (non-breaking)
