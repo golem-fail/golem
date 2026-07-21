@@ -430,6 +430,7 @@ impl SuiteRunner {
             self.config.coverage_override,
             self.config.repeat,
             self.config.profile.as_deref(),
+            self.config.stub_fail_on_runs.is_some(),
         )
         .await?;
 
