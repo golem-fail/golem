@@ -13,6 +13,7 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.
 - Sign off every commit: `git commit -s` (the DCO check fails unsigned commits — see `docs/contributing.md`). Author identity is the repo-local GitHub no-reply (auto); do NOT override it or reintroduce a personal/work email.
+- PR body needs a release-notes block (a `category: line` — `fixed:`/`added:`/`internal:`/… — inside the `<!-- release-notes -->` markers) or the `no-release-note` label, else the required gate blocks merge.
 
 ## Where information belongs (How / What / Why / Why not)
 Put each fact where it lives; don't write it in the wrong place.

@@ -220,7 +220,7 @@ while IFS=$'\x1f' read -r sha subject; do
     # Authored block: one typed line each. Require a non-space char after the
     # type (rejects empty / "- feat:   "); the leading [^space] also strips
     # leading padding from the captured text.
-    re_blockline='^[[:space:]]*-[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*([^[:space:]].*)$'
+    re_blockline='^[[:space:]]*-?[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*([^[:space:]].*)$'
     while IFS= read -r line; do
       [[ "$line" =~ $re_blockline ]] || continue
       bucket="$(canon_type "${BASH_REMATCH[1]}")"; [[ -z "$bucket" ]] && continue
