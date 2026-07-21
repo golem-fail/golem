@@ -27,7 +27,18 @@ use golem_runner::executor::{execute_flow, FlowResult};
 // for "not found" to time out.
 const DEFAULT_TIMEOUT: u64 = 500;
 
-static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(CaptureConfig::default);
+// Isolate capture output per test process. `CaptureConfig::default()` writes
+// to a *relative* `.golem/results` in the crate cwd; with `write_to_disk` on,
+// every golem-runner test process (nextest = process-per-test) that triggers
+// a failure/warning screenshot writes there — and the default empty
+// flow/device names mean two processes reusing a block name collide on the
+// identical path, racing `create_dir_all`/`write`. A per-process temp dir
+// removes the cross-process contention (and keeps `.golem/results` out of the
+// repo working tree).
+static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
+    output_dir: std::env::temp_dir().join(format!("golem-policy-tests-{}", std::process::id())),
+    ..CaptureConfig::default()
+});
 
 fn test_ctx() -> ExecutionContext<'static> {
     ExecutionContext {
