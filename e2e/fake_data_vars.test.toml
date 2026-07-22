@@ -17,6 +17,16 @@ gen_email = "${fake:email}"
 jp_city = "${fake:address(country=JP).city}"
 jp_city_ascii = "${fake:address(country=JP).ascii.city}"
 jp_street_ascii = "${fake:address(country=JP).ascii.street}"
+# Remaining generators, declared as vars so the typed value and the asserted
+# value are the identical seed-deterministic string. Kept ASCII/short so the
+# type→assert round-trip is robust cross-platform (no truncation, clean IME).
+gen_password = "${fake:password(length=12,symbols=false)}"
+gen_number = "${fake:number(min=100000,max=999999)}"
+gen_choice = "${fake:one_of(alpha|bravo|charlie)}"
+gen_year = "${fake:timestamp.year}"
+gen_phone = "${fake:phone(country=US)}"
+gen_person = "${fake:person(country=US).given}"
+gen_card = "${fake:credit_card(brand=visa).number}"
 
 [[flow.apps]]
 name = "app"
@@ -74,4 +84,37 @@ steps = [
   { action = "tap", on_text = "Reset fields" },
   { action = "type", on_text = "Search", input = "os-${_os}", auto_scroll = true },
   { action = "assert_visible", on_text = "os-${_os}" },
+
+  # 6. Remaining generators — one type→assert cycle each, reusing the Search
+  #    field via Reset. Each asserts via the same var, so the match is
+  #    seed-deterministic and the generator's output shape is exercised end to
+  #    end (simple: password/number/one_of/timestamp; geo: phone; structured:
+  #    person/credit_card).
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_password}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_password}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_number}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_number}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_choice}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_choice}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "year-${gen_year}", auto_scroll = true },
+  { action = "assert_visible", on_text = "year-${gen_year}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_phone}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_phone}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_person}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_person}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_card}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_card}" },
 ]
