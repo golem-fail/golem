@@ -9,6 +9,7 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 - Unit: `cargo t` (nextest; NOT `cargo test --release`). Output shows only fail/retry/slow by default (no tailing needed); `--status-level pass` for full output.
 - iOS companion Swift logic changed (`companions/ios`): `./scripts/test-ios-companion.sh` (Swift Testing on a sim; `cargo t` does NOT cover Swift — not part of nextest).
 - Lint: `cargo clippy --workspace --all-targets` (workspace denies `unwrap_used`).
+- Format: `cargo fmt --all -- --check` (uses the pinned toolchain; matches CI). Opt-in pre-push hook: `git config core.hooksPath .githooks`.
 - E2E per matrix, live on sim/emu.
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.

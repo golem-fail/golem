@@ -8,6 +8,7 @@ golem is a Cargo workspace. The agent-facing workflow lives in [`AGENTS.md`](../
 
 Run these after coding, before committing:
 
+- **Format:** `cargo fmt --all -- --check`. Uses the toolchain pinned in `rust-toolchain.toml`, so it matches CI exactly. See [Git hooks](#git-hooks-optional) for an opt-in pre-push check.
 - **Unit tests:** `cargo t` (nextest, debug). **Not** `cargo test --release` — nextest debug is far faster. Output shows only fail/retry/slow by default; add `--status-level pass` for full output.
 - **Lint:** `cargo clippy --workspace --all-targets`. The workspace denies `unwrap_used` — no `.unwrap()` in non-test code.
 - **iOS companion Swift changes** (`companions/ios`): `./scripts/test-ios-companion.sh` (Swift Testing on a simulator). `cargo t` does **not** cover Swift.
@@ -29,6 +30,18 @@ New features SHALL add or amend Rust tests — the goal is full unit + e2e cover
 | Both companions / companion + core | ✓ | both | ✓ |
 
 Any non-test code change — even making a `fn` `pub` — counts as its real category, not "tests only". Prefer an e2e flow relevant to the change; otherwise run a generic flow such as `e2e/cross/tap.test.toml`.
+
+## Git hooks (optional)
+
+The repo ships a pre-push hook in [`.githooks/`](../.githooks) that runs `cargo fmt --all -- --check` before a push — the one gate that silently diverges between a local edit and CI. It's fmt-only on purpose: instant and deterministic, where a hook that compiled the workspace would make every push slow. Heavier gates (clippy, tests, e2e) stay in CI and the commit gate above.
+
+Git never auto-installs repo-tracked hooks, so opt in once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Bypass a single push with `git push --no-verify`. CI remains the real gate either way — the hook just catches formatting locally so it never round-trips through a failed CI run.
 
 ## Running e2e
 
