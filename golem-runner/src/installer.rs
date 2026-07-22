@@ -199,42 +199,39 @@ impl InstallCache {
     /// Configure the on-disk persistent cache and load its contents.
     /// Subsequent [`Self::get_persistent`] / [`Self::set_persistent`] calls
     /// read from / write to `path`. Soft-fails on parse / IO errors —
-    /// returns `Ok(())` with an empty cache and emits a warning to stderr,
+    /// loads an empty cache and returns `Ok(Some(reason))` describing why,
     /// rather than blocking the suite from running. A corrupt cache should
-    /// degrade to "every (udid, bundle) misses" not crash the suite.
-    pub async fn load_persistent(&self, path: PathBuf) -> Result<()> {
+    /// degrade to "every (udid, bundle) misses" not crash the suite. The
+    /// caller surfaces `reason` as an `InstallCacheFileBroken` event so the
+    /// warning reaches daemon clients too; a missing file (fresh project)
+    /// and a clean load both return `Ok(None)`.
+    pub async fn load_persistent(&self, path: PathBuf) -> Result<Option<String>> {
+        let mut broken: Option<String> = None;
         let entries = match std::fs::read_to_string(&path) {
             Ok(s) => match serde_json::from_str::<CacheFile>(&s) {
                 Ok(file) if file.version == CACHE_FILE_VERSION => file.entries,
                 Ok(file) => {
-                    eprintln!(
-                        "  [install] cache file {} has unknown version {} — treating as empty",
-                        path.display(),
+                    broken = Some(format!(
+                        "has unknown version {} — treating as empty",
                         file.version
-                    );
+                    ));
                     HashMap::new()
                 }
                 Err(e) => {
-                    eprintln!(
-                        "  [install] cache file {} unreadable ({e}) — treating as empty",
-                        path.display()
-                    );
+                    broken = Some(format!("unreadable ({e}) — treating as empty"));
                     HashMap::new()
                 }
             },
             // Missing file is normal for a fresh project — quiet path.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
             Err(e) => {
-                eprintln!(
-                    "  [install] cache file {} unreadable ({e}) — treating as empty",
-                    path.display()
-                );
+                broken = Some(format!("unreadable ({e}) — treating as empty"));
                 HashMap::new()
             }
         };
         *self.persistent.lock().await = entries;
         *self.persistent_path.lock().await = Some(path);
-        Ok(())
+        Ok(broken)
     }
 
     /// Get the persisted install entry for `(udid, bundle)`, if any.
@@ -734,10 +731,14 @@ mod tests {
         let path = tmp.path().join("install-cache.json");
         std::fs::write(&path, "{not json").expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache
+        let reason = cache
             .load_persistent(path)
             .await
             .expect("async operation SHALL succeed");
+        assert!(
+            matches!(&reason, Some(r) if r.contains("unreadable")),
+            "corrupt cache SHALL report an unreadable reason, got {reason:?}"
+        );
         assert!(
             cache.get_persistent("u-1", "com.x").await.is_none(),
             "corrupt cache SHALL not block startup"
@@ -750,11 +751,31 @@ mod tests {
         let path = tmp.path().join("install-cache.json");
         std::fs::write(&path, r#"{"version": 99, "entries": {}}"#).expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache
+        let reason = cache
             .load_persistent(path)
             .await
             .expect("async operation SHALL succeed");
+        assert!(
+            matches!(&reason, Some(r) if r.contains("unknown version 99")),
+            "unknown-version cache SHALL report the version, got {reason:?}"
+        );
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_missing_file_returns_no_warning() {
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
+        // Never written — a fresh project's cache is simply absent.
+        let path = tmp.path().join("install-cache.json");
+        let cache = InstallCache::new();
+        let reason = cache
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
+        assert!(
+            reason.is_none(),
+            "a missing cache file is normal and SHALL NOT warn, got {reason:?}"
+        );
     }
 
     #[tokio::test]

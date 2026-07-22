@@ -7,3 +7,7 @@
 
 [alias]
 t = "nextest run --workspace"
+# Dev-only visual check of every EventKind / SubstepEvent rendering. The
+# example is never linked into the release binary; run `cargo gallery` in a
+# terminal to see the coloured output.
+gallery = "run -p golem-report --example event_gallery"

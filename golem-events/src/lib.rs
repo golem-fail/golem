@@ -563,6 +563,56 @@ pub enum EventKind {
         device_name: String,
         os_version: String,
     },
+    /// The persistent install cache file existed but couldn't be used
+    /// (unknown schema version or unreadable/corrupt) and was treated as
+    /// empty. Non-fatal — the suite proceeds with a cold cache. `reason`
+    /// carries the specific cause. Suite-level (sentinel `"suite"`).
+    InstallCacheFileBroken {
+        path: String,
+        reason: String,
+    },
+    /// Writing the persistent install cache back to disk failed after an
+    /// install. Non-fatal — a later run just recomputes. Device-tied.
+    InstallCacheWriteFailed {
+        reason: String,
+    },
+    /// A device-settings adjustment (e.g. disabling animations) couldn't be
+    /// applied. Non-fatal; the flow still runs. One event per warning,
+    /// device-tied.
+    DeviceSettingsWarning {
+        device_name: String,
+        warning: String,
+    },
+    /// A companion stopped answering health checks and is being relaunched.
+    /// `attempt`/`max` track the bounded restart budget. Device-tied.
+    CompanionRestarting {
+        device_name: String,
+        attempt: u32,
+        max: u32,
+    },
+    /// A post-flow state-reset cleanup step produced a warning. Non-fatal;
+    /// the flow result is unaffected. One event per warning, device-tied.
+    DeviceCleanupWarning {
+        warning: String,
+    },
+    /// No device matched a requested slot, so one is being created. Fires
+    /// before the (slow) create. Suite-level (sentinel `"suite"`).
+    DeviceBootRequested {
+        platform: String,
+    },
+    /// A companion failed to register on the registration server (bad
+    /// request or handler error). Server-side — lost to daemon clients
+    /// without this event. Suite-level.
+    RegistrationError {
+        error: String,
+    },
+    /// A companion registered successfully and was assigned a driver port.
+    /// Device-tied (`{platform}/{device_name}`).
+    RegistrationCompleted {
+        device_name: String,
+        platform: String,
+        port: u16,
+    },
 }
 
 // ── Substep events ──

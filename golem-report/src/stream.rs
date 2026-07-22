@@ -956,6 +956,100 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{t} {word} {dur} {device_id} — {detail}");
                 }
             }
+            EventKind::InstallCacheFileBroken { path, reason } => {
+                let t = tag("[install]", BOLD_YELLOW, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {DIM}cache file {path} {reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} cache file {path} {reason}");
+                }
+            }
+            EventKind::InstallCacheWriteFailed { reason } => {
+                let t = tag("[install]", BOLD_YELLOW, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {DIM}failed to write cache: {reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} failed to write cache: {reason}");
+                }
+            }
+            EventKind::DeviceSettingsWarning {
+                device_name,
+                warning,
+            } => {
+                let t = tag("[device_settings]", YELLOW, use_color);
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {dn} {DIM}—{RESET} {YELLOW}{warning}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} {dn} — {warning}");
+                }
+            }
+            EventKind::CompanionRestarting {
+                device_name,
+                attempt,
+                max,
+            } => {
+                let t = tag("[companion]", BLUE, use_color);
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {dn} {DIM}unreachable (health check failed) — restarting ({attempt}/{max})...{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} {dn} unreachable (health check failed) — restarting ({attempt}/{max})...");
+                }
+            }
+            EventKind::DeviceCleanupWarning { warning } => {
+                let t = tag("[cleanup]", YELLOW, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {YELLOW}{warning}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} {warning}");
+                }
+            }
+            EventKind::DeviceBootRequested { platform } => {
+                let t = tag("[devices]", MAGENTA, use_color);
+                if use_color {
+                    eprintln!(
+                        "{ts}  {dp}{t} {DIM}no {platform} device found — creating one...{RESET}"
+                    );
+                } else {
+                    eprintln!("{ts}  {dp}{t} no {platform} device found — creating one...");
+                }
+            }
+            EventKind::RegistrationError { error } => {
+                let t = tag("[registration]", BOLD_RED, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {BOLD_RED}error:{RESET} {error}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} error: {error}");
+                }
+            }
+            EventKind::RegistrationCompleted {
+                device_name,
+                platform,
+                port,
+            } => {
+                let t = tag("[registration]", BLUE, use_color);
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
+                if use_color {
+                    eprintln!(
+                        "{ts}  {dp}{t} {dn} {DIM}({platform}) registered on port {port}{RESET}"
+                    );
+                } else {
+                    eprintln!("{ts}  {dp}{t} {dn} ({platform}) registered on port {port}");
+                }
+            }
             _ => {}
         }
     }
