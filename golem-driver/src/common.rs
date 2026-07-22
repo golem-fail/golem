@@ -144,7 +144,8 @@ mod tests {
             "safe_area_top": 47,
             "safe_area_bottom": 34,
             "safe_area_left": 5,
-            "safe_area_right": 6
+            "safe_area_right": 6,
+            "css_safe_area_top": 62
         }"#;
         let (_el, meta) = parse_hierarchy(json).expect("tree wrapper SHALL parse");
         assert_eq!(
@@ -155,6 +156,10 @@ mod tests {
         assert_eq!(meta.safe_area_bottom, 34, "safe_area_bottom SHALL be read");
         assert_eq!(meta.safe_area_left, 5, "safe_area_left SHALL be read");
         assert_eq!(meta.safe_area_right, 6, "safe_area_right SHALL be read");
+        assert_eq!(
+            meta.css_safe_area_top, 62,
+            "css_safe_area_top SHALL be read from wrapper as a diagnostic"
+        );
     }
 
     // 5. Invalid JSON surfaces a contextual parse error.

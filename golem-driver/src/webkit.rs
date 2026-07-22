@@ -910,6 +910,11 @@ fn webview_screen_offset(
 /// - No inspector socket found (simulator not running)
 /// - No inspectable WKWebView (isInspectable not set)
 /// - JS evaluation fails
+///
+/// On success returns the screen-offset DOM tree and the CSS
+/// `env(safe-area-inset-top)` the page reported — the caller keeps the latter
+/// as a diagnostic on `HierarchyMeta` (it is NOT the value used for the offset;
+/// see `webview_screen_offset`).
 pub(crate) async fn fetch_webview_dom(
     inspector: &mut WebKitInspector,
     webview_bounds_left: i32,
@@ -918,7 +923,7 @@ pub(crate) async fn fetch_webview_dom(
     // `webview_bounds_top`. Used to cancel exactly that inset for cover pages
     // (the page's CSS env can differ and must not be used as the amount).
     native_safe_area_top: i32,
-) -> Option<serde_json::Value> {
+) -> Option<(serde_json::Value, i32)> {
     let dom_json = match inspector
         .evaluate_js(crate::cdp::DOM_TRAVERSAL_JS.trim())
         .await
@@ -1012,7 +1017,7 @@ pub(crate) async fn fetch_webview_dom(
             vv_offset_top,
         );
         crate::cdp::offset_bounds(&mut tree, dx, dy);
-        Some(tree)
+        Some((tree, css_safe_area_top))
     } else {
         None
     }
