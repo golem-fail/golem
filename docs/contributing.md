@@ -72,9 +72,10 @@ See [Architecture](architecture.md) for the crate map and the end-to-end executi
 
 ## Release notes
 
-Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one line per change, each prefixed with a category:
+Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one line per change, each prefixed with a category. Keep the `## Release notes` header above the markers (it's in the [PR template](../.github/pull_request_template.md)): the generator keys off the `<!-- release-notes -->` markers, but the header is what orients a human reviewer scanning the description.
 
 ```text
+## Release notes
 <!-- release-notes -->
 - added: swipe_until scrolls until a target is visible
 - fixed: scroll overshoot no longer reverses on RTL
