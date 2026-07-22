@@ -71,6 +71,25 @@ steps = [
 ]
 
 [[block]]
+name = "relational_flat"
+steps = [
+  # All four flat prefixed positional forms — the syntactic complement to the
+  # grouped below/above/left_of/right_of above, co-located in the authoritative
+  # selector flow. Same grid, tap→readout proves each resolves to the right
+  # cell. (Flat forms take only a text/label anchor, no trait array, so the
+  # anchors are chosen unambiguous: the grid's column/row overlap picks the
+  # adjacent cell without needing a `button` filter.)
+  { action = "tap", on_below = "A1" },
+  { action = "assert_visible", on_text = "tapped:A2" },
+  { action = "tap", on_above = "A4" },
+  { action = "assert_visible", on_text = "tapped:A3" },
+  { action = "tap", on_left_of = "D1" },
+  { action = "assert_visible", on_text = "tapped:C1" },
+  { action = "tap", on_right_of = "A1" },
+  { action = "assert_visible", on_text = "tapped:B1" },
+]
+
+[[block]]
 name = "containment"
 steps = [
   # contains → the box that ENCLOSES "D4" (D4's own button is the anchor, so
