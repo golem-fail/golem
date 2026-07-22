@@ -60,6 +60,13 @@ pub struct HierarchyMeta {
     pub safe_area_left: i32,
     /// Safe area inset from right (mirror of left).
     pub safe_area_right: i32,
+    /// CSS `env(safe-area-inset-top)` reported by an enriched iOS WKWebView
+    /// (`viewport-fit=cover` pages). Diagnostic only — the coordinate
+    /// transform uses the NATIVE inset, which can differ from this CSS value
+    /// (e.g. native 54 vs CSS 62 on a Dynamic-Island device). Kept so callers
+    /// can inspect the value the webview reported; `0` when there was no
+    /// webview enrichment or the page isn't cover.
+    pub css_safe_area_top: i32,
     /// Display cutout regions where physical pixels don't exist (notch, punch-hole).
     pub cutouts: Vec<CutoutRect>,
     /// Rounded display corners where physical pixels don't exist.
@@ -129,6 +136,10 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
                 .unwrap_or(0) as i32;
             meta.safe_area_right = obj
                 .get("safe_area_right")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            meta.css_safe_area_top = obj
+                .get("css_safe_area_top")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
             meta.cutouts = parse_cutouts_json(obj.get("cutouts"));

@@ -280,11 +280,14 @@ fn safe_area_top_from_wrapper(wrapper: &serde_json::Value) -> i32 {
 ///
 /// Builds `{"tree": <raw>}` and copies the device-context keys
 /// (`keyboard_height`, `safe_area_top`, `safe_area_bottom`,
-/// `device_model`) from `original` when present. Returns the serialized
-/// JSON string.
+/// `device_model`) from `original` when present. `css_safe_area_top` is the
+/// diagnostic value from webview enrichment (0 when none); it's written only
+/// when non-zero so `parse_hierarchy` leaves the field at its default
+/// otherwise. Returns the serialized JSON string.
 fn build_enriched_hierarchy(
     original: &serde_json::Value,
     raw: &serde_json::Value,
+    css_safe_area_top: i32,
 ) -> Result<String> {
     let mut response = serde_json::json!({ "tree": raw });
     if let Some(obj) = original.as_object() {
@@ -298,6 +301,9 @@ fn build_enriched_hierarchy(
                 response[key] = val.clone();
             }
         }
+    }
+    if css_safe_area_top != 0 {
+        response["css_safe_area_top"] = css_safe_area_top.into();
     }
     serde_json::to_string(&response).context("failed to serialize hierarchy")
 }
@@ -330,18 +336,20 @@ async fn setup_webkit(target_udid: &str) -> Option<WebKitState> {
 }
 
 /// Try to enrich a WebView node with WebKit Inspector DOM data.
-/// Returns the WebKitState back if successful (for reuse), None if failed.
+/// Returns the WebKitState back (for reuse) plus the CSS safe-area-top the
+/// page reported (diagnostic, 0 for non-cover pages) if successful; None if
+/// the inspector connection was lost.
 async fn try_enrich(
     raw: &mut serde_json::Value,
     mut state: WebKitState,
     wv_x: i32,
     wv_y: i32,
     safe_area_top: i32,
-) -> Option<WebKitState> {
+) -> Option<(WebKitState, i32)> {
     match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y, safe_area_top).await {
-        Some(dom) => {
+        Some((dom, css_safe_area_top)) => {
             replace_webview_children(raw, dom);
-            Some(state)
+            Some((state, css_safe_area_top))
         }
         None => None, // Inspector connection lost
     }
@@ -366,6 +374,9 @@ impl PlatformDriver for IosDriver {
         // viewport, which starts below the safe area. Add safe_area_top so DOM
         // coordinates match the native accessibility tree (screen coordinates).
         let safe_area_top = safe_area_top_from_wrapper(&wrapper);
+        // Diagnostic captured from webview enrichment below (0 when there's no
+        // webview or the page isn't cover); surfaced on HierarchyMeta.
+        let mut css_safe_area_top = 0;
         if let Some((wv_x, wv_y)) = find_webview_bounds(&raw) {
             let wv_y = wv_y + safe_area_top;
             // Check WebKit state (short lock, no async while held)
@@ -446,16 +457,20 @@ impl PlatformDriver for IosDriver {
 
             // Now do async WebKit work outside the lock
             if let WebKitAction::Enrich(state) = webkit_action {
-                if let Some(state) = try_enrich(&mut raw, state, wv_x, wv_y, safe_area_top).await {
+                if let Some((state, css)) =
+                    try_enrich(&mut raw, state, wv_x, wv_y, safe_area_top).await
+                {
+                    css_safe_area_top = css;
                     // Put state back
                     let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                     *wk = WebKitLifecycle::Ready(state);
                 } else {
                     // Inspector failed — reconnect immediately
                     if let Some(new_state) = setup_webkit(&self.device_id).await {
-                        if let Some(new_state) =
+                        if let Some((new_state, css)) =
                             try_enrich(&mut raw, new_state, wv_x, wv_y, safe_area_top).await
                         {
+                            css_safe_area_top = css;
                             let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                             *wk = WebKitLifecycle::Ready(new_state);
                         } else {
@@ -472,7 +487,7 @@ impl PlatformDriver for IosDriver {
 
         // Reconstruct wrapper with enriched tree for parse_hierarchy
         let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
-        let enriched_str = build_enriched_hierarchy(&original, &raw)?;
+        let enriched_str = build_enriched_hierarchy(&original, &raw, css_safe_area_top)?;
         parse_hierarchy(&enriched_str)
     }
 
@@ -1325,7 +1340,7 @@ mod tests {
             "extraneous": "ignored",
         });
         let raw = serde_json::json!({ "element_type": "View" });
-        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw, 62).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"]["element_type"], "View");
@@ -1333,6 +1348,10 @@ mod tests {
         assert_eq!(parsed["safe_area_top"], 47);
         assert_eq!(parsed["safe_area_bottom"], 34);
         assert_eq!(parsed["device_model"], "iPhone17,1");
+        assert_eq!(
+            parsed["css_safe_area_top"], 62,
+            "a non-zero css safe-area SHALL be recorded as a diagnostic"
+        );
         assert!(
             parsed.get("extraneous").is_none(),
             "only the whitelisted device-context keys SHALL be copied, got: {s}",
@@ -1344,12 +1363,16 @@ mod tests {
     fn build_enriched_hierarchy_omits_missing_keys() {
         let original = serde_json::json!({ "tree": [] });
         let raw = serde_json::json!({ "element_type": "Window" });
-        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw, 0).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"]["element_type"], "Window");
         assert!(parsed.get("keyboard_height").is_none());
         assert!(parsed.get("safe_area_top").is_none());
+        assert!(
+            parsed.get("css_safe_area_top").is_none(),
+            "a zero css safe-area SHALL be omitted so parse leaves the default"
+        );
     }
 
     // 3. A non-object `original` (e.g. the default Null from a parse failure)
@@ -1358,7 +1381,7 @@ mod tests {
     fn build_enriched_hierarchy_non_object_original() {
         let original = serde_json::Value::Null;
         let raw = serde_json::json!([{ "element_type": "Leaf" }]);
-        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw, 0).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"][0]["element_type"], "Leaf");
