@@ -38,7 +38,7 @@ Before adding a comment ask: "is this *why not*, or just *why* (excuse for a cha
 | Both companions / companion+core | ✓ | both | ✓ |
 
 Any non-test code change (even a fn → `pub`) = its real category, not "tests only".
-Prefer e2e relevant to the change; else any generic flow (`e2e/cross/tap.test.toml`).
+Prefer e2e relevant to the change; else any generic flow (`e2e/tap.test.toml`).
 
 ## Core invariant: visible tree judges, full tree only hints
 golem tests like a human — target/assert ONLY against the visible (filtered) tree (`filter_viewport` on `effective_bounds`/`visible_bounds`, ancestor-clip-aware via IntersectionObserver in webviews). The full (unfiltered) tree is for hints that speed/steer but never decide pass/fail: auto-scroll direction, overshoot reversal, settle fingerprints. Reading the full tree to judge a step succeeded = bug (passes on what the user can't see). See [Visibility model](docs/architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints).
@@ -46,10 +46,10 @@ golem tests like a human — target/assert ONLY against the visible (filtered) t
 ## Run e2e
 ```
 # fast (no companion change): reuses installed app+companion
-cargo run -- run e2e/cross/<flow>.test.toml --no-build --platform android|ios
+cargo run -- run e2e/<flow>.test.toml --no-build --platform android|ios
 # companion changed: bump first (invalidates cache), then full build/install
 ./scripts/bump-version.sh --patch
-cargo run -- run e2e/cross/<flow>.test.toml --platform android|ios
+cargo run -- run e2e/<flow>.test.toml --platform android|ios
 ```
 Versions never go backwards; final commit may skip numbers.
 
