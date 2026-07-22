@@ -1,0 +1,88 @@
+# PR auto-labels (actions/labeler@v5). Path-derivable dimensions ONLY:
+# `lang:` and `framework:`. `area:`/`platform:` encode intent, not path, so
+# they stay manual. Globs match golem's OWN code (the label definitions are
+# "golem's own X" / "app-under-test: Y") — test apps are app-under-test, so
+# `lang:` never matches them and `framework:` matches them by design.
+#
+# Each dir lists both `<dir>/*.ext` and `<dir>/**/*.ext` so a file at the dir
+# root (e.g. golem-cli/build.rs, npm/install.js) matches regardless of how the
+# globstar treats zero path segments.
+
+# ── documentation (pure-docs PRs only) ───────────────────────────────────
+# `any-glob-to-all-files` = the glob must match EVERY changed file, so this
+# fires only when the whole PR is markdown. A code+docs PR gets its lang:
+# label instead — `documentation` stays meaningful ("docs-only, skip the deep
+# review") rather than tagging every feature PR that also edits a doc.
+"documentation":
+  - changed-files:
+      - any-glob-to-all-files:
+          - "**/*.md"
+
+# ── lang: (golem's own code) ──────────────────────────────────────────────
+"lang: rust":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "golem-*/*.rs" # workspace crates only; test-app*/src-tauri is app-under-test
+          - "golem-*/**/*.rs"
+
+"lang: js":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "npm/*.js" # the @golem-fail/golem wrapper (test-app Svelte is app-under-test)
+          - "npm/**/*.js"
+          - "npm/*.mjs"
+          - "npm/**/*.mjs"
+          - "npm/*.cjs"
+          - "npm/**/*.cjs"
+
+"lang: swift":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "companions/ios/**/*.swift"
+
+"lang: kotlin":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "companions/android/**/*.kt"
+          - "companions/android/**/*.java"
+
+"lang: shell":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/*.sh"
+          - "scripts/**/*.sh"
+          - "golem-cli/templates/install-scripts/*.sh" # shipped templates are golem's own
+          - ".githooks/*"
+          - ".githooks/**"
+
+# ── framework: (app-under-test — one per test-app dir + its install template) ─
+"framework: tauri":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "test-app/**"
+          - "golem-cli/templates/install-scripts/tauri.sh"
+
+"framework: native":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "test-app-b/**"
+          - "golem-cli/templates/install-scripts/native-android.sh"
+          - "golem-cli/templates/install-scripts/native-ios.sh"
+
+"framework: expo":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "test-app-e/**"
+          - "golem-cli/templates/install-scripts/expo.sh"
+
+"framework: flutter":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "test-app-d/**"
+          - "golem-cli/templates/install-scripts/flutter.sh"
+
+"framework: capacitor":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "test-app-c/**"
+          - "golem-cli/templates/install-scripts/capacitor.sh"
