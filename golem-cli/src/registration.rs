@@ -15,6 +15,8 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
+use golem_events::channel::EventSender;
+use golem_events::{DeviceId, EventKind};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener as AsyncTcpListener;
 
@@ -212,33 +214,53 @@ impl RegistrationState {
     }
 }
 
-/// Start the registration server. Returns the port it's listening on.
-pub async fn start_registration_server(state: RegistrationState) -> Result<u16> {
+/// Start the registration server. Returns the port it's listening on and
+/// the accept-loop task handle.
+///
+/// `event_tx` carries setup narrative (registration success / handler
+/// errors) so it reaches daemon clients — the accept loop runs on the
+/// server, whose stderr a remote client never sees.
+///
+/// The caller MUST abort the returned handle once registration is over:
+/// the accept loop owns a clone of `event_tx`, and the suite's event
+/// consumers only finish when every sender drops. Leaving it running
+/// wedges suite shutdown (the accumulator/forwarder await channel close).
+pub async fn start_registration_server(
+    state: RegistrationState,
+    event_tx: EventSender,
+) -> Result<(u16, tokio::task::JoinHandle<()>)> {
     // Find a free port in the registration range
     let (listener, port) = find_free_port_in_range(REG_PORT_START, REG_PORT_END)?;
     listener.set_nonblocking(true)?;
     let listener = AsyncTcpListener::from_std(listener)?;
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         loop {
             let Ok((stream, _)) = listener.accept().await else {
                 continue;
             };
             let state = state.clone();
+            let event_tx = event_tx.clone();
             tokio::spawn(async move {
-                if let Err(e) = handle_connection(stream, state).await {
-                    eprintln!("  [registration] error: {e}");
+                if let Err(e) = handle_connection(stream, state, &event_tx).await {
+                    event_tx.emit(
+                        DeviceId("suite".into()),
+                        EventKind::RegistrationError {
+                            error: e.to_string(),
+                        },
+                    );
                 }
             });
         }
     });
 
-    Ok(port)
+    Ok((port, handle))
 }
 
 async fn handle_connection(
     mut stream: tokio::net::TcpStream,
     state: RegistrationState,
+    event_tx: &EventSender,
 ) -> Result<()> {
     let (reader, mut writer) = stream.split();
     let mut buf_reader = BufReader::new(reader);
@@ -289,7 +311,14 @@ async fn handle_connection(
 
         let port = state.allocate_port(device_id, platform, device_name, version);
 
-        eprintln!("  [registration] {device_name} ({platform}) registered on port {port}");
+        event_tx.emit(
+            DeviceId(format!("{platform}/{device_name}")),
+            EventKind::RegistrationCompleted {
+                device_name: device_name.to_string(),
+                platform: platform.to_string(),
+                port,
+            },
+        );
 
         let response_body = serde_json::json!({ "port": port }).to_string();
         let response = format!(
@@ -777,7 +806,9 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let (state, _rx) = RegistrationState::new();
-        let reg_port = start_registration_server(state.clone())
+        let (event_tx, subs) = golem_events::channel::event_channel();
+        let mut events = subs.subscribe();
+        let (reg_port, _reg_task) = start_registration_server(state.clone(), event_tx)
             .await
             .expect("registration server SHALL start");
 
@@ -820,6 +851,20 @@ mod tests {
             got.device_name, "SimPhone",
             "recorded device_name SHALL match the request"
         );
+
+        let event = events
+            .recv()
+            .await
+            .expect("a registration event SHALL be emitted");
+        assert!(
+            matches!(
+                event.kind,
+                EventKind::RegistrationCompleted { ref device_name, ref platform, port }
+                    if device_name == "SimPhone" && platform == "ios" && port == got.port
+            ),
+            "SHALL emit RegistrationCompleted with the request's identity + allocated port, got {:?}",
+            event.kind
+        );
     }
 
     // 20. An unknown route returns 404 and records nothing.
@@ -828,7 +873,8 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let (state, _rx) = RegistrationState::new();
-        let reg_port = start_registration_server(state.clone())
+        let (event_tx, _subs) = golem_events::channel::event_channel();
+        let (reg_port, _reg_task) = start_registration_server(state.clone(), event_tx)
             .await
             .expect("registration server SHALL start");
 
@@ -861,7 +907,8 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let (state, _rx) = RegistrationState::new();
-        let reg_port = start_registration_server(state.clone())
+        let (event_tx, _subs) = golem_events::channel::event_channel();
+        let (reg_port, _reg_task) = start_registration_server(state.clone(), event_tx)
             .await
             .expect("registration server SHALL start");
 

@@ -463,10 +463,19 @@ impl SuiteRunner {
         // (test harnesses, flows with no `install_script`) skip the work
         // entirely so suite startup stays fast.
         let needs_cache = !parsed.install_matrix.is_empty() && !self.config.no_build;
+        // Deferred so it emits after the stream subscribers attach below —
+        // the broadcast drops events sent before any receiver exists.
+        let mut cache_broken: Option<(String, String)> = None;
         if needs_cache {
             let cache_path = self.config.project_root.join(".golem/install-cache.json");
-            if let Err(e) = self.install_cache.load_persistent(cache_path).await {
-                eprintln!("  [install] cache load failed ({e}) — continuing with empty cache");
+            let path_str = cache_path.display().to_string();
+            match self.install_cache.load_persistent(cache_path).await {
+                Ok(Some(reason)) => cache_broken = Some((path_str, reason)),
+                Ok(None) => {}
+                Err(e) => {
+                    cache_broken =
+                        Some((path_str, format!("load failed ({e}) — treating as empty")));
+                }
             }
         }
         let fingerprint = Arc::new(if needs_cache {
@@ -542,15 +551,27 @@ impl SuiteRunner {
         if let Some(event) = self.plan_event.take() {
             suite_tx.emit(golem_events::DeviceId("suite".into()), event);
         }
+        if let Some((path, reason)) = cache_broken {
+            suite_tx.emit(
+                golem_events::DeviceId("suite".into()),
+                golem_events::EventKind::InstallCacheFileBroken { path, reason },
+            );
+        }
 
         drop(suite_rx);
 
         // Start the registration server once, share across every worker.
         // Companions register here; workers look up the port post-registration.
         let (reg_state, _reg_rx) = crate::registration::RegistrationState::new();
-        let reg_port = crate::registration::start_registration_server(reg_state.clone())
-            .await
-            .unwrap_or(0);
+        let (reg_port, reg_task) = match crate::registration::start_registration_server(
+            reg_state.clone(),
+            suite_tx.clone(),
+        )
+        .await
+        {
+            Ok((port, task)) => (port, Some(task)),
+            Err(_) => (0, None),
+        };
 
         // Parse failures become failed flow reports immediately — they don't
         // need a worker, they just need to appear in the output stream so
@@ -820,6 +841,13 @@ impl SuiteRunner {
                 skipped,
             },
         );
+        // Stop the registration accept loop before draining: it owns a
+        // clone of suite_tx, so the event consumers below never see the
+        // channel close while it runs. All companions have registered by
+        // now (every flow has finished), so aborting loses nothing.
+        if let Some(t) = reg_task {
+            t.abort();
+        }
         drop(suite_tx);
         if let Some(h) = human_handle {
             let _ = h.await;
@@ -1758,6 +1786,7 @@ async fn setup_slot(
     // nobody answered on.
     let port = {
         let device_for_init = device.clone();
+        let device_label_for_init = format!("{}/{}", device.platform, device.name);
         let reg_state_for_init = reg_state.clone();
         let event_tx_for_init = event_tx.clone();
         let android_settings = device_settings.android.clone();
@@ -1776,7 +1805,13 @@ async fn setup_slot(
                 )
                 .await;
                 for w in setting_warnings {
-                    eprintln!("  [device_settings] {w}");
+                    event_tx_for_init.emit(
+                        golem_events::DeviceId(device_label_for_init.clone()),
+                        golem_events::EventKind::DeviceSettingsWarning {
+                            device_name: device_for_init.name.clone(),
+                            warning: w,
+                        },
+                    );
                 }
 
                 // Next-run self-heal: if a prior run left golem's Unicode IME
@@ -1879,9 +1914,13 @@ async fn setup_slot(
                     );
                 }
                 restarts += 1;
-                eprintln!(
-                    "  [companion] {device_label} unreachable (health check failed) — \
-                     restarting ({restarts}/{MAX_COMPANION_RESTARTS})"
+                event_tx.emit(
+                    golem_events::DeviceId(device_label.clone()),
+                    golem_events::EventKind::CompanionRestarting {
+                        device_name: device.name.clone(),
+                        attempt: restarts,
+                        max: MAX_COMPANION_RESTARTS,
+                    },
                 );
                 // Evict the dead companion so the relaunch spawns fresh rather
                 // than routing back to the same dead port (both the port cache
@@ -2113,7 +2152,12 @@ async fn preinstall_for_device_scoped(
                     .set_persistent(&device.udid, &entry.bundle_id, persisted)
                     .await
                 {
-                    eprintln!("  [install] failed to write cache: {e}");
+                    event_tx.emit(
+                        golem_events::DeviceId(format!("{platform}/{}", device.name)),
+                        golem_events::EventKind::InstallCacheWriteFailed {
+                            reason: e.to_string(),
+                        },
+                    );
                 }
             }
         }
@@ -2716,7 +2760,12 @@ pub async fn start_companions_public(
     }
 
     let (reg_state, _rx) = crate::registration::RegistrationState::new();
-    let reg_port = crate::registration::start_registration_server(reg_state.clone()).await?;
+    // `golem tree` renders its own output via direct stderr, not the event
+    // stream — no subscriber consumes registration narrative here, so a
+    // detached sender is correct (the events are simply not displayed).
+    let (tree_tx, _tree_subs) = golem_events::channel::event_channel();
+    let (reg_port, _reg_task) =
+        crate::registration::start_registration_server(reg_state.clone(), tree_tx).await?;
 
     let mut results = Vec::new();
 
@@ -3680,7 +3729,11 @@ async fn run_flow_on_device(
     )
     .await;
     for w in cleanup_result.warnings {
-        eprintln!("  [{device_label}] Cleanup: {w}");
+        if let Some(em) = &device_emitter {
+            em.emit(golem_events::EventKind::DeviceCleanupWarning {
+                warning: format!("Cleanup: {w}"),
+            });
+        }
         report.warnings.push(format!("Cleanup: {w}"));
     }
 
@@ -3917,7 +3970,12 @@ async fn find_available_device(
                 .unwrap_or(golem_devices::DeviceType::Phone);
             let requested_os = slot.and_then(|s| s.os_version.clone());
             let requested_playstore = slot.and_then(|s| s.playstore);
-            eprintln!("  [devices] no {target_platform} device found — creating one...");
+            event_tx.emit(
+                golem_events::DeviceId("suite".into()),
+                golem_events::EventKind::DeviceBootRequested {
+                    platform: target_platform.to_string(),
+                },
+            );
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
             let created = golem_devices::lifecycle::auto_create_device(
                 target_platform,
