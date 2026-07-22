@@ -1,0 +1,25 @@
+#!/bin/sh
+# Fail fast on formatting drift before it reaches CI.
+#
+# Scope is deliberately fmt-only: it is instant and deterministic, and it is
+# the one check that silently diverges between a local edit and CI. Heavier
+# gates (clippy, tests, e2e) stay in CI and the documented commit gate — a
+# push hook that compiled the workspace would make every push slow.
+#
+# Opt in (hooks are never auto-installed):
+#   git config core.hooksPath .githooks
+#
+# `cargo fmt` resolves the toolchain pinned in rust-toolchain.toml, so this
+# matches CI's rustfmt byte-for-byte. Skips cleanly when cargo is absent.
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-push: cargo not found — skipping fmt check" >&2
+    exit 0
+fi
+
+if ! cargo fmt --all -- --check; then
+    echo >&2
+    echo "pre-push: formatting check failed — run 'cargo fmt --all' and amend, then push again." >&2
+    echo "          (bypass once with: git push --no-verify)" >&2
+    exit 1
+fi
