@@ -1,0 +1,23 @@
+name: Label PRs
+
+# At-a-glance `lang:`/`framework:` tags for reviewers, derived from changed
+# paths (see .github/labeler.yml). Runs only on open/reopen — NOT synchronize —
+# so a label a reviewer deliberately removes isn't re-added on the next push.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+# labeler needs write to apply labels; it reads only the changed-file list via
+# the API (never checks out or runs PR code), so pull_request_target is safe.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-slim # cheapest tier (matches dco / release-note-check); ample for a JS action
+    timeout-minutes: 5 # trivial JS action (seconds); a cap stops a hung run burning minutes
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          sync-labels: false # additive only — never removes a human's manual edits
