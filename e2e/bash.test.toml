@@ -1,0 +1,24 @@
+[flow]
+name = "bash action"
+tags = ["cross-platform", "external", "bash"]
+
+# `bash` runs a host-side command via `sh -c` and captures stdout into a var
+# (save_to). We then type that captured value into a field and assert it,
+# proving bash output flows through the var store into a later step. `printf`
+# (no trailing newline) keeps the captured value exact. Menu-jump to Text
+# Fields (no absorber) so the round-trip is robust cross-platform.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "bash_echo"
+steps = [
+  { action = "bash", run = "printf golem-bash-7", save_to = "bash_out" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+  { action = "type", on_text = "Search", input = "${bash_out}", auto_scroll = true },
+  { action = "assert_visible", on_text = "golem-bash-7" },
+]

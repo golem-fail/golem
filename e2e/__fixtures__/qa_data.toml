@@ -1,0 +1,6 @@
+# Fixture for e2e/load_fixture.test.toml. `load_fixture … as = "cfg"` loads
+# this [vars] table under the `cfg` namespace, referenced as ${cfg.key}.
+# Generators are evaluated at load (seed-deterministic), same as [flow.vars].
+[vars]
+username = "qa-user-42"
+token = "${fake:uuid}"
