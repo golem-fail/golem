@@ -28,17 +28,17 @@ New features SHALL add or amend Rust tests — the goal is full unit + e2e cover
 | One companion only | ✓ | that 1 platform | ✓ |
 | Both companions / companion + core | ✓ | both | ✓ |
 
-Any non-test code change — even making a `fn` `pub` — counts as its real category, not "tests only". Prefer an e2e flow relevant to the change; otherwise run a generic flow such as `e2e/cross/tap.test.toml`.
+Any non-test code change — even making a `fn` `pub` — counts as its real category, not "tests only". Prefer an e2e flow relevant to the change; otherwise run a generic flow such as `e2e/tap.test.toml`.
 
 ## Running e2e
 
 ```bash
 # Fast (no companion change): reuses the installed app + companion
-cargo run -- run e2e/cross/<flow>.test.toml --no-build --platform android|ios
+cargo run -- run e2e/<flow>.test.toml --no-build --platform android|ios
 
 # Companion changed: bump first (invalidates the install cache), then full build/install
 ./scripts/bump-version.sh --patch
-cargo run -- run e2e/cross/<flow>.test.toml --platform android|ios
+cargo run -- run e2e/<flow>.test.toml --platform android|ios
 ```
 
 Versions only ever go forward — a final commit may skip numbers. See [Versioning](versioning.md) for which files carry a version and why a companion change requires a bump (it invalidates the install cache so the new companion actually ships to the device).

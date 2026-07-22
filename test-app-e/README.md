@@ -18,7 +18,7 @@ Expo account or signing account needed.
 
 ```
 # from the repo root, via golem:
-cargo run -- run e2e/cross/expo_lifecycle.test.toml --platform ios|android
+cargo run -- run e2e/expo_lifecycle.test.toml --platform ios|android
 ```
 
 Generated native dirs (`ios/`, `android/`), `node_modules/`, and `.expo/` are
