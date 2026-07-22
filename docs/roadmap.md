@@ -10,11 +10,8 @@ test guard) and cover device boot/wait, `installed_state::query`, the adb
 driver funnel, device reboot/recovery, and the `http` action. Sites still on
 raw `tokio::process`/`reqwest`, to wire when hermetic tests are wanted:
 
-- `installer::run_install_script` — holds a *live child*, streams stderr line-by-line as
-  `InstallOutput` events, and applies caller-side timeout+kill. The capture-all `output()`
-  seam can't model it without regressing live build-progress streaming; needs a dedicated
-  *streaming* trait method (live child + kill handle). Its 3 tests still spawn real trivial
-  scripts (nextest SLOW).
+- `installer::run_install_script` streaming seam — **migrated to #66** (needs a dedicated
+  streaming trait method; its 3 tests still spawn real scripts, nextest SLOW).
 - The `screenrecord` spawn in `golem-driver` `android` `start_recording` — same live-child
   shape.
 - Lower-value auxiliary sites: `golem-driver` `cdp`/`webkit` (lsof/ps/adb + CDP
@@ -40,33 +37,6 @@ insufficient.
 
 **Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
 glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
-
-## Suite summary rendering
-
-The end-of-suite block mixes metrics at different granularity without
-clear separation:
-
-```
-Summary [  73.715s]  1 passed, 1 failed             ← flow-level counts
-Results: .golem/results/  (json, toon)
-
-── 0 flakes, 1 fail, 1 stable across 1 runs ──      ← test-aggregate over repeats
-FAIL     0/1    webview.test (android/Pixel 7a API 36)
-PASS     1/1    webview.test (android/Pixel 8 Pro API 36)
-```
-
-`1 passed, 1 failed` is flow-level, but `0 flakes / 1 fail / 1 stable`
-is test-level aggregated across repeats. Same line height, no visual
-cue that they're different things. The trailing per-(test, device)
-table is yet another granularity. The reader has to parse three
-different "what does this number mean" contexts in adjacent lines.
-
-Rework for clarity — keep all the info but make levels distinct,
-e.g. label sections, indent, or use a divider. Worth a design pass
-when there's spare cycles. Not blocking.
-
-**Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
-`golem-report/src/human.rs`.
 
 ## Step interpolation: cross-device & `for_each` prefixes
 
@@ -258,39 +228,6 @@ identical devices = 5 parallel runs" USP without manual pre-booting,
 free RAM permits, capped by `--max-concurrency`. Covered by the
 broader "True Parallel Flow × Device Concurrency" entry below.
 
-## Physical iOS screen recording
-
-`xcrun simctl io ... recordVideo` is simulator-only. Real-device
-recording requires a different transport — either
-(a) `idevicescreenshot` polling + ffmpeg encode (slow), or
-(b) USB-Mux QuickTime trace pull (Xcode's approach). Today the
-driver `bail!`s when `physical = true` so the failure mode is loud.
-
-**Files:** `golem-driver/src/ios.rs` (physical path).
-
-## Physical iOS device free-disk capture
-
-`ResourceSnapshot::capture_with_ios_simulator` mirrors the host free
-disk into `device_free_disk_mb` because the sim's data dir lives on
-the host filesystem. Physical iOS has its own storage — for the
-recovery / disk-pressure diagnostic to be accurate, we need a real
-device-side query. Options:
-
-- `xcrun devicectl device info storage --device <udid>` — Xcode 15+,
-  Apple-shipped, returns JSON with capacity + available.
-- `idevicediskusage` (libimobiledevice) — external dep, broader OS
-  coverage.
-
-Until a physical iOS flow exists in CI, `capture_with_ios_physical`
-should be added and wired in for symmetry with the Android path. Today
-recovery messages on physical iOS would silently fall back to host-only
-disk info (mirrored to `device_free_disk_mb`) which is wrong for
-physical hardware.
-
-**Files:** `golem-devices/src/concurrency.rs` (add
-`capture_with_ios_physical`), `golem-cli/src/suite.rs` (dispatch
-based on `device.physical`).
-
 ## `golem trace-extract` subcommand
 
 Subcommand `golem trace-extract <flow> <step>` (or `<flow>
@@ -319,32 +256,6 @@ Further hardening that would catch the next variant of this class:
 - **Reject `set +e` failures with a known signature.** The tolerated `tauri-cli` rename error is "failed to rename app ... Directory not empty". Instead of blanket-tolerating any nonzero exit, parse stderr and only tolerate that exact line. Anything else fails fast.
 - **Build cache key includes lockfiles.** `install_cache.rs`'s fingerprint is git porcelain — works when lockfiles are tracked. When they're not (e.g. some downstream consumers), include lockfile hashes explicitly so `cargo update` / `npm install` invalidate the install cache.
 
-## e2e Coverage for Physical Device Path
-
-No e2e flow exercises the physical-device path today. Android is the easier starter (ADB-based, no special transport). Add:
-
-- One flow under `e2e/physical/` that auto-skips when no physical device is connected (harness detects via `golem_devices::android::discover_physical_devices` — returns empty → mark as xfail).
-- CI runs it only on a self-hosted runner with a real device attached.
-- Verifies the physical path works for basic `tap`/`type` — no WebView yet (blocked by iOS WebKit work).
-
-**Files:** `e2e/physical/basic.test.toml` (new), `.github/workflows/` (physical-runner lane, gated).
-
-## WebKit Inspector: Physical iOS Device Support
-
-Currently WebKit Inspector enrichment (visible text, checked state) only works on iOS Simulator. The simulator exposes a Unix domain socket at `/private/tmp/com.apple.launchd.*/com.apple.webinspectord_sim.socket` which golem connects to directly.
-
-Physical devices require a different transport path:
-
-- **USB multiplexing** via `usbmuxd` — the system daemon that tunnels TCP over USB to iOS devices
-- **Lockdown TLS handshake** — physical devices require a TLS connection using pairing certificates stored in `~/Library/Lockdown/`
-- **Device discovery** — enumerate connected devices via usbmuxd, match to the target device
-
-The `golem-driver/src/webkit.rs` transport layer is already designed around a `SimulatorTransport` trait, intended for a future `UsbTransport` implementation that handles the usbmuxd + TLS path.
-
-Without this, physical device test runs still work but WebView elements lack enriched text — falling back to accessibility labels only.
-
-Requires access to a physical iOS device for development and testing.
-
 ## True Parallel Flow × Device Concurrency
 
 Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but only 2 execute in parallel (one per booted device per platform). Other 2 wait for devices to free. Machines with spare RAM could run all 4 at once.
@@ -361,25 +272,6 @@ Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but o
 
 **Files:** `golem-devices/src/resource_manager.rs` (boot-on-demand logic), `golem-devices/src/concurrency.rs` (headroom checks), `golem-devices/src/{ios,android}.rs` (boot helpers + tracking).
 
-## Coverage Strategy: Residual Polish
-
-The tick-box model is live end-to-end: `CoverageStrategy { One, Min, Smart, Full }` with `Smart` default, `DeviceSlot` with `Option<Platform>` + `booted` axis, greedy set-cover in `golem-orchestrator::coverage`, partial-axis expansion with dedup + underspec errors, and execute-time adaptive JIT for `Smart` + `One` via `CoverageGroup` + shared progress tracker in the scheduler. `FlowReport.covered_axes` is populated from the chosen device and renders in human output.
-
-**What's left:**
-
-### Responsive-design / cross-platform axis sharing
-
-Already works via array syntax on a single `[[flow.apps.devices]]` block: `os = ["ios:latest", "android:latest"]` + `type = ["phone", "tablet"]` emits 4 partial boxes that 2 devices (one per platform, different types) cover end-to-end. Documented in README flow-options.
-
-### Reference: strategy semantics
-
-| Strategy | Box generation | Resolution timing | Semantics |
-|---|---|---|---|
-| `full` | Cartesian — each box fully pinned | plan-time | 1 FlowRun per box |
-| `min` | Partial-axis — each axis-value = one box | plan-time: greedy set-cover | Fewest devices; waits on contested |
-| `smart` | Partial-axis | execute-time adaptive (CoverageGroup) | **Default.** Stops once every pool box is ticked |
-| `one` | Partial-axis | execute-time adaptive (CoverageGroup, `max_runs=1`) | Single successful run; local smoke / dev |
-
 ## Multi-Device Flow Coordination (Chat Tests)
 
 Some flows use two apps on two different devices that must run together (chat client + chat server). Today's suite model spawns a separate flow task per platform; two devices never coordinate inside one flow execution. The new `FlowRun { slots: Vec<DeviceSlot> }` structure supports 2+ slots, but the initial Plan implementation only emits single-slot FlowRuns.
@@ -391,17 +283,6 @@ Some flows use two apps on two different devices that must run together (chat cl
 
 **Depends on:** clarification of flow-step semantics across devices — which device is "current" at each step, how `{ action = "launch", app = "b" }` switches focus, how assertions scope. The slot infrastructure already exists; the missing piece is step-level semantics.
 
-## Reconcile `[[flow.apps]]` Implementation with Original Spec
-
-Per design notes, some original-spec behaviour around `[[flow.apps]]` and step-level app targeting was not carried through during initial implementation. Examples:
-- Default expectation that blocks/steps target the single app when only one is declared.
-- `{ action = "launch", app = "app-b" }` switching apps on the same device.
-- Device-sharing defaults for multi-app flows.
-
-**Action:** produce a reconciliation doc mapping current implementation against original spec, flag gaps, and either (a) fix the implementation, or (b) update the spec to match current behaviour with a rationale. Low priority but important for long-term clarity.
-
-**Files:** `docs/reconciliation-flow-apps.md` (new), followed by targeted fixes in `golem-parser/src/lib.rs` or `golem-runner/src/executor.rs` depending on findings.
-
 ## Transient Install Errors: Retry Classifier Polish
 
 `golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
@@ -410,7 +291,7 @@ Per design notes, some original-spec behaviour around `[[flow.apps]]` and step-l
 - `error: device offline` / `error: device not found` — adb device-state race during emulator early boot
 
 **What's left:**
-- Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
+- iOS `bootstatus` grace probe to eliminate the Mach -308 case at source — **migrated to #67**.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
 ## iOS concurrent flows: cross-flow focus / state corruption
@@ -423,6 +304,7 @@ Single-device runs are stable; iPhone + iPad in parallel is where the tail lives
 - **Cold-start `/hierarchy` warm-up** → `handleLaunch` does one throwaway `HierarchySerializer.serialize` after activate, behind the launch gate, so the first real `/hierarchy` hits a warm accessibility-snapshot path (the `/health` screenshot warm-up only attaches the screenshot subsystem). App-scoped, no SpringBoard query.
 
 **Still open (the genuine tail):**
+> The runtime host-headroom throttle lever (adaptive backpressure on rising companion round-trip latency) is now tracked as a feature in **#63**. The remaining sub-modes below stay here until they sharpen.
 - **EX000 was a catch-all — now split into coded errors** (`golem-driver/src/common.rs` classifies companion request failures). Connection-refused → `D505` (companion unreachable: death or cold-start drop); a `504` / client-timeout → `D503` (companion wedged, alive but stuck). Only genuinely-unattributable transport errors stay `EX000`. This makes the sub-modes *measurable* — a prerequisite for the fixes below. The failure modes themselves remain:
   - *cold-start `/hierarchy` drop* (now renders `D505`) — the `handleLaunch` warm-up targets it; isolated benefit unproven (confounded: freshly-**booted** sims sit in the settle window and drop MORE than long-warm sims, independent of the warm-up).
   - *mid-flow companion death* (`D505`) — the XCUITest host exits mid-flow under load. Restart-recovery catches it at *setup* time, but a death *during* a flow still fails that flow. Needs mid-flow death detection + retry.
