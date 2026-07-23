@@ -51,6 +51,14 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-golem
 
+      # scripts/release-notes.sh uses bash 4+ features (associative arrays,
+      # namerefs); the runner's default /bin/bash is 3.2, so `env bash` finds it
+      # and the notes generation errors out → release.sh keeps the placeholder
+      # body. Install a modern bash (onto /opt/homebrew/bin, ahead of /bin on
+      # PATH) so the script's `#!/usr/bin/env bash` resolves to 5.x.
+      - name: Ensure a modern bash for release-notes.sh
+        run: brew install bash
+
       - name: Build, package, and publish the macOS release + sync the tap formula
         env:
           GH_TOKEN: ${{ github.token }}

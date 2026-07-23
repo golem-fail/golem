@@ -198,7 +198,7 @@ echo "✓ uploaded $TARBALL (+ .sha256) to release $TAG"
 # Needs full history + tags (CI checkout must use fetch-depth: 0).
 if [ -z "$NOTES" ]; then
     NOTES_FILE="$(mktemp)"
-    if "$ROOT/scripts/release-notes.sh" "$TAG" > "$NOTES_FILE" 2>/dev/null && [ -s "$NOTES_FILE" ]; then
+    if "$ROOT/scripts/release-notes.sh" "$TAG" > "$NOTES_FILE" && [ -s "$NOTES_FILE" ]; then
         gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null \
             && echo "✓ release notes generated + applied"
     else
