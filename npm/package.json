@@ -1,6 +1,6 @@
 {
   "name": "@golem-fail/golem",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Mobile UI testing framework — prebuilt binary wrapper for npm/bun/yarn",
   "homepage": "https://golem.fail",
   "repository": {
