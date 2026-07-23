@@ -1,0 +1,70 @@
+[flow]
+name = "Branch conditions"
+tags = ["cross-platform", "control-flow"]
+
+# Exercises every branch condition the loop flow doesn't: if_var+equals,
+# if_var+matches (glob), if_visible, and if_not_visible (branch_loop covers
+# if_var+gte). The blocks form a routing chain — each must take its conditional
+# `goto`; the shared `wrong` fallback uses the `fail` action, so any mis-routed
+# condition fails the flow loudly. That also gives `fail` its coverage via a
+# never-taken branch (#78). Counter is the first section, always on screen, so
+# it's a stable if_visible anchor and a harmless per-block no-op.
+[flow.vars]
+mode = "alpha"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "route_equals"
+steps = [{ action = "assert_visible", on_text = "Counter" }]
+[[block.branch]]
+if_var = "mode"
+equals = "alpha"
+goto = "route_matches"
+[[block.branch]]
+goto = "wrong"
+
+[[block]]
+name = "route_matches"
+steps = [{ action = "assert_visible", on_text = "Counter" }]
+[[block.branch]]
+if_var = "mode"
+matches = "al*"
+goto = "route_visible"
+[[block.branch]]
+goto = "wrong"
+
+[[block]]
+name = "route_visible"
+steps = [{ action = "assert_visible", on_text = "Counter" }]
+[[block.branch]]
+if_visible = "Counter"
+goto = "route_not_visible"
+[[block.branch]]
+goto = "wrong"
+
+[[block]]
+name = "route_not_visible"
+steps = [{ action = "assert_visible", on_text = "Counter" }]
+[[block.branch]]
+if_not_visible = "ZZ-NONEXISTENT-ZZ"
+goto = "done"
+[[block.branch]]
+goto = "wrong"
+
+# Never reached when the four conditions route correctly; a mis-eval's default
+# branch lands here and fails the flow. Must sit BEFORE `done` so `done` is the
+# last block (a block with no branch falls through to the next one — if `done`
+# weren't last it would fall through into this `fail`). The routing blocks above
+# always `goto`, so `wrong` is only entered via an explicit mis-route.
+[[block]]
+name = "wrong"
+steps = [{ action = "fail", message = "branch condition mis-routed" }]
+
+[[block]]
+name = "done"
+steps = [{ action = "assert_visible", on_text = "Counter" }]

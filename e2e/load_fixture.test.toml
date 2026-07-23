@@ -1,0 +1,31 @@
+[flow]
+name = "load_fixture action"
+tags = ["cross-platform", "external", "fixtures"]
+
+# Loads __fixtures__/qa_data.toml under the `cfg` namespace and uses its vars
+# in later steps — proving fixture vars (fixed + generator-backed) flow through
+# the store into interpolation. Menu-jumps straight to the Text Fields section
+# (no scroll absorber), so the type→assert round-trip is robust on both
+# platforms.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "fixture_vars"
+steps = [
+  { action = "load_fixture", fixture = "qa_data", as = "cfg" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+
+  # Fixed fixture var → asserted via the same ${cfg.username} (exact).
+  { action = "type", on_text = "Search", input = "${cfg.username}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${cfg.username}" },
+
+  # Generator-backed fixture var (evaluated at load) → glob-asserted.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "id-${cfg.token}", auto_scroll = true },
+  { action = "assert_visible", on_text = "id-*" },
+]

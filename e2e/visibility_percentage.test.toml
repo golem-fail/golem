@@ -1,0 +1,24 @@
+[flow]
+name = "visibility_percentage auto-scroll threshold"
+tags = ["cross-platform", "scroll"]
+
+# Exercises the `visibility_percentage` step field (#50): the fraction of the
+# target auto_scroll reveals before stopping. Uses short, reliably-reachable
+# targets (the Buttons + ScrollList sections near the top) rather than a
+# deep absorber-gauntlet target — the point is to thread the field through the
+# scroll engine end to end, not to stress absorber routing (that's #19). The
+# step passing = the target reached the visible tree at the requested threshold.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "reveal_thresholds"
+steps = [
+  # Full reveal (100%).
+  { action = "assert_visible", on_text = "Submit", auto_scroll = true, visibility_percentage = 100 },
+  # First stable sighting is enough (20%).
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true, visibility_percentage = 20 },
+]

@@ -1,0 +1,21 @@
+[flow]
+name = "double_tap action"
+tags = ["cross-platform", "counter", "interaction"]
+
+# double_tap fires two taps in quick succession at one point. The Counter's
+# Increment button counts one increment per tap, so a single double_tap moves it
+# 0 → 2 — a clean, deterministic assertion that both taps landed. The Counter is
+# the first section, visible at launch (no scroll needed).
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "double_tap_increments_twice"
+steps = [
+  { action = "assert_visible", on_text = "0", on_below = "Counter" },
+  { action = "double_tap", on_accessibility_label = "Increment" },
+  { action = "assert_visible", on_text = "2", on_below = "Counter" },
+]

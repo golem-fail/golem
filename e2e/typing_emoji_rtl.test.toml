@@ -1,0 +1,30 @@
+[flow]
+name = "Typing emoji and RTL"
+tags = ["cross-platform", "text-input", "unicode"]
+
+# Multiline / CJK / special-chars are covered elsewhere; this fills the emoji +
+# RTL gap (#78). Type each into the single-line Search field and assert the exact
+# round-trip. Kept short to minimise IME truncation risk. If a platform's IME
+# can't round-trip these deterministically, this is tracked separately and the
+# flow may be dropped rather than left flaky.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "emoji_and_rtl"
+steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+
+  # Emoji round-trip.
+  { action = "type", on_text = "Search", input = "🎉🚀🔥", auto_scroll = true },
+  { action = "assert_visible", on_text = "🎉🚀🔥" },
+
+  # RTL (Arabic) round-trip.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "مرحبا", auto_scroll = true },
+  { action = "assert_visible", on_text = "مرحبا" },
+]

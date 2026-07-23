@@ -1,0 +1,25 @@
+[flow]
+name = "run action"
+tags = ["cross-platform", "external", "run"]
+
+# `run` executes a host script FILE (flow-dir-relative, path-traversal-guarded)
+# and captures stdout into save_to as an object → ${var.stdout}. We type that
+# captured value into a field and assert it, proving script output flows through
+# the var store into a later step. Complements `bash` (inline `sh -c`); this
+# exercises the file-based variant. Menu-jump to Text Fields (no absorber) so the
+# round-trip is robust cross-platform.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "run_script"
+steps = [
+  { action = "run", script = "scripts/run_echo.sh", save_to = "run_out" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+  { action = "type", on_text = "Search", input = "${run_out.stdout}", auto_scroll = true },
+  { action = "assert_visible", on_text = "golem-run-99" },
+]
