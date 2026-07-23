@@ -156,10 +156,17 @@ pub async fn scroll_to_element(
     // Step 1: Check current viewport before any scrolling.
     let (mut root, meta, _initial_stats) = wait_for_settle(driver).await?;
     let mut viewport = Viewport::from_root(&root);
+    // Compute the safe viewport from the RAW viewport: make_safe_viewport
+    // already subtracts the keyboard (bottom_inset = max(safe_bottom, kb)).
+    // Trimming the keyboard off `viewport` first would subtract it twice —
+    // collapsing the safe area to a sliver so swipe_from clamps both
+    // endpoints to the same y (a zero-displacement swipe that never
+    // scrolls). The trimmed `viewport` below still feeds swipe_strategies +
+    // horizon fingerprinting, which must exclude the keyboard region.
+    let safe_vp = make_safe_viewport(&viewport, &meta);
     if meta.keyboard_height > 0 {
         viewport.height -= meta.keyboard_height;
     }
-    let safe_vp = make_safe_viewport(&viewport, &meta);
     let visible = filter_viewport(&root, &safe_vp);
     if let Some(found) = find_elements(&visible, selector).into_iter().next() {
         if let Some(accepted) = consider(found, &safe_vp, target_frac, &mut best, &mut best_frac) {
@@ -261,10 +268,12 @@ pub async fn scroll_to_element(
         let iter_stats;
         (root, settle_meta, iter_stats) = wait_for_settle(driver).await?;
         let mut vp = Viewport::from_root(&root);
+        // Safe viewport from the raw vp — see the initial computation above
+        // for why the keyboard must not be pre-subtracted here.
+        let safe_vp = make_safe_viewport(&vp, &settle_meta);
         if settle_meta.keyboard_height > 0 {
             vp.height -= settle_meta.keyboard_height;
         }
-        let safe_vp = make_safe_viewport(&vp, &settle_meta);
         let visible = filter_viewport(&root, &safe_vp);
         let prev_best_frac = best_frac;
         if let Some(found) = find_elements(&visible, selector).into_iter().next() {
@@ -631,6 +640,7 @@ mod tests {
         hierarchies: Mutex<Vec<Element>>,
         call_index: AtomicU32,
         calls: Mutex<Vec<(String, Vec<String>)>>,
+        meta: golem_driver::common::HierarchyMeta,
     }
 
     impl SequenceMockDriver {
@@ -644,7 +654,17 @@ mod tests {
                 hierarchies: Mutex::new(doubled),
                 call_index: AtomicU32::new(0),
                 calls: Mutex::new(Vec::new()),
+                meta: golem_driver::common::HierarchyMeta::default(),
             }
+        }
+
+        /// Report a soft keyboard + safe-area insets in the hierarchy meta,
+        /// so a scroll runs against a keyboard-compressed viewport.
+        fn with_meta(mut self, keyboard_height: i32, safe_top: i32, safe_bottom: i32) -> Self {
+            self.meta.keyboard_height = keyboard_height;
+            self.meta.safe_area_top = safe_top;
+            self.meta.safe_area_bottom = safe_bottom;
+            self
         }
 
         fn get_calls(&self) -> Vec<(String, Vec<String>)> {
@@ -668,10 +688,7 @@ mod tests {
             let hierarchies = self.hierarchies.lock().expect("lock poisoned");
             let idx = self.call_index.fetch_add(1, Ordering::SeqCst) as usize;
             let clamped = idx.min(hierarchies.len().saturating_sub(1));
-            Ok((
-                hierarchies[clamped].clone(),
-                golem_driver::common::HierarchyMeta::default(),
-            ))
+            Ok((hierarchies[clamped].clone(), self.meta.clone()))
         }
 
         async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
@@ -928,6 +945,70 @@ mod tests {
             err_msg.contains("swipes attempted"),
             "timeout error SHALL include the swipe count for diagnostic context: {err_msg}"
         );
+    }
+
+    // ── 3b. Keyboard-up swipes keep a non-zero displacement ─────────
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn keyboard_up_swipe_has_nonzero_displacement() {
+        // Regression: the scroll loop pre-subtracted the keyboard from the
+        // viewport, then make_safe_viewport subtracted it a second time,
+        // collapsing the safe area so swipe_from clamped both endpoints to the
+        // same y — a zero-displacement swipe that never scrolls (iOS
+        // auto_scroll hung to a 40s EF408). With one subtraction the swipe
+        // must actually move the finger.
+        //
+        // Ever-changing trees so the loop keeps swiping (no stall-reversal
+        // noise); the collapse is pure viewport-vs-keyboard geometry, so any
+        // swipe surfaces it.
+        let hierarchies: Vec<Element> = (0..25)
+            .map(|i| {
+                let mut root = make_element("View", default_bounds());
+                root.children.push(make_element_with_text(
+                    "Label",
+                    &format!("Page {i}"),
+                    Bounds::new(0, 0, 200, 40),
+                ));
+                root
+            })
+            .collect();
+
+        // 400px keyboard (taller than the 34px safe-bottom) on an 812px
+        // viewport — the exact shape that collapsed the safe area.
+        let driver = SequenceMockDriver::new(hierarchies).with_meta(400, 47, 34);
+        let selector = sel_with_text("Nonexistent");
+
+        let _ = scroll_to_element(
+            &selector,
+            &driver,
+            Direction::Down,
+            Some(2000),
+            None,
+            None,
+            0.0,
+        )
+        .await;
+
+        let swipe_calls: Vec<_> = driver
+            .get_calls()
+            .into_iter()
+            .filter(|(m, _)| m == "gesture_swipe")
+            .collect();
+        assert!(
+            !swipe_calls.is_empty(),
+            "keyboard-up scroll SHALL still attempt swipes"
+        );
+        for (_, args) in &swipe_calls {
+            let fx: i32 = args[0].parse().expect("parse() SHALL succeed");
+            let fy: i32 = args[1].parse().expect("parse() SHALL succeed");
+            let tx: i32 = args[2].parse().expect("parse() SHALL succeed");
+            let ty: i32 = args[3].parse().expect("parse() SHALL succeed");
+            assert_ne!(
+                (fx, fy),
+                (tx, ty),
+                "keyboard-up swipe SHALL have non-zero displacement, got ({fx},{fy})→({tx},{ty})"
+            );
+        }
     }
 
     // ── 4. Bounce detection triggers direction reversal ─────────────

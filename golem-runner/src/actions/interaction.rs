@@ -396,7 +396,12 @@ pub(crate) async fn handle_swipe(
                 other
             ),
         };
-        let safe_vp = crate::scroll::make_safe_viewport(&vp, &meta);
+        // Raw viewport: make_safe_viewport subtracts the keyboard itself, so
+        // passing the already-trimmed `vp` would double-subtract and collapse
+        // the safe area to a sliver (zero-displacement swipe). `vp` stays
+        // keyboard-trimmed for the visible-filter / coord resolution above.
+        let raw_vp = golem_element::Viewport::from_root(&root);
+        let safe_vp = crate::scroll::make_safe_viewport(&raw_vp, &meta);
         let (sx, sy) = crate::scroll::default_swipe_start(&safe_vp, direction);
         let (fx, fy, tx, ty) = crate::scroll::swipe_from(&safe_vp, direction, sx, sy, 40);
         points = vec![(fx, fy), (tx, ty)];
