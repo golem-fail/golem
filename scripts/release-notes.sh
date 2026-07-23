@@ -273,7 +273,7 @@ if [[ -n "$PREV" ]]; then
         < <(cargo_manifest_keys "$m")
     fi
     n="$(git show "${NEW}:${m}" 2>/dev/null \
-         | awk '/^\[package\]/{p=1} p&&/^name = "/{sub(/^name = "/,"");sub(/"$/,"");print;exit}')"
+         | awk '/^\[package\]/{p=1} p&&/^name = "/{sub(/^name = "/,"");sub(/"$/,"");print;p=0}')"
     [[ -n "$n" ]] && INTERNAL["$n"]=1
   done < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
              | grep -E '(^|/)Cargo\.toml$' | grep -v '/node_modules/' || true)
@@ -325,8 +325,12 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
     [[ -n "${INTERNAL[$name]:-}" ]] && continue          # workspace's own crate
-    ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2; exit}')"
-    nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2; exit}')"
+    # No `exit` in these awks: it closes the pipe while `printf` is still
+    # writing → EPIPE → `set -o pipefail` fails the whole script. Keys are
+    # unique (names come from `sort -u`), so awk prints the one match and reads
+    # to EOF regardless.
+    ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2}')"
+    nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2}')"
     [[ "$ov" == "$nv" ]] && continue                     # unchanged
     cls="${direct_force:-${DEPCLASS[${eco}:${name}]:-}}"
     if [[ -z "$cls" ]]; then                             # transitive → count once
