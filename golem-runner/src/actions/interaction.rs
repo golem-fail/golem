@@ -56,6 +56,46 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
     driver.tap(x, y).await
 }
 
+/// Deadline for the keyboard to finish retracting after a pre-tap dismissal.
+const KEYBOARD_RETRACT_TIMEOUT: Duration = Duration::from_millis(2000);
+
+/// Dismiss an open soft keyboard before a tap, so a focused text input can't
+/// absorb the synthesized touch and so the target isn't grazing the keyboard's
+/// top edge. Applied on both platforms for consistent semantics: most acute on
+/// iOS, where a tap on a web element while an input is focused is dropped
+/// outright — the companion reports ok but no DOM click fires and focus isn't
+/// even lost (#83), independent of gesture type or dwell — but a near-keyboard
+/// tap can also mis-land on Android. Dismissing first restores a clean click.
+///
+/// `enabled` carries the `keep_keyboard` opt-out so the no-op path stays cheap.
+/// No-op when the keyboard is already down. The caller MUST re-resolve the
+/// target afterward: retracting the keyboard reflows the page, so a
+/// pre-dismissal tap point is stale.
+async fn dismiss_keyboard_before_tap(driver: &dyn PlatformDriver, enabled: bool) -> Result<()> {
+    if !enabled {
+        return Ok(());
+    }
+    let (_root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+    if meta.keyboard_height <= 0 {
+        return Ok(());
+    }
+    driver.hide_keyboard().await?;
+    // Block on keyboard_height == 0 before returning so the caller's re-resolve
+    // sees the reflowed layout (mirrors the keyboard-occlusion recovery in
+    // resolve_element). Bounded so a keyboard that never retracts can't hang
+    // the step past its own timeout.
+    let deadline = Instant::now() + KEYBOARD_RETRACT_TIMEOUT;
+    while Instant::now() < deadline {
+        if let Ok((_, m)) = driver.get_hierarchy().await {
+            if m.keyboard_height == 0 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    Ok(())
+}
+
 /// Find a smaller switch/toggle control inside a larger switch/toggle row.
 ///
 /// Spatial matching: looks for a switch/toggle element whose bounds fit entirely
@@ -110,6 +150,7 @@ pub(crate) async fn handle_tap(
     driver: &dyn PlatformDriver,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
+    dismiss_keyboard_before_tap(driver, !step.keep_keyboard.unwrap_or(false)).await?;
     let (elem, coords) = resolve_element(step, driver, ctx.emitter).await?;
 
     // Workaround: iOS SwiftUI Toggles render as a full-width row with the
@@ -276,6 +317,7 @@ pub(crate) async fn handle_long_press(
     driver: &dyn PlatformDriver,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
+    dismiss_keyboard_before_tap(driver, !step.keep_keyboard.unwrap_or(false)).await?;
     let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
 
     let duration = step.duration.unwrap_or(1000);
@@ -649,6 +691,98 @@ mod tests {
         // Both taps hit the same center: x=100+100/2=150, y=200+44/2=222
         assert_eq!(tap_calls[0].1, vec!["150", "222"]);
         assert_eq!(tap_calls[1].1, vec!["150", "222"]);
+    }
+
+    // ── 2b. pre-tap keyboard dismissal (#83) ────────────────────────
+
+    fn hide_calls(driver: &MockPlatformDriver) -> usize {
+        driver
+            .get_calls()
+            .iter()
+            .filter(|c| c.0 == "hide_keyboard")
+            .count()
+    }
+
+    #[tokio::test]
+    async fn dismiss_keyboard_disabled_is_noop() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+        driver.set_keyboard_height(300);
+        dismiss_keyboard_before_tap(&driver, false)
+            .await
+            .expect("disabled dismissal SHALL be a no-op");
+        assert_eq!(hide_calls(&driver), 0, "disabled SHALL NOT hide keyboard");
+    }
+
+    #[tokio::test]
+    async fn dismiss_keyboard_noop_when_keyboard_down() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+        // keyboard_height defaults to 0 (down).
+        dismiss_keyboard_before_tap(&driver, true)
+            .await
+            .expect("keyboard-down dismissal SHALL be a no-op");
+        assert_eq!(
+            hide_calls(&driver),
+            0,
+            "no hide when the keyboard is already down"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn dismiss_keyboard_hides_when_open() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+        driver.set_keyboard_height(300);
+        dismiss_keyboard_before_tap(&driver, true)
+            .await
+            .expect("open-keyboard dismissal SHALL hide it");
+        assert_eq!(
+            hide_calls(&driver),
+            1,
+            "an open keyboard SHALL be dismissed once before the tap"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn handle_tap_dismisses_open_keyboard_before_tapping() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+        driver.set_keyboard_height(300);
+        let mut step = make_step("tap");
+        step.on_text = Some("Submit".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_tap(&step, &driver, &ctx)
+            .await
+            .expect("tap succeeds");
+
+        assert_eq!(
+            hide_calls(&driver),
+            1,
+            "tap SHALL dismiss the open keyboard before tapping"
+        );
+        assert_eq!(
+            driver.get_calls().iter().filter(|c| c.0 == "tap").count(),
+            1,
+            "tap SHALL still fire after the dismissal"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn handle_tap_keep_keyboard_skips_dismissal() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+        driver.set_keyboard_height(300);
+        let mut step = make_step("tap");
+        step.on_text = Some("Submit".to_string());
+        step.keep_keyboard = Some(true);
+
+        let ctx = test_ctx(Path::new("."));
+        handle_tap(&step, &driver, &ctx)
+            .await
+            .expect("tap succeeds");
+
+        assert_eq!(
+            hide_calls(&driver),
+            0,
+            "keep_keyboard SHALL suppress the pre-tap dismissal"
+        );
     }
 
     // ── 3. type action types text to element ─────────────────────────
@@ -1061,7 +1195,8 @@ mod tests {
         // type: get_hierarchy (resolve), tap (focus), get_hierarchy
         //   (post-tap focus check), type_text
         // hide_keyboard: hide_keyboard
-        // tap: get_hierarchy (resolve), tap
+        // tap: get_hierarchy (pre-tap keyboard check, #83 — no hide since the
+        //   keyboard is already down), get_hierarchy (resolve), tap
         assert_eq!(
             method_names,
             vec![
@@ -1070,6 +1205,7 @@ mod tests {
                 "get_hierarchy",
                 "type_text",
                 "hide_keyboard",
+                "get_hierarchy",
                 "get_hierarchy",
                 "tap",
             ]

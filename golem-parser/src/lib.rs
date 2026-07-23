@@ -432,6 +432,11 @@ pub struct Step {
     pub restart: Option<bool>,
     pub auto_scroll: Option<bool>,
     pub scroll_timeout: Option<u64>,
+    /// Opt out of the pre-tap keyboard dismissal (`tap`/`long_press`). Default
+    /// (unset) auto-dismisses an open keyboard on iOS so the focused input
+    /// can't absorb the tap (#83); set true when the tap targets an
+    /// input-accessory/toolbar control meant to act on the focused field.
+    pub keep_keyboard: Option<bool>,
     /// How much of the target must be visible for auto-scroll to stop, 0–100.
     /// Unset = the engine default (maximise visibility, best-effort). Lower it
     /// to stop earlier on elements taller/wider than the viewport.
