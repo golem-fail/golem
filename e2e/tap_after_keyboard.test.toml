@@ -1,0 +1,39 @@
+[flow]
+name = "Tap after keyboard (blur-before-tap)"
+tags = ["cross-platform", "keyboard", "text-input"]
+
+# Regression for #83: a tap issued while the soft keyboard is up (a text input
+# focused) must still fire. golem dismisses the keyboard first, then taps — on
+# iOS the WKWebView otherwise drops the touch (companion returns ok, no DOM
+# click). Uses the Text Fields "Reset fields" button, which clears the inputs
+# on a normal click; a dropped tap leaves the field's value in place, so the
+# assert_not_visible catches the regression on both platforms.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "tap_after_type"
+steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+  { action = "type", on_text = "Search", input = "kbtap-one" },
+  { action = "assert_visible", on_text = "kbtap-one" },
+  # Keyboard is up from the type; the tap must dismiss it and click Reset.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "assert_not_visible", on_text = "kbtap-one" },
+]
+
+[[block]]
+name = "tap_after_type_backspace"
+steps = [
+  { action = "type", on_text = "Search", input = "kbtap-twoX" },
+  # backspace operates on the focused field and keeps the keyboard up.
+  { action = "backspace" },
+  { action = "assert_visible", on_text = "kbtap-two" },
+  # Keyboard still up after the backspace; the tap must still dismiss + click.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "assert_not_visible", on_text = "kbtap-two" },
+]
