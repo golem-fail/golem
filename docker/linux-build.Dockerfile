@@ -33,6 +33,14 @@ RUN apt-get update \
       gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
       openjdk-17-jdk-headless curl unzip ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+# Add the musl target to the PINNED toolchain, not the image's default. The
+# `cargo build` below honors rust-toolchain.toml and auto-selects that channel;
+# if the target was added to a different (image-default) toolchain the build
+# fails with "can't find crate for core". Copy the pin file first so
+# `rustup target add` resolves the same channel — kept before `COPY . .` so this
+# layer still caches across source changes.
+WORKDIR /src
+COPY rust-toolchain.toml ./
 RUN rustup target add "${TARGET}"
 
 # Cross-compiling to aarch64-musl from an amd64 build host: use the aarch64 GNU
