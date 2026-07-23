@@ -102,6 +102,49 @@ fn emit_best_effort(
     }
 }
 
+/// When the target is located in the full tree but sits wholly outside the
+/// safe viewport, return the scroll `Direction` that brings it in, the pixel
+/// distance its near edge must travel to clear the safe-area edge by `margin`,
+/// and that near edge's current position (for calibrating swipe→scroll ratio).
+/// `None` when the target isn't located or already overlaps the safe band
+/// (there the visibility check, not a nudge, decides).
+fn located_correction(
+    root: &golem_element::Element,
+    selector: &Selector,
+    safe_vp: &Viewport,
+    vertical: bool,
+    margin: i32,
+) -> Option<(Direction, i32, i32)> {
+    let b = find_elements(root, selector)
+        .into_iter()
+        .next()?
+        .element
+        .bounds;
+    if vertical {
+        let (top, bottom) = (b.y, b.y + b.height);
+        let (band_top, band_bottom) = (safe_vp.y, safe_vp.y + safe_vp.height);
+        if bottom <= band_top {
+            // Wholly above → scroll Up (content moves down) to lower it in.
+            Some((Direction::Up, (band_top + margin) - top, top))
+        } else if top >= band_bottom {
+            // Wholly below → scroll Down (content moves up) to raise it in.
+            Some((Direction::Down, bottom - (band_bottom - margin), top))
+        } else {
+            None
+        }
+    } else {
+        let (left, right) = (b.x, b.x + b.width);
+        let (band_left, band_right) = (safe_vp.x, safe_vp.x + safe_vp.width);
+        if right <= band_left {
+            Some((Direction::Right, (band_left + margin) - left, left))
+        } else if left >= band_right {
+            Some((Direction::Left, right - (band_right - margin), left))
+        } else {
+            None
+        }
+    }
+}
+
 /// Scroll through a view to find an element matching the given selector.
 ///
 /// The algorithm uses a strategy-based approach:
@@ -219,6 +262,24 @@ pub async fn scroll_to_element(
     let mut dynamic_start_tried: bool = false;
     let mut dynamic_start_override: Option<(i32, i32)> = None;
 
+    // Precise-nudge state (#19): once the target is located just outside the
+    // safe band, correct by the measured distance toward it instead of a blind
+    // full-stride swipe / direction reversal that over-corrects a small miss
+    // and oscillates. Self-calibrating — `nudge_ratio` (scroll px per swipe px,
+    // measured from the previous nudge's actual travel) sizes the next one, so
+    // it converges whatever the platform's swipe:scroll ratio.
+    const NUDGE_STRIDE_PCT: i32 = 55; // near-miss threshold = one long swipe
+    const NUDGE_MARGIN_PX: i32 = 24; // land clear of the safe-area edge
+    const NUDGE_MIN_PX: i32 = 40; // floor so a nudge actually moves the page
+    const NUDGE_MIN_MOVE_PX: i32 = 8; // travel below this ⇒ don't trust ratio
+    const NUDGE_NO_PROGRESS_LIMIT: u32 = 3; // consumed/stuck ⇒ fall back to blind
+    let mut nudge_ratio: f64 = 1.0;
+    let mut last_nudge_edge: Option<i32> = None;
+    let mut last_nudge_px: i32 = 0;
+    let mut nudge_no_progress: u32 = 0;
+    let mut nudge_prev_remaining: i32 = i32::MAX;
+    let mut nudge_disabled: bool = false;
+
     // Container swipe start position
     let mut container_start = container
         .as_ref()
@@ -242,8 +303,67 @@ pub async fn scroll_to_element(
             );
         }
 
+        // Precise nudge (#19): if the target is located just outside the safe
+        // band, correct by the measured distance toward it rather than a blind
+        // swipe / full reversal. Only within one stride — a far overshoot still
+        // falls through to the blind path + overshoot guard.
+        let vertical = matches!(direction, Direction::Down | Direction::Up);
+        let stride_px = if vertical {
+            safe_vp.height * NUDGE_STRIDE_PCT / 100
+        } else {
+            safe_vp.width * NUDGE_STRIDE_PCT / 100
+        };
+        let nudge = if container.is_none() && !nudge_disabled {
+            located_correction(&root, selector, &safe_vp, vertical, NUDGE_MARGIN_PX)
+                .filter(|&(_, remaining, _)| remaining > 0 && remaining <= stride_px)
+        } else {
+            None
+        };
+        let nudging = nudge.is_some();
+
         // Compute swipe coordinates
-        let (fx, fy, tx, ty) = if let Some(ref cb) = container {
+        let (fx, fy, tx, ty) = if let Some((corr_dir, remaining, edge)) = nudge {
+            // Calibrate from the previous nudge's actual travel, then size this
+            // one as remaining ÷ observed ratio.
+            if let (Some(prev_edge), true) = (last_nudge_edge, last_nudge_px > 0) {
+                let moved = (edge - prev_edge).abs();
+                if moved >= NUDGE_MIN_MOVE_PX {
+                    nudge_ratio = (moved as f64 / last_nudge_px as f64).clamp(0.1, 4.0);
+                }
+            }
+            let dim = if vertical {
+                safe_vp.height
+            } else {
+                safe_vp.width
+            };
+            let commanded =
+                ((remaining as f64 / nudge_ratio).round() as i32).clamp(NUDGE_MIN_PX, stride_px);
+            let pct = (commanded * 100 / dim.max(1)).clamp(3, 90) as u32;
+            let (sx, sy) = default_swipe_start(&safe_vp, corr_dir);
+            last_nudge_edge = Some(edge);
+            last_nudge_px = commanded;
+            // No-progress guard: if the miss isn't shrinking (nudge consumed by
+            // an absorber, or over-corrected), fall back to the blind path
+            // rather than nudging to the deadline.
+            if remaining < nudge_prev_remaining {
+                nudge_no_progress = 0;
+            } else {
+                nudge_no_progress += 1;
+                if nudge_no_progress >= NUDGE_NO_PROGRESS_LIMIT {
+                    nudge_disabled = true;
+                }
+            }
+            nudge_prev_remaining = remaining;
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
+                    to_index: strategy_idx,
+                    reason: format!(
+                        "precise nudge {corr_dir:?} {commanded}px (remaining {remaining}px, ratio {nudge_ratio:.2})"
+                    ),
+                });
+            }
+            swipe_from(&safe_vp, corr_dir, sx, sy, pct)
+        } else if let Some(ref cb) = container {
             // Inner-scrollable swipe distance — kept moderate on the
             // horizontal axis because `scroll-snap-type: x mandatory`
             // carousels with finite snap stops will glide past the
@@ -293,6 +413,14 @@ pub async fn scroll_to_element(
                 return Ok(accepted);
             }
         }
+
+        // A nudge is self-directed correction toward a located target — skip
+        // the blind no-improve / overshoot / strategy machinery and re-measure
+        // on the next iteration (the deadline and no-progress guard bound it).
+        if nudging {
+            continue;
+        }
+
         // No-improvement guard: once the target has been seen, if this swipe
         // moved the page (it did — we swiped) but the best visibility didn't
         // improve, count it. After a few futile swipes, accept the best
@@ -620,12 +748,10 @@ mod tests {
             } else {
                 "Up"
             }
+        } else if dx < 0 {
+            "Right"
         } else {
-            if dx < 0 {
-                "Right"
-            } else {
-                "Left"
-            }
+            "Left"
         }
     }
 
@@ -634,6 +760,87 @@ mod tests {
             text: Some(text.to_string()),
             ..Selector::default()
         }
+    }
+
+    // ── located_correction (#19 precise nudge) ──────────────────────
+
+    fn root_with_target_at(bounds: Bounds) -> Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 402, 874));
+        root.children
+            .push(make_element_with_text("span", "Dark Mode", bounds));
+        root
+    }
+
+    #[test]
+    fn located_correction_above_band_scrolls_up() {
+        // Safe band y∈[59, 800]. Target wholly above (bottom=36 < 59) — the
+        // #19 case: correct by scrolling Up (content down) to lower it in.
+        let safe = Viewport {
+            x: 0,
+            y: 59,
+            width: 402,
+            height: 741,
+        };
+        let root = root_with_target_at(Bounds::new(32, 15, 71, 21));
+        let (dir, remaining, edge) =
+            located_correction(&root, &sel_with_text("Dark Mode"), &safe, true, 24)
+                .expect("above-band target SHALL yield a correction");
+        assert!(matches!(dir, Direction::Up), "above band SHALL scroll Up");
+        // (band_top 59 + margin 24) - top 15 = 68.
+        assert_eq!(remaining, 68);
+        assert_eq!(edge, 15, "near edge is the target top");
+    }
+
+    #[test]
+    fn located_correction_below_band_scrolls_down() {
+        let safe = Viewport {
+            x: 0,
+            y: 59,
+            width: 402,
+            height: 741,
+        };
+        // band_bottom = 800. Target wholly below (top=900 >= 800).
+        let root = root_with_target_at(Bounds::new(32, 900, 71, 21));
+        let (dir, remaining, _edge) =
+            located_correction(&root, &sel_with_text("Dark Mode"), &safe, true, 24)
+                .expect("below-band target SHALL yield a correction");
+        assert!(
+            matches!(dir, Direction::Down),
+            "below band SHALL scroll Down"
+        );
+        // bottom 921 - (band_bottom 800 - margin 24) = 145.
+        assert_eq!(remaining, 145);
+    }
+
+    #[test]
+    fn located_correction_within_band_is_none() {
+        let safe = Viewport {
+            x: 0,
+            y: 59,
+            width: 402,
+            height: 741,
+        };
+        // Target overlaps the band → visibility check decides, not a nudge.
+        let root = root_with_target_at(Bounds::new(32, 400, 71, 21));
+        assert!(
+            located_correction(&root, &sel_with_text("Dark Mode"), &safe, true, 24).is_none(),
+            "in-band target SHALL NOT be nudged"
+        );
+    }
+
+    #[test]
+    fn located_correction_absent_target_is_none() {
+        let safe = Viewport {
+            x: 0,
+            y: 59,
+            width: 402,
+            height: 741,
+        };
+        let root = make_element("View", Bounds::new(0, 0, 402, 874));
+        assert!(
+            located_correction(&root, &sel_with_text("Nope"), &safe, true, 24).is_none(),
+            "unlocated target SHALL NOT yield a correction"
+        );
     }
 
     struct SequenceMockDriver {

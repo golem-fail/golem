@@ -1,0 +1,22 @@
+[flow]
+name = "Scroll past absorbers (auto_scroll convergence)"
+tags = ["cross-platform", "scroll"]
+
+# Regression for #19: auto_scroll from the top of the app to "Dark Mode" (the
+# Toggles section) must traverse three gesture-absorbing widgets — ScrollList
+# (vertical inner scroll), GestureTarget (pointer pad), Carousel (horizontal
+# scroll-snap) — and still converge. No menu-jump, on purpose: force the full
+# traversal. Before the precise-nudge fix this oscillated around the safe-area
+# boundary (a near-miss overshoot triggered a full-distance reversal) and hit
+# EF408 on iOS.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "scroll_to_dark_mode"
+steps = [
+  { action = "assert_visible", on_text = "Dark Mode", auto_scroll = true },
+]
