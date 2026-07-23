@@ -27,6 +27,7 @@ gen_year = "${fake:timestamp.year}"
 gen_phone = "${fake:phone(country=US)}"
 gen_person = "${fake:person(country=US).given}"
 gen_card = "${fake:credit_card(brand=visa).number}"
+gen_sentence = "${fake:sentence}"
 
 [[flow.apps]]
 name = "app"
@@ -117,4 +118,8 @@ steps = [
   { action = "tap", on_text = "Reset fields" },
   { action = "type", on_text = "Search", input = "${gen_card}", auto_scroll = true },
   { action = "assert_visible", on_text = "${gen_card}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${gen_sentence}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${gen_sentence}" },
 ]
