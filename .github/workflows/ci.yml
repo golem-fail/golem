@@ -146,13 +146,17 @@ jobs:
   android-tests:
     needs: classify
     if: ${{ needs.classify.outputs.android == 'true' }}
-    # Instrumented (androidTest) test → needs an emulator. Runs on Linux via KVM,
-    # which the standard runner exposes. NOTE: CompanionServerTest boots the
-    # companion server and registers with a golem host over HTTP; if that handshake
-    # needs the golem binary present, swap `connectedCheck` for
-    # `assembleDebugAndroidTest` (compile-only) until the host is wired up here.
+    # Compile-check the companion + its androidTest sources — we deliberately do
+    # NOT run the instrumented test on an emulator. The only androidTest,
+    # CompanionServerTest, is the companion's runtime entry point: it calls
+    # CompanionServer.start(), an infinite accept() loop, and there's no golem
+    # host in CI to drive it, so `connectedCheck` just blocks (its inactivity
+    # watchdog is 5h) until the job timeout — asserting nothing. assembleDebug-
+    # AndroidTest gives the real CI signal (the companion + test APK compile);
+    # runtime behavior is covered by the local e2e. See #87 — revisit if a
+    # bounded, host-free instrumented smoke test is added.
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v4
@@ -160,13 +164,9 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
-      - name: Run instrumented companion tests on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          working-directory: companions/android
-          script: ./gradlew connectedCheck
+      - name: Compile the companion + androidTest sources
+        working-directory: companions/android
+        run: ./gradlew assembleDebugAndroidTest
 
   gate:
     # The single REQUIRED status check. It always runs (independent of the path
