@@ -85,6 +85,29 @@ case "$TARGET" in *apple-darwin*) NEED_IOS=1 ;; esac
 
 echo "→ golem $VERSION  target=$TARGET  tag=$TAG"
 
+# ── Release notes (generate up front, fail loud) ───────────────────────────────
+# A release without notes is a bug, and generation is cheap, so produce them
+# BEFORE the slow build and hard-fail instead of silently shipping a placeholder
+# (a late, best-effort generation once let a broken pipe degrade to "Automated
+# release …"). Skipped for --no-upload (no release to annotate) or explicit
+# --notes. Needs the tag + full history (CI: fetch-depth 0) and bash 4+ (the
+# macOS runner's /bin/bash 3.2 lacks the associative arrays the generator uses).
+NOTES_FILE=""
+if [ "$NO_UPLOAD" -eq 0 ] && [ -z "$NOTES" ]; then
+    command -v gh >/dev/null 2>&1 || { echo "error: gh CLI not found (needed for release notes + upload)." >&2; exit 1; }
+    NOTES_FILE="$(mktemp)"
+    trap 'rm -f "$NOTES_FILE"' EXIT
+    if ! "$ROOT/scripts/release-notes.sh" "$TAG" > "$NOTES_FILE"; then
+        echo "error: release-notes generation failed for $TAG (see above) — refusing to ship without notes." >&2
+        exit 1
+    fi
+    if [ ! -s "$NOTES_FILE" ]; then
+        echo "error: release-notes generation produced no output for $TAG." >&2
+        exit 1
+    fi
+    echo "✓ release notes generated ($(wc -l <"$NOTES_FILE" | tr -d ' ') lines)"
+fi
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 # Touch build.rs so the build script is guaranteed to re-run and emit its
 # out_dir on stdout as JSON — the only reliable, unambiguous handle on THIS
@@ -94,7 +117,7 @@ echo "→ golem $VERSION  target=$TARGET  tag=$TAG"
 touch "$ROOT/golem-cli/build.rs"
 
 BUILD_JSON="$(mktemp)"
-trap 'rm -f "$BUILD_JSON"' EXIT
+trap 'rm -f "$BUILD_JSON" ${NOTES_FILE:+"$NOTES_FILE"}' EXIT
 
 echo "→ building release binary (companions build/embed inside)…"
 # stdout → JSON (parsed below); stderr → human-rendered progress/errors.
@@ -179,9 +202,11 @@ if gh release view "$TAG" >/dev/null 2>&1; then
     echo "→ release $TAG exists; uploading assets (clobber)…"
 else
     echo "→ creating release ${TAG}…"
-    gh release create "$TAG" $DRAFT $PRERELEASE \
-        --title "golem $TAG" \
-        --notes "${NOTES:-Automated release $TAG.}"
+    if [ -n "$NOTES_FILE" ]; then
+        gh release create "$TAG" $DRAFT $PRERELEASE --title "golem $TAG" --notes-file "$NOTES_FILE"
+    else
+        gh release create "$TAG" $DRAFT $PRERELEASE --title "golem $TAG" --notes "${NOTES:-Automated release $TAG.}"
+    fi
 fi
 
 gh release upload "$TAG" \
@@ -192,19 +217,13 @@ gh release upload "$TAG" \
 echo "✓ uploaded $TARBALL (+ .sha256) to release $TAG"
 
 # ── Release notes ────────────────────────────────────────────────────────────
-# Generate the body from what changed since the previous tag and set it on the
-# release. Done here (after create/upload) so the tag exists and a re-cut onto an
-# existing release refreshes the notes. An explicit --notes overrides generation.
-# Needs full history + tags (CI checkout must use fetch-depth: 0).
-if [ -z "$NOTES" ]; then
-    NOTES_FILE="$(mktemp)"
-    if "$ROOT/scripts/release-notes.sh" "$TAG" > "$NOTES_FILE" && [ -s "$NOTES_FILE" ]; then
-        gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null \
-            && echo "✓ release notes generated + applied"
-    else
-        echo "⚠ release-notes generation failed (shallow clone? first release?) — keeping default notes" >&2
-    fi
-    rm -f "$NOTES_FILE"
+# Notes were generated up front (fail-loud) and set at create; re-apply here so a
+# re-cut onto an EXISTING release also refreshes them. Explicit --notes wins.
+if [ -n "$NOTES_FILE" ]; then
+    gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null
+    echo "✓ release notes applied"
+elif [ -n "$NOTES" ]; then
+    gh release edit "$TAG" --notes "$NOTES" >/dev/null
 fi
 
 gh release view "$TAG" --json url --jq '.url' 2>/dev/null || true
