@@ -1,0 +1,53 @@
+[flow]
+name = "clear_data wipes persisted app state"
+tags = ["android", "lifecycle"]
+
+# clear_data coverage (#78, surface from #94). The Persisted State section is
+# localStorage-backed, which survives a normal relaunch but is wiped by
+# clear_data — the only observable way to prove the wipe (the rest of the app is
+# in-memory state that resets on launch regardless).
+#
+# Android-only: iOS clear_data is `simctl uninstall` (removes the app entirely),
+# and golem has no in-flow reinstall action, so the clear -> relaunch -> assert
+# cycle can't run on iOS (tracked separately).
+#
+# Relaunches use restart = true so the WebView cold-starts and re-derives the
+# value from localStorage; a warm launch would keep the in-memory count and the
+# assertion would pass without proving persistence.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "set_persisted"
+steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-persisted-state" },
+  { action = "assert_visible", on_text = "Persisted: 0" },
+  { action = "tap", on_accessibility_label = "persist-increment" },
+  { action = "tap", on_accessibility_label = "persist-increment" },
+  { action = "assert_visible", on_text = "Persisted: 2" },
+]
+
+[[block]]
+name = "survives_relaunch"
+steps = [
+  { action = "launch", app = "app", restart = true },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-persisted-state" },
+  # Cold start re-read localStorage — the value persisted across relaunch.
+  { action = "assert_visible", on_text = "Persisted: 2" },
+]
+
+[[block]]
+name = "cleared_after_wipe"
+steps = [
+  { action = "clear_data", app = "app" },
+  { action = "launch", app = "app", restart = true },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-persisted-state" },
+  # localStorage wiped by clear_data — back to the default.
+  { action = "assert_visible", on_text = "Persisted: 0" },
+]
