@@ -31,6 +31,7 @@ pub async fn execute_teardown(
     vars: &mut VariableStore,
     default_timeout_ms: u64,
     ctx: &ExecutionContext<'_>,
+    apps: &[golem_parser::AppConfig],
 ) -> TeardownResult {
     let mut result = TeardownResult {
         warnings: Vec::new(),
@@ -47,7 +48,7 @@ pub async fn execute_teardown(
                 vars,
                 default_timeout_ms,
                 ctx,
-                &[],
+                apps,
             )
             .await
             {
@@ -148,7 +149,8 @@ mod tests {
             make_success_step(),
         ])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
@@ -173,7 +175,8 @@ mod tests {
             make_success_step(),
         ])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         // The failing step is silently ignored (default if_fail = "ignore")
         assert!(result.warnings.is_empty());
@@ -206,7 +209,8 @@ mod tests {
             make_success_step(),
         ])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
         assert!(
@@ -234,7 +238,8 @@ mod tests {
             make_success_step(),
         ])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert_eq!(
             result.errors.len(),
@@ -268,13 +273,14 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         // No blocks at all
-        let result = execute_teardown(&[], &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result = execute_teardown(&[], &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
 
         // One block with no steps
         let blocks = vec![make_teardown_block(vec![])];
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
     }
@@ -295,7 +301,8 @@ mod tests {
 
         let blocks = vec![make_teardown_block(vec![make_success_step()])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
@@ -323,7 +330,8 @@ mod tests {
             make_teardown_block(vec![make_success_step(), make_success_step()]),
         ];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
@@ -356,7 +364,8 @@ mod tests {
             make_teardown_block(vec![warn_step_2]),
         ];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert_eq!(
             result.warnings.len(),
@@ -392,7 +401,8 @@ mod tests {
             error_step_3,
         ])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert_eq!(
             result.errors.len(),
@@ -429,7 +439,8 @@ mod tests {
         ])];
 
         // execute_teardown always returns a TeardownResult, never an Err
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         assert_eq!(result.errors.len(), 1, "one error from if_fail=error step");
         assert_eq!(
@@ -460,7 +471,8 @@ mod tests {
 
         let blocks = vec![make_teardown_block(vec![ignore_step, make_success_step()])];
 
-        let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+        let result =
+            execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx, &[]).await;
 
         // Explicit ignore should behave the same as default ignore
         assert!(result.warnings.is_empty());

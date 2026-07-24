@@ -473,8 +473,15 @@ steps = [
     assert_success(&flow_result);
 
     // Now execute teardown (as the runner would)
-    let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+    let teardown_result = execute_teardown(
+        &flow.teardown,
+        &driver,
+        &mut vars,
+        DEFAULT_TIMEOUT,
+        &ctx,
+        &[],
+    )
+    .await;
 
     assert!(
         teardown_result.warnings.is_empty(),
@@ -534,8 +541,15 @@ steps = [
     assert_eq!(flow_result.failed_block, Some("failing".to_string()));
 
     // Teardown still runs after failure
-    let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+    let teardown_result = execute_teardown(
+        &flow.teardown,
+        &driver,
+        &mut vars,
+        DEFAULT_TIMEOUT,
+        &ctx,
+        &[],
+    )
+    .await;
 
     assert!(teardown_result.errors.is_empty(), "teardown should succeed");
 
@@ -996,8 +1010,15 @@ steps = [
     .expect("execute_flow should not error");
     assert_success(&flow_result);
 
-    let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+    let teardown_result = execute_teardown(
+        &flow.teardown,
+        &driver,
+        &mut vars,
+        DEFAULT_TIMEOUT,
+        &ctx,
+        &[],
+    )
+    .await;
 
     // Failing step in teardown defaults to if_fail="ignore" so it's silent
     assert!(teardown_result.warnings.is_empty());
@@ -1143,8 +1164,15 @@ steps = [
     assert_success(&flow_result);
 
     // Execute teardown
-    let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
+    let teardown_result = execute_teardown(
+        &flow.teardown,
+        &driver,
+        &mut vars,
+        DEFAULT_TIMEOUT,
+        &ctx,
+        &[],
+    )
+    .await;
     assert!(teardown_result.errors.is_empty());
 
     let calls = driver.get_calls();
