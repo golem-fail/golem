@@ -70,3 +70,30 @@ steps = [
   { action = "assert_visible", on_text = "Rot: -270 CCW" },
   { action = "assert_visible", on_text = "*Max: 2" },
 ]
+
+# Two-finger parallel pan — exercises the `gesture` action's arbitrary
+# multi-finger `fingers` paths (#78), the one gesture primitive the pinch/swipe/
+# rotate blocks above don't reach. Distinct from pinch (fingers converge) and
+# rotate (fingers orbit): both fingers sweep left→right in parallel, one along
+# the top row, one along the bottom. `Max: 2` is the load-bearing assertion
+# (multi-finger); the grid corroborates that each finger filled its own row.
+[[block]]
+name = "two_finger_pan"
+steps = [
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
+  { action = "assert_visible", on_text = "Grid: 000-000-000" },
+  { action = "gesture", duration = 800, fingers = [
+    { points = [
+      { accessibility_label = "gesture-area", x = "-33%", y = "-33%" },
+      { accessibility_label = "gesture-area", x = "0", y = "-33%" },
+      { accessibility_label = "gesture-area", x = "33%", y = "-33%" },
+    ] },
+    { points = [
+      { accessibility_label = "gesture-area", x = "-33%", y = "33%" },
+      { accessibility_label = "gesture-area", x = "0", y = "33%" },
+      { accessibility_label = "gesture-area", x = "33%", y = "33%" },
+    ] },
+  ] },
+  { action = "assert_visible", on_text = "*Max: 2" },
+  { action = "assert_visible", on_text = "Grid: 111-000-111" },
+]
