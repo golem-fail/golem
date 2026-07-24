@@ -1,0 +1,46 @@
+[flow]
+name = "Data-driven block iteration (for_each)"
+tags = ["cross-platform", "variables", "control-flow"]
+
+# Exercises block-level `for_each = "data"` (#93): a single block iterates the
+# flow's [[data]] rows, binding each row's fields under `${_each.<field>}`. The
+# block re-enters once per row; each iteration types the row's value into the
+# Search field and asserts the exact round-trip, then resets for the next row.
+# The trailing `done` block runs once (proving surrounding blocks aren't caught
+# in the per-row loop and the flow proceeds after the table is exhausted); it
+# anchors on the Reset button, which stays on screen in the Text Fields section.
+
+[[data]]
+term = "alpha-row"
+
+[[data]]
+term = "bravo-row"
+
+[[data]]
+term = "charlie-row"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "open_text_fields"
+steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+]
+
+[[block]]
+name = "each_row"
+for_each = "data"
+steps = [
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${_each.term}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${_each.term}" },
+]
+
+[[block]]
+name = "done"
+steps = [{ action = "assert_visible", on_text = "Reset fields" }]
