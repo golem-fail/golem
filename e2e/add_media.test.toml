@@ -1,0 +1,29 @@
+[flow]
+name = "add_media pushes an image into the gallery"
+tags = ["android", "media"]
+
+# add_media coverage (#78). On Android add_media is `adb push <file>
+# /sdcard/DCIM/`, so the most direct test of the action is that the file lands
+# there — no in-app surface needed (an in-app gallery consumer would test the
+# app, not the action). Verified out-of-band via adb against the run's device
+# (${_udid} = the adb serial).
+#
+# Android-only: iOS add_media is `simctl addmedia` into the PhotoKit library,
+# which has no simple CLI to observe from a flow (tracked separately).
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "push_and_verify"
+steps = [
+  # Clean slate so the post-check proves THIS add_media placed the file, not a
+  # leftover from a prior run (|| true: absence is not an error).
+  { action = "bash", run = "adb -s ${_udid} shell rm -f /sdcard/DCIM/sample_media.png || true" },
+  { action = "add_media", path = "e2e/__fixtures__/sample_media.png" },
+  # grep exits non-zero if the file isn't in the gallery dir → the bash step
+  # fails → the flow fails. A clean exit proves add_media pushed it.
+  { action = "bash", run = "adb -s ${_udid} shell ls /sdcard/DCIM/ | grep -q sample_media.png" },
+]
