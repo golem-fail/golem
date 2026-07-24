@@ -15,7 +15,7 @@ use golem_parser::FlowFile;
 use golem_report::{FlowReport, SuiteReport};
 use golem_runner::capture::CaptureConfig;
 use golem_runner::context::ExecutionContext;
-use golem_runner::executor::execute_flow;
+use golem_runner::executor::execute_flow_with_teardown;
 use golem_vars::VariableStore;
 
 use crate::companion_paths::{find_android_apk, find_android_main_apk, find_companion_path};
@@ -676,6 +676,7 @@ impl SuiteRunner {
             };
             let no_results = self.config.no_results;
             let no_perf = self.config.no_perf;
+            let no_teardown = self.config.no_teardown;
             let a11y_override = self.config.a11y_override;
             let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
@@ -743,6 +744,7 @@ impl SuiteRunner {
                         repeat_ctx,
                         max_device_wait,
                         stub_fail_on_runs,
+                        no_teardown,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -998,6 +1000,8 @@ struct FlowRunConfig {
     /// Stub mode: `Some(fail_on_runs)` drives this FlowRun against the
     /// device-free `StubDriver` (see [`SuiteConfig::stub_fail_on_runs`]).
     stub_fail_on_runs: Option<Vec<u32>>,
+    /// CLI `--no-teardown` — skip `[[teardown]]` execution after each flow.
+    no_teardown: bool,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1399,6 +1403,7 @@ async fn execute_flow_run(
                     a11y_override,
                     a11y_min_confidence_override,
                     stub_fail_on_runs: stub_fail_on_runs_c,
+                    no_teardown: cfg.no_teardown,
                 },
             )
             .await
@@ -3215,6 +3220,7 @@ struct FlowRunPolicy {
     a11y_override: Option<golem_parser::A11yLevel>,
     a11y_min_confidence_override: Option<f32>,
     stub_fail_on_runs: Option<Vec<u32>>,
+    no_teardown: bool,
 }
 
 /// Execute a flow on a single device. This is a free function (not a method)
@@ -3258,6 +3264,7 @@ async fn run_flow_on_device(
         a11y_override,
         a11y_min_confidence_override,
         stub_fail_on_runs,
+        no_teardown,
     } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -3629,7 +3636,7 @@ async fn run_flow_on_device(
         .as_ref()
         .and_then(|o| o.step_timeout)
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
-    let mut report = match execute_flow(
+    let mut report = match execute_flow_with_teardown(
         &flow,
         driver.as_ref(),
         &mut vars,
@@ -3637,6 +3644,7 @@ async fn run_flow_on_device(
         base_timeout,
         &mut ctx,
         Some(&barrier),
+        !no_teardown,
     )
     .await
     {

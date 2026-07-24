@@ -1675,6 +1675,63 @@ fn chrono_now() -> String {
     format!("{secs}")
 }
 
+/// Execute a flow, then run its `[[teardown]]` blocks (unless `run_teardown`
+/// is false or there are none).
+///
+/// Teardown runs on the same device **regardless of the flow's pass/fail** —
+/// cleaning up state a failed run would otherwise leak — and its
+/// warnings/errors are folded into the returned result's `warnings` without
+/// ever changing `success` (teardown is isolated from the verdict, per
+/// [`crate::teardown::TeardownResult`]). This is the seam the CLI run path
+/// uses; `--no-teardown` maps to `run_teardown = false`.
+pub async fn execute_flow_with_teardown<'a>(
+    flow: &'a FlowFile,
+    driver: &dyn PlatformDriver,
+    vars: &mut VariableStore,
+    start_block: Option<&str>,
+    default_timeout_ms: u64,
+    ctx: &mut ExecutionContext<'a>,
+    barrier: Option<&FailureBarrier>,
+    run_teardown: bool,
+) -> Result<FlowResult> {
+    let mut result = execute_flow(
+        flow,
+        driver,
+        vars,
+        start_block,
+        default_timeout_ms,
+        ctx,
+        barrier,
+    )
+    .await;
+
+    if run_teardown && !flow.teardown.is_empty() {
+        // execute_flow's &mut borrow has ended; teardown takes a shared ctx.
+        let teardown = crate::teardown::execute_teardown(
+            &flow.teardown,
+            driver,
+            vars,
+            default_timeout_ms,
+            ctx,
+            &flow.flow.apps,
+        )
+        .await;
+        // Fold into the flow result's warnings — never the verdict. Only the
+        // Ok arm carries a FlowResult; on a hard execution error teardown still
+        // ran (cleanup) but there's no result to attach its notes to.
+        if let Ok(ref mut r) = result {
+            for w in teardown.warnings {
+                r.warnings.push(format!("Teardown: {w}"));
+            }
+            for e in teardown.errors {
+                r.warnings.push(format!("Teardown error: {e}"));
+            }
+        }
+    }
+
+    result
+}
+
 /// Execute a flow once per data-driven row (or once if there are no data rows).
 ///
 /// Returns the first failing [`FlowResult`] if any row fails, otherwise returns the
@@ -3940,6 +3997,109 @@ action = "screenshot"
         assert!(
             result.success,
             "re-entered for_each SHALL rebind rows (not leave ${{_each}} unbound)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // execute_flow_with_teardown: teardown wiring (#114)
+    // ---------------------------------------------------------------
+
+    fn make_teardown_flow(main: Vec<Block>, teardown_steps: Vec<Step>) -> FlowFile {
+        let mut flow = make_flow(main);
+        flow.teardown = vec![golem_parser::TeardownBlock {
+            steps: teardown_steps,
+        }];
+        flow
+    }
+
+    async fn run_with_teardown(flow: &FlowFile, run_teardown: bool) -> (Result<FlowResult>, usize) {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        let result = execute_flow_with_teardown(
+            flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+            run_teardown,
+        )
+        .await;
+        let screenshots = driver
+            .get_calls()
+            .iter()
+            .filter(|c| c.0 == "screenshot")
+            .count();
+        (result, screenshots)
+    }
+
+    // Teardown runs after a passing flow: flow screenshot + teardown screenshot = 2.
+    #[tokio::test]
+    async fn teardown_runs_after_passing_flow() {
+        let flow = make_teardown_flow(
+            vec![make_block(Some("main"), vec![make_success_step()])],
+            vec![make_success_step()],
+        );
+        let (result, screenshots) = run_with_teardown(&flow, true).await;
+        assert!(result.expect("SHALL succeed").success);
+        assert_eq!(screenshots, 2, "teardown SHALL run after a passing flow");
+    }
+
+    // Teardown runs even when the flow FAILS (the whole point — clean up state a
+    // failed run leaks). The failing main step (a tap, no screenshot) leaves the
+    // teardown screenshot as the only one.
+    #[tokio::test]
+    async fn teardown_runs_after_failing_flow() {
+        let flow = make_teardown_flow(
+            vec![make_block(Some("main"), vec![make_failing_step()])],
+            vec![make_success_step()],
+        );
+        let (result, screenshots) = run_with_teardown(&flow, true).await;
+        assert!(!result.expect("SHALL return a result").success);
+        assert_eq!(
+            screenshots, 1,
+            "teardown SHALL run despite the flow failing"
+        );
+    }
+
+    // `--no-teardown` (run_teardown = false) skips teardown entirely.
+    #[tokio::test]
+    async fn teardown_skipped_when_disabled() {
+        let flow = make_teardown_flow(
+            vec![make_block(Some("main"), vec![make_success_step()])],
+            vec![make_success_step()],
+        );
+        let (result, screenshots) = run_with_teardown(&flow, false).await;
+        assert!(result.expect("SHALL succeed").success);
+        assert_eq!(screenshots, 1, "run_teardown=false SHALL skip teardown");
+    }
+
+    // A flow with no teardown blocks is a no-op even with run_teardown = true.
+    #[tokio::test]
+    async fn teardown_empty_is_noop() {
+        let flow = make_flow(vec![make_block(Some("main"), vec![make_success_step()])]);
+        let (result, screenshots) = run_with_teardown(&flow, true).await;
+        assert!(result.expect("SHALL succeed").success);
+        assert_eq!(screenshots, 1, "no teardown blocks SHALL add no steps");
+    }
+
+    // Teardown step outcomes fold into the result's warnings without changing
+    // the verdict: a warning-level teardown failure leaves success = true.
+    #[tokio::test]
+    async fn teardown_warnings_folded_without_changing_verdict() {
+        let flow = make_teardown_flow(
+            vec![make_block(Some("main"), vec![make_success_step()])],
+            vec![make_warn_step()],
+        );
+        let (result, _) = run_with_teardown(&flow, true).await;
+        let result = result.expect("SHALL succeed");
+        assert!(result.success, "a teardown warning SHALL NOT fail the flow");
+        assert!(
+            result.warnings.iter().any(|w| w.starts_with("Teardown:")),
+            "teardown warnings SHALL be folded into the result: {:?}",
+            result.warnings
         );
     }
 

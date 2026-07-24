@@ -1,0 +1,29 @@
+[flow]
+name = "Teardown execution"
+tags = ["cross-platform", "lifecycle"]
+
+# Exercises [[teardown]] execution (#114): teardown blocks run after the flow's
+# blocks complete, on the same device, regardless of pass/fail. A teardown's
+# effect can't be asserted from within the same flow (it runs after the last
+# block, before device-state cleanup, and nothing observes it afterwards), so
+# this flow proves teardown is *wired* — the teardown steps appear in the run
+# log after the `main` block. The runner unit tests carry the deterministic
+# pass/fail/skip proof; this is the live cross-platform check.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "main"
+steps = [{ action = "assert_visible", on_text = "Counter" }]
+
+# Two app-agnostic teardown steps plus an app-targeted stop (exercises the
+# `app=` resolution path through teardown). Order is document order.
+[[teardown]]
+steps = [
+  { action = "bash", run = "echo golem-teardown-ran" },
+  { action = "screenshot" },
+  { action = "stop", app = "app" },
+]
