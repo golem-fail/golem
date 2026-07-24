@@ -465,6 +465,32 @@ steps = [
 ]
 ```
 
+### Block-level iteration (`for_each`)
+
+Instead of re-running the whole flow, a single block can iterate the `[[data]]`
+rows itself with `for_each = "data"`. The block runs once per row, and each
+row's fields are read under the `${_each.<field>}` prefix:
+
+```toml
+[[data]]
+user = "alice"
+
+[[data]]
+user = "bob"
+
+[[block]]
+for_each = "data"
+steps = [
+  { action = "type", on_text = "Search", input = "${_each.user}" },
+  { action = "assert_visible", on_text = "${_each.user}" },
+]
+```
+
+Only surrounding blocks run once; the `for_each` block re-enters per row
+(`block:0`, `block:1`, … in step labels and recordings). When a block claims
+`[[data]]` this way, the whole-flow-per-row expansion above is suppressed so
+rows aren't applied twice. An empty `[[data]]` table runs the block zero times.
+
 ## Variables
 
 Set variables from the CLI, flow metadata, data rows, `read` actions, or fixtures:

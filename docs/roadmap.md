@@ -40,9 +40,8 @@ glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
 
 ## Step interpolation: cross-device & `for_each` prefixes
 
-The single-device builtins (`${_device}`/`${_os}`/`${_platform}`/`${_type}`/`${_udid}`/`${_app}`) are migrated to #40. Remaining: the prefixed **cross-device** forms `${self:var}` / `${global:var}` / `${<device>:var}` and `${_each.x}` still error at step time (the step `InterpolationContext` leaves `device_stores`/`global_store`/`each_vars` as `None`). These are gated on features that must exist first:
+The single-device builtins (`${_device}`/`${_os}`/`${_platform}`/`${_type}`/`${_udid}`/`${_app}`) are migrated to #40. `${_each.x}` is wired to block-level data iteration (#93): a `for_each = "data"` block binds each `[[data]]` row's fields under the `_each.` prefix. Remaining: the prefixed **cross-device** forms `${self:var}` / `${global:var}` / `${<device>:var}` still error at step time (the step `InterpolationContext` leaves `device_stores`/`global_store` as `None`). These are gated on a feature that must exist first:
 - `${self:}` / `${global:}` / `${<device>:}` → **multi-device flow coordination** (planned; see "Multi-Device Flow Coordination").
-- `${_each.x}` → **`for_each` over devices** (future).
 
 Wire them into the step `InterpolationContext` when those land. **Files:** `golem-runner/src/interp.rs`.
 ## Confirm host-queue benefit on a load-saturated host

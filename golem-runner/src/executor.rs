@@ -295,6 +295,14 @@ pub async fn execute_flow<'a>(
     let mut recordings: Vec<golem_report::RecordingEntry> = Vec::new();
     let mut a11y_audits: Vec<golem_report::A11yAudit> = Vec::new();
     let mut block_iterations: HashMap<usize, u32> = HashMap::new();
+    // Per-`for_each`-block `[[data]]` row cursor, kept separate from
+    // `block_iterations` (which counts *every* entry, including outer
+    // `goto`/`next` loops). Decoupling means re-entering an exhausted
+    // `for_each` block via an outer loop restarts its row iteration from 0
+    // rather than indexing past the table (which would leave `${_each.*}`
+    // unbound). Set when the block re-enters itself for the next row.
+    let mut for_each_row: HashMap<usize, usize> = HashMap::new();
+    let mut for_each_reentered: Option<usize> = None;
 
     // `--trace` boundary state, lazily populated when a recording block
     // starts. One tracker active at a time since blocks don't nest.
@@ -354,6 +362,23 @@ pub async fn execute_flow<'a>(
                     current_idx += 1;
                     continue;
                 }
+            }
+        }
+
+        // A `for_each` block iterates the flow's `[[data]]` rows (see the
+        // per-row binding + re-entry below). Validate the target up front, and
+        // skip the block entirely on an empty table so zero rows run the block
+        // zero times rather than once with `${_each.*}` unbound.
+        if let Some(target) = block.for_each.as_deref() {
+            if target != "data" {
+                return Err(anyhow::anyhow!(
+                    "block for_each = \"{target}\" is not supported; only \"data\" \
+                     (the flow's [[data]] table) can be iterated"
+                ));
+            }
+            if flow.data.is_empty() {
+                current_idx += 1;
+                continue;
             }
         }
 
@@ -474,6 +499,27 @@ pub async fn execute_flow<'a>(
             .clone()
             .unwrap_or_else(|| format!("block_{current_idx}"));
         let block_iter_for_recording = *iteration;
+        // Data-driven binding: a `for_each = "data"` block re-enters once per
+        // `[[data]]` row (see "Determine next block"). A fresh entry (not a
+        // self-re-entry for the next row) restarts the cursor at row 0, so an
+        // outer loop back into the block re-runs the whole table. Bind the
+        // current row's fields into a throwaway store exposed to steps under
+        // the `_each.` prefix. Validated + empty-guarded at block entry.
+        let each_store: Option<VariableStore> = block.for_each.as_deref().and_then(|_| {
+            let cursor = for_each_row.entry(current_idx).or_insert(0);
+            if for_each_reentered != Some(current_idx) {
+                *cursor = 0;
+            }
+            let row_idx = *cursor;
+            flow.data.get(row_idx).map(|row| {
+                let mut store = VariableStore::new();
+                for (key, value) in row {
+                    store.set_in_scope(ScopeLevel::Flow, key, VarValue::String(value.clone()));
+                }
+                store
+            })
+        });
+        for_each_reentered = None;
         // Expose the 0-based per-block iteration as the reserved `_loop`
         // variable: 0 on first entry, 1 on the second, etc. This is what
         // bounds a branch loop — `[[block.branch]] if_var = "_loop", gte = N`
@@ -636,6 +682,7 @@ pub async fn execute_flow<'a>(
                 let mut ictx = golem_vars::interpolation::InterpolationContext::new(&*vars);
                 ictx.generator = Some(&generator);
                 ictx.builtins = Some(&builtins);
+                ictx.each_vars = each_store.as_ref();
                 crate::interp::interpolate_step(step, &ictx)?
             };
             let step = &step_owned;
@@ -1081,6 +1128,21 @@ pub async fn execute_flow<'a>(
                         a11y_audits,
                     });
                 }
+            }
+        }
+
+        // A `for_each = "data"` block re-enters itself for the next `[[data]]`
+        // row until the table is exhausted; only the final row hands off via
+        // branch/next. Re-entry leaves current_idx unchanged so the block
+        // re-enters (advancing block_iterations → its own iteration label +
+        // recording, block:0, block:1, …) and marks itself so the entry above
+        // advances the row cursor instead of restarting it.
+        if block.for_each.is_some() {
+            let cursor = for_each_row.entry(current_idx).or_insert(0);
+            if *cursor + 1 < flow.data.len() {
+                *cursor += 1;
+                for_each_reentered = Some(current_idx);
+                continue;
             }
         }
 
@@ -1626,7 +1688,16 @@ pub async fn execute_flow_with_data<'a>(
     ctx: &mut ExecutionContext<'a>,
     barrier: Option<&FailureBarrier>,
 ) -> Result<FlowResult> {
-    let runs = crate::data_driven::get_runs(&flow.data);
+    // When a block claims the `[[data]]` table via `for_each = "data"`, rows are
+    // iterated at the block level (each row = one block iteration binding
+    // `${_each.*}`). Suppress the whole-flow-per-row expansion in that case —
+    // otherwise the flow would run once per row AND the block would re-iterate
+    // every row within each, yielding N×N executions.
+    let runs = if flow.block.iter().any(|b| b.for_each.is_some()) {
+        crate::data_driven::get_runs(&[])
+    } else {
+        crate::data_driven::get_runs(&flow.data)
+    };
     let mut last_result = None;
     for run in &runs {
         if !run.vars.is_empty() {
@@ -3624,6 +3695,251 @@ action = "screenshot"
             vars.resolve("payment").ok(),
             Some(&VarValue::String("credit_card".to_string())),
             "row variables SHALL be applied to the variable store"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // for_each = "data": block-level data-driven iteration (#93)
+    // ---------------------------------------------------------------
+
+    fn make_for_each_block(name: Option<&str>, steps: Vec<Step>, target: &str) -> Block {
+        let mut block = make_block(name, steps);
+        block.for_each = Some(target.to_string());
+        block
+    }
+
+    fn assert_visible_on_text(text: &str) -> Step {
+        Step {
+            action: "assert_visible".to_string(),
+            on_text: Some(text.to_string()),
+            timeout: Some(200),
+            ..Default::default()
+        }
+    }
+
+    // A `for_each = "data"` block runs its steps once per row, and the
+    // whole-flow-per-row expansion is suppressed — so N rows give exactly N
+    // block executions, not N×N. Two rows × one screenshot = two screenshots.
+    #[tokio::test]
+    async fn for_each_data_iterates_block_once_per_row() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let mut flow = make_flow(vec![make_for_each_block(
+            Some("rows"),
+            vec![make_success_step()],
+            "data",
+        )]);
+        flow.data = vec![
+            HashMap::from([("user".to_string(), "alice".to_string())]),
+            HashMap::from([("user".to_string(), "bob".to_string())]),
+        ];
+
+        let result = execute_flow_with_data(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow_with_data SHALL succeed");
+        assert!(result.success);
+
+        let calls = driver.get_calls();
+        let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
+        assert_eq!(
+            screenshots, 2,
+            "2 rows SHALL run the block exactly twice (not 1×, not 4× from N×N)"
+        );
+    }
+
+    // Each row's fields resolve under the `${_each.*}` prefix in that row's
+    // steps. Both rows tap a text present in the hierarchy: success proves the
+    // prefix resolved to each row's value (an unbound `${_each}` would make
+    // interpolate_step error, returning Err from execute_flow, not Ok).
+    #[tokio::test]
+    async fn for_each_data_binds_each_prefix_per_row() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["alice", "bob"]));
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let mut flow = make_flow(vec![make_for_each_block(
+            Some("rows"),
+            vec![assert_visible_on_text("${_each.user}")],
+            "data",
+        )]);
+        flow.data = vec![
+            HashMap::from([("user".to_string(), "alice".to_string())]),
+            HashMap::from([("user".to_string(), "bob".to_string())]),
+        ];
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed (each row's ${_each.user} resolves + matches)");
+        assert!(result.success);
+    }
+
+    // A wrong row value fails only its own iteration: row 0 (alice, present)
+    // passes, row 1 (missing) fails — proving the prefix rebinds per row rather
+    // than reusing row 0's value.
+    #[tokio::test]
+    async fn for_each_data_rebinds_each_row_distinctly() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["alice"]));
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let mut flow = make_flow(vec![make_for_each_block(
+            Some("rows"),
+            vec![assert_visible_on_text("${_each.user}")],
+            "data",
+        )]);
+        flow.data = vec![
+            HashMap::from([("user".to_string(), "alice".to_string())]),
+            HashMap::from([("user".to_string(), "ZZ-absent-ZZ".to_string())]),
+        ];
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL return a FlowResult");
+        assert!(
+            !result.success,
+            "row 1's ${{_each.user}} (absent in hierarchy) SHALL fail its iteration"
+        );
+    }
+
+    // An empty `[[data]]` table runs a `for_each` block zero times; the flow
+    // still proceeds to the following block.
+    #[tokio::test]
+    async fn for_each_data_empty_table_skips_block() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let flow = make_flow(vec![
+            make_for_each_block(Some("rows"), vec![make_success_step()], "data"),
+            make_block(Some("after"), vec![make_success_step()]),
+        ]);
+        // flow.data left empty.
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed");
+        assert!(result.success);
+
+        let calls = driver.get_calls();
+        let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
+        assert_eq!(
+            screenshots, 1,
+            "empty data SHALL skip the for_each block; only `after` runs"
+        );
+    }
+
+    // Only "data" is a valid for_each target today; any other value is a loud
+    // configuration error rather than a silent no-op.
+    #[tokio::test]
+    async fn for_each_unknown_target_errors() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let mut flow = make_flow(vec![make_for_each_block(
+            Some("rows"),
+            vec![make_success_step()],
+            "bogus",
+        )]);
+        flow.data = vec![HashMap::from([("user".to_string(), "alice".to_string())])];
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "an unsupported for_each target SHALL error the flow"
+        );
+    }
+
+    // Re-entering an exhausted `for_each` block via an outer loop restarts its
+    // row iteration from row 0 (rather than indexing past the table and leaving
+    // `${_each.*}` unbound). `rows` iterates 2 rows, hands to `gate`, which
+    // loops back to `rows` once (via `_loop`) then exits: `rows` must bind
+    // alice/bob on both passes, so every `${_each.user}` assert resolves.
+    #[tokio::test]
+    async fn for_each_data_restarts_on_outer_reentry() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["alice", "bob"]));
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        let rows = {
+            let mut b = make_for_each_block(
+                Some("rows"),
+                vec![assert_visible_on_text("${_each.user}")],
+                "data",
+            );
+            b.next = Some("gate".to_string());
+            b
+        };
+        let gate = make_block_with_branch(
+            Some("gate"),
+            vec![make_success_step()],
+            vec![cond_if_var_gte("_loop", 1, "done"), cond_default("rows")],
+        );
+        let done = make_block(Some("done"), vec![make_success_step()]);
+
+        let mut flow = make_flow(vec![rows, gate, done]);
+        flow.data = vec![
+            HashMap::from([("user".to_string(), "alice".to_string())]),
+            HashMap::from([("user".to_string(), "bob".to_string())]),
+        ];
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed: the second pass restarts at row 0");
+        assert!(
+            result.success,
+            "re-entered for_each SHALL rebind rows (not leave ${{_each}} unbound)"
         );
     }
 

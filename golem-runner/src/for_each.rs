@@ -4,11 +4,15 @@ use golem_devices::{DeviceInfo, DeviceType, Platform};
 use golem_parser::DeviceFilter;
 use golem_vars::VarValue;
 
-/// Represents the `_each` context for one iteration of a `for_each` block.
+/// Per-device `_each` context, one per iteration of a **device**-iterating
+/// `for_each` block.
 ///
-/// When a block specifies `for_each = "client"`, the runner iterates over each
-/// device assigned to the "client" app. Each iteration produces an `EachContext`
-/// that makes the target device's variables available via `${_each.*}` references.
+/// > **Not yet wired.** No `for_each` target selects devices today — block
+/// > `for_each = "data"` iterates `[[data]]` rows instead (see the executor),
+/// > binding row fields (not device vars) under `${_each.*}`. This scaffolding
+/// > reserves a future `for_each = "<app>"` that would iterate the devices
+/// > assigned to an app; `build_each_contexts` is exercised only by tests until
+/// > then.
 pub struct EachContext {
     /// The UDID / unique identifier of the iteration device.
     pub device_id: String,
@@ -20,7 +24,8 @@ pub struct EachContext {
     pub vars: HashMap<String, VarValue>,
 }
 
-/// Build the list of [`EachContext`] entries for a `for_each` block.
+/// Build the list of [`EachContext`] entries for a device-iterating `for_each`
+/// block. Not yet reachable — see [`EachContext`].
 ///
 /// One context is created per device in `target_app_devices`, in the same order.
 /// Each context captures the device's current variables from `device_vars`.
