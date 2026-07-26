@@ -47,7 +47,8 @@ See [Installing golem](docs/distribution.md) for every channel, CI usage, and ve
 **At runtime**, driving a platform needs its device CLI (`xcrun simctl` for iOS, `adb` for Android) plus an available simulator/emulator or a connected device. `golem doctor` checks every prerequisite and prints a copy-paste fix for each miss.
 
 ```bash
-golem doctor                     # check your device toolchain + environment
+# Check your device toolchain + environment
+golem doctor
 
 # Scaffold a project (golem.toml, flows/, __fixtures__/, __mixins__/, .golem/)
 golem init
