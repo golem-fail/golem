@@ -1,23 +1,21 @@
 [flow]
 name = "clear_data wipes persisted app state"
-tags = ["android", "lifecycle"]
+tags = ["cross-platform", "lifecycle"]
 
 # clear_data coverage (#78, surface from #94). The Persisted State section is
 # localStorage-backed, which survives a normal relaunch but is wiped by
 # clear_data — the only observable way to prove the wipe (the rest of the app is
 # in-memory state that resets on launch regardless).
 #
-# Android-only: iOS clear_data is `simctl uninstall` (removes the app entirely),
-# and golem has no in-flow reinstall action, so the clear -> relaunch -> assert
-# cycle can't run on iOS (tracked separately).
-#
-# Relaunches use restart = true so the WebView cold-starts and re-derives the
-# value from localStorage; a warm launch would keep the in-memory count and the
-# assertion would pass without proving persistence.
+# One flow, both platforms, no platform-specific steps: clear_data keeps the app
+# installed on both (Android `pm clear`; iOS wipes the data container in place —
+# see golem-driver), so relaunch-and-assert works identically. Relaunches use
+# restart = true so the WebView cold-starts and re-derives the value from
+# localStorage; a warm launch would keep the in-memory count and assert nothing.
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = ["android:latest"]
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]
