@@ -266,6 +266,17 @@ fn validate_recording_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Guard for the recursive wipe in `clear_app_data`: only clear a path that is
+/// unmistakably a simulator app *data* container. Rejects empty, relative, or
+/// stray paths so a malformed/empty `get_app_container` result can never point
+/// the remove at the wrong place (root, cwd, a bundle container, etc.).
+fn is_safe_container_path(path: &str) -> bool {
+    !path.is_empty()
+        && std::path::Path::new(path).is_absolute()
+        && path.contains("/CoreSimulator/Devices/")
+        && path.contains("/Containers/Data/Application/")
+}
+
 /// Read `safe_area_top` from the companion hierarchy wrapper as an `i32`,
 /// defaulting to 0 when absent or non-integer.
 fn safe_area_top_from_wrapper(wrapper: &serde_json::Value) -> i32 {
@@ -630,9 +641,69 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn clear_app_data(&self, bundle_id: &str) -> Result<()> {
-        // Uninstall and reinstall is the standard way to clear data on iOS simulator
-        self.simctl(&["uninstall", &self.device_id, bundle_id])
+        // Wipe the app's data container in place, keeping the app installed, so
+        // a flow can relaunch and observe the reset — the same shape as Android
+        // `pm clear`. `simctl uninstall` (the obvious alternative) removes the
+        // app entirely, and no in-flow action can reinstall it, so the
+        // clear -> relaunch -> assert cycle would be impossible on iOS.
+        //
+        // Scope: clears the *data* container (Documents, Library — incl. WebKit
+        // localStorage —, tmp) and resets the app's TCC/privacy grants (below),
+        // matching Android `pm clear`'s data + permissions reset. Keychain items
+        // and app-group containers live outside the data container and are not
+        // cleared — no simctl reset exists for them; irrelevant to apps that
+        // don't use them.
+        //
+        // Simulator-only: the data container is a host path we can clear.
+        // `get_app_container` on a physical device returns an on-device path
+        // this can't reach, so physical iOS data-clear is unsupported.
+        if self.physical {
+            bail!("clear_data is not supported on physical iOS devices");
+        }
+        // Terminate first so WebKit flushes and no live process rewrites the
+        // container after the wipe. Ignore errors — the app may not be running.
+        let _ = self
+            .simctl(&["terminate", &self.device_id, bundle_id])
+            .await;
+
+        let container = self
+            .simctl(&["get_app_container", &self.device_id, bundle_id, "data"])
             .await?;
+        let container = container.trim();
+        if !is_safe_container_path(container) {
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceDriverOpFailed,
+                anyhow::anyhow!("refusing to clear unexpected container path: {container:?}"),
+            ));
+        }
+
+        // Remove every top-level entry except the container manager's metadata
+        // plist; iOS recreates Documents/Library/tmp on the next launch.
+        let container_path = std::path::Path::new(container);
+        for entry in std::fs::read_dir(container_path)
+            .with_context(|| format!("reading data container {container}"))?
+        {
+            let entry = entry?;
+            if entry.file_name() == ".com.apple.mobile_container_manager.metadata.plist" {
+                continue;
+            }
+            let path = entry.path();
+            let removed = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            removed.with_context(|| format!("clearing {}", path.display()))?;
+        }
+
+        // Reset the app's TCC/privacy grants so permission state also starts
+        // clean (parity with Android `pm clear`). Scoped to this bundle — not a
+        // device-wide `reset all` — so other apps' grants are untouched. Same
+        // TCC settle window as grant/revoke so an immediately-following launch
+        // doesn't race the privacy daemons.
+        self.simctl(&["privacy", &self.device_id, "reset", "all", bundle_id])
+            .await?;
+        tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
         Ok(())
     }
 
@@ -1386,5 +1457,28 @@ mod tests {
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"][0]["element_type"], "Leaf");
         assert!(parsed.get("safe_area_top").is_none());
+    }
+
+    #[test]
+    fn safe_container_path_accepts_real_data_container() {
+        assert!(is_safe_container_path(
+            "/Users/x/Library/Developer/CoreSimulator/Devices/ABC-123/data/Containers/Data/Application/DEF-456"
+        ));
+    }
+
+    #[test]
+    fn safe_container_path_rejects_dangerous_paths() {
+        // Empty / relative / root / non-container paths must never be cleared.
+        assert!(!is_safe_container_path(""));
+        assert!(!is_safe_container_path("/"));
+        assert!(!is_safe_container_path(
+            "data/Containers/Data/Application/X"
+        )); // relative
+        assert!(!is_safe_container_path("/Users/x/project")); // no simulator markers
+                                                              // A bundle (app) container is absolute + under CoreSimulator but is NOT
+                                                              // the data container — clearing it would delete the installed app.
+        assert!(!is_safe_container_path(
+            "/Users/x/Library/Developer/CoreSimulator/Devices/ABC/data/Containers/Bundle/Application/DEF"
+        ));
     }
 }

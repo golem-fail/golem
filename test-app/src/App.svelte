@@ -10,6 +10,7 @@ import NestedLayout from "./lib/NestedLayout.svelte";
 import AlertTriggers from "./lib/AlertTriggers.svelte";
 import Permissions from "./lib/Permissions.svelte";
 import DeviceState from "./lib/DeviceState.svelte";
+import PersistedState from "./lib/PersistedState.svelte";
 import DelayedElement from "./lib/DelayedElement.svelte";
 import DialogOverlay from "./lib/DialogOverlay.svelte";
 import PositionTest from "./lib/PositionTest.svelte";
@@ -43,5 +44,6 @@ import A11yDemo from "./lib/A11yDemo.svelte";
   <div id="section-dialog-overlay"><DialogOverlay /></div>
   <div id="section-position-test"><PositionTest /></div>
   <div id="section-device-state"><DeviceState /></div>
+  <div id="section-persisted-state"><PersistedState /></div>
   <div id="section-a11y-demo"><A11yDemo /></div>
 </main>
