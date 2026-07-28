@@ -516,6 +516,9 @@ fn app_from_project(proj: &ProjectAppConfig) -> AppConfig {
         install_timeout_ms: proj.install_timeout_ms,
         install_env: proj.install_env.clone(),
         profile: proj.profile.clone(),
+        // Launch-time permissions are a flow-app concept; project-only apps
+        // don't define them.
+        permissions: Default::default(),
     }
 }
 
@@ -1313,6 +1316,7 @@ mod tests {
             install_timeout_ms: None,
             install_env: None,
             profile: None,
+            permissions: Default::default(),
             devices,
         }
     }
@@ -2439,6 +2443,7 @@ mod tests {
             install_timeout_ms: None,
             install_env: None,
             profile: profile.map(Into::into),
+            permissions: Default::default(),
         }
     }
 

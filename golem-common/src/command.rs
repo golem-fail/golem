@@ -35,6 +35,12 @@ pub struct CommandOpts {
     pub stdin: Option<Vec<u8>>,
     /// Working directory for the child.
     pub current_dir: Option<String>,
+    /// When set on a detached spawn, redirect the child's stdout+stderr to
+    /// this file (appended) instead of discarding them. Used to persist the
+    /// iOS companion's `xcodebuild test` output so a mid-flow XCUITest-host
+    /// exit leaves a diagnosable teardown reason behind. Ignored by `output`
+    /// (which already captures stdout/stderr into the returned `Output`).
+    pub log_file: Option<String>,
 }
 
 impl CommandOpts {
@@ -50,6 +56,15 @@ impl CommandOpts {
     pub fn with_stdin(stdin: Vec<u8>) -> Self {
         Self {
             stdin: Some(stdin),
+            ..Self::default()
+        }
+    }
+
+    /// Options carrying env vars plus a detached-spawn log file.
+    pub fn with_env_and_log(env: Vec<(String, String)>, log_file: String) -> Self {
+        Self {
+            env,
+            log_file: Some(log_file),
             ..Self::default()
         }
     }
@@ -132,9 +147,24 @@ impl CommandRunner for SystemCommandRunner {
         opts: &CommandOpts,
     ) -> std::io::Result<()> {
         let mut cmd = tokio::process::Command::new(program);
-        cmd.args(args)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
+        cmd.args(args);
+        match &opts.log_file {
+            Some(path) => {
+                // Append so a companion restart to the same path preserves the
+                // prior instance's death output rather than truncating it.
+                let file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)?;
+                let err = file.try_clone()?;
+                cmd.stdout(std::process::Stdio::from(file))
+                    .stderr(std::process::Stdio::from(err));
+            }
+            None => {
+                cmd.stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+            }
+        }
         apply_opts(&mut cmd, opts);
         cmd.spawn()?;
         Ok(())

@@ -1,0 +1,40 @@
+[flow]
+name = "add_media lands an image in the gallery"
+tags = ["cross-platform", "media"]
+
+# add_media coverage (#78 / #117). add_media puts a photo in the device gallery;
+# test-app-b's Gallery section reads the photo library and renders the added
+# image's pixel dimensions — the observable effect of the action, asserted
+# through the app UI.
+#
+# One flow, both platforms, no platform-specific steps:
+#  - Android add_media indexes the pushed file into MediaStore; iOS `simctl
+#    addmedia` indexes into PhotoKit — so the app sees it either way.
+#  - Photo access: Android is PRE-GRANTED at launch via the app's `permissions`
+#    map (`pm grant`), so no prompt appears. iOS 26 does NOT let `simctl privacy
+#    grant photos` satisfy the full-library-access prompt (it appears even for a
+#    native app), so the prompt shows and `accept_alert` accepts it — a no-op on
+#    Android (`if_fail = "ignore"`). test-app-b is native, so unlike the Expo app
+#    it doesn't force-quit the XCUITest companion — the prompt-accept is reliable.
+#    (A prompt-free iOS pre-grant would need `applesimutils` — a future option.)
+[[flow.apps]]
+name = "app-b"
+bundle = "fail.golem.testb"
+install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
+permissions = { photos = "allow" }
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "add_and_observe"
+steps = [
+  { action = "add_media", path = "e2e/__fixtures__/sample_media.png" },
+  { action = "assert_visible", on_text = "Dims: pending" },
+  { action = "tap", on_accessibility_label = "load-gallery" },
+  # iOS shows the photo-access prompt (see header); accept it. No-op on Android
+  # (pre-granted, no prompt) via if_fail=ignore.
+  { action = "accept_alert", if_fail = "ignore", timeout = 12000 },
+  # The app renders the added image's actual pixel size; the fixture is 7x11.
+  { action = "assert_visible", on_text = "Dims: 7x11", timeout = 30000 },
+]

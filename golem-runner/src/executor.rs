@@ -151,6 +151,106 @@ async fn clear_startup_anr(driver: &dyn PlatformDriver, ctx: &ExecutionContext<'
     }
 }
 
+/// Restart the companion, measure how long the restart-and-reconnect took, and
+/// (on success) emit the verbose-only `CompanionRestarted` breadcrumb. `attempt`
+/// is the human-facing "N of max" for the breadcrumb. Propagates the restart's
+/// own error so the caller can decide whether the flow is now unrecoverable.
+async fn restart_and_emit(
+    recovery: &dyn crate::recovery::CompanionRecovery,
+    ctx: &ExecutionContext<'_>,
+    attempt: u32,
+) -> Result<()> {
+    let started = Instant::now();
+    let outcome = recovery.restart_and_reconnect().await;
+    let reconnect_ms = started.elapsed().as_millis() as u64;
+    if outcome.is_ok() {
+        ctx.substep(golem_events::SubstepEvent::CompanionRestarted {
+            attempt,
+            max: crate::recovery::MAX_COMPANION_RESTARTS,
+            reconnect_ms,
+        });
+    }
+    outcome
+}
+
+/// Commit-aware recovery for a single step. Given the step's initial outcome:
+/// pass through anything that isn't a companion-death failure; otherwise use
+/// the witnessed [`MutationState`](crate::recovery::MutationState) to decide.
+///
+/// - **Committed** → restart (so the next step meets a live companion), then
+///   deem the step done (`Ok(Success)`) — re-running would double the action.
+/// - **Ambiguous** → restart, then keep the D507 failure (can't know if it
+///   landed; `if_fail` may still govern it). Does NOT consume the budget.
+/// - **None / NotCommitted** → restart + retry the whole step on a fresh
+///   timeout, counting the restart against `zero_progress`; once the budget is
+///   spent, abandon with D506 (`DeviceCompanionUnrecoverable`).
+#[allow(clippy::too_many_arguments)]
+async fn run_step_recovery(
+    initial: Result<StepOutcome>,
+    recovery: &dyn crate::recovery::CompanionRecovery,
+    witness: &crate::recovery::WitnessDriver<'_>,
+    step_driver: &dyn PlatformDriver,
+    step: &golem_parser::Step,
+    vars: &mut VariableStore,
+    base_timeout_ms: u64,
+    ctx: &ExecutionContext<'_>,
+    apps: &[golem_parser::AppConfig],
+    zero_progress: &mut u32,
+) -> Result<StepOutcome> {
+    use crate::recovery::{decide, is_companion_death, RecoveryDecision, MAX_COMPANION_RESTARTS};
+    let mut result = initial;
+    loop {
+        let code = match &result {
+            // Success / warn / ignore: the step advanced — nothing to recover.
+            Ok(_) => return result,
+            Err(e) => golem_events::extract_code(e),
+        };
+        if !is_companion_death(code) {
+            // A genuine test/app failure — leave it for normal handling.
+            return result;
+        }
+        let state = witness.take_state();
+        match decide(state, *zero_progress, MAX_COMPANION_RESTARTS) {
+            RecoveryDecision::DeemDone => {
+                // The mutation committed; restart so the next step has a live
+                // companion, then treat this step as done. Best-effort: even if
+                // the restart fails, the action already landed.
+                let _ = restart_and_emit(recovery, ctx, zero_progress.saturating_add(1)).await;
+                return Ok(StepOutcome::Success);
+            }
+            RecoveryDecision::FailAmbiguous => {
+                // Restart so `if_fail`/teardown run against a live companion,
+                // but keep the D507 verdict — the landing is unknowable.
+                let _ = restart_and_emit(recovery, ctx, zero_progress.saturating_add(1)).await;
+                return result;
+            }
+            RecoveryDecision::GiveUp => {
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::DeviceCompanionUnrecoverable,
+                    anyhow::anyhow!(
+                        "companion kept dying with no flow progress across {} restarts",
+                        *zero_progress
+                    ),
+                ));
+            }
+            RecoveryDecision::Retry => {
+                *zero_progress += 1;
+                if let Err(e) = restart_and_emit(recovery, ctx, *zero_progress).await {
+                    // Can't retry against a companion we couldn't bring back.
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceCompanionUnrecoverable,
+                        e.context("companion restart failed during recovery"),
+                    ));
+                }
+                witness.reset();
+                result =
+                    execute_step_with_policy(step, step_driver, vars, base_timeout_ms, ctx, apps)
+                        .await;
+            }
+        }
+    }
+}
+
 /// Execute a parsed FlowFile by traversing blocks in order.
 ///
 /// Block traversal:
@@ -221,6 +321,12 @@ pub async fn execute_flow<'a>(
                     let _ = tokio::time::timeout(lifecycle_timeout, driver.stop_app(bundle)).await;
                 }
             }
+            // Apply launch-time permissions while the apps are stopped, so the
+            // fresh launch below starts with them in place (required for iOS
+            // TCC, which won't apply to a running process).
+            for app in apps {
+                apply_launch_permissions(driver, app).await?;
+            }
             if let Some(app) = apps.first() {
                 let bundle = app.bundle.as_deref()
                     .ok_or_else(|| anyhow::anyhow!(
@@ -240,6 +346,9 @@ pub async fn execute_flow<'a>(
             }
         }
         golem_parser::AppLifecycle::Launch => {
+            for app in apps {
+                apply_launch_permissions(driver, app).await?;
+            }
             if let Some(app) = apps.first() {
                 let bundle = app.bundle.as_deref()
                     .ok_or_else(|| anyhow::anyhow!(
@@ -289,6 +398,19 @@ pub async fn execute_flow<'a>(
         .unwrap_or(Duration::from_secs(DEFAULT_MAX_RUNTIME_SECS));
     let start_time = Instant::now();
     let mut step_count: u64 = 0;
+
+    // Commit-aware companion recovery (see `crate::recovery`). When a recovery
+    // hook is present, wrap the driver in a witness that records each step's
+    // last-mutation commit state, and count consecutive restarts that made no
+    // flow progress — exceeding the budget abandons the flow with D506.
+    let witness = ctx
+        .recovery
+        .map(|_| crate::recovery::WitnessDriver::new(driver));
+    let step_driver: &dyn PlatformDriver = match witness.as_ref() {
+        Some(w) => w,
+        None => driver,
+    };
+    let mut consecutive_zero_progress: u32 = 0;
 
     let mut warnings = Vec::new();
     let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
@@ -435,6 +557,9 @@ pub async fn execute_flow<'a>(
                 // the child's own `[flow.options].record` if set.
                 inherited_record_default: ctx.inherited_record_default,
                 extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+                // Sub-flows share the parent's recovery hook so a companion
+                // death inside a run_flow child recovers the same way.
+                recovery: ctx.recovery,
             };
 
             let child_result = Box::pin(execute_flow(
@@ -697,15 +822,55 @@ pub async fn execute_flow<'a>(
             });
             let step_start = Instant::now();
             crate::reset_step_tree_stats();
+            // Fresh commit-state slate for this step (only when witnessing), and
+            // tell the witness which mutation is this step's decisive commit so a
+            // committed focus-tap / auto-scroll swipe can't falsely deem-done.
+            if let Some(w) = witness.as_ref() {
+                w.reset();
+                w.set_terminal(crate::recovery::terminal_mutation(&step.action));
+            }
             let step_action_result = execute_step_with_policy(
                 step,
-                driver,
+                step_driver,
                 vars,
                 default_timeout_ms,
                 ctx,
                 &flow.flow.apps,
             )
             .await;
+
+            // Commit-aware companion recovery: on a companion-death step
+            // failure, restart+reconnect and deem-done / fail-D507 / retry /
+            // give-up-D506 per the witnessed commit state. No-op (returns the
+            // result untouched) without a recovery hook or on a non-death
+            // outcome. A successful step (any Ok) resets the zero-progress run.
+            let step_action_result =
+                if let (Some(recovery), Some(w)) = (ctx.recovery, witness.as_ref()) {
+                    run_step_recovery(
+                        step_action_result,
+                        recovery,
+                        w,
+                        step_driver,
+                        step,
+                        vars,
+                        default_timeout_ms,
+                        ctx,
+                        &flow.flow.apps,
+                        &mut consecutive_zero_progress,
+                    )
+                    .await
+                } else {
+                    step_action_result
+                };
+            // `if_fail` governs the FINAL verdict of a companion death (recovery
+            // ran on the raw `Err`). Applied in BOTH branches so a warn/ignore
+            // step still softens an unrecovered death — except the device-fatal
+            // D506 give-up, which is never suppressed.
+            let step_action_result =
+                crate::policy::apply_if_fail_for_death(step_action_result, step);
+            if step_action_result.is_ok() {
+                consecutive_zero_progress = 0;
+            }
 
             // `--trace` post-step capture, OOB of the step timeout
             // budget. Boundary index N == "after step N". Errors are
@@ -1177,6 +1342,45 @@ pub async fn execute_flow<'a>(
         recordings,
         a11y_audits,
     })
+}
+
+/// Apply an app's launch-time `permissions` map before it's launched.
+///
+/// `"allow"` grants, `"deny"` revokes — keyed by the same shorthand the
+/// `grant_permission` action uses. Applied while the app is stopped (see the
+/// lifecycle setup) so the grants are in place at process start; this is the
+/// only reliable way to satisfy iOS TCC, which ignores grants made to an
+/// already-running process. Keys are applied in sorted order so logs and
+/// `--seed` replay are deterministic.
+async fn apply_launch_permissions(
+    driver: &dyn PlatformDriver,
+    app: &golem_parser::AppConfig,
+) -> Result<()> {
+    if app.permissions.is_empty() {
+        return Ok(());
+    }
+    let bundle = app.bundle.as_deref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "app '{}' declares permissions but has no bundle id",
+            app.name
+        )
+    })?;
+    let mut entries: Vec<(&String, &String)> = app.permissions.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+    for (permission, mode) in entries {
+        match mode.as_str() {
+            "allow" => driver.grant_permission(bundle, permission).await?,
+            "deny" => driver.revoke_permission(bundle, permission).await?,
+            other => {
+                return Err(anyhow::anyhow!(
+                    "app '{}' permission '{}' must be \"allow\" or \"deny\", got {other:?}",
+                    app.name,
+                    permission
+                ))
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Parse a human-readable duration string into a [`Duration`].
@@ -4104,6 +4308,77 @@ action = "screenshot"
     }
 
     // ---------------------------------------------------------------
+    // Launch-time permissions (apply_launch_permissions)
+    // ---------------------------------------------------------------
+
+    fn app_with_permissions(
+        bundle: Option<&str>,
+        perms: &[(&str, &str)],
+    ) -> golem_parser::AppConfig {
+        golem_parser::AppConfig {
+            name: "app".to_string(),
+            bundle: bundle.map(str::to_string),
+            devices: Vec::new(),
+            install_script: None,
+            install_timeout_ms: None,
+            install_env: None,
+            profile: None,
+            permissions: perms
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        }
+    }
+
+    // "allow" grants, "deny" revokes — keyed by the grant_permission shorthand.
+    #[tokio::test]
+    async fn launch_permissions_grant_and_revoke() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let app = app_with_permissions(
+            Some("com.example"),
+            &[("photos", "allow"), ("camera", "deny")],
+        );
+        apply_launch_permissions(&driver, &app)
+            .await
+            .expect("SHALL apply permissions");
+        let calls = driver.get_calls();
+        assert!(
+            calls
+                .iter()
+                .any(|c| c.0 == "grant_permission" && c.1 == vec!["com.example", "photos"]),
+            "photos=allow SHALL grant: {calls:?}"
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|c| c.0 == "revoke_permission" && c.1 == vec!["com.example", "camera"]),
+            "camera=deny SHALL revoke: {calls:?}"
+        );
+    }
+
+    // No permissions → no driver calls.
+    #[tokio::test]
+    async fn launch_permissions_empty_is_noop() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let app = app_with_permissions(Some("com.example"), &[]);
+        apply_launch_permissions(&driver, &app).await.expect("noop");
+        assert!(driver
+            .get_calls()
+            .iter()
+            .all(|c| c.0 != "grant_permission" && c.0 != "revoke_permission"));
+    }
+
+    // Permissions without a bundle id, or an invalid mode, error loudly.
+    #[tokio::test]
+    async fn launch_permissions_errors() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let no_bundle = app_with_permissions(None, &[("photos", "allow")]);
+        assert!(apply_launch_permissions(&driver, &no_bundle).await.is_err());
+        let bad_mode = app_with_permissions(Some("com.example"), &[("photos", "maybe")]);
+        assert!(apply_launch_permissions(&driver, &bad_mode).await.is_err());
+    }
+
+    // ---------------------------------------------------------------
     // Where clause: block skipped when device doesn't match
     // ---------------------------------------------------------------
     #[tokio::test]
@@ -4162,6 +4437,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            recovery: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -4233,6 +4509,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            recovery: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -4313,6 +4590,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            recovery: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -5024,6 +5302,596 @@ action = "screenshot"
         assert!(
             vars.get("_perf").is_none(),
             "disabled perf SHALL not write the _perf var"
+        );
+    }
+
+    // ── step-level companion recovery state machine ─────────────────
+    //
+    // Drives execute_flow with a witnessing driver + a fake recovery hook,
+    // injecting coded companion-death errors on specific driver calls to
+    // exercise each state-machine branch (deem-done / fail-D507 / retry /
+    // give-up-D506) and the zero-progress budget.
+
+    use crate::recovery::{CompanionRecovery, MAX_COMPANION_RESTARTS};
+    use async_trait::async_trait;
+    use golem_events::FailureCode;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// A `CompanionRecovery` that just counts restarts (and always "succeeds").
+    /// The mocks fail on call *indices*, so the retry after a restart naturally
+    /// hits a non-failing call — no need to mutate the driver here.
+    struct FakeRecovery {
+        restarts: AtomicU32,
+    }
+
+    impl FakeRecovery {
+        fn new() -> Self {
+            Self {
+                restarts: AtomicU32::new(0),
+            }
+        }
+        fn restart_count(&self) -> u32 {
+            self.restarts.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl CompanionRecovery for FakeRecovery {
+        async fn restart_and_reconnect(&self) -> anyhow::Result<()> {
+            self.restarts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn tap_step(text: &str) -> Step {
+        Step {
+            action: "tap".to_string(),
+            on_text: Some(text.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn type_step(target: &str, input: &str) -> Step {
+        Step {
+            action: "type".to_string(),
+            on_text: Some(target.to_string()),
+            input: Some(input.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn count_calls(driver: &MockPlatformDriver, method: &str) -> usize {
+        driver.get_calls().iter().filter(|c| c.0 == method).count()
+    }
+
+    // NotCommitted death (clean connect-refused on the mutation): restart, then
+    // retry the whole step on a fresh budget — the retry succeeds.
+    #[tokio::test]
+    async fn recovery_not_committed_death_retries_then_succeeds() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "a not-committed death SHALL recover and the retry SHALL pass: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "exactly one restart SHALL happen for a single recoverable death"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            2,
+            "the step SHALL be retried once (2 taps: the dead one + the recovered one)"
+        );
+    }
+
+    // A `type` step whose intermediate FOCUS-CHECK read dies after the focus-tap
+    // committed but BEFORE `type_text` ran: the focus-tap is navigation, not the
+    // step's commit, so the death SHALL NOT deem-done (that would mark the field
+    // "typed" while it is empty — a false pass). It retries, and `type_text`
+    // eventually runs. (Enshrines the corrected Bug-2 behavior; the pre-fix code
+    // wrongly deemed this done via the last-mutation-wins witness.)
+    #[tokio::test]
+    async fn recovery_type_intermediate_read_death_retries_and_types() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Email"]));
+        // type: get_hierarchy #1 = resolve (Ok) → tap focus (committed, but a
+        // non-terminal navigation mutation) → get_hierarchy #2 = post-tap focus
+        // check → dies. `type_text` has NOT run yet.
+        driver.set_error_on_calls(
+            "get_hierarchy",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[2],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(
+            Some("b"),
+            vec![type_step("Email", "hello")],
+        )]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "the death on the focus-check SHALL recover via retry, not fail: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "exactly one restart precedes the (successful) retry"
+        );
+        assert_eq!(
+            count_calls(&driver, "type_text"),
+            1,
+            "type_text SHALL eventually run on the retry — a focus-tap-only death \
+             must NEVER be silently deemed a successful type"
+        );
+    }
+
+    // The legitimate DeemDone: a plain `tap` whose terminal mutation committed,
+    // then the companion died during the out-of-band POST-SETTLE read. Re-tapping
+    // would double the action, so the committed step is deemed done (not retried,
+    // not failed) — and the companion is restarted for the next step.
+    #[tokio::test]
+    async fn recovery_committed_tap_death_in_post_settle_deems_done() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        // tap step: get_hierarchy #1 (pre-tap keyboard check) → #2 (resolve) →
+        // tap (Committed, terminal) → post-settle get_hierarchy #3 → dies.
+        driver.set_error_on_calls(
+            "get_hierarchy",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[3],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "a committed tap + post-settle death SHALL be deemed done: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "the companion SHALL be restarted so the next step meets a live one"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            1,
+            "deem-done SHALL NOT re-execute the committed tap (re-tapping doubles it)"
+        );
+    }
+
+    // double_tap (Bug 2 mirror): the second tap dies with a clean connect-refused
+    // (NotCommitted) — the double-tap did not complete, so the step retries.
+    // type_text-style false-pass cannot occur because both taps go through the
+    // terminal `tap` method and DeemDone only fires once BOTH have committed.
+    #[tokio::test]
+    async fn recovery_double_tap_second_tap_death_retries() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        // tap sequence: #1 ok (first tap) → #2 dies (second tap, NotCommitted) →
+        // retry: #3, #4 ok.
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[2],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let mut dt = tap_step("OK");
+        dt.action = "double_tap".to_string();
+        let flow = make_flow(vec![make_block(Some("b"), vec![dt])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "a not-committed second-tap death SHALL retry the double_tap: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "exactly one restart precedes the retry"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            4,
+            "double_tap retries wholesale (2 taps that died + 2 on the recovered retry)"
+        );
+    }
+
+    // Bug 1: a step with `if_fail = "warn"` and a companion death SHALL still go
+    // through recovery (restart + retry) — NOT be silently demoted to a Warning
+    // before recovery can see the raw death. (add_media's accept_alert uses
+    // if_fail=ignore, so this bypass was directly in the shipping path.)
+    #[tokio::test]
+    async fn recovery_if_fail_warn_does_not_bypass_recovery() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let mut step = tap_step("OK");
+        step.if_fail = Some("warn".to_string());
+        let flow = make_flow(vec![make_block(Some("b"), vec![step])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "if_fail=warn SHALL NOT short-circuit recovery: the retry passes: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "recovery SHALL fire (restart) instead of demoting the death to a Warning"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            2,
+            "the step SHALL be retried (2 taps), not demoted to a Warning after 1"
+        );
+    }
+
+    // Bug 1: `if_fail = "ignore"` MUST NOT suppress the device-fatal D506
+    // give-up. A companion that keeps dying across the restart budget fails the
+    // flow with D506 regardless of if_fail.
+    #[tokio::test]
+    async fn recovery_if_fail_ignore_does_not_suppress_d506() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_coded(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let mut step = tap_step("OK");
+        step.if_fail = Some("ignore".to_string());
+        let flow = make_flow(vec![make_block(Some("b"), vec![step])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            !result.success,
+            "D506 (device-fatal) SHALL NOT be suppressed by if_fail=ignore"
+        );
+        assert_eq!(
+            result.failed_code,
+            Some(FailureCode::DeviceCompanionUnrecoverable),
+            "an unrecoverable companion SHALL surface D506 even under if_fail=ignore"
+        );
+        assert_eq!(
+            fake.restart_count(),
+            MAX_COMPANION_RESTARTS,
+            "the full restart budget SHALL be spent before D506"
+        );
+    }
+
+    // Ambiguous death (mid-exchange drop, D507, on the mutation): fail the step
+    // with D507 — never retry, never deem-done — but restart so teardown/if_fail
+    // meet a live companion.
+    #[tokio::test]
+    async fn recovery_ambiguous_death_fails_with_d507() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionDropped,
+            "connection closed before message completed",
+            &[1],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(!result.success, "an ambiguous death SHALL fail the step");
+        assert_eq!(
+            result.failed_code,
+            Some(FailureCode::DeviceCompanionDropped),
+            "an ambiguous death SHALL surface as D507, never EF408 or D506"
+        );
+        assert_eq!(
+            fake.restart_count(),
+            1,
+            "the companion SHALL still be restarted (alive for teardown / next flow)"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            1,
+            "an ambiguous step SHALL NOT be retried (the landing is unknowable)"
+        );
+    }
+
+    // A companion that keeps dying with no progress: after exactly
+    // MAX_COMPANION_RESTARTS restarts, give up with D506 — never EF408.
+    #[tokio::test]
+    async fn recovery_persistent_death_gives_up_with_d506() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_coded(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            !result.success,
+            "an unrecoverable companion SHALL fail the flow"
+        );
+        assert_eq!(
+            result.failed_code,
+            Some(FailureCode::DeviceCompanionUnrecoverable),
+            "persistent death SHALL give up with D506, never EF408"
+        );
+        assert_eq!(
+            fake.restart_count(),
+            MAX_COMPANION_RESTARTS,
+            "exactly {MAX_COMPANION_RESTARTS} zero-progress restarts SHALL precede D506"
+        );
+    }
+
+    // A step that succeeds between restarts resets the zero-progress budget:
+    // two steps that each die twice-then-recover total four restarts without
+    // ever tripping the (3-restart) D506 give-up.
+    #[tokio::test]
+    async fn recovery_success_between_restarts_resets_the_budget() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        // tap call sequence across two steps: 1,2 fail (step 1) → 3 ok;
+        // 4,5 fail (step 2) → 6 ok. Without a reset, step 2's first death would
+        // be the 3rd cumulative restart → D506.
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1, 2, 4, 5],
+        );
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let flow = make_flow(vec![make_block(
+            Some("b"),
+            vec![tap_step("OK"), tap_step("OK")],
+        )]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(
+            result.success,
+            "a success between restarts SHALL reset the budget so the flow completes: {:?}",
+            result.failed_reason
+        );
+        assert_eq!(
+            fake.restart_count(),
+            4,
+            "each step restarts twice (4 total); the reset keeps each under the 3-restart cap"
+        );
+    }
+
+    // A recovery restart emits the verbose-only CompanionRestarted breadcrumb
+    // carrying the attempt/max and the measured reconnect duration.
+    #[tokio::test]
+    async fn recovery_restart_emits_companion_restarted_substep() {
+        use crate::context::TestHarness;
+        use golem_events::{EventKind, SubstepEvent};
+
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_on_calls(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let fake = FakeRecovery::new();
+        let mut harness = TestHarness::new(Path::new("."), &[]);
+        let mut vars = VariableStore::new();
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+        {
+            let mut ctx = harness.ctx();
+            ctx.recovery = Some(&fake);
+            let result = execute_flow(
+                &flow,
+                &driver,
+                &mut vars,
+                None,
+                DEFAULT_TIMEOUT,
+                &mut ctx,
+                None,
+            )
+            .await
+            .expect("execute_flow SHALL not hard-error");
+            assert!(result.success, "the retried step SHALL pass");
+        }
+
+        let mut restarts = Vec::new();
+        while let Some(ev) = harness.try_recv() {
+            if let EventKind::Substep(SubstepEvent::CompanionRestarted { attempt, max, .. }) =
+                ev.kind
+            {
+                restarts.push((attempt, max));
+            }
+        }
+        assert_eq!(
+            restarts,
+            vec![(1u32, MAX_COMPANION_RESTARTS)],
+            "a single restart SHALL emit exactly one CompanionRestarted breadcrumb as 1/{MAX_COMPANION_RESTARTS}"
+        );
+    }
+
+    // Without a recovery hook, a companion death fails the step as before — the
+    // witness/state-machine is inert (regression guard for the None path).
+    #[tokio::test]
+    async fn recovery_absent_hook_leaves_death_as_step_failure() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_error_coded(
+            "tap",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new(".")); // recovery: None
+        let flow = make_flow(vec![make_block(Some("b"), vec![tap_step("OK")])]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+
+        assert!(!result.success);
+        assert_eq!(
+            result.failed_code,
+            Some(FailureCode::DeviceCompanionUnreachable),
+            "without a recovery hook the death SHALL surface untouched (D505), no retry"
+        );
+        assert_eq!(
+            count_calls(&driver, "tap"),
+            1,
+            "no recovery hook SHALL mean no retry"
         );
     }
 }

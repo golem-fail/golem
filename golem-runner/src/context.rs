@@ -72,6 +72,12 @@ pub struct ExecutionContext<'a> {
     /// that settle, so it only stretches the one settle immediately
     /// following the un-verified mutation.
     pub extend_next_settle: AtomicBool,
+    /// Companion restart-and-reconnect hook. `Some` enables step-level,
+    /// commit-aware recovery: on a companion death mid-flow the step loop
+    /// restarts the companion and retries safely (see [`crate::recovery`]).
+    /// `None` (tests, stub, non-recoverable platforms) keeps the current
+    /// behavior — a death fails the step as usual.
+    pub recovery: Option<&'a dyn crate::recovery::CompanionRecovery>,
 }
 
 impl ExecutionContext<'_> {
@@ -205,6 +211,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         rng: Mutex::new(FakeRng::from_optional_seed(None)),
         inherited_record_default: false,
         extend_next_settle: AtomicBool::new(false),
+        recovery: None,
     }
 }
 
@@ -276,6 +283,7 @@ impl TestHarness {
             rng: Mutex::new(FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: AtomicBool::new(false),
+            recovery: None,
         }
     }
 

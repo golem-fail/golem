@@ -183,6 +183,18 @@ pub trait PlatformDriver: Send + Sync {
         Ok(())
     }
 
+    /// Directly accept an OS-owned system alert (iOS SpringBoard permission
+    /// prompt / deep-link confirm) by tapping its affirmative button, and
+    /// report whether one was accepted. Deterministic alternative to
+    /// `poke_for_system_alert`, whose UI-interruption-monitor fires only at
+    /// iOS's discretion and misses the photo prompt often enough to be
+    /// flaky. Returns `Ok(false)` when no system alert is present (a no-op).
+    /// Default: `Ok(false)` (iOS-XCUITest-specific; other platforms surface
+    /// their permission prompts through the normal hierarchy or pre-grant).
+    async fn accept_system_alert(&self) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     /// Prepare to type `text` into the next-focused field. Called by the
     /// runner BEFORE the focus tap, so any input-method switch is in
     /// place when the field gains focus. Android uses this to lazily
@@ -200,6 +212,14 @@ pub trait PlatformDriver: Send + Sync {
     /// fast at the connection layer rather than burning the outer
     /// `tokio::time::timeout` budget. Default: no-op (mock drivers).
     fn set_request_timeout(&self, _timeout: std::time::Duration) {}
+
+    /// Point the driver's companion client at a companion now listening on
+    /// `port`. Called by the step-level recovery path after it restarts a
+    /// force-quit companion (which comes back on a *new* port): the driver
+    /// object stays the same, only its base URL is swapped. Default: no-op
+    /// (mock/stub drivers hold no live socket). Real drivers forward to
+    /// `CompanionClient::reconnect`.
+    fn reconnect(&self, _port: u16) {}
 
     /// Wait for the UI to finish rendering after a launch. Polls
     /// `get_hierarchy()` and returns once the tree is non-empty AND
@@ -1300,6 +1320,28 @@ mod tests {
         assert!(
             driver.get_calls().is_empty(),
             "default poke SHALL record nothing"
+        );
+    }
+
+    // accept_system_alert reports whether a system alert was accepted:
+    // false until configured, true once `set_system_alert_accept(true)`.
+    #[tokio::test]
+    async fn mock_accept_system_alert_reports_configured_result() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        assert!(
+            !driver
+                .accept_system_alert()
+                .await
+                .expect("accept_system_alert SHALL be Ok"),
+            "SHALL default to false (no system alert)"
+        );
+        driver.set_system_alert_accept(true);
+        assert!(
+            driver
+                .accept_system_alert()
+                .await
+                .expect("accept_system_alert SHALL be Ok"),
+            "SHALL report true once configured"
         );
     }
 

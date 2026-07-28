@@ -1,10 +1,17 @@
+import Photos
 import SwiftUI
+
+// The fixture image is tiny (7×11); real photos are large. Match the fixture
+// by picking the first asset within this bound on both axes rather than
+// hardcoding 7×11 in the app (the e2e asserts the exact size).
+private let smallMax = 64
 
 struct ContentView: View {
     @State private var counter = 0
     @State private var status = "Ready"
     @State private var toggleOn = false
     @State private var occTapped = "none"
+    @State private var galleryDims = "pending"
     @EnvironmentObject var notifications: NotificationStore
 
     var body: some View {
@@ -82,6 +89,20 @@ struct ContentView: View {
 
             Divider()
 
+            // Photo-library read → render dimensions. add_media pushes the
+            // fixture image into the simulator's photo library (PhotoKit);
+            // this section reads it back and renders its pixel size, the
+            // observable result the add_media e2e asserts.
+            Text("Dims: \(galleryDims)")
+                .accessibilityIdentifier("dims-b")
+
+            Button("Load") {
+                loadGallery()
+            }
+            .accessibilityIdentifier("load-gallery")
+
+            Divider()
+
             Text("Native Scroll List")
                 .font(.headline)
                 .accessibilityIdentifier("native-list-title")
@@ -95,5 +116,29 @@ struct ContentView: View {
             .accessibilityIdentifier("native-list")
         }
         .padding()
+    }
+
+    // Pre-granted permission (the e2e grants photos before launch) returns
+    // .authorized here immediately — no prompt, no hang. .limited is treated
+    // as granted since the fixture asset is still fetchable.
+    private func loadGallery() {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            let result: String
+            switch status {
+            case .authorized, .limited:
+                let assets = PHAsset.fetchAssets(with: .image, options: PHFetchOptions())
+                var found: String?
+                assets.enumerateObjects { asset, _, stop in
+                    if asset.pixelWidth <= smallMax && asset.pixelHeight <= smallMax {
+                        found = "\(asset.pixelWidth)x\(asset.pixelHeight)"
+                        stop.pointee = true
+                    }
+                }
+                result = found ?? "none"
+            default:
+                result = "denied"
+            }
+            DispatchQueue.main.async { galleryDims = result }
+        }
     }
 }

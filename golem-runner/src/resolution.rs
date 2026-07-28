@@ -105,6 +105,10 @@ pub async fn resolve_element(
                 crate::record_tree_fetch(meta.node_count);
                 (root, meta)
             }
+            // A dead companion (D505/D507/D503) won't answer a re-poll —
+            // propagate immediately so the step surfaces the death code (not a
+            // swallowed `EF408`) and the loop's commit-aware recovery can fire.
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
@@ -194,10 +198,17 @@ pub async fn resolve_element(
                 let _ = driver.hide_keyboard().await;
                 let kb_deadline = Instant::now() + Duration::from_millis(2000);
                 while Instant::now() < kb_deadline {
-                    if let Ok((_, m)) = driver.get_hierarchy().await {
-                        if m.keyboard_height == 0 {
-                            break;
+                    match driver.get_hierarchy().await {
+                        Ok((_, m)) => {
+                            if m.keyboard_height == 0 {
+                                break;
+                            }
                         }
+                        // A dead companion won't recover — propagate the death
+                        // rather than spinning to this loop's deadline (which
+                        // would surface as EF408 and skip recovery).
+                        Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+                        Err(_) => {}
                     }
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
@@ -437,6 +448,10 @@ pub async fn poll_for_absence(step: &Step, driver: &dyn PlatformDriver) -> Resul
                 crate::record_tree_fetch(meta.node_count);
                 (root, meta)
             }
+            // A dead companion (D505/D507/D503) won't answer a re-poll —
+            // propagate immediately so the step surfaces the death code (not a
+            // swallowed `EF408`) and the loop's commit-aware recovery can fire.
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;

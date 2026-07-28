@@ -20,6 +20,7 @@ golem-orchestrator = { path = "../golem-orchestrator" }
 golem-common = { path = "../golem-common" }
 clap = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

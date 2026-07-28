@@ -169,6 +169,11 @@ fn all_substeps() -> Vec<SubstepEvent> {
         SubstepEvent::DriverWarning {
             message: "CDP enrichment unavailable — falling back to native tree".into(),
         },
+        SubstepEvent::CompanionRestarted {
+            attempt: 1,
+            max: 3,
+            reconnect_ms: 4200,
+        },
         SubstepEvent::Screenshot {
             path: ".golem/results/tap/ios/screenshots/step-3.png".into(),
         },
@@ -648,6 +653,7 @@ fn _substep_exhaustiveness_guard(s: &SubstepEvent) {
         | SubstepEvent::AppLaunch { .. }
         | SubstepEvent::AppStop { .. }
         | SubstepEvent::DriverWarning { .. }
+        | SubstepEvent::CompanionRestarted { .. }
         | SubstepEvent::Screenshot { .. }
         | SubstepEvent::BarrierAborted { .. } => {}
     }

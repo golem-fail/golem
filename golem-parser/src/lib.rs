@@ -114,6 +114,15 @@ pub struct AppConfig {
     /// app, falling back to the catch-all. See `resolve_app_profiles`.
     #[serde(default)]
     pub profile: Option<String>,
+    /// Permissions to apply **before the app is launched**, keyed by the same
+    /// shorthand the `grant_permission` action uses (`camera`, `photos`, …),
+    /// each mapped to `"allow"` (grant) or `"deny"` (revoke). Applied during
+    /// app-lifecycle setup so the app starts with them already in place — the
+    /// only reliable way to grant iOS TCC permissions, which don't apply to an
+    /// already-running process. The `grant_permission`/`revoke_permission`
+    /// actions remain for mid-flow changes.
+    #[serde(default)]
+    pub permissions: HashMap<String, String>,
 }
 
 /// An install script path, either a single cross-platform script or a
@@ -639,6 +648,39 @@ on_text = "OK"
         assert_eq!(flow.block.len(), 1);
         assert_eq!(flow.block[0].steps.len(), 1);
         assert_eq!(flow.block[0].steps[0].action, "tap");
+    }
+
+    #[test]
+    fn flow_app_permissions_parse() {
+        let toml_str = r#"
+[flow]
+name = "perms"
+[[flow.apps]]
+name = "app"
+bundle = "com.example.app"
+permissions = { photos = "allow", camera = "deny" }
+[[block]]
+name = "b"
+[[block.steps]]
+action = "tap"
+"#;
+        let flow = parse_flow(toml_str).expect("permissions map should parse");
+        let perms = &flow.flow.apps[0].permissions;
+        assert_eq!(perms.get("photos").map(String::as_str), Some("allow"));
+        assert_eq!(perms.get("camera").map(String::as_str), Some("deny"));
+    }
+
+    #[test]
+    fn flow_app_permissions_default_empty() {
+        let toml_str = r#"
+[flow]
+name = "noperms"
+[[flow.apps]]
+name = "app"
+bundle = "com.example.app"
+"#;
+        let flow = parse_flow(toml_str).expect("flow without permissions should parse");
+        assert!(flow.flow.apps[0].permissions.is_empty());
     }
 
     // ---------------------------------------------------------------

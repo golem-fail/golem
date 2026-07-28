@@ -137,6 +137,11 @@ pub enum SubstepDetail {
     DriverWarning {
         message: String,
     },
+    CompanionRestarted {
+        attempt: u32,
+        max: u32,
+        reconnect_ms: u64,
+    },
     Screenshot {
         path: String,
     },
@@ -319,6 +324,15 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
             },
             golem_events::SubstepEvent::DriverWarning { message } => SubstepDetail::DriverWarning {
                 message: message.clone(),
+            },
+            golem_events::SubstepEvent::CompanionRestarted {
+                attempt,
+                max,
+                reconnect_ms,
+            } => SubstepDetail::CompanionRestarted {
+                attempt: *attempt,
+                max: *max,
+                reconnect_ms: *reconnect_ms,
             },
             golem_events::SubstepEvent::Screenshot { path } => {
                 SubstepDetail::Screenshot { path: path.clone() }

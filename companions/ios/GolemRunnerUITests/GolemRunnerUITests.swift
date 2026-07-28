@@ -38,7 +38,7 @@ final class GolemRunnerUITests: XCTestCase {
             "platform": "ios",
             "device_id": deviceId,
             "device_name": device.name,
-            "version": "0.8.2"
+            "version": "0.8.5"
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body),
@@ -81,12 +81,15 @@ final class GolemRunnerUITests: XCTestCase {
         // the test process, so it can safely use XCUI APIs to tap the
         // dialog's positive button — no cross-app XCUI query required.
         //
-        // This is the supported XCTest-native path. Our prior approach
-        // — querying SpringBoard via `XCUIApplication(bundleIdentifier:)
-        // .alerts.count` — terminated the harness in iOS 26 (XCTest's
-        // "test done" lifecycle treats cross-app proxy attach as a
-        // fatal step). The monitor is invoked only at iOS's discretion
-        // and never directly queries cross-app state.
+        // This is the supported XCTest-native path, kept as a fallback.
+        // It is invoked only at iOS's discretion, so it MISSES the photo
+        // full-library prompt often enough (~40%) to make add_media flaky
+        // on its own. The deterministic primary path is the companion's
+        // `/accept-system-alert` endpoint, which queries SpringBoard's
+        // alert and taps the affirmative directly. Cross-app SpringBoard
+        // *queries* (alerts/statusBars/snapshot) are proven safe here and
+        // do NOT terminate the harness; only a cross-app *tap* was ever the
+        // open risk, and it's confined to that endpoint.
         //
         // The monitor only fires when an XCUI interaction is attempted
         // against the test app *while* the interruption is on screen.
@@ -103,7 +106,15 @@ final class GolemRunnerUITests: XCTestCase {
         // For permission prompts that *only* expose "OK" or "Yes",
         // the test should use `accept_alert` explicitly.
         addUIInterruptionMonitor(withDescription: "golem-system-alert") { alert in
-            for label in ["Open", "Allow", "Allow Once", "Allow While Using App"] {
+            // Ordered most-permissive-first. "Allow Full Access" / "Allow
+            // Access to All Photos" are the affirmative on the iOS photo-library
+            // prompt (a 3-button alert whose positive option is NOT last, so a
+            // last-button tap would hit "Don't Allow"); the earlier labels cover
+            // camera/location/deep-link confirms.
+            for label in [
+                "Allow Full Access", "Allow Access to All Photos",
+                "Open", "Allow", "Allow Once", "Allow While Using App",
+            ] {
                 let btn = alert.buttons[label]
                 if btn.exists {
                     btn.tap()

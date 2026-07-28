@@ -1,10 +1,14 @@
 package fail.golem.testb
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -17,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -25,6 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
+
+// The fixture image is tiny (7×11); real photos are large. Match the fixture
+// by picking the first image within this bound on both axes rather than
+// hardcoding 7×11 in the app (the e2e asserts the exact size).
+private const val SMALL_MAX = 64
 
 /// Process-lifetime notification store updated by the broadcast
 /// receiver below. TestScreen observes it for the
@@ -81,7 +91,9 @@ fun TestScreen() {
     var status by remember { mutableStateOf("Ready") }
     var toggleOn by remember { mutableStateOf(false) }
     var occTapped by remember { mutableStateOf("none") }
+    var galleryDims by remember { mutableStateOf("pending") }
     val notification by NotificationStore.latestBody.collectAsState()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -197,6 +209,24 @@ fun TestScreen() {
 
         Divider()
 
+        // Photo-library read → render dimensions. add_media pushes the fixture
+        // image into the gallery (indexed into MediaStore); this section reads
+        // it back and renders its pixel size, the observable result the
+        // add_media e2e asserts.
+        Text(
+            "Dims: $galleryDims",
+            modifier = Modifier.semantics { contentDescription = "dims-b" }
+        )
+
+        Button(
+            onClick = { galleryDims = loadGalleryDims(context) },
+            modifier = Modifier.semantics { contentDescription = "load-gallery" }
+        ) {
+            Text("Load")
+        }
+
+        Divider()
+
         Text(
             "Native Scroll List",
             fontSize = 18.sp,
@@ -220,5 +250,48 @@ fun TestScreen() {
                 )
             }
         }
+    }
+}
+
+/// Reads the photo library and returns the pixel size of the first image
+/// within SMALL_MAX on both axes, as "<w>x<h>". The e2e pre-grants the
+/// permission (`pm grant`) so the check passes with no prompt; if it isn't
+/// granted returns "denied", no matching image "none", and a query failure
+/// "E:<short err>".
+private fun loadGalleryDims(context: Context): String {
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    if (ContextCompat.checkSelfPermission(context, permission) !=
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        return "denied"
+    }
+    return try {
+        val projection = arrayOf(
+            MediaStore.Images.Media.WIDTH,
+            MediaStore.Images.Media.HEIGHT,
+        )
+        val selection =
+            "${MediaStore.Images.Media.WIDTH} <= ? AND ${MediaStore.Images.Media.HEIGHT} <= ?"
+        val args = arrayOf(SMALL_MAX.toString(), SMALL_MAX.toString())
+        context.contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            args,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val width = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH))
+                val height = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Images.Media.HEIGHT))
+                return "${width}x${height}"
+            }
+        }
+        "none"
+    } catch (e: Exception) {
+        "E:${(e.message ?: e.javaClass.simpleName).take(20)}"
     }
 }

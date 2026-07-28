@@ -1152,6 +1152,7 @@ mod tests {
             install_timeout_ms: None,
             install_env: None,
             profile: None,
+            permissions: Default::default(),
             devices: vec![dc(
                 Some(vec!["ios:26"]),
                 Some(vec!["phone", "tablet"]),
@@ -1194,6 +1195,7 @@ mod tests {
             install_timeout_ms: None,
             install_env: None,
             profile: None,
+            permissions: Default::default(),
             devices: vec![dc(
                 Some(vec!["ios:18", "ios:26"]),
                 None,

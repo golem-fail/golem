@@ -3,8 +3,41 @@
 use crate::{common, GestureFinger, PlatformDriver, ScreenshotResult};
 use async_trait::async_trait;
 use golem_element::Element;
+use golem_events::FailureCode;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
+
+/// A per-method injected error. `code` optionally tags it with a
+/// [`FailureCode`] (so the recovery state machine can classify companion
+/// deaths); `on_calls`, when set, restricts the error to specific 1-based
+/// invocation counts of that method (e.g. `[1]` fails only the first call,
+/// `[1, 3]` fails the 1st and 3rd) so a test can script "fail then succeed"
+/// without a bespoke driver. `None` fails every call.
+#[derive(Clone)]
+struct InjectedError {
+    code: Option<FailureCode>,
+    message: String,
+    on_calls: Option<Vec<u32>>,
+}
+
+impl InjectedError {
+    /// Build the error for the `count`-th (1-based) invocation, or `None` if
+    /// this invocation should succeed.
+    fn build(&self, count: u32) -> Option<anyhow::Error> {
+        let fires = match &self.on_calls {
+            None => true,
+            Some(calls) => calls.contains(&count),
+        };
+        if !fires {
+            return None;
+        }
+        let base = anyhow::anyhow!(self.message.clone());
+        Some(match self.code {
+            Some(c) => golem_events::coded(c, base),
+            None => base,
+        })
+    }
+}
 
 /// Mock driver for testing — records calls and returns configured responses
 pub struct MockPlatformDriver {
@@ -17,9 +50,13 @@ pub struct MockPlatformDriver {
     /// behaviour. Mutate via `set_keyboard_height` only.
     keyboard_height: Mutex<i32>,
     /// Per-method injected errors. Keyed by the canonical trait method
-    /// name; when present, that method returns `Err(anyhow!(message))`
-    /// before doing anything else. Empty by default (no errors).
-    errors: Mutex<HashMap<String, String>>,
+    /// name; when present, that method returns an `Err` (optionally coded, and
+    /// optionally only on specific invocation counts) before doing anything
+    /// else. Empty by default (no errors).
+    errors: Mutex<HashMap<String, InjectedError>>,
+    /// Last port passed to `reconnect`, for assertions. `None` until a
+    /// reconnect happens.
+    reconnect_port: Mutex<Option<u16>>,
     /// Queue of hierarchies for `get_hierarchy` to pop FIFO. When empty,
     /// `get_hierarchy` falls back to the steady `hierarchy` field, so
     /// single-hierarchy tests are unaffected. Empty by default.
@@ -35,6 +72,10 @@ pub struct MockPlatformDriver {
     /// run the check); set to `Some(true)` to simulate an un-verified
     /// mutation (slow IME) or `Some(false)` a verified one.
     type_verify: Mutex<Option<bool>>,
+    /// Value `accept_system_alert` returns — whether a system alert was
+    /// found and accepted. `false` by default (matches the trait default:
+    /// no system-alert layer). Set via `set_system_alert_accept`.
+    system_alert_accept: Mutex<bool>,
 }
 
 /// Map a caller-supplied method name to the canonical trait method name
@@ -58,10 +99,12 @@ impl MockPlatformDriver {
             calls: Mutex::new(Vec::new()),
             keyboard_height: Mutex::new(0),
             errors: Mutex::new(HashMap::new()),
+            reconnect_port: Mutex::new(None),
             hierarchy_queue: Mutex::new(VecDeque::new()),
             launch_warning: Mutex::new(None),
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
             type_verify: Mutex::new(None),
+            system_alert_accept: Mutex::new(false),
         }
     }
 
@@ -91,14 +134,60 @@ impl MockPlatformDriver {
             .push((method.to_string(), args));
     }
 
-    /// Inject an error: the named trait method returns `Err(anyhow!(message))`.
-    /// Accepts the real trait method names plus the shorthands
-    /// `clear_data` (→ `clear_app_data`) and `swipe` (→ `swipe_coords`).
+    /// Inject an uncoded error: the named trait method returns
+    /// `Err(anyhow!(message))` on every call. Accepts the real trait method
+    /// names plus the shorthands `clear_data` (→ `clear_app_data`) and
+    /// `swipe` (→ `swipe_coords`).
     pub fn set_error(&self, method: &str, message: &str) {
-        self.errors.lock().expect("lock poisoned").insert(
-            canonical_method_name(method).to_string(),
-            message.to_string(),
+        self.insert_error(
+            method,
+            InjectedError {
+                code: None,
+                message: message.to_string(),
+                on_calls: None,
+            },
         );
+    }
+
+    /// Inject a *coded* error on every call — used to simulate a companion
+    /// death (e.g. `DeviceCompanionUnreachable`) the recovery machine can
+    /// classify.
+    pub fn set_error_coded(&self, method: &str, code: FailureCode, message: &str) {
+        self.insert_error(
+            method,
+            InjectedError {
+                code: Some(code),
+                message: message.to_string(),
+                on_calls: None,
+            },
+        );
+    }
+
+    /// Inject a coded error that fires only on the given 1-based invocation
+    /// counts of `method` (e.g. `&[1]` = first call only, `&[1, 3]` = 1st and
+    /// 3rd). Lets a test script "die, then succeed on retry" deterministically.
+    pub fn set_error_on_calls(
+        &self,
+        method: &str,
+        code: FailureCode,
+        message: &str,
+        on_calls: &[u32],
+    ) {
+        self.insert_error(
+            method,
+            InjectedError {
+                code: Some(code),
+                message: message.to_string(),
+                on_calls: Some(on_calls.to_vec()),
+            },
+        );
+    }
+
+    fn insert_error(&self, method: &str, err: InjectedError) {
+        self.errors
+            .lock()
+            .expect("lock poisoned")
+            .insert(canonical_method_name(method).to_string(), err);
     }
 
     /// Clear a previously-injected error for the named method.
@@ -109,19 +198,37 @@ impl MockPlatformDriver {
             .remove(canonical_method_name(method));
     }
 
-    /// Return the injected error for `method` as an `Err`, if one is set.
-    /// `method` here is always the canonical trait method name.
+    /// Return the injected error for `method` as an `Err`, if one is set and
+    /// fires on this invocation. `method` here is always the canonical trait
+    /// method name. The invocation count is derived from how many times the
+    /// method already appears in the call log (`record_call` runs first), so
+    /// the current call is 1-based.
     fn check_error(&self, method: &str) -> anyhow::Result<()> {
-        let msg = self
+        let inj = self
             .errors
             .lock()
             .expect("lock poisoned")
             .get(method)
             .cloned();
-        match msg {
-            Some(m) => Err(anyhow::anyhow!(m)),
+        let Some(inj) = inj else {
+            return Ok(());
+        };
+        let count = self
+            .calls
+            .lock()
+            .expect("lock poisoned")
+            .iter()
+            .filter(|(name, _)| name == method)
+            .count() as u32;
+        match inj.build(count) {
+            Some(e) => Err(e),
             None => Ok(()),
         }
+    }
+
+    /// Last port a `reconnect` call targeted, or `None` if never reconnected.
+    pub fn reconnect_port(&self) -> Option<u16> {
+        *self.reconnect_port.lock().expect("lock poisoned")
     }
 
     /// Enqueue a hierarchy. Successive `get_hierarchy()` calls pop the
@@ -147,6 +254,11 @@ impl MockPlatformDriver {
     /// Set the post-mutation check `type_text`/`backspace` return.
     pub fn set_type_verify(&self, verify: Option<bool>) {
         *self.type_verify.lock().expect("lock poisoned") = verify;
+    }
+
+    /// Set whether `accept_system_alert` reports a system alert accepted.
+    pub fn set_system_alert_accept(&self, accepted: bool) {
+        *self.system_alert_accept.lock().expect("lock poisoned") = accepted;
     }
 }
 
@@ -180,16 +292,19 @@ impl PlatformDriver for MockPlatformDriver {
             "long_press",
             vec![x.to_string(), y.to_string(), duration_ms.to_string()],
         );
+        self.check_error("long_press")?;
         Ok(())
     }
 
     async fn type_text(&self, text: &str) -> anyhow::Result<Option<bool>> {
         self.record_call("type_text", vec![text.to_string()]);
+        self.check_error("type_text")?;
         Ok(*self.type_verify.lock().expect("lock poisoned"))
     }
 
     async fn backspace(&self, count: u32) -> anyhow::Result<Option<bool>> {
         self.record_call("backspace", vec![count.to_string()]);
+        self.check_error("backspace")?;
         Ok(*self.type_verify.lock().expect("lock poisoned"))
     }
 
@@ -223,6 +338,7 @@ impl PlatformDriver for MockPlatformDriver {
                 format!("{velocity}"),
             ],
         );
+        self.check_error("pinch")?;
         Ok(())
     }
 
@@ -232,6 +348,7 @@ impl PlatformDriver for MockPlatformDriver {
             .map(|f| format!("{}pts@{}ms", f.points.len(), f.duration_ms))
             .collect();
         self.record_call("gesture", args);
+        self.check_error("gesture")?;
         Ok(())
     }
 
@@ -344,5 +461,16 @@ impl PlatformDriver for MockPlatformDriver {
     async fn remove_port_forwards(&self) -> anyhow::Result<()> {
         self.record_call("remove_port_forwards", vec![]);
         Ok(())
+    }
+
+    async fn accept_system_alert(&self) -> anyhow::Result<bool> {
+        self.record_call("accept_system_alert", vec![]);
+        self.check_error("accept_system_alert")?;
+        Ok(*self.system_alert_accept.lock().expect("lock poisoned"))
+    }
+
+    fn reconnect(&self, port: u16) {
+        self.record_call("reconnect", vec![port.to_string()]);
+        *self.reconnect_port.lock().expect("lock poisoned") = Some(port);
     }
 }

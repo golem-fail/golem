@@ -53,6 +53,8 @@ final class RequestRouter {
             return handleHierarchy(query: query)
         case ("POST", "/poke-interruption-monitor"):
             return handlePokeInterruptionMonitor(query: query)
+        case ("POST", "/accept-system-alert"):
+            return handleAcceptSystemAlert(query: query)
         case ("GET", "/debug/probe"):
             return handleDebugProbe(query: query)
         case ("POST", "/tap"):
@@ -252,7 +254,7 @@ final class RequestRouter {
         return .json([
             "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.8.2",
+            "version": "0.8.5",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -301,7 +303,17 @@ final class RequestRouter {
             return gatewayTimeout("hierarchy (app init)")
         }
         guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
-            application.activate()
+            // Only foreground the app when it isn't already frontmost. golem
+            // reads /hierarchy repeatedly (warm-up + every assert), so an
+            // unconditional activate() here fired dozens of FrontBoard
+            // activation requests per flow; the simulator host can answer a
+            // burst of those by force-quitting the requesting XCUITest runner
+            // ("Termination requested by simulator host") — observed ~30% on
+            // React Native apps, whose activate() drives a full JS/UI
+            // re-render. A frontmost app needs no re-activation to snapshot.
+            if application.state != .runningForeground {
+                application.activate()
+            }
             let tree = HierarchySerializer.serialize(app: application)
             // NB: SpringBoard-owned alerts (deep-link "Open in App?"
             // confirms, permission prompts, …) are deliberately NOT
@@ -389,6 +401,52 @@ final class RequestRouter {
             return gatewayTimeout("poke-interruption-monitor")
         }
         return .json(["status": "ok"])
+    }
+
+    /// Directly accept an OS-owned system alert (SpringBoard-hosted
+    /// permission prompt, deep-link "Open in <App>?" confirm) by finding
+    /// and tapping its affirmative button. Returns `{"accepted": bool}` —
+    /// false when no system alert is on screen (a no-op, e.g. the prompt
+    /// was pre-granted), which the runner treats as "keep polling".
+    ///
+    /// Why this exists alongside the UIInterruptionMonitor: the monitor
+    /// fires only at iOS's discretion (Apple: "when a UI action is
+    /// performed while an interruption is present") and misses the photo
+    /// prompt often enough (~40%) to make add_media flaky. This path is
+    /// deterministic — it queries SpringBoard's alert and taps directly.
+    ///
+    /// Cross-app safety: querying SpringBoard (`/hierarchy`'s
+    /// `statusBars.firstMatch`, `/debug/probe`'s `alerts`/`snapshot`) is
+    /// already proven safe in this companion — it does NOT terminate the
+    /// harness. The added risk here is the `.tap()` (an XCUI *action* on a
+    /// cross-app element, not just a query). Scoped to `.alerts.firstMatch`
+    /// so we never snapshot SpringBoard's full tree. Labels are matched by
+    /// text (the photo prompt's affirmative is the MIDDLE button, so a
+    /// positional "last button" tap would hit "Don't Allow").
+    private func handleAcceptSystemAlert(query: [String: String]) -> HTTPResponse {
+        // Affirmatives, most-permissive-first. Exact XCUI labels as reported
+        // by /debug/probe on iOS 26 (e.g. "Allow Full Access" for the photo
+        // full-library prompt).
+        let labels = [
+            "Allow Full Access", "Allow Access to All Photos",
+            "Open", "Allow", "Allow Once", "Allow While Using App",
+        ]
+        guard let accepted = runOnMain(timeout: Self.kTimeoutFast, { () -> Bool in
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let alert = springboard.alerts.firstMatch
+            guard alert.exists else { return false }
+            for label in labels {
+                let btn = alert.buttons[label]
+                if btn.exists {
+                    btn.tap()
+                    return true
+                }
+            }
+            return false
+        }) else {
+            return gatewayTimeout("accept-system-alert")
+        }
+        return .json(["accepted": accepted])
     }
 
     /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.

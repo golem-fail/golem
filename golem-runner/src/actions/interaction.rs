@@ -86,10 +86,16 @@ async fn dismiss_keyboard_before_tap(driver: &dyn PlatformDriver, enabled: bool)
     // the step past its own timeout.
     let deadline = Instant::now() + KEYBOARD_RETRACT_TIMEOUT;
     while Instant::now() < deadline {
-        if let Ok((_, m)) = driver.get_hierarchy().await {
-            if m.keyboard_height == 0 {
-                break;
+        match driver.get_hierarchy().await {
+            Ok((_, m)) => {
+                if m.keyboard_height == 0 {
+                    break;
+                }
             }
+            // A dead companion won't retract the keyboard — propagate the death
+            // instead of spinning to the deadline (which would hide as EF408).
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+            Err(_) => {}
         }
         sleep(Duration::from_millis(100)).await;
     }

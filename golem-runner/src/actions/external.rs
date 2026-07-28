@@ -537,13 +537,13 @@ pub(crate) async fn handle_accept_alert(
     //    `get_hierarchy()` as alert/sheet elements — tap the positive
     //    button directly.
     // 2. OS-owned dialogs (deep-link "Open in <App>?", permission
-    //    prompts) live in SpringBoard's process. We can't safely
-    //    query that cross-app from XCTest (cross-app XCUI attach
-    //    terminates the harness in iOS 26). Instead the companion
-    //    pre-installs a UIInterruptionMonitor that taps the common
-    //    positive labels (Open / Allow / OK / Yes); iOS invokes the
-    //    handler on the next UI action against the test app. The
-    //    `poke_for_system_alert` call below synthesises that action.
+    //    prompts) live in SpringBoard's process. The companion's
+    //    `/accept-system-alert` queries that alert and taps the
+    //    affirmative directly (`accept_system_alert`) — deterministic,
+    //    unlike the UIInterruptionMonitor which iOS fires only at its
+    //    own discretion. The `poke_for_system_alert` call remains as a
+    //    fallback that nudges the monitor for dialogs the direct accept
+    //    doesn't reach.
     //
     // Idempotent: if no alert surfaces, accept_alert fails — callers
     // who want optional behaviour (warm sims that have already
@@ -554,41 +554,69 @@ pub(crate) async fn handle_accept_alert(
     // hard-coded 5s gave up before alerts that appeared at ~5-6s
     // under sweep load, while the surrounding step still had budget
     // left to find them.
-    let mut poked = false;
     loop {
-        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
-        if let Some(alert) = golem_driver::common::find_alert(&root) {
-            let buttons = golem_driver::common::find_alert_buttons(&alert);
-            if buttons.is_empty() {
-                crate::fail_code!(
-                    golem_events::FailureCode::FlowAlertInteraction,
-                    "accept_alert failed: no buttons found in alert"
-                );
+        // A system prompt (iOS SpringBoard) blocks the app's own hierarchy
+        // fetch, so this can error while the prompt is up. Tolerate a *transient*
+        // error and keep poking rather than aborting the accept — bailing here
+        // (the old `?`) was why a slow-to-appear permission prompt intermittently
+        // went unhandled. But a companion DEATH won't answer a re-poll: propagate
+        // it so the step surfaces the death code (not a swallowed EF408) and the
+        // step loop's commit-aware recovery can fire. An in-app alert is only
+        // reachable when the fetch succeeds.
+        match crate::resolution::get_hierarchy_bounded(driver).await {
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+            Err(_) => {}
+            Ok((root, _meta)) => {
+                if let Some(alert) = golem_driver::common::find_alert(&root) {
+                    let buttons = golem_driver::common::find_alert_buttons(&alert);
+                    if buttons.is_empty() {
+                        crate::fail_code!(
+                            golem_events::FailureCode::FlowAlertInteraction,
+                            "accept_alert failed: no buttons found in alert"
+                        );
+                    }
+                    // Last button is the positive action (OK, Yes, Open).
+                    let btn = &buttons[buttons.len() - 1];
+                    let b = btn.effective_bounds();
+                    let (x, y) = (b.center_x(), b.center_y());
+                    ctx.substep(golem_events::SubstepEvent::Tap {
+                        point: golem_events::Point { x, y },
+                        element_bounds: Some(golem_events::Rect {
+                            x: b.x,
+                            y: b.y,
+                            width: b.width,
+                            height: b.height,
+                        }),
+                    });
+                    driver.tap(x, y).await?;
+                    return wait_for_alert_gone(driver).await;
+                }
             }
-            // Last button is the positive action (OK, Yes, Open).
-            let btn = &buttons[buttons.len() - 1];
-            let b = btn.effective_bounds();
-            let (x, y) = (b.center_x(), b.center_y());
-            ctx.substep(golem_events::SubstepEvent::Tap {
-                point: golem_events::Point { x, y },
-                element_bounds: Some(golem_events::Rect {
-                    x: b.x,
-                    y: b.y,
-                    width: b.width,
-                    height: b.height,
-                }),
-            });
-            driver.tap(x, y).await?;
-            return wait_for_alert_gone(driver).await;
         }
-        // First miss: poke the test app so the harness's interruption
-        // monitor gets a chance to fire and dismiss any pending system
-        // dialog. Only poke once — repeated taps would interfere with
-        // a test that genuinely has no alert.
-        if !poked {
-            poked = true;
-            let _ = driver.poke_for_system_alert().await;
+        // OS-owned prompt (iOS SpringBoard): accept it deterministically by
+        // querying SpringBoard's alert and tapping the affirmative directly.
+        // Preferred over the poke below because the UI-interruption-monitor
+        // fires only at iOS's discretion (~40% misses on the photo prompt).
+        // No-op (Ok(false)) on platforms without a system-alert layer / when
+        // no prompt is up, so we fall through to the poke + re-loop. A companion
+        // DEATH here is NOT swallowed into `false` (which would spin until the
+        // step deadline → EF408); it propagates so recovery can engage.
+        match driver.accept_system_alert().await {
+            Ok(true) => return wait_for_alert_gone(driver).await,
+            Ok(false) => {}
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+            Err(_) => {}
         }
+        // Re-poke every iteration: a system permission prompt (iOS) appears
+        // asynchronously after the triggering action, so a single early poke
+        // can fire before the prompt is on screen and miss it entirely,
+        // leaving the request hung. The interruption monitor only fires while
+        // an alert is up, so repeated pokes reliably catch it whenever it
+        // arrives. This path is reached ONLY when no in-app alert was found
+        // (in-app alerts are tapped + returned above), so it can't disturb a
+        // UIAlertController the test means to drive; the poke's own tap lands
+        // at the app-frame top edge, clear of app UI.
+        let _ = driver.poke_for_system_alert().await;
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
 }
@@ -1105,6 +1133,91 @@ mod tests {
             tap_calls[0].1,
             vec!["240", "325"],
             "SHALL tap last button (positive)"
+        );
+    }
+
+    // An OS-owned system prompt has no in-app alert in the hierarchy;
+    // accept_alert SHALL accept it via `accept_system_alert` (the direct
+    // SpringBoard path) without a coordinate tap, then return.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_uses_system_alert_when_no_in_app_alert() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_system_alert_accept(true);
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        handle_accept_alert(&step, &driver, &ctx)
+            .await
+            .expect("accept_alert SHALL succeed via the system-alert path");
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.iter().any(|c| c.0 == "accept_system_alert"),
+            "SHALL call accept_system_alert"
+        );
+        assert!(
+            !calls.iter().any(|c| c.0 == "tap"),
+            "SHALL NOT coordinate-tap when the system alert accepts directly"
+        );
+    }
+
+    // Bug 4: a companion death during the accept_alert poll loop's hierarchy
+    // fetch SHALL propagate the death code (so the step loop's recovery fires),
+    // NOT be swallowed and spun on until the step deadline (→ EF408).
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_propagates_companion_death_from_hierarchy() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error_coded(
+            "get_hierarchy",
+            golem_events::FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            handle_accept_alert(&step, &driver, &ctx),
+        )
+        .await
+        .expect("accept_alert SHALL return promptly on a death, not spin to the deadline")
+        .expect_err("a companion death SHALL surface as an Err, not be swallowed");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::DeviceCompanionUnreachable),
+            "the death code SHALL propagate so recovery can engage (not EF408)"
+        );
+    }
+
+    // Bug 4: a coded companion death from `accept_system_alert` SHALL propagate
+    // rather than being `.unwrap_or(false)`-swallowed into another poll cycle.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_propagates_companion_death_from_system_alert() {
+        // No in-app alert in the tree → the loop falls through to
+        // accept_system_alert, which dies.
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error_coded(
+            "accept_system_alert",
+            golem_events::FailureCode::DeviceCompanionDropped,
+            "connection closed before message completed",
+        );
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            handle_accept_alert(&step, &driver, &ctx),
+        )
+        .await
+        .expect("accept_alert SHALL return promptly on a death, not spin to the deadline")
+        .expect_err("a companion death SHALL surface as an Err, not be swallowed");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::DeviceCompanionDropped),
+            "a coded death from accept_system_alert SHALL propagate, not become false"
         );
     }
 

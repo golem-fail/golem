@@ -53,6 +53,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+        recovery: None,
     }
 }
 
