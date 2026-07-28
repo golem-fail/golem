@@ -95,11 +95,15 @@ struct ContentView: View {
             // observable result the add_media e2e asserts.
             Text("Dims: \(galleryDims)")
                 .accessibilityIdentifier("dims-b")
+                .frame(minHeight: 24)
 
             Button("Load") {
                 loadGallery()
             }
             .accessibilityIdentifier("load-gallery")
+            // Meet the 24dp min touch-target (HIG minimum is 44); a bare
+            // SwiftUI Button hugs its label (~20dp) and trips golem's a11y audit.
+            .frame(minHeight: 44)
 
             Divider()
 
