@@ -215,7 +215,11 @@ fun TestScreen() {
         // add_media e2e asserts.
         Text(
             "Dims: $galleryDims",
-            modifier = Modifier.semantics { contentDescription = "dims-b" }
+            // Meet the 24dp min touch-target (the Compose Button below is
+            // already 48dp by Material default; the bare Text label isn't).
+            modifier = Modifier
+                .heightIn(min = 24.dp)
+                .semantics { contentDescription = "dims-b" }
         )
 
         Button(
