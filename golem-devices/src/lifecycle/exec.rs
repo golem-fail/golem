@@ -345,14 +345,42 @@ pub async fn spawn_companion_with_reg(
         }
     }
 
-    golem_common::command::spawn_detached_with(
-        program,
-        arguments,
-        &golem_common::command::CommandOpts::with_env(env),
-    )
-    .await
-    .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
+    // Persist the companion's stdout/stderr. The iOS companion is an
+    // `xcodebuild test` host that can exit mid-flow (voluntary XCUITest-host
+    // teardown observed on RN apps); without this its output was discarded, so
+    // the teardown reason was unrecoverable. Logs land in `~/.golem/logs/`.
+    let opts = match companion_log_path(&device.udid) {
+        Some(path) => golem_common::command::CommandOpts::with_env_and_log(env, path),
+        None => golem_common::command::CommandOpts::with_env(env),
+    };
+    golem_common::command::spawn_detached_with(program, arguments, &opts)
+        .await
+        .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
     Ok(())
+}
+
+/// Path for a companion's persisted stdout/stderr: `~/.golem/logs/
+/// companion-<udid>.log`. Returns `None` (log discarded) if `$HOME` is unset
+/// or the logs dir can't be created — never blocks the spawn on logging.
+fn companion_log_path(udid: &str) -> Option<String> {
+    let home = std::env::var_os("HOME")?;
+    let dir = Path::new(&home).join(".golem").join("logs");
+    std::fs::create_dir_all(&dir).ok()?;
+    let sanitized: String = udid
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    Some(
+        dir.join(format!("companion-{sanitized}.log"))
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 /// Inject an environment variable into the xctestrun plist.

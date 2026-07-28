@@ -285,8 +285,8 @@ impl AndroidDriver {
     }
 
     /// Return the base URL for the companion server.
-    pub fn base_url(&self) -> &str {
-        &self.client.base_url
+    pub fn base_url(&self) -> String {
+        self.client.base_url()
     }
 
     /// Check companion server health and return device info.
@@ -547,6 +547,10 @@ use crate::common::{find_webview_bounds, replace_webview_children};
 impl PlatformDriver for AndroidDriver {
     fn set_request_timeout(&self, timeout: std::time::Duration) {
         self.client.set_request_timeout(timeout);
+    }
+
+    fn reconnect(&self, port: u16) {
+        self.client.reconnect(port);
     }
 
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
@@ -982,6 +986,34 @@ impl PlatformDriver for AndroidDriver {
 
     async fn add_media(&self, path: &str) -> Result<()> {
         self.adb(&["push", path, "/sdcard/DCIM/"]).await?;
+        // `adb push` drops the file on disk but doesn't register it with
+        // MediaStore, so gallery apps and the OS photo picker can't see it
+        // (the emulator's inotify auto-scan is async and racy). Force a
+        // synchronous scan of the pushed file so a flow that reads the gallery
+        // right after add_media sees it. Idempotent — re-scanning an indexed
+        // file updates in place, no duplicate row.
+        let basename = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| {
+                golem_events::coded(
+                    golem_events::FailureCode::ParseMissingParam,
+                    anyhow::anyhow!("add_media path has no file name: {path:?}"),
+                )
+            })?;
+        let device_path = format!("/sdcard/DCIM/{basename}");
+        self.adb(&[
+            "shell",
+            "content",
+            "call",
+            "--uri",
+            "content://media/external/images/media",
+            "--method",
+            "scan_file",
+            "--arg",
+            &device_path,
+        ])
+        .await?;
         Ok(())
     }
 

@@ -33,12 +33,14 @@ fn coded_transport_err(e: reqwest::Error, ctx: String) -> anyhow::Error {
 /// constructor).
 ///
 /// - timeout → `DeviceCompanionWedged` (D503): alive but didn't answer in time.
-/// - connect / request / body drop → `DeviceCompanionUnreachable` (D505): the
-///   exchange couldn't complete. `is_connect` is a cold/gone socket; `is_request`
-///   / `is_body` are a socket that dropped *mid-exchange* — the companion
-///   process died while serving (e.g. "connection closed before message
-///   completed" mid-`/hierarchy`), which previously fell through to an opaque
-///   `EX000`.
+/// - connect → `DeviceCompanionUnreachable` (D505): a cold/gone socket, i.e. the
+///   HTTP connect failed (connection refused) before the request went out. For a
+///   mutation this means the action did NOT land (nothing was sent).
+/// - request / body drop → `DeviceCompanionDropped` (D507): a socket that dropped
+///   *mid-exchange* — the companion process died while serving (e.g. "connection
+///   closed before message completed" mid-`/hierarchy`). For a mutation the
+///   landing is unknown/ambiguous (the request may or may not have been applied
+///   before the drop). Previously this fell through to an opaque `EX000`.
 /// - anything else (decode/builder) → uncoded on purpose.
 fn classify_transport(
     is_timeout: bool,
@@ -48,8 +50,10 @@ fn classify_transport(
 ) -> Option<golem_events::FailureCode> {
     if is_timeout {
         Some(golem_events::FailureCode::DeviceCompanionWedged)
-    } else if is_connect || is_request || is_body {
+    } else if is_connect {
         Some(golem_events::FailureCode::DeviceCompanionUnreachable)
+    } else if is_request || is_body {
+        Some(golem_events::FailureCode::DeviceCompanionDropped)
     } else {
         None
     }
@@ -72,7 +76,11 @@ pub(crate) fn coded_status_err(status: reqwest::StatusCode, msg: String) -> anyh
 
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
 pub struct CompanionClient {
-    pub base_url: String,
+    /// Companion base URL (`http://localhost:{port}`). Interior-mutable so a
+    /// mid-flow companion restart on a *new* port can be swapped in place via
+    /// [`reconnect`](Self::reconnect) without rebuilding the driver — every
+    /// request reads the current value under the lock.
+    base_url: std::sync::RwLock<String>,
     /// Default query string appended to every request (e.g. `"bundle_id=fail.golem.test"`).
     default_query: std::sync::RwLock<String>,
     pub client: reqwest::Client,
@@ -110,12 +118,20 @@ const GET_MAX_ATTEMPTS: u32 = 2;
 /// per-request timeout budget.
 const GET_RETRY_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
 
-/// Whether a failed read should be retried: only a companion *drop*
-/// (`DeviceCompanionUnreachable`). A wedge (`DeviceCompanionWedged`, from a
-/// timeout) is likely to repeat and burn the budget, and a status error is
-/// deterministic — neither is retried.
+/// Whether a failed read should be retried: only a companion connect-refused
+/// (`DeviceCompanionUnreachable`, D505) or a mid-exchange drop
+/// (`DeviceCompanionDropped`, D507) — both are the kind of transient socket
+/// failure a fresh idempotent GET can clear. A wedge (`DeviceCompanionWedged`,
+/// from a timeout) is likely to repeat and burn the budget, and a status error
+/// is deterministic — neither is retried.
 fn is_retryable_read(e: &anyhow::Error) -> bool {
-    golem_events::extract_code(e) == Some(golem_events::FailureCode::DeviceCompanionUnreachable)
+    matches!(
+        golem_events::extract_code(e),
+        Some(
+            golem_events::FailureCode::DeviceCompanionUnreachable
+                | golem_events::FailureCode::DeviceCompanionDropped
+        )
+    )
 }
 
 /// Health information returned by the companion server.
@@ -139,7 +155,7 @@ impl CompanionClient {
     /// happens here — the base URL is just recorded for later requests.
     pub fn new(port: u16) -> Self {
         Self {
-            base_url: format!("http://localhost:{port}"),
+            base_url: std::sync::RwLock::new(format!("http://localhost:{port}")),
             default_query: std::sync::RwLock::new(String::new()),
             client: reqwest::Client::new(),
             request_timeout_ms: std::sync::atomic::AtomicU64::new(0),
@@ -190,6 +206,22 @@ impl CompanionClient {
         }
     }
 
+    /// Current companion base URL (`http://localhost:{port}`). Cloned out of
+    /// the lock so callers never hold the guard across an `.await`.
+    pub fn base_url(&self) -> String {
+        self.base_url.read().map(|u| u.clone()).unwrap_or_default()
+    }
+
+    /// Point the client at a companion now listening on `port`. Used after a
+    /// mid-flow companion restart: the process (and its port) changed, but the
+    /// driver object — and every reference to it — stays the same. Interior
+    /// mutability so the reconnect needs only `&self`.
+    pub fn reconnect(&self, port: u16) {
+        if let Ok(mut u) = self.base_url.write() {
+            *u = format!("http://localhost:{port}");
+        }
+    }
+
     /// Update the default query string (e.g. on app switch).
     pub fn set_default_query(&self, query: &str) {
         if let Ok(mut q) = self.default_query.write() {
@@ -219,7 +251,8 @@ impl CompanionClient {
     /// Returns `Ok(health)` if the companion is running and responsive.
     /// Returns `Err` if the companion is not reachable or returns unexpected data.
     pub async fn check_health(&self) -> Result<CompanionHealth> {
-        let url = format!("{}/health", self.base_url);
+        let base_url = self.base_url();
+        let url = format!("{base_url}/health");
         let resp = self
             .client
             .get(&url)
@@ -227,10 +260,7 @@ impl CompanionClient {
             .send()
             .await
             .with_context(|| {
-                format!(
-                    "Companion server not reachable at {}. Is it running?",
-                    self.base_url
-                )
+                format!("Companion server not reachable at {base_url}. Is it running?")
             })?;
 
         // 503 = companion is up but its UiAutomation accessibility-
@@ -292,10 +322,11 @@ impl CompanionClient {
             .map(|q| q.clone())
             .unwrap_or_default();
         let sep = if path.contains('?') { "&" } else { "?" };
+        let base_url = self.base_url();
         if dq.is_empty() {
-            format!("{}{}", self.base_url, path)
+            format!("{base_url}{path}")
         } else {
-            format!("{}{}{}{}", self.base_url, path, sep, dq)
+            format!("{base_url}{path}{sep}{dq}")
         }
     }
 
@@ -447,18 +478,31 @@ mod tests {
     }
 
     #[test]
-    fn mid_exchange_drop_is_unreachable() {
+    fn mid_exchange_drop_is_dropped() {
         // "connection closed before message completed" while reading a body
-        // surfaces as a request/body error — the companion died while serving.
+        // surfaces as a request/body error — the companion died mid-serve, so
+        // (unlike a clean connect-refused) a mutation's landing is ambiguous.
         assert_eq!(
             classify_transport(false, false, true, false),
-            Some(FailureCode::DeviceCompanionUnreachable),
-            "a request-side mid-exchange drop SHALL code as unreachable, not uncoded"
+            Some(FailureCode::DeviceCompanionDropped),
+            "a request-side mid-exchange drop SHALL code as dropped (D507), not unreachable"
         );
         assert_eq!(
             classify_transport(false, false, false, true),
-            Some(FailureCode::DeviceCompanionUnreachable),
-            "a body-read mid-exchange drop SHALL code as unreachable, not uncoded"
+            Some(FailureCode::DeviceCompanionDropped),
+            "a body-read mid-exchange drop SHALL code as dropped (D507), not unreachable"
+        );
+    }
+
+    #[test]
+    fn connect_and_drop_are_distinct_codes() {
+        // The connect-vs-drop split is the whole point: a cold socket (connect)
+        // means the request never went out (D505), a mid-exchange drop means it
+        // may have (D507). They MUST NOT collapse to the same code.
+        assert_ne!(
+            classify_transport(false, true, false, false),
+            classify_transport(false, false, true, false),
+            "connect-refused (D505) and mid-exchange drop (D507) SHALL be distinct"
         );
     }
 
@@ -534,17 +578,28 @@ mod tests {
     }
 
     #[test]
-    fn retryable_only_on_companion_drop() {
-        let drop = golem_events::coded(
+    fn retryable_on_unreachable_and_dropped() {
+        let unreachable = golem_events::coded(
             FailureCode::DeviceCompanionUnreachable,
-            anyhow::anyhow!("connection closed"),
+            anyhow::anyhow!("connection refused"),
+        );
+        let dropped = golem_events::coded(
+            FailureCode::DeviceCompanionDropped,
+            anyhow::anyhow!("connection closed before message completed"),
         );
         let wedged = golem_events::coded(
             FailureCode::DeviceCompanionWedged,
             anyhow::anyhow!("timed out"),
         );
         let plain = anyhow::anyhow!("some 404");
-        assert!(super::is_retryable_read(&drop), "a drop SHALL be retried");
+        assert!(
+            super::is_retryable_read(&unreachable),
+            "a connect-refused (D505) read SHALL be retried"
+        );
+        assert!(
+            super::is_retryable_read(&dropped),
+            "a mid-exchange drop (D507) read SHALL be retried"
+        );
         assert!(
             !super::is_retryable_read(&wedged),
             "a wedge SHALL NOT be retried (would burn the budget)"

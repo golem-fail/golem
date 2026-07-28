@@ -217,6 +217,7 @@ mod tests {
             install_timeout_ms: None,
             install_env: None,
             profile: None,
+            permissions: Default::default(),
         }
     }
 

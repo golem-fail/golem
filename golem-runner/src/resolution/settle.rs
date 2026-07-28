@@ -127,6 +127,10 @@ async fn wait_for_settle_with(
                     tokio::time::sleep(settle_interval).await;
                     let (root, meta) = match get_hierarchy_bounded(driver).await {
                         Ok(r) => r,
+                        // A dead companion won't answer a re-poll — surface the
+                        // death so it can't hide as an EF408 timeout up the call
+                        // stack (and so commit-aware recovery can fire).
+                        Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
                         Err(_) => break,
                     };
                     stats.record(meta.node_count);
@@ -153,6 +157,10 @@ async fn wait_for_settle_with(
 
         let (root, meta) = match get_hierarchy_bounded(driver).await {
             Ok(r) => r,
+            // A dead companion won't answer a re-poll — surface the death rather
+            // than returning the last (stale) tree as "settled", so it can't hide
+            // as an EF408 timeout and recovery can fire.
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
             Err(_) => return Ok((prev_root, prev_meta, stats)),
         };
         stats.record(meta.node_count);

@@ -116,6 +116,8 @@ pub enum FailureCode {
     ParseFlowFile,
     /// P461: suite device-constraint unsatisfiable.
     ParseDeviceConstraint,
+    /// P462: add_media given a file that isn't a supported image/video format.
+    ParseUnsupportedMedia,
 
     // ── A: app build / install / lifecycle ──
     /// A403: install script path traversal blocked.
@@ -153,6 +155,23 @@ pub enum FailureCode {
     /// companion exit and a cold-start drop before the socket is up; the two
     /// are indistinguishable at the transport layer, so they share this code.
     DeviceCompanionUnreachable,
+    /// D507: companion connection dropped *mid-exchange* — the socket closed
+    /// while a request was in flight ("connection closed before message
+    /// completed"), i.e. the companion process died while serving. Distinct
+    /// from D505 (a clean connect-refused, where the request never left): after
+    /// a D507 on a *non-idempotent* mutation the landing is unknown/ambiguous
+    /// (the request may or may not have been applied before the drop), so the
+    /// runner must NOT blindly retry it — see the step-level recovery state
+    /// machine.
+    DeviceCompanionDropped,
+    /// D506: companion unreachable and could not be recovered — after N
+    /// consecutive restarts the companion kept dying before the flow made any
+    /// progress (zero steps advanced between restarts). Distinct from D505 (a
+    /// single unreachable hit that recovery then healed): D506 is the terminal
+    /// "restart loop gave up" signal, surfaced so a companion that can't stay
+    /// up never masquerades as a flow/app failure (EF408) — nothing the test
+    /// writer or app author can control.
+    DeviceCompanionUnrecoverable,
     /// D520: misc driver op failed (adb forward, unsupported button).
     DeviceDriverOpFailed,
 
@@ -185,7 +204,8 @@ impl FailureCode {
             | ParseMissingParam
             | ParseVariable
             | ParseFlowFile
-            | ParseDeviceConstraint => Domain::Parsing,
+            | ParseDeviceConstraint
+            | ParseUnsupportedMedia => Domain::Parsing,
             AppInstallPathBlocked
             | AppInstallScriptNotFound
             | AppInstallTimeout
@@ -200,6 +220,8 @@ impl FailureCode {
             | DeviceCompanionWedged
             | DeviceRegistrationTimeout
             | DeviceCompanionUnreachable
+            | DeviceCompanionDropped
+            | DeviceCompanionUnrecoverable
             | DeviceDriverOpFailed => Domain::Device,
             HostToolchainMissing | HostPortsExhausted | HostOrchestratorIpc => Domain::Host,
         }
@@ -225,6 +247,7 @@ impl FailureCode {
             ParseVariable => 450,
             ParseFlowFile => 460,
             ParseDeviceConstraint => 461,
+            ParseUnsupportedMedia => 462,
             AppInstallPathBlocked => 403,
             AppInstallScriptNotFound => 404,
             AppInstallTimeout => 408,
@@ -239,6 +262,8 @@ impl FailureCode {
             DeviceCompanionWedged => 503,
             DeviceRegistrationTimeout => 504,
             DeviceCompanionUnreachable => 505,
+            DeviceCompanionUnrecoverable => 506,
+            DeviceCompanionDropped => 507,
             DeviceDriverOpFailed => 520,
             HostToolchainMissing => 404,
             HostPortsExhausted => 429,
@@ -344,6 +369,10 @@ mod tests {
         assert_eq!(
             FailureCode::DeviceCompanionUnreachable.render(Severity::Error),
             "ED505"
+        );
+        assert_eq!(
+            FailureCode::DeviceCompanionDropped.render(Severity::Error),
+            "ED507"
         );
         assert_eq!(
             FailureCode::HostToolchainMissing.render(Severity::Error),

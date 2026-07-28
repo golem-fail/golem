@@ -751,6 +751,16 @@ pub enum SubstepEvent {
     DriverWarning {
         message: String,
     },
+    /// The companion died mid-step (force-quit by the simulator host) and was
+    /// restarted + reconnected before retrying the step. `attempt`/`max` track
+    /// the bounded restart budget; `reconnect_ms` is how long the
+    /// restart-and-reconnect took. Verbose-only breadcrumb — the step itself
+    /// still runs to its real verdict.
+    CompanionRestarted {
+        attempt: u32,
+        max: u32,
+        reconnect_ms: u64,
+    },
 
     // Media
     Screenshot {

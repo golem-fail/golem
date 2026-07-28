@@ -135,8 +135,8 @@ impl IosDriver {
     }
 
     /// Return the base URL for the companion server.
-    pub fn base_url(&self) -> &str {
-        &self.client.base_url
+    pub fn base_url(&self) -> String {
+        self.client.base_url()
     }
 
     /// Check companion server health and return device info.
@@ -372,6 +372,10 @@ impl PlatformDriver for IosDriver {
         self.client.set_request_timeout(timeout);
     }
 
+    fn reconnect(&self, port: u16) {
+        self.client.reconnect(port);
+    }
+
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
         let wrapper: serde_json::Value =
@@ -512,6 +516,17 @@ impl PlatformDriver for IosDriver {
             .post_json("/poke-interruption-monitor", "{}")
             .await?;
         Ok(())
+    }
+
+    async fn accept_system_alert(&self) -> Result<bool> {
+        // The companion queries SpringBoard's alert and taps the affirmative
+        // directly (deterministic), returning {"accepted": bool}.
+        let resp = self.client.post_json("/accept-system-alert", "{}").await?;
+        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+        Ok(parsed
+            .get("accepted")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false))
     }
 
     async fn tap(&self, x: i32, y: i32) -> Result<()> {
@@ -1121,6 +1136,26 @@ mod tests {
             true,
         );
         assert_eq!(driver.base_url(), "http://localhost:9999");
+    }
+
+    // reconnect swaps the base URL in place (mid-flow companion restart on a
+    // new port) — the driver object stays the same, only its port changes.
+    #[test]
+    fn reconnect_updates_base_url_in_place() {
+        use crate::PlatformDriver;
+        let driver = IosDriver::new(
+            "ABCD-1234".to_string(),
+            "com.example.app".to_string(),
+            8222,
+            false,
+        );
+        assert_eq!(driver.base_url(), "http://localhost:8222");
+        PlatformDriver::reconnect(&driver, 8299);
+        assert_eq!(
+            driver.base_url(),
+            "http://localhost:8299",
+            "reconnect SHALL point the client at the new companion port"
+        );
     }
 
     // -----------------------------------------------------------------------

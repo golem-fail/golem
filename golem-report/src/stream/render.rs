@@ -305,6 +305,17 @@ pub(crate) fn print_substep_to(
         SubstepEvent::Screenshot { path } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} screenshot {path}{r}");
         }
+        SubstepEvent::CompanionRestarted {
+            attempt,
+            max,
+            reconnect_ms,
+        } => {
+            let tag = tag("[recovered]", YELLOW, use_color);
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {tag} companion restart {attempt}/{max} (reconnect {reconnect_ms}ms)"
+            );
+        }
         _ => {}
     }
 }

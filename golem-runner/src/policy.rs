@@ -306,8 +306,24 @@ pub async fn execute_step_with_policy(
                     } else {
                         crate::resolution::wait_for_settle(driver).await
                     };
-                    if let Ok((root, _meta, _stats)) = settled {
-                        ctx.cache_settled_tree(root, ctx.global_step_index);
+                    match settled {
+                        Ok((root, _meta, _stats)) => {
+                            ctx.cache_settled_tree(root, ctx.global_step_index);
+                        }
+                        // The action already committed (we're on the Ok path);
+                        // if the companion then died during post-settle, surface
+                        // the death so the step loop's recovery can deem-done the
+                        // committed step and restart — instead of silently
+                        // passing against a dead companion. Only when recovery is
+                        // wired (production): without it, a swallowed settle keeps
+                        // the prior Success behavior. Non-death settle errors stay
+                        // swallowed (the step succeeded regardless).
+                        Err(e) => {
+                            if ctx.recovery.is_some() && crate::recovery::is_companion_death_err(&e)
+                            {
+                                return Err(e);
+                            }
+                        }
                     }
                     let elapsed = started.elapsed();
                     // The settle's internal timeout is 1500ms (3000ms when
@@ -373,6 +389,15 @@ pub async fn execute_step_with_policy(
     }
 
     let error = last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
+    // Companion-death codes (D505/D507/D503) bypass `if_fail` here so the step
+    // loop's commit-aware recovery sees the RAW `Err`. Translating them to a
+    // Warning/Ignored at this layer would let a dead companion be demoted to a
+    // soft outcome and the flow run on against it — recovery would never fire.
+    // `if_fail` is re-applied to recovery's FINAL verdict by the caller (via
+    // [`apply_if_fail_for_death`]), which also exempts the device-fatal D506.
+    if crate::recovery::is_companion_death(extract_code(&error)) {
+        return Err(error);
+    }
     match if_fail {
         "warn" => Ok(StepOutcome::Warning {
             code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
@@ -380,6 +405,46 @@ pub async fn execute_step_with_policy(
         }),
         "ignore" => Ok(StepOutcome::Ignored),
         _ => Err(error), // "error" (default) — propagate
+    }
+}
+
+/// Apply `if_fail` to a companion-death `Err` that survived commit-aware
+/// recovery. The step loop runs recovery on the RAW `Err` (since
+/// [`execute_step_with_policy`] no longer translates death codes), then calls
+/// this on the final verdict — in BOTH the recovery-on and recovery-off paths,
+/// so a warn/ignore step still softens an unrecovered death.
+///
+/// Exemption: D506 `DeviceCompanionUnrecoverable` (the give-up) is device-fatal
+/// and MUST NEVER be suppressed by `if_fail`. A recovered success is `Ok` and
+/// passes through untouched; a D507 `FailAmbiguous` MAY be governed by `if_fail`
+/// (writer's choice).
+pub(crate) fn apply_if_fail_for_death(
+    result: Result<StepOutcome>,
+    step: &Step,
+) -> Result<StepOutcome> {
+    let code = match &result {
+        Ok(_) => return result,
+        Err(e) => extract_code(e),
+    };
+    // Device-fatal give-up: never softened.
+    if code == Some(FailureCode::DeviceCompanionUnrecoverable) {
+        return result;
+    }
+    // Only un-translated companion-death codes reach here as `Err`; a non-death
+    // failure was already resolved by `execute_step_with_policy`'s if_fail pass.
+    if !crate::recovery::is_companion_death(code) {
+        return result;
+    }
+    match step.if_fail.as_deref().unwrap_or("error") {
+        "warn" => {
+            let error = result.expect_err("checked Err above");
+            Ok(StepOutcome::Warning {
+                code: code.unwrap_or(FailureCode::Uncoded),
+                message: clean_msg(&error),
+            })
+        }
+        "ignore" => Ok(StepOutcome::Ignored),
+        _ => result,
     }
 }
 

@@ -56,6 +56,18 @@ The flow runs on every device listed. Golem launches the first app automatically
 
 The `name` you give an app here is the **canonical reference** for it from any action with an `app` field (`launch`, `stop`, `push_notification`, `grant_permission`, etc.). Use the name — `app = "app"` — rather than the bundle id. Bundle ids are accepted as a fallback but they're an implementation detail; the name keeps flows readable and survives bundle-id renames. The [Multi-App Flows](#multi-app-flows) section shows the pattern.
 
+#### Launch-time permissions
+
+An app entry may declare `permissions` — granted **before the app is launched**, so they're in place from process start (iOS TCC / Android runtime grants don't apply to an already-running process). Pre-grant is best-effort: Android grants cleanly, and most iOS permissions do too, but some iOS system prompts can't be fully suppressed by `simctl` (notably iOS 26 full Photo Library access) and still surface at runtime — accept those with `accept_alert` (see below). A missing pre-grant is a warning, not a failure: the app simply prompts when it needs the permission.
+
+```toml
+[[flow.apps]]
+name = "app"
+permissions = { photos = "allow", camera = "deny" }
+```
+
+Keys use the same shorthand as the `grant_permission` action (`camera`, `microphone`, `location`, `photos`, …); each value is `"allow"` (grant) or `"deny"` (revoke). The `grant_permission` / `revoke_permission` actions remain for changing a permission mid-flow. On iOS, an app that requests a permission at runtime whose grant can't be pre-applied still surfaces the system prompt — accept it with `accept_alert` (the companion taps the affirmative button, including "Allow Full Access").
+
 ### Flow Options
 
 ```toml

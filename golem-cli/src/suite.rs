@@ -1369,6 +1369,7 @@ async fn execute_flow_run(
         let a11y_override = cfg.a11y_override;
         let a11y_min_confidence_override = cfg.a11y_min_confidence_override;
         let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
+        let reg_state_c = reg_state.clone();
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 FlowDeviceRun {
@@ -1386,6 +1387,8 @@ async fn execute_flow_run(
                     project_root: project_root_c,
                     barrier: barrier_c,
                     event_sender: Some(tx_c),
+                    reg_state: reg_state_c,
+                    reg_port,
                 },
                 FlowRunPolicy {
                     seed,
@@ -3181,6 +3184,62 @@ fn make_driver(
     }
 }
 
+/// Step-level [`CompanionRecovery`](golem_runner::recovery::CompanionRecovery)
+/// for one flow slot: relaunch a force-quit companion and repoint the driver at
+/// its new port, in place. Holds owned clones of everything the relaunch needs
+/// (the slot's future is `'static`) plus an `Arc` to the SAME driver
+/// `execute_flow` runs against, so the reconnect is visible to the running flow.
+struct CompanionRecoveryImpl {
+    device: DeviceInfo,
+    platform: Platform,
+    reg_port: u16,
+    reg_state: crate::registration::RegistrationState,
+    event_tx: golem_events::channel::EventSender,
+    driver: Arc<dyn PlatformDriver>,
+    /// App to re-target on the fresh companion (see `restart_and_reconnect`).
+    bundle_id: String,
+}
+
+#[async_trait::async_trait]
+impl golem_runner::recovery::CompanionRecovery for CompanionRecoveryImpl {
+    async fn restart_and_reconnect(&self) -> anyhow::Result<()> {
+        // Evict the dead companion so `ensure_companion_with_reg` spawns a
+        // fresh one instead of routing back to the same dead port (both the
+        // port cache and the registration must be cleared) — mirrors the
+        // setup-phase relaunch in `bring_up_companion_with_health`.
+        self.reg_state.invalidate_companion(&self.device.udid);
+        self.reg_state.remove(&self.device.udid);
+        let new_port = ensure_companion_with_reg(
+            &self.device,
+            self.platform,
+            self.reg_port,
+            &self.reg_state,
+            &self.event_tx,
+            RELAUNCH_REG_DEADLINE,
+        )
+        .await?;
+        // Same driver object `execute_flow` holds — reconnect is seen in place.
+        self.driver.reconnect(new_port);
+        // Re-establish the target app on the fresh companion, then warm it.
+        // A brand-new XCUITest runner has no `lastLaunchedBundle`, so its
+        // `/hierarchy` would snapshot the wrong (default) app until a `/launch`
+        // tells it which bundle to drive — the retried step would poll a tree
+        // that never contains the target and burn its budget (spurious EF408).
+        // The companion's `/launch` `activate()`s a running app WITHOUT
+        // restarting it (so mid-flow state is preserved), sets the target, and
+        // does a throwaway serialize that completes the framework's cold
+        // accessibility warm-up (~10s+ on RN). Best-effort: if it fails (the
+        // fresh companion died again), the retried step surfaces that and the
+        // loop's budget drives another restart.
+        //
+        // NB: uses the flow's primary bundle. A mid-flow *app switch* (multi-app
+        // iOS flow) could re-target the wrong app here — acceptable for now
+        // (single-app is the norm); revisit if multi-app iOS recovery is needed.
+        let _ = self.driver.launch_app(&self.bundle_id).await;
+        Ok(())
+    }
+}
+
 /// Which flow to run.
 struct FlowDeviceRun {
     flow: FlowFile,
@@ -3201,6 +3260,11 @@ struct FlowRunHandles {
     project_root: PathBuf,
     barrier: golem_runner::barrier::FailureBarrier,
     event_sender: Option<golem_events::channel::EventSender>,
+    /// Registration server handle + assigned port, so a mid-flow companion
+    /// death can relaunch the companion (evict the dead registration, then
+    /// `ensure_companion_with_reg`) and reconnect the driver in place.
+    reg_state: crate::registration::RegistrationState,
+    reg_port: u16,
 }
 
 /// Per-run config/policy knobs (CLI flags + flow-run bookkeeping).
@@ -3247,6 +3311,8 @@ async fn run_flow_on_device(
         project_root,
         barrier,
         event_sender,
+        reg_state,
+        reg_port,
     } = handles;
     let FlowRunPolicy {
         seed,
@@ -3280,7 +3346,10 @@ async fn run_flow_on_device(
     // 1-based run index for the stub script: repeat_index+1 (run 1 when
     // not repeating). Only consumed in stub mode.
     let stub_run_index = repeat_ctx.map(|r| r.index + 1).unwrap_or(1);
-    let driver: Box<dyn PlatformDriver> = make_driver(
+    // `Arc` (not `Box`) so the step-level recovery impl and `execute_flow` can
+    // both hold the SAME driver — a reconnect on one is seen by the other (the
+    // `CompanionClient` base URL is interior-mutable).
+    let driver: Arc<dyn PlatformDriver> = Arc::from(make_driver(
         platform,
         device.udid.clone(),
         bundle_id.clone(),
@@ -3288,7 +3357,24 @@ async fn run_flow_on_device(
         device.physical,
         stub_fail_on_runs,
         stub_run_index,
-    );
+    ));
+
+    // Step-level, commit-aware companion recovery. Gated to iOS: it is the iOS
+    // XCUITest companion the simulator host force-quits mid-flow. Android's
+    // `am instrument` companion can also be relaunched, but its adb-forward
+    // reconnect path is untested here — TODO: extend recovery to Android.
+    let recovery_impl: Option<CompanionRecoveryImpl> = match (platform, event_sender.clone()) {
+        (Platform::Ios, Some(tx)) => Some(CompanionRecoveryImpl {
+            device: device.clone(),
+            platform,
+            reg_port,
+            reg_state: reg_state.clone(),
+            event_tx: tx,
+            driver: driver.clone(),
+            bundle_id: bundle_id.clone(),
+        }),
+        _ => None,
+    };
 
     // Resolve perf setting:
     // - Explicit CLI `--no-perf` always wins. The user opted out;
@@ -3421,6 +3507,9 @@ async fn run_flow_on_device(
         // refine again from their own options.
         inherited_record_default: project_record.unwrap_or(false),
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+        recovery: recovery_impl
+            .as_ref()
+            .map(|r| r as &dyn golem_runner::recovery::CompanionRecovery),
     };
 
     // Run install scripts for all apps in this flow on this device (unless
