@@ -325,7 +325,6 @@ Android multi-emu contention is the same *character* (host saturation → stocha
 The prebuilt-binary pipeline ships for macOS arm64 and Linux x86_64 + arm64
 (static musl) — see [distribution.md](distribution.md). What's left:
 
-- **`setup-golem` Action** — extend the binary download to the Linux tarballs.
 - **Real Linux device/emulator e2e** — can't run on the macOS dev host.
 - **Fuller Linux resolver** — per-flow iOS-leg skip + a `strict_coverage` error
   mode (reusing the existing skip machinery), if the current `--platform android`
