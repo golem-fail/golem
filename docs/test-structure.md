@@ -58,7 +58,7 @@ The `name` you give an app here is the **canonical reference** for it from any a
 
 #### Launch-time permissions
 
-An app entry may declare `permissions` — granted **before the app is launched**, so they're in place from process start (iOS TCC / Android runtime grants don't apply to an already-running process). Pre-grant is best-effort: Android grants cleanly, and most iOS permissions do too, but some iOS system prompts can't be fully suppressed by `simctl` (notably iOS 26 full Photo Library access) and still surface at runtime — accept those with `accept_alert` (see below). A missing pre-grant is a warning, not a failure: the app simply prompts when it needs the permission.
+An app entry may declare `permissions` — granted **before the app is launched**, so they're in place from process start (iOS TCC / Android runtime grants don't apply to an already-running process). Pre-grant is best-effort and a missing one is a warning, not a failure: the app simply prompts when it needs the permission. iOS `photos` needs [`applesimutils`](actions-reference.md#app-permissions) to grant prompt-free (`simctl` can't suppress the iOS 26 library prompt); without it the prompt fires and `accept_alert` covers it.
 
 ```toml
 [[flow.apps]]
@@ -66,7 +66,7 @@ name = "app"
 permissions = { photos = "allow", camera = "deny" }
 ```
 
-Keys use the cross-platform permission shorthand (`camera`, `microphone`, `location`, `photos`, …); each value is `"allow"` (grant) or `"deny"` (revoke). To **change** a permission later in a flow, relaunch the app with the [`launch` action's own `permissions =` map](actions-reference.md#app-permissions) — a hard restart, which is the only reliable way to re-apply an iOS grant. On iOS, an app that requests a permission at runtime whose grant can't be pre-applied still surfaces the system prompt — accept it with `accept_alert` (the companion taps the affirmative button, including "Allow Full Access").
+Keys use the cross-platform permission vocabulary (`camera`, `microphone`, `location`, `photos`, …); the value is a **mode** — `"allow"`/`"deny"` for any permission, plus `location = "always"` (background; `allow` is foreground) and `photos = "limited"`. See [App permissions](actions-reference.md#app-permissions) for the full mode/permission matrix. To **change** a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map — a hard restart, the only reliable way to re-apply an iOS grant.
 
 ### Flow Options
 

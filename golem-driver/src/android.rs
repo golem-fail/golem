@@ -173,21 +173,27 @@ fn swipe_duration_ms(from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> u64 {
 /// `sdk_int` is the device's `ro.build.version.sdk` value — used to
 /// pick the right grouping for the `photos` shorthand, which changed
 /// shape across Android 12 → 13 → 14.
-fn normalize_android_permission(permission: &str, sdk_int: u32) -> Result<Vec<String>> {
+fn normalize_android_permission(permission: &str, mode: &str, sdk_int: u32) -> Result<Vec<String>> {
     if permission.starts_with("android.permission.") {
         return Ok(vec![permission.to_string()]);
     }
     let perms: Vec<&str> = match permission {
         "camera" => vec!["android.permission.CAMERA"],
         "microphone" => vec!["android.permission.RECORD_AUDIO"],
-        "location" => vec!["android.permission.ACCESS_FINE_LOCATION"],
-        // `location-always` needs both foreground and background fine
-        // location on Android 10+; granting only FINE_LOCATION leaves
-        // the app blocked from background updates.
-        "location-always" => vec![
-            "android.permission.ACCESS_FINE_LOCATION",
-            "android.permission.ACCESS_BACKGROUND_LOCATION",
-        ],
+        // `location = "always"` needs both foreground and background fine
+        // location on Android 10+; `allow` (foreground) grants FINE only.
+        // Granting only FINE_LOCATION for `always` leaves the app blocked
+        // from background updates.
+        "location" => {
+            if mode == "always" {
+                vec![
+                    "android.permission.ACCESS_FINE_LOCATION",
+                    "android.permission.ACCESS_BACKGROUND_LOCATION",
+                ]
+            } else {
+                vec!["android.permission.ACCESS_FINE_LOCATION"]
+            }
+        }
         "contacts" => vec!["android.permission.READ_CONTACTS"],
         "calendar" => vec!["android.permission.READ_CALENDAR"],
         // Photo access changed shape across Android versions:
@@ -195,8 +201,13 @@ fn normalize_android_permission(permission: &str, sdk_int: u32) -> Result<Vec<St
         //   • Android 13 (SDK 33):              READ_MEDIA_IMAGES
         //   • Android 14+ (SDK ≥ 34):           also
         //     READ_MEDIA_VISUAL_USER_SELECTED for the user-curated subset
+        // `photos = "limited"` maps to the user-selected subset alone on
+        // Android 14+ (the platform's partial-access grant); on older SDKs
+        // there's no partial grant, so it behaves as full `photos`.
         "photos" => {
-            if sdk_int >= SDK_ANDROID_14 {
+            if mode == "limited" && sdk_int >= SDK_ANDROID_14 {
+                vec!["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
+            } else if sdk_int >= SDK_ANDROID_14 {
                 vec![
                     "android.permission.READ_MEDIA_IMAGES",
                     "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
@@ -209,10 +220,9 @@ fn normalize_android_permission(permission: &str, sdk_int: u32) -> Result<Vec<St
         }
         other => bail!(
             "Unknown Android permission shorthand: {other:?}. Known shorthands: \
-             camera, microphone, location, location-always, contacts, calendar, \
-             photos. Or pass a full `android.permission.*` string. \
-             (Notifications: don't pre-grant — trigger the prompt from the app \
-             and use `accept_alert` for cross-platform parity.)"
+             camera, microphone, location, contacts, calendar, photos. Or pass \
+             a full `android.permission.*` string. (Notifications: don't \
+             pre-grant — trigger the prompt from the app and use `accept_alert`.)"
         ),
     };
     Ok(perms.into_iter().map(String::from).collect())
@@ -1017,22 +1027,18 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> Result<Option<String>> {
         let sdk = self.sdk_int().await?;
-        for perm in normalize_android_permission(permission, sdk)? {
-            self.adb(&["shell", "pm", "grant", bundle_id, &perm])
-                .await?;
+        let verb = if mode == "deny" { "revoke" } else { "grant" };
+        for perm in normalize_android_permission(permission, mode, sdk)? {
+            self.adb(&["shell", "pm", verb, bundle_id, &perm]).await?;
         }
-        Ok(())
-    }
-
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
-        let sdk = self.sdk_int().await?;
-        for perm in normalize_android_permission(permission, sdk)? {
-            self.adb(&["shell", "pm", "revoke", bundle_id, &perm])
-                .await?;
-        }
-        Ok(())
+        Ok(None)
     }
 
     async fn start_recording(&self, name: &str) -> Result<()> {
@@ -1552,7 +1558,7 @@ mod tests {
     #[test]
     fn normalize_simple_shorthand_one_to_one() {
         assert_eq!(
-            normalize_android_permission("camera", 34).expect("known shorthand"),
+            normalize_android_permission("camera", "allow", 34).expect("known shorthand"),
             vec!["android.permission.CAMERA"],
         );
     }
@@ -1562,7 +1568,7 @@ mod tests {
         // Full `android.permission.*` strings bypass the shorthand table
         // so callers can target permissions the table doesn't cover.
         assert_eq!(
-            normalize_android_permission("android.permission.BLUETOOTH_CONNECT", 34)
+            normalize_android_permission("android.permission.BLUETOOTH_CONNECT", "allow", 34)
                 .expect("full strings always pass"),
             vec!["android.permission.BLUETOOTH_CONNECT"],
         );
@@ -1570,7 +1576,7 @@ mod tests {
 
     #[test]
     fn normalize_unknown_shorthand_errors_loudly() {
-        let err = normalize_android_permission("locaiton", 34)
+        let err = normalize_android_permission("locaiton", "allow", 34)
             .expect_err("unknown shorthand SHALL error");
         let msg = format!("{err}");
         assert!(
@@ -1585,24 +1591,28 @@ mod tests {
 
     #[test]
     fn normalize_location_always_grants_foreground_and_background() {
-        let perms = normalize_android_permission("location-always", 34).expect("known shorthand");
-        // Background updates require BOTH foreground (FINE_LOCATION) and
-        // background permissions on Android 10+. The legacy table mapped
-        // it to FINE_LOCATION only and apps silently failed at runtime.
+        // `location = "always"` needs BOTH foreground (FINE_LOCATION) and
+        // background on Android 10+; `allow` is foreground only.
+        let perms =
+            normalize_android_permission("location", "always", 34).expect("known shorthand");
         assert!(perms.contains(&"android.permission.ACCESS_FINE_LOCATION".to_string()));
         assert!(perms.contains(&"android.permission.ACCESS_BACKGROUND_LOCATION".to_string()));
+
+        let foreground =
+            normalize_android_permission("location", "allow", 34).expect("known shorthand");
+        assert_eq!(foreground, vec!["android.permission.ACCESS_FINE_LOCATION"]);
     }
 
     #[test]
     fn normalize_photos_on_android_12_uses_legacy_storage() {
         // SDK ≤ 32 (Android 12 and below) predates READ_MEDIA_*.
-        let perms = normalize_android_permission("photos", 32).expect("known shorthand");
+        let perms = normalize_android_permission("photos", "allow", 32).expect("known shorthand");
         assert_eq!(perms, vec!["android.permission.READ_EXTERNAL_STORAGE"]);
     }
 
     #[test]
     fn normalize_photos_on_android_13_uses_read_media_images_only() {
-        let perms = normalize_android_permission("photos", 33).expect("known shorthand");
+        let perms = normalize_android_permission("photos", "allow", 33).expect("known shorthand");
         assert_eq!(perms, vec!["android.permission.READ_MEDIA_IMAGES"]);
     }
 
@@ -1610,9 +1620,19 @@ mod tests {
     fn normalize_photos_on_android_14_adds_user_selected() {
         // SDK ≥ 34 (Android 14+) introduced READ_MEDIA_VISUAL_USER_SELECTED
         // for the user-curated subset access flow.
-        let perms = normalize_android_permission("photos", 34).expect("known shorthand");
+        let perms = normalize_android_permission("photos", "allow", 34).expect("known shorthand");
         assert!(perms.contains(&"android.permission.READ_MEDIA_IMAGES".to_string()));
         assert!(perms.contains(&"android.permission.READ_MEDIA_VISUAL_USER_SELECTED".to_string()));
+    }
+
+    #[test]
+    fn normalize_photos_limited_on_android_14_is_user_selected_only() {
+        // `photos = "limited"` maps to the partial-access grant alone on 14+.
+        let perms = normalize_android_permission("photos", "limited", 34).expect("known shorthand");
+        assert_eq!(
+            perms,
+            vec!["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
+        );
     }
 
     #[test]
@@ -1620,7 +1640,7 @@ mod tests {
         // We dropped `notifications` from pre-grant — the prompt-driven
         // flow + `accept_alert` is the cross-platform path. The error
         // message points authors at that pattern.
-        let err = normalize_android_permission("notifications", 34)
+        let err = normalize_android_permission("notifications", "allow", 34)
             .expect_err("notifications SHALL no longer be a shorthand");
         let msg = format!("{err}");
         assert!(
@@ -1634,8 +1654,8 @@ mod tests {
         // `location-when-in-use` and `photo-library` were redundant
         // aliases for `location` / `photos`. They're gone; the error
         // names the canonical shorthand instead.
-        assert!(normalize_android_permission("location-when-in-use", 34).is_err());
-        assert!(normalize_android_permission("photo-library", 34).is_err());
+        assert!(normalize_android_permission("location-when-in-use", "allow", 34).is_err());
+        assert!(normalize_android_permission("photo-library", "allow", 34).is_err());
     }
 
     // -----------------------------------------------------------------------
@@ -1799,19 +1819,19 @@ mod tests {
     #[test]
     fn normalize_remaining_simple_shorthands() {
         assert_eq!(
-            normalize_android_permission("microphone", 34).expect("known"),
+            normalize_android_permission("microphone", "allow", 34).expect("known"),
             vec!["android.permission.RECORD_AUDIO"],
         );
         assert_eq!(
-            normalize_android_permission("location", 34).expect("known"),
+            normalize_android_permission("location", "allow", 34).expect("known"),
             vec!["android.permission.ACCESS_FINE_LOCATION"],
         );
         assert_eq!(
-            normalize_android_permission("contacts", 34).expect("known"),
+            normalize_android_permission("contacts", "allow", 34).expect("known"),
             vec!["android.permission.READ_CONTACTS"],
         );
         assert_eq!(
-            normalize_android_permission("calendar", 34).expect("known"),
+            normalize_android_permission("calendar", "allow", 34).expect("known"),
             vec!["android.permission.READ_CALENDAR"],
         );
     }
@@ -1823,12 +1843,12 @@ mod tests {
     fn normalize_photos_sdk_boundary_33_vs_34() {
         // SDK 33: single READ_MEDIA_IMAGES (no USER_SELECTED).
         assert_eq!(
-            normalize_android_permission("photos", 33).expect("known"),
+            normalize_android_permission("photos", "allow", 33).expect("known"),
             vec!["android.permission.READ_MEDIA_IMAGES"],
         );
         // SDK 34: adds READ_MEDIA_VISUAL_USER_SELECTED.
         assert_eq!(
-            normalize_android_permission("photos", 34).expect("known"),
+            normalize_android_permission("photos", "allow", 34).expect("known"),
             vec![
                 "android.permission.READ_MEDIA_IMAGES",
                 "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
@@ -1841,7 +1861,7 @@ mod tests {
     #[test]
     fn normalize_photos_sdk_boundary_32_legacy() {
         assert_eq!(
-            normalize_android_permission("photos", 32).expect("known"),
+            normalize_android_permission("photos", "allow", 32).expect("known"),
             vec!["android.permission.READ_EXTERNAL_STORAGE"],
         );
     }
@@ -1851,7 +1871,7 @@ mod tests {
     #[test]
     fn normalize_full_string_ignores_sdk() {
         assert_eq!(
-            normalize_android_permission("android.permission.READ_MEDIA_IMAGES", 21)
+            normalize_android_permission("android.permission.READ_MEDIA_IMAGES", "allow", 21)
                 .expect("full string passes"),
             vec!["android.permission.READ_MEDIA_IMAGES"],
         );
@@ -1861,6 +1881,6 @@ mod tests {
     //     hatch for unknown names).
     #[test]
     fn normalize_unknown_shorthand_errors_at_sdk_zero() {
-        assert!(normalize_android_permission("bogus", 0).is_err());
+        assert!(normalize_android_permission("bogus", "allow", 0).is_err());
     }
 }

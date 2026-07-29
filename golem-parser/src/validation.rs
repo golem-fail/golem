@@ -29,6 +29,9 @@ pub enum ValidationErrorKind {
     /// A selector was given to an action that operates on the currently
     /// focused element (e.g. `backspace`), where it can't be honored reliably.
     SelectorNotAllowed,
+    /// A `permissions` map entry has an invalid mode for its permission
+    /// (e.g. `camera = "limited"`) or uses the removed `location-always` key.
+    InvalidPermission,
 }
 
 const KNOWN_ACTIONS: &[&str] = &[
@@ -180,6 +183,15 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
                 message: format!("App '{}' has no device constraints", app.name),
                 kind: ValidationErrorKind::MissingDevices,
             });
+        }
+        // Launch-time permission map: mode must be valid for the permission.
+        for (permission, mode) in &app.permissions {
+            if let Err(message) = crate::permissions::validate_permission_entry(permission, mode) {
+                errors.push(ValidationError {
+                    message: format!("App '{}': {message}", app.name),
+                    kind: ValidationErrorKind::InvalidPermission,
+                });
+            }
         }
     }
 

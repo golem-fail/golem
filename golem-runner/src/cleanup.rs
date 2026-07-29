@@ -231,20 +231,13 @@ mod tests {
             Ok(())
         }
 
-        async fn grant_permission(
+        async fn set_permission(
             &self,
             _bundle_id: &str,
             _permission: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        async fn revoke_permission(
-            &self,
-            _bundle_id: &str,
-            _permission: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
+            _mode: &str,
+        ) -> anyhow::Result<Option<String>> {
+            Ok(None)
         }
 
         async fn start_recording(&self, _name: &str) -> anyhow::Result<()> {
@@ -657,20 +650,13 @@ mod tests {
             Ok(())
         }
 
-        async fn grant_permission(
+        async fn set_permission(
             &self,
             _bundle_id: &str,
             _permission: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        async fn revoke_permission(
-            &self,
-            _bundle_id: &str,
-            _permission: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
+            _mode: &str,
+        ) -> anyhow::Result<Option<String>> {
+            Ok(None)
         }
 
         async fn start_recording(&self, _name: &str) -> anyhow::Result<()> {

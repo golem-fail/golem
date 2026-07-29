@@ -996,19 +996,21 @@ mod tests {
             self.record_call("add_media", vec![path.to_string()]);
             Ok(())
         }
-        async fn grant_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
+        async fn set_permission(
+            &self,
+            bundle_id: &str,
+            permission: &str,
+            mode: &str,
+        ) -> anyhow::Result<Option<String>> {
             self.record_call(
-                "grant_permission",
-                vec![bundle_id.to_string(), permission.to_string()],
+                "set_permission",
+                vec![
+                    bundle_id.to_string(),
+                    permission.to_string(),
+                    mode.to_string(),
+                ],
             );
-            Ok(())
-        }
-        async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
-            self.record_call(
-                "revoke_permission",
-                vec![bundle_id.to_string(), permission.to_string()],
-            );
-            Ok(())
+            Ok(None)
         }
         async fn start_recording(&self, name: &str) -> anyhow::Result<()> {
             self.record_call("start_recording", vec![name.to_string()]);

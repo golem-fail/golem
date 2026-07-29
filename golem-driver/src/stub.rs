@@ -340,20 +340,21 @@ impl PlatformDriver for StubDriver {
         Ok(())
     }
 
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> anyhow::Result<Option<String>> {
         self.record(
-            "grant_permission",
-            vec![bundle_id.to_string(), permission.to_string()],
+            "set_permission",
+            vec![
+                bundle_id.to_string(),
+                permission.to_string(),
+                mode.to_string(),
+            ],
         );
-        Ok(())
-    }
-
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
-        self.record(
-            "revoke_permission",
-            vec![bundle_id.to_string(), permission.to_string()],
-        );
-        Ok(())
+        Ok(None)
     }
 
     async fn start_recording(&self, name: &str) -> anyhow::Result<()> {

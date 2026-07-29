@@ -1,16 +1,13 @@
 [flow]
-# Covers the cross-platform permission-shorthand normalization paths:
-# `location-always` (Android: grants both FINE_LOCATION and
-# BACKGROUND_LOCATION; iOS: maps to simctl `location-always` token)
-# and `photos` (Android: SDK-conditional grouping of READ_MEDIA_IMAGES
-# / READ_MEDIA_VISUAL_USER_SELECTED / READ_EXTERNAL_STORAGE; iOS:
-# simctl `photos` token). Permissions are applied via a launch's
-# `permissions =` map; a normalization failure surfaces as the launch
-# step failing — `pm grant` / `simctl privacy` rejects undeclared or
-# wrong-API-level permissions loudly, which propagates through the
-# driver. The same normalizer serves grant and revoke, so the allow
-# path exercises both directions (revoke is unit-tested in golem-driver).
-name = "Permission shorthands"
+# Covers the cross-platform permission value paths that fan out per platform:
+# `location = "always"` (Android: grants both FINE_LOCATION and
+# BACKGROUND_LOCATION; iOS: maps to the simctl `location-always` token) and
+# `photos = "limited"` (Android 14+: READ_MEDIA_VISUAL_USER_SELECTED only; iOS:
+# applesimutils `photos=limited`). Permissions are applied via a launch's
+# `permissions =` map; a mapping failure surfaces as the launch step failing —
+# `pm grant` / `simctl privacy` / `applesimutils` reject undeclared or
+# wrong-API-level permissions loudly, which propagates through the driver.
+name = "Permission modes"
 tags = ["permissions", "cross-platform"]
 
 [[flow.apps]]
@@ -22,13 +19,13 @@ type = "phone"
 [[block]]
 name = "location_always_grants_foreground_and_background"
 steps = [
-  { action = "launch", app = "app", permissions = { location-always = "allow" } },
+  { action = "launch", app = "app", permissions = { location = "always" } },
   { action = "assert_visible", on_text = "Counter" },
 ]
 
 [[block]]
-name = "photos_sdk_conditional"
+name = "photos_limited_partial_access"
 steps = [
-  { action = "launch", app = "app", permissions = { photos = "allow" } },
+  { action = "launch", app = "app", permissions = { photos = "limited" } },
   { action = "assert_visible", on_text = "Counter" },
 ]

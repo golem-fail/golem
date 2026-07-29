@@ -8,33 +8,55 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
 
-/// Map a cross-platform permission shorthand to the corresponding
-/// `simctl privacy` service token. The set deliberately matches the
-/// Android normalizer's shorthand vocabulary so flows stay
-/// platform-agnostic; the values are simctl tokens (which mostly
-/// coincide with the shorthand names by design).
+/// Map a cross-platform permission shorthand + mode to the corresponding
+/// `simctl privacy` service token. Matches the Android normalizer's
+/// vocabulary so flows stay platform-agnostic. `location` folds its mode into
+/// the token: `always` → `location-always`, otherwise → `location` (the
+/// grant/revoke verb carries the enable/disable).
 ///
-/// Notifications aren't here: iOS doesn't accept a `notifications`
-/// simctl token and Android prompts identically when the app first
-/// requests `POST_NOTIFICATIONS` — let the prompt fire and use
-/// `accept_alert` / the companion's UIInterruptionMonitor instead.
-fn normalize_ios_permission(permission: &str) -> Result<&str> {
+/// Notifications aren't here: iOS doesn't accept a `notifications` simctl token
+/// and Android prompts identically when the app first requests
+/// `POST_NOTIFICATIONS` — let the prompt fire and use `accept_alert` instead.
+fn ios_simctl_token(permission: &str, mode: &str) -> Result<&'static str> {
     match permission {
         "camera" => Ok("camera"),
         "microphone" => Ok("microphone"),
-        "location" => Ok("location"),
-        "location-always" => Ok("location-always"),
         "contacts" => Ok("contacts"),
         "calendar" => Ok("calendar"),
         "photos" => Ok("photos"),
+        "location" => Ok(if mode == "always" {
+            "location-always"
+        } else {
+            "location"
+        }),
         other => bail!(
-            "Unknown iOS permission shorthand: {other:?}. Known shorthands: \
-             camera, microphone, location, location-always, contacts, calendar, \
-             photos. (Notifications: don't pre-grant — trigger the prompt from \
-             the app and use `accept_alert` for cross-platform parity.)"
+            "Unknown iOS permission: {other:?}. Known: camera, microphone, \
+             location, contacts, calendar, photos. (Notifications: don't \
+             pre-grant — trigger the prompt from the app and use `accept_alert`.)"
         ),
     }
 }
+
+/// Whether `applesimutils` is on `PATH`. Cached — the lookup is a `PATH` scan
+/// and the answer can't change within a run. iOS-sim only; used to decide
+/// whether a `photos` pre-grant can be applied prompt-free (`simctl privacy
+/// grant photos` accepts the command but does NOT suppress the iOS 26
+/// full-library prompt, so we never fall back to it for photos).
+fn applesimutils_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        std::process::Command::new("applesimutils")
+            .arg("--help")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
+}
+
+/// Install hint surfaced when a photos pre-grant needs `applesimutils` but it
+/// isn't installed. Kept as a warning (not an error): the app will fall back to
+/// the runtime prompt, which `accept_alert` handles.
+const APPLESIMUTILS_INSTALL_HINT: &str = "brew tap wix/brew && brew install wix/brew/applesimutils";
 
 /// Post-stop grace period on iOS. `simctl terminate` returns when the
 /// kill signal is dispatched; the OS still needs time to release the
@@ -225,6 +247,45 @@ impl IosDriver {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    /// Apply a single permission via `applesimutils --setPermissions`. Used
+    /// only for the cases `simctl privacy` can't satisfy (photos prompt
+    /// suppression / limited-library). `permission=value` uses applesimutils'
+    /// own vocabulary (e.g. `photos=YES`, `photos=limited`).
+    async fn applesimutils_set(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        value: &str,
+    ) -> Result<()> {
+        let spec = format!("{permission}={value}");
+        let run = tokio::process::Command::new("applesimutils")
+            .args([
+                "--byId",
+                &self.device_id,
+                "--bundle",
+                bundle_id,
+                "--setPermissions",
+                &spec,
+            ])
+            .output();
+        let output = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Simctl,
+            run,
+        )
+        .await
+        .context("failed to spawn applesimutils")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceDriverOpFailed,
+                anyhow::anyhow!("applesimutils --setPermissions {spec:?} failed: {stderr}"),
+            ));
+        }
+        // Same TCC settle window as simctl — the app launches right after.
+        tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
+        Ok(())
     }
 }
 
@@ -823,23 +884,38 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
-        let token = normalize_ios_permission(permission)?;
-        self.simctl(&["privacy", &self.device_id, "grant", token, bundle_id])
-            .await?;
-        // See IOS_PERMISSION_TCC_SETTLE_GRACE for rationale.
-        tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
-        Ok(())
-    }
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> Result<Option<String>> {
+        // photos + grant is the one case `simctl privacy` can't satisfy on iOS
+        // 26 — it accepts `grant photos` but the full-library prompt still
+        // fires. applesimutils suppresses it; without applesimutils we must NOT
+        // fall back to simctl (silent flake), so warn and let the runtime
+        // prompt fire (accept_alert covers it).
+        if permission == "photos" && matches!(mode, "allow" | "limited") {
+            if applesimutils_available() {
+                let value = if mode == "limited" { "limited" } else { "YES" };
+                self.applesimutils_set(bundle_id, "photos", value).await?;
+                return Ok(None);
+            }
+            return Ok(Some(format!(
+                "iOS photos pre-grant needs applesimutils (simctl can't suppress the \
+                 iOS 26 photo-library prompt); it isn't installed, so the app will \
+                 prompt at runtime — accept it with `accept_alert`. Install: {APPLESIMUTILS_INSTALL_HINT}"
+            )));
+        }
 
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
-        let token = normalize_ios_permission(permission)?;
-        self.simctl(&["privacy", &self.device_id, "revoke", token, bundle_id])
+        let token = ios_simctl_token(permission, mode)?;
+        let verb = if mode == "deny" { "revoke" } else { "grant" };
+        self.simctl(&["privacy", &self.device_id, verb, token, bundle_id])
             .await?;
-        // Same TCC settle window as `grant_permission` — a `launch`
-        // immediately after revoke would otherwise race the same way.
+        // See IOS_PERMISSION_TCC_SETTLE_GRACE: a `launch` immediately after
+        // would otherwise race the privacy daemons.
         tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
-        Ok(())
+        Ok(None)
     }
 
     async fn start_recording(&self, name: &str) -> Result<()> {
@@ -1169,114 +1245,77 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // normalize_ios_permission — shorthand → simctl token
+    // ios_simctl_token — (permission, mode) → simctl privacy token
     // -----------------------------------------------------------------------
     #[test]
-    fn normalize_known_shorthands_match_simctl_tokens() {
-        // simctl `privacy` accepts these exact strings as service tokens —
-        // most coincide with the shorthand names by design.
-        for (shorthand, expected) in [
+    fn token_known_permissions_match_simctl_tokens() {
+        // simctl `privacy` accepts these exact strings as service tokens.
+        for (permission, expected) in [
             ("camera", "camera"),
             ("microphone", "microphone"),
-            ("location", "location"),
-            ("location-always", "location-always"),
             ("contacts", "contacts"),
             ("calendar", "calendar"),
             ("photos", "photos"),
         ] {
             assert_eq!(
-                normalize_ios_permission(shorthand).expect("known shorthand"),
+                ios_simctl_token(permission, "allow").expect("known permission"),
                 expected,
-                "iOS shorthand {shorthand:?} SHALL map to simctl token {expected:?}",
+                "iOS {permission:?} SHALL map to simctl token {expected:?}",
             );
         }
     }
 
     #[test]
-    fn normalize_unknown_shorthand_errors_loudly() {
-        let err = normalize_ios_permission("locaiton").expect_err("unknown shorthand SHALL error");
+    fn token_location_folds_mode_into_token() {
+        // `always` needs the background-capable token; `allow` (foreground) and
+        // `deny` use the plain `location` token (the grant/revoke verb carries
+        // the intent).
+        assert_eq!(
+            ios_simctl_token("location", "always").expect("location always"),
+            "location-always"
+        );
+        assert_eq!(
+            ios_simctl_token("location", "allow").expect("location allow"),
+            "location"
+        );
+        assert_eq!(
+            ios_simctl_token("location", "deny").expect("location deny"),
+            "location"
+        );
+    }
+
+    #[test]
+    fn token_unknown_permission_errors_loudly() {
+        let err = ios_simctl_token("locaiton", "allow").expect_err("unknown SHALL error");
         let msg = format!("{err}");
         assert!(
             msg.contains("locaiton"),
-            "should echo the bad shorthand, got: {msg}"
+            "should echo the bad key, got: {msg}"
         );
+        assert!(msg.contains("Known"), "should list known set, got: {msg}");
+    }
+
+    #[test]
+    fn token_rejects_removed_and_dropped_keys() {
+        // location-always is no longer a key (use location=always);
+        // notifications was never a simctl token.
+        assert!(ios_simctl_token("location-always", "allow").is_err());
+        assert!(ios_simctl_token("location-when-in-use", "inuse").is_err());
+        assert!(ios_simctl_token("photo-library", "allow").is_err());
+        let err = ios_simctl_token("notifications", "allow").expect_err("no notifications token");
         assert!(
-            msg.contains("Known shorthands"),
-            "should list known set, got: {msg}"
+            format!("{err}").contains("accept_alert"),
+            "error should point at the cross-platform pattern"
         );
     }
 
     #[test]
-    fn normalize_rejects_dropped_synonyms() {
-        // location-when-in-use / photo-library were Android-only aliases;
-        // they were dropped to keep the cross-platform vocabulary single-
-        // canonical-name per intent. iOS rejects them too.
-        assert!(normalize_ios_permission("location-when-in-use").is_err());
-        assert!(normalize_ios_permission("photo-library").is_err());
-    }
-
-    #[test]
-    fn normalize_rejects_notifications_with_accept_alert_hint() {
-        let err = normalize_ios_permission("notifications")
-            .expect_err("notifications SHALL not be a shorthand on iOS");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("accept_alert"),
-            "error should point at the cross-platform pattern, got: {msg}",
-        );
-    }
-
-    // 1. Empty string is not a known shorthand and SHALL error (the
-    //    match has no empty-string arm — it falls through to `other`).
-    #[test]
-    fn normalize_rejects_empty_string() {
-        let err = normalize_ios_permission("").expect_err("empty shorthand SHALL error");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("Known shorthands"),
-            "empty input SHALL still list the known set, got: {msg}",
-        );
-    }
-
-    // 2. Matching is exact and case-sensitive — an uppercased token is
-    //    NOT accepted (simctl tokens are lowercase by design).
-    #[test]
-    fn normalize_is_case_sensitive() {
-        assert!(
-            normalize_ios_permission("Camera").is_err(),
-            "uppercased `Camera` SHALL NOT match the lowercase `camera` token",
-        );
-        assert!(
-            normalize_ios_permission("CAMERA").is_err(),
-            "all-caps `CAMERA` SHALL NOT match",
-        );
-    }
-
-    // 3. No trimming — surrounding whitespace makes the token unknown
-    //    rather than being silently normalized.
-    #[test]
-    fn normalize_does_not_trim_whitespace() {
-        assert!(
-            normalize_ios_permission(" camera").is_err(),
-            "leading space SHALL NOT be trimmed away",
-        );
-        assert!(
-            normalize_ios_permission("camera ").is_err(),
-            "trailing space SHALL NOT be trimmed away",
-        );
-    }
-
-    // 4. The unknown-shorthand error echoes the offending input with
-    //    debug quoting (`{other:?}`), so a token containing a quote is
-    //    rendered escaped — confirms the `:?` formatting path.
-    #[test]
-    fn normalize_unknown_error_uses_debug_quoting() {
-        let err = normalize_ios_permission("we\"ird").expect_err("unknown shorthand SHALL error");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("we\\\"ird"),
-            "debug-quoted input SHALL escape the embedded quote, got: {msg}",
-        );
+    fn token_is_case_sensitive_and_untrimmed() {
+        assert!(ios_simctl_token("Camera", "allow").is_err());
+        assert!(ios_simctl_token("CAMERA", "allow").is_err());
+        assert!(ios_simctl_token(" camera", "allow").is_err());
+        assert!(ios_simctl_token("camera ", "allow").is_err());
+        assert!(ios_simctl_token("", "allow").is_err());
     }
 
     // 5. Post-stop grace SHALL be a real, bounded teardown window: nonzero

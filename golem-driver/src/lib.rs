@@ -147,11 +147,17 @@ pub trait PlatformDriver: Send + Sync {
     /// Add media to device library
     async fn add_media(&self, path: &str) -> anyhow::Result<()>;
 
-    /// Grant app permission
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()>;
-
-    /// Revoke app permission
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()>;
+    /// Set an app permission to a mode: `allow`/`deny` (universal),
+    /// `limited` (photos), or `always` (location background). The
+    /// `(permission, mode)` pair is pre-validated by the parser/runner. Returns
+    /// an optional warning (e.g. a pre-grant that couldn't be fully applied and
+    /// will fall back to a runtime prompt) — non-fatal, surfaced as a substep.
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> anyhow::Result<Option<String>>;
 
     /// Start screen recording
     async fn start_recording(&self, name: &str) -> anyhow::Result<()>;
@@ -675,10 +681,12 @@ mod tests {
         async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
-            unimplemented!()
-        }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+        async fn set_permission(
+            &self,
+            _b: &str,
+            _p: &str,
+            _m: &str,
+        ) -> anyhow::Result<Option<String>> {
             unimplemented!()
         }
         async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
@@ -804,10 +812,12 @@ mod tests {
         async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
-            unimplemented!()
-        }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+        async fn set_permission(
+            &self,
+            _b: &str,
+            _p: &str,
+            _m: &str,
+        ) -> anyhow::Result<Option<String>> {
             unimplemented!()
         }
         async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
@@ -1011,10 +1021,12 @@ mod tests {
         async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
-            unimplemented!()
-        }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+        async fn set_permission(
+            &self,
+            _b: &str,
+            _p: &str,
+            _m: &str,
+        ) -> anyhow::Result<Option<String>> {
             unimplemented!()
         }
         async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
@@ -1223,11 +1235,11 @@ mod tests {
         driver.open_url("https://x").await.expect("url failed");
         driver.add_media("/tmp/a.png").await.expect("media failed");
         driver
-            .grant_permission("com.x", "camera")
+            .set_permission("com.x", "camera", "allow")
             .await
             .expect("grant failed");
         driver
-            .revoke_permission("com.x", "camera")
+            .set_permission("com.x", "location", "always")
             .await
             .expect("revoke failed");
         driver.start_recording("rec").await.expect("rec failed");
@@ -1243,8 +1255,8 @@ mod tests {
             ("set_location", vec!["1.5", "-2.5"]),
             ("open_url", vec!["https://x"]),
             ("add_media", vec!["/tmp/a.png"]),
-            ("grant_permission", vec!["com.x", "camera"]),
-            ("revoke_permission", vec!["com.x", "camera"]),
+            ("set_permission", vec!["com.x", "camera", "allow"]),
+            ("set_permission", vec!["com.x", "location", "always"]),
             ("start_recording", vec!["rec"]),
             ("remove_port_forwards", vec![]),
         ];

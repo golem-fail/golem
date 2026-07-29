@@ -19,6 +19,7 @@
 pub mod config;
 pub mod fixture;
 pub mod mixin;
+pub mod permissions;
 pub mod validation;
 
 use serde::Deserialize;

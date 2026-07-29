@@ -428,22 +428,22 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> anyhow::Result<Option<String>> {
         self.record_call(
-            "grant_permission",
-            vec![bundle_id.to_string(), permission.to_string()],
+            "set_permission",
+            vec![
+                bundle_id.to_string(),
+                permission.to_string(),
+                mode.to_string(),
+            ],
         );
-        self.check_error("grant_permission")?;
-        Ok(())
-    }
-
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
-        self.record_call(
-            "revoke_permission",
-            vec![bundle_id.to_string(), permission.to_string()],
-        );
-        self.check_error("revoke_permission")?;
-        Ok(())
+        self.check_error("set_permission")?;
+        Ok(None)
     }
 
     async fn start_recording(&self, name: &str) -> anyhow::Result<()> {
