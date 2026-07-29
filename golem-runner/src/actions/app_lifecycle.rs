@@ -59,10 +59,16 @@ pub(crate) async fn handle_launch(
     // runs out-of-band after this step returns (see policy.rs's
     // `needs_post_settle`), not inline — otherwise the launch step's
     // own timeout would absorb the wait.
-    let warning = driver
-        .launch_app(bundle_id)
-        .await
-        .code(golem_events::FailureCode::AppLifecycleFailed)?;
+    // A companion death mid-launch must keep its transport code (D505/D507) so
+    // the step loop's recovery fires: a launch witnesses no mutation, so
+    // recovery relaunches the companion and retries the launch. Coercing to
+    // AppLifecycleFailed would mask the death code, and recovery — which keys
+    // off `is_companion_death` — would never fire, hard-failing the step and
+    // cascading every subsequent launch to connection-refused.
+    let warning = match driver.launch_app(bundle_id).await {
+        Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+        other => other.code(golem_events::FailureCode::AppLifecycleFailed)?,
+    };
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {
         bundle: bundle_id.to_string(),
@@ -86,10 +92,12 @@ pub(crate) async fn handle_stop(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
-    driver
-        .stop_app(bundle_id)
-        .await
-        .code(golem_events::FailureCode::AppLifecycleFailed)?;
+    // As in `handle_launch`: a companion death mid-stop keeps its transport
+    // code so recovery fires, rather than masking it as a stop failure.
+    match driver.stop_app(bundle_id).await {
+        Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+        other => other.code(golem_events::FailureCode::AppLifecycleFailed)?,
+    };
     ctx.substep(golem_events::SubstepEvent::AppStop {
         bundle: bundle_id.to_string(),
     });
@@ -164,6 +172,82 @@ mod tests {
         let stop_calls: Vec<_> = calls.iter().filter(|c| c.0 == "stop_app").collect();
         assert_eq!(stop_calls.len(), 1);
         assert_eq!(stop_calls[0].1, vec!["com.example.app"]);
+    }
+
+    // ── lifecycle actions must not mask companion-death codes ─────────
+    //
+    // A companion force-quit mid-launch/stop surfaces as a transport-death
+    // code (D505 connect-refused / D507 mid-exchange drop). handle_launch /
+    // handle_stop must propagate that code raw so the step loop's recovery
+    // fires; coercing it to AppLifecycleFailed (EA503) masks the death and
+    // recovery — which keys off `is_companion_death` — never runs.
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn launch_propagates_companion_death_code_unmasked() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error_coded(
+            "launch_app",
+            FailureCode::DeviceCompanionDropped,
+            "connection closed before message completed",
+        );
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("launch death SHALL error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::DeviceCompanionDropped),
+            "launch SHALL propagate the death code raw, not mask it as EA503: {err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn launch_non_death_error_is_coded_app_lifecycle_failed() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("launch_app", "app crashed on launch");
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("launch failure SHALL error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::AppLifecycleFailed),
+            "a real (non-death) launch failure SHALL still be coded EA503: {err:#}"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn stop_propagates_companion_death_code_unmasked() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error_coded(
+            "stop_app",
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("stop");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_stop(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("stop death SHALL error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::DeviceCompanionUnreachable),
+            "stop SHALL propagate the death code raw, not mask it as EA503: {err:#}"
+        );
     }
 
     // ── clear_data action calls driver.clear_app_data ─────────────────
