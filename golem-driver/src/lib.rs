@@ -148,7 +148,7 @@ pub trait PlatformDriver: Send + Sync {
     async fn add_media(&self, path: &str) -> anyhow::Result<()>;
 
     /// Set an app permission to a mode: `allow`/`deny` (universal),
-    /// `limited` (photos), or `always`/`inuse`/`never` (location). The
+    /// `limited` (photos), or `always` (location background). The
     /// `(permission, mode)` pair is pre-validated by the parser/runner. Returns
     /// an optional warning (e.g. a pre-grant that couldn't be fully applied and
     /// will fall back to a runtime prompt) — non-fatal, surfaced as a substep.

@@ -12,7 +12,7 @@ use crate::context::ExecutionContext;
 /// non-fatal warnings the driver surfaced (e.g. a photos pre-grant that
 /// couldn't be applied prompt-free and will fall back to a runtime prompt).
 ///
-/// The mode (`allow`/`deny`/`limited`/`always`/`inuse`/`never`) is validated by
+/// The mode (`allow`/`deny`/`limited`/`always`) is validated by
 /// the parser/runner before it reaches here; the driver maps it to the platform
 /// primitive (`simctl`/`applesimutils`/`pm`). Keys are applied in sorted order
 /// so logs and `--seed` replay stay deterministic. The caller is responsible

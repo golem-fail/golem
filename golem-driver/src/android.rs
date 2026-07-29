@@ -181,9 +181,9 @@ fn normalize_android_permission(permission: &str, mode: &str, sdk_int: u32) -> R
         "camera" => vec!["android.permission.CAMERA"],
         "microphone" => vec!["android.permission.RECORD_AUDIO"],
         // `location = "always"` needs both foreground and background fine
-        // location on Android 10+; `inuse` (and plain allow/deny) is
-        // foreground only. Granting only FINE_LOCATION for `always` leaves
-        // the app blocked from background updates.
+        // location on Android 10+; `allow` (foreground) grants FINE only.
+        // Granting only FINE_LOCATION for `always` leaves the app blocked
+        // from background updates.
         "location" => {
             if mode == "always" {
                 vec![
@@ -1592,14 +1592,15 @@ mod tests {
     #[test]
     fn normalize_location_always_grants_foreground_and_background() {
         // `location = "always"` needs BOTH foreground (FINE_LOCATION) and
-        // background on Android 10+; `inuse` is foreground only.
+        // background on Android 10+; `allow` is foreground only.
         let perms =
             normalize_android_permission("location", "always", 34).expect("known shorthand");
         assert!(perms.contains(&"android.permission.ACCESS_FINE_LOCATION".to_string()));
         assert!(perms.contains(&"android.permission.ACCESS_BACKGROUND_LOCATION".to_string()));
 
-        let inuse = normalize_android_permission("location", "inuse", 34).expect("known shorthand");
-        assert_eq!(inuse, vec!["android.permission.ACCESS_FINE_LOCATION"]);
+        let foreground =
+            normalize_android_permission("location", "allow", 34).expect("known shorthand");
+        assert_eq!(foreground, vec!["android.permission.ACCESS_FINE_LOCATION"]);
     }
 
     #[test]

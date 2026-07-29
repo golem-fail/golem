@@ -11,7 +11,7 @@ use golem_element::Element;
 /// Map a cross-platform permission shorthand + mode to the corresponding
 /// `simctl privacy` service token. Matches the Android normalizer's
 /// vocabulary so flows stay platform-agnostic. `location` folds its mode into
-/// the token: `always` → `location-always`, `inuse`/`never` → `location` (the
+/// the token: `always` → `location-always`, otherwise → `location` (the
 /// grant/revoke verb carries the enable/disable).
 ///
 /// Notifications aren't here: iOS doesn't accept a `notifications` simctl token
@@ -1267,14 +1267,15 @@ mod tests {
 
     #[test]
     fn token_location_folds_mode_into_token() {
-        // `always` needs the background-capable token; `inuse` and `deny` use
-        // the plain `location` token (the grant/revoke verb carries the intent).
+        // `always` needs the background-capable token; `allow` (foreground) and
+        // `deny` use the plain `location` token (the grant/revoke verb carries
+        // the intent).
         assert_eq!(
             ios_simctl_token("location", "always").expect("location always"),
             "location-always"
         );
         assert_eq!(
-            ios_simctl_token("location", "inuse").expect("location inuse"),
+            ios_simctl_token("location", "allow").expect("location allow"),
             "location"
         );
         assert_eq!(

@@ -352,8 +352,8 @@ Permissions are declared **on a launch**, not as a standalone step — the platf
 
 | Mode | Applies to | Meaning |
 |------|-----------|---------|
-| `allow` / `deny` | any permission | grant / **explicit-denied** (`simctl privacy revoke` / `pm revoke`, not a not-determined reset) |
-| `always` / `inuse` | `location` only | grant with background+foreground / foreground-only scope (to deny location, use `deny`) |
+| `allow` / `deny` | any permission | grant / **explicit-denied** (`simctl privacy revoke` / `pm revoke`, not a not-determined reset). For `location`, `allow` grants foreground ("when in use"). |
+| `always` | `location` only | grant background + foreground location (the broader grant; `allow` is foreground-only) |
 | `limited` | `photos` only | partial photo-library access (iOS limited library; Android 14+ user-selected subset) |
 
 An invalid mode for a permission (e.g. `camera = "limited"`) is a parse-time error.
