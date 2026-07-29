@@ -1034,11 +1034,7 @@ impl PlatformDriver for AndroidDriver {
         mode: &str,
     ) -> Result<Option<String>> {
         let sdk = self.sdk_int().await?;
-        let verb = if matches!(mode, "deny" | "never") {
-            "revoke"
-        } else {
-            "grant"
-        };
+        let verb = if mode == "deny" { "revoke" } else { "grant" };
         for perm in normalize_android_permission(permission, mode, sdk)? {
             self.adb(&["shell", "pm", verb, bundle_id, &perm]).await?;
         }

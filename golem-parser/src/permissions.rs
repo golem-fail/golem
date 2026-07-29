@@ -24,15 +24,18 @@ pub fn validate_permission_entry(permission: &str, mode: &str) -> Result<(), Str
         );
     }
     match mode {
+        // `deny` is the one denial spelling (explicit-denied — `simctl privacy
+        // revoke` / `pm revoke`, distinct from a not-determined reset). Location
+        // scope lives in the grant modes only; there is no `never` (use `deny`).
         "allow" | "deny" => Ok(()),
         "limited" if permission == "photos" => Ok(()),
-        "always" | "inuse" | "never" if permission == "location" => Ok(()),
+        "always" | "inuse" if permission == "location" => Ok(()),
         "limited" => Err(format!(
             "permission {permission:?} does not accept mode \"limited\" (only `photos` does)"
         )),
-        "always" | "inuse" | "never" => Err(format!(
+        "always" | "inuse" => Err(format!(
             "permission {permission:?} does not accept mode {mode:?} \
-             (only `location` takes always/inuse/never)"
+             (only `location` takes always/inuse)"
         )),
         other => Err(format!(
             "permission {permission:?} has invalid mode {other:?} — \
@@ -40,7 +43,7 @@ pub fn validate_permission_entry(permission: &str, mode: &str) -> Result<(), Str
              {}",
             match permission {
                 "photos" => " (or \"limited\")",
-                "location" => " (or \"always\"/\"inuse\"/\"never\")",
+                "location" => " (or \"always\"/\"inuse\")",
                 _ => "",
             }
         )),
@@ -66,8 +69,8 @@ mod tests {
     }
 
     #[test]
-    fn location_enum_is_location_only() {
-        for m in ["always", "inuse", "never"] {
+    fn location_scope_modes_are_location_only() {
+        for m in ["always", "inuse"] {
             assert!(
                 validate_permission_entry("location", m).is_ok(),
                 "location={m}"
@@ -77,6 +80,13 @@ mod tests {
                 "camera should reject {m}"
             );
         }
+    }
+
+    #[test]
+    fn never_is_not_a_mode_use_deny() {
+        // `never` was dropped — `deny` is the single denial spelling.
+        assert!(validate_permission_entry("location", "never").is_err());
+        assert!(validate_permission_entry("location", "deny").is_ok());
     }
 
     #[test]

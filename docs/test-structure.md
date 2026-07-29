@@ -66,7 +66,7 @@ name = "app"
 permissions = { photos = "allow", camera = "deny" }
 ```
 
-Keys use the cross-platform permission vocabulary (`camera`, `microphone`, `location`, `photos`, …); the value is a **mode** — `"allow"`/`"deny"` for any permission, plus `location = "always"|"inuse"|"never"` and `photos = "limited"`. See [App permissions](actions-reference.md#app-permissions) for the full mode/permission matrix. To **change** a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map — a hard restart, the only reliable way to re-apply an iOS grant.
+Keys use the cross-platform permission vocabulary (`camera`, `microphone`, `location`, `photos`, …); the value is a **mode** — `"allow"`/`"deny"` for any permission, plus `location = "always"|"inuse"` (scope) and `photos = "limited"`. See [App permissions](actions-reference.md#app-permissions) for the full mode/permission matrix. To **change** a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map — a hard restart, the only reliable way to re-apply an iOS grant.
 
 ### Flow Options
 

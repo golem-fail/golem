@@ -909,11 +909,7 @@ impl PlatformDriver for IosDriver {
         }
 
         let token = ios_simctl_token(permission, mode)?;
-        let verb = if matches!(mode, "deny" | "never") {
-            "revoke"
-        } else {
-            "grant"
-        };
+        let verb = if mode == "deny" { "revoke" } else { "grant" };
         self.simctl(&["privacy", &self.device_id, verb, token, bundle_id])
             .await?;
         // See IOS_PERMISSION_TCC_SETTLE_GRACE: a `launch` immediately after
@@ -1271,8 +1267,8 @@ mod tests {
 
     #[test]
     fn token_location_folds_mode_into_token() {
-        // `always` needs the background-capable token; `inuse`/`never` use the
-        // plain `location` token (the grant/revoke verb carries enable/disable).
+        // `always` needs the background-capable token; `inuse` and `deny` use
+        // the plain `location` token (the grant/revoke verb carries the intent).
         assert_eq!(
             ios_simctl_token("location", "always").expect("location always"),
             "location-always"
@@ -1282,7 +1278,7 @@ mod tests {
             "location"
         );
         assert_eq!(
-            ios_simctl_token("location", "never").expect("location never"),
+            ios_simctl_token("location", "deny").expect("location deny"),
             "location"
         );
     }
