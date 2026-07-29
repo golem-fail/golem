@@ -1346,12 +1346,12 @@ pub async fn execute_flow<'a>(
 
 /// Apply an app's launch-time `permissions` map before it's launched.
 ///
-/// `"allow"` grants, `"deny"` revokes — keyed by the same shorthand the
-/// `grant_permission` action uses. Applied while the app is stopped (see the
-/// lifecycle setup) so the grants are in place at process start; this is the
-/// only reliable way to satisfy iOS TCC, which ignores grants made to an
-/// already-running process. Keys are applied in sorted order so logs and
-/// `--seed` replay are deterministic.
+/// Keyed by the cross-platform permission shorthand (`camera`, `photos`, …);
+/// `"allow"` grants, `"deny"` revokes. Applied while the app is stopped (see
+/// the lifecycle setup) so the grants are in place at process start; this is
+/// the only reliable way to satisfy iOS TCC, which ignores grants made to an
+/// already-running process. The per-launch `permissions =` on the `launch`
+/// action shares the same map application (see `apply_permissions_map`).
 async fn apply_launch_permissions(
     driver: &dyn PlatformDriver,
     app: &golem_parser::AppConfig,
@@ -1365,22 +1365,9 @@ async fn apply_launch_permissions(
             app.name
         )
     })?;
-    let mut entries: Vec<(&String, &String)> = app.permissions.iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(b.0));
-    for (permission, mode) in entries {
-        match mode.as_str() {
-            "allow" => driver.grant_permission(bundle, permission).await?,
-            "deny" => driver.revoke_permission(bundle, permission).await?,
-            other => {
-                return Err(anyhow::anyhow!(
-                    "app '{}' permission '{}' must be \"allow\" or \"deny\", got {other:?}",
-                    app.name,
-                    permission
-                ))
-            }
-        }
-    }
-    Ok(())
+    crate::actions::apply_permissions_map(driver, bundle, &app.permissions)
+        .await
+        .with_context(|| format!("app '{}'", app.name))
 }
 
 /// Parse a human-readable duration string into a [`Duration`].

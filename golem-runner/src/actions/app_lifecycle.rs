@@ -1,4 +1,5 @@
-use std::time::Instant;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use golem_driver::PlatformDriver;
@@ -6,6 +7,66 @@ use golem_events::CodeExt;
 use golem_parser::{AppConfig, Step};
 
 use crate::context::ExecutionContext;
+
+/// Apply a permission map (`shorthand -> "allow" | "deny"`) to an app.
+///
+/// `"allow"` grants, `"deny"` revokes — via the platform's privacy database
+/// (`pm grant` on Android, `simctl privacy` on iOS). Keys are applied in
+/// sorted order so logs and `--seed` replay stay deterministic. The caller is
+/// responsible for the app being stopped first: iOS TCC ignores grants made to
+/// a running process. Shared by launch-time (`[[flow.apps]].permissions`) and
+/// the `launch` action's per-launch `permissions`.
+pub(crate) async fn apply_permissions_map(
+    driver: &dyn PlatformDriver,
+    bundle_id: &str,
+    permissions: &HashMap<String, String>,
+) -> Result<()> {
+    let mut entries: Vec<(&String, &String)> = permissions.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+    for (permission, mode) in entries {
+        match mode.as_str() {
+            "allow" => driver.grant_permission(bundle_id, permission).await?,
+            "deny" => driver.revoke_permission(bundle_id, permission).await?,
+            other => {
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::ParseMissingParam,
+                    anyhow::anyhow!(
+                        "permission '{permission}' must be \"allow\" or \"deny\", got {other:?}"
+                    ),
+                ))
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parse the `launch` action's optional `permissions = { … }` table into a
+/// shorthand→mode map. Absent → empty. A non-table value, or a non-string
+/// entry, is a P422 authoring error.
+fn parse_launch_permissions(step: &Step) -> Result<HashMap<String, String>> {
+    let Some(value) = step.params.get("permissions") else {
+        return Ok(HashMap::new());
+    };
+    let table = value.as_table().ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!(
+                "launch 'permissions' must be a table of shorthand = \"allow\"|\"deny\""
+            ),
+        )
+    })?;
+    let mut map = HashMap::with_capacity(table.len());
+    for (permission, mode) in table {
+        let mode = mode.as_str().ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("launch permission '{permission}' must be \"allow\" or \"deny\""),
+            )
+        })?;
+        map.insert(permission.clone(), mode.to_string());
+    }
+    Ok(map)
+}
 
 /// Resolve the app identifier from a step to a bundle ID.
 ///
@@ -47,10 +108,18 @@ pub(crate) async fn handle_launch(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
-    // restart = true: stop first (ignore errors if not running), then launch fresh.
-    if step.restart == Some(true) {
+    let permissions = parse_launch_permissions(step)?;
+    // A launch carrying `permissions` is always a hard restart: iOS TCC only
+    // applies grants to a stopped process, so the app must be terminated
+    // before the grant and the launch must be a fresh start — a soft
+    // foreground would read stale permission state. `restart = true` forces
+    // the same path explicitly.
+    if step.restart == Some(true) || !permissions.is_empty() {
         let _ = driver.stop_app(bundle_id).await;
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    if !permissions.is_empty() {
+        apply_permissions_map(driver, bundle_id, &permissions).await?;
     }
     let start = Instant::now();
     // `launch_app` includes the post-launch settle gate (node-count
@@ -149,6 +218,155 @@ mod tests {
         let launch_calls: Vec<_> = calls.iter().filter(|c| c.0 == "launch_app").collect();
         assert_eq!(launch_calls.len(), 1);
         assert_eq!(launch_calls[0].1, vec!["com.example.app"]);
+    }
+
+    // ── launch permissions map applies before the launch ─────────────
+
+    fn perms_param(pairs: &[(&str, &str)]) -> toml::Value {
+        let mut table = toml::value::Table::new();
+        for (k, v) in pairs {
+            table.insert(k.to_string(), toml::Value::String(v.to_string()));
+        }
+        toml::Value::Table(table)
+    }
+
+    // A `launch` carrying `permissions` is a hard restart: stop -> apply -> launch.
+    // `"allow"` grants, `"deny"` revokes; keys apply in sorted order.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn launch_with_permissions_stops_applies_then_launches() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permissions".to_string(),
+            perms_param(&[
+                ("microphone", "allow"),
+                ("camera", "allow"),
+                ("location", "deny"),
+            ]),
+        );
+
+        handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect("launch with permissions should succeed");
+
+        let names: Vec<String> = driver.get_calls().into_iter().map(|c| c.0).collect();
+        // Stop precedes the grants (iOS TCC needs a stopped process); launch is last.
+        let stop_at = names
+            .iter()
+            .position(|n| n == "stop_app")
+            .expect("must stop first");
+        let launch_at = names
+            .iter()
+            .position(|n| n == "launch_app")
+            .expect("must launch");
+        assert!(stop_at < launch_at, "stop SHALL precede launch: {names:?}");
+
+        let calls = driver.get_calls();
+        let grants: Vec<_> = calls.iter().filter(|c| c.0 == "grant_permission").collect();
+        let revokes: Vec<_> = calls
+            .iter()
+            .filter(|c| c.0 == "revoke_permission")
+            .collect();
+        // camera + microphone granted, location revoked — sorted key order.
+        assert_eq!(grants.len(), 2);
+        assert_eq!(grants[0].1, vec!["com.example.app", "camera"]);
+        assert_eq!(grants[1].1, vec!["com.example.app", "microphone"]);
+        assert_eq!(revokes.len(), 1);
+        assert_eq!(revokes[0].1, vec!["com.example.app", "location"]);
+        // Every permission is applied before the launch.
+        let first_launch = calls
+            .iter()
+            .position(|c| c.0 == "launch_app")
+            .expect("launch");
+        assert!(
+            calls
+                .iter()
+                .take(first_launch)
+                .any(|c| c.0 == "grant_permission"),
+            "permissions SHALL be applied before launch: {names:?}"
+        );
+    }
+
+    // A plain foreground launch (no permissions, no restart) does NOT stop first.
+    #[tokio::test]
+    async fn launch_without_permissions_is_soft_foreground() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect("launch should succeed");
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.iter().all(|c| c.0 != "stop_app"),
+            "soft foreground SHALL NOT stop the app: {calls:?}"
+        );
+        assert!(
+            calls
+                .iter()
+                .all(|c| c.0 != "grant_permission" && c.0 != "revoke_permission"),
+            "no permissions declared SHALL apply none: {calls:?}"
+        );
+    }
+
+    // A malformed permission value (not "allow"/"deny") is a P422 authoring error.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn launch_with_bad_permission_mode_errors_p422() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+        step.params
+            .insert("permissions".to_string(), perms_param(&[("camera", "yes")]));
+
+        let err = handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("bad mode SHALL error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::ParseMissingParam),
+            "bad permission mode SHALL be coded P422, got: {err:#}"
+        );
+    }
+
+    // A `permissions` param that isn't a table is a P422 authoring error.
+    #[tokio::test]
+    async fn launch_with_non_table_permissions_errors_p422() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permissions".to_string(),
+            toml::Value::String("camera".to_string()),
+        );
+
+        let err = handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("non-table permissions SHALL error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::ParseMissingParam),
+            "non-table permissions SHALL be coded P422, got: {err:#}"
+        );
+        assert!(
+            driver.get_calls().is_empty(),
+            "SHALL NOT touch the driver on a malformed param: {:?}",
+            driver.get_calls()
+        );
     }
 
     // ── stop action calls driver.stop_app ─────────────────────────────

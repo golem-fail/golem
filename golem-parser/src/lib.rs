@@ -114,13 +114,13 @@ pub struct AppConfig {
     /// app, falling back to the catch-all. See `resolve_app_profiles`.
     #[serde(default)]
     pub profile: Option<String>,
-    /// Permissions to apply **before the app is launched**, keyed by the same
-    /// shorthand the `grant_permission` action uses (`camera`, `photos`, …),
-    /// each mapped to `"allow"` (grant) or `"deny"` (revoke). Applied during
-    /// app-lifecycle setup so the app starts with them already in place — the
-    /// only reliable way to grant iOS TCC permissions, which don't apply to an
-    /// already-running process. The `grant_permission`/`revoke_permission`
-    /// actions remain for mid-flow changes.
+    /// Permissions to apply **before the app is launched**, keyed by the
+    /// cross-platform permission shorthand (`camera`, `photos`, …), each mapped
+    /// to `"allow"` (grant) or `"deny"` (revoke). Applied during app-lifecycle
+    /// setup so the app starts with them already in place — the only reliable
+    /// way to grant iOS TCC permissions, which don't apply to an already-running
+    /// process. To change a permission mid-flow, relaunch with the `launch`
+    /// action's own `permissions =` map (a hard restart).
     #[serde(default)]
     pub permissions: HashMap<String, String>,
 }
@@ -668,6 +668,37 @@ action = "tap"
         let perms = &flow.flow.apps[0].permissions;
         assert_eq!(perms.get("photos").map(String::as_str), Some("allow"));
         assert_eq!(perms.get("camera").map(String::as_str), Some("deny"));
+    }
+
+    #[test]
+    fn launch_step_permissions_land_in_params_as_table() {
+        // The `launch` action's per-launch `permissions =` map has no named
+        // Step field — it flattens into `params` as a nested table, which the
+        // runner reads back. Guard that the inline table survives parsing.
+        let toml_str = r#"
+[flow]
+name = "launch perms"
+[[flow.apps]]
+name = "app"
+bundle = "com.example.app"
+[[block]]
+name = "b"
+[[block.steps]]
+action = "launch"
+app = "app"
+permissions = { camera = "allow", location-always = "deny" }
+"#;
+        let flow = parse_flow(toml_str).expect("launch permissions should parse");
+        let params = &flow.block[0].steps[0].params;
+        let table = params
+            .get("permissions")
+            .and_then(|v| v.as_table())
+            .expect("permissions SHALL flatten into params as a table");
+        assert_eq!(table.get("camera").and_then(|v| v.as_str()), Some("allow"));
+        assert_eq!(
+            table.get("location-always").and_then(|v| v.as_str()),
+            Some("deny")
+        );
     }
 
     #[test]
