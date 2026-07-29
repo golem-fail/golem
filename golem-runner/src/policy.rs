@@ -89,8 +89,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
         "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification" | "log"
-        | "clear_data" | "press" | "set_dark_mode" | "set_location" | "grant_permission"
-        | "revoke_permission" | "hide_keyboard" => 1,
+        | "clear_data" | "press" | "set_dark_mode" | "set_location" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
         // settle (the first tap after a fresh app launch on iOS 26 spends
@@ -1065,8 +1064,6 @@ mod tests {
             "press",
             "set_dark_mode",
             "set_location",
-            "grant_permission",
-            "revoke_permission",
             "hide_keyboard",
         ] {
             let step = Step {

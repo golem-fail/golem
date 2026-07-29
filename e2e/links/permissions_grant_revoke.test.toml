@@ -9,39 +9,29 @@ os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]
-name = "camera_permission_cycle"
+name = "camera_permission_granted"
 steps = [
-  # Grant before launch — `simctl privacy grant` (iOS) and `pm grant`
-  # (Android) terminate the running app, so doing it after launch leaves
-  # the next tap on a dead UI.
-  { action = "grant_permission", app = "fail.golem.test", permission = "camera" },
-
-  # Launch and navigate to Permissions via the menu.
-  { action = "launch", app = "fail.golem.test" },
+  # Grant camera via a permissions-carrying launch: golem stops the app,
+  # applies the grant (iOS TCC only accepts it while stopped), then
+  # cold-starts — so the fresh process sees the grant. Navigate to the
+  # Permissions section via the menu and confirm the grant is active.
+  { action = "launch", app = "app", permissions = { camera = "allow" } },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
   { action = "assert_visible", on_accessibility_label = "camera-permission-button" },
 
-  # Tap the camera permission button; no permission dialog should appear
+  # Tap the camera permission button; no permission dialog should appear.
   { action = "tap", on_accessibility_label = "camera-permission-button" },
-
-  # Revoke camera permission (also kills the app)
-  { action = "revoke_permission", app = "fail.golem.test", permission = "camera" },
 ]
 
 [[block]]
-name = "location_permission_cycle"
+name = "location_permission_granted"
 steps = [
-  # Grant location, then relaunch into Permissions section.
-  { action = "grant_permission", app = "fail.golem.test", permission = "location" },
-  { action = "launch", app = "fail.golem.test" },
+  { action = "launch", app = "app", permissions = { location = "allow" } },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
   { action = "assert_visible", on_accessibility_label = "location-permission-button" },
 
-  # Tap the location permission button; no permission dialog should appear
+  # Tap the location permission button; no permission dialog should appear.
   { action = "tap", on_accessibility_label = "location-permission-button" },
-
-  # Revoke location permission
-  { action = "revoke_permission", app = "fail.golem.test", permission = "location" },
 ]

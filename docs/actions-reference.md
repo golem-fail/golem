@@ -26,13 +26,13 @@
   - [read](#read--read-element-text)
 - [App Lifecycle](#app-lifecycle)
   - [launch](#launch--launch-or-foreground-an-app)
+  - [App permissions](#app-permissions)
   - [stop](#stop--terminate-an-app)
   - [clear_data](#clear_data--clear-app-data)
 - [Device Controls](#device-controls)
   - [set_dark_mode](#set_dark_mode--set-dark-mode)
   - [set_location](#set_location--set-gps-coordinates)
   - [press](#press--press-hardware-button)
-  - [grant_permission / revoke_permission](#grant_permission-revoke_permission--manage-app-permissions)
 - [Capture](#capture)
   - [screenshot](#screenshot--take-screenshot)
   - [recording](#screen-recording--per-block-via-record--true)
@@ -320,13 +320,58 @@ Bring an app to the foreground. Does not restart if already running. Use `restar
 ```toml
 { action = "launch", app = "app" }
 { action = "launch", app = "companion" }
-{ action = "launch", app = "app", restart = true }   # Kill and relaunch
+{ action = "launch", app = "app", restart = true }                        # Kill and relaunch
+{ action = "launch", app = "app", permissions = { camera = "allow" } }    # Grant, then cold start
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `app` | — | App name (as defined in `[[flow.apps]]`) |
 | `restart` | `false` | Stop app first, then launch fresh |
+| `permissions` | — | Per-launch permission map (see [App permissions](#app-permissions)) |
+
+A `permissions` map on `launch` **always cold-starts** the app, even without `restart = true`: iOS TCC only applies a grant to a *stopped* process, so golem stops the app, applies the grant/revoke, then launches fresh. A soft foreground would read stale permission state. Use this to flip a permission mid-flow — relaunching with a new map is the supported way to test both the granted and denied paths in one flow.
+
+### App permissions
+
+Permissions are declared **on a launch**, not as a standalone step — the platform tooling (`pm grant` on Android, `simctl privacy` on iOS sims) terminates the app to apply a grant, so a permission change is inseparable from a (re)launch. Two places take the same `shorthand = "allow" | "deny"` map:
+
+- **`[[flow.apps]].permissions`** — the baseline, applied once before the app's first launch (see [Test structure](test-structure.md#launch-time-permissions)).
+- **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow (a cold start, as above).
+
+```toml
+{ action = "launch", app = "app", permissions = { camera = "allow" } }
+# ... exercise the granted path ...
+{ action = "launch", app = "app", permissions = { camera = "deny" } }
+# ... exercise the denied path ...
+```
+
+> **Migrating from `grant_permission` / `revoke_permission`:** those step-level actions were removed. Replace `{ action = "grant_permission", app = "app", permission = "camera" }` immediately followed by a `launch` with a single `{ action = "launch", app = "app", permissions = { camera = "allow" } }` (`"deny"` for revoke). They always forced an app restart anyway, so this is a faithful — and shorter — replacement.
+
+**Cross-platform shorthands.** One vocabulary, mapped per platform:
+
+| Shorthand        | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
+|------------------|-----------------------------------------------------------|------------------------|
+| `camera`         | `CAMERA`                                                  | `camera`               |
+| `microphone`     | `RECORD_AUDIO`                                            | `microphone`           |
+| `location`       | `ACCESS_FINE_LOCATION` (foreground only)                  | `location`             |
+| `location-always`| `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION`     | `location-always`      |
+| `contacts`       | `READ_CONTACTS`                                           | `contacts`             |
+| `calendar`       | `READ_CALENDAR`                                           | `calendar`             |
+| `photos`         | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` |
+
+Unknown shorthands fail loudly (no silent passthrough to `pm grant` / `simctl privacy`). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+
+> **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
+>
+> ```toml
+> { action = "tap", on_text = "Enable Notifications" }
+> { action = "accept_alert", if_fail = "ignore" }
+> ```
+>
+> `if_fail = "ignore"` keeps the step happy on warm sims/emulators that have already recorded the user's prior choice and skipped the prompt.
+
+The test app's `AndroidManifest.xml` must declare every permission you intend to grant — `pm grant` rejects undeclared permissions. The committed manifest in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml` declares all the shorthands above; copy that pattern for your own apps.
 
 ### `stop` — Terminate an app
 
@@ -379,42 +424,7 @@ An unsupported button errors at action time. On iOS only `home` exists;
 companion's `/press` endpoint (`XCUIDevice.shared.press(.home)`), the
 version-stable path.
 
-### `grant_permission`, `revoke_permission` — Manage app permissions
-
-Pre-grants (or revokes) a permission via the platform's privacy
-database (`pm grant` on Android, `simctl privacy` on iOS sims). The
-`app` field is required and must name an entry from `[[flow.apps]]`
-or the project's `golem.toml` so the bundle id can be resolved.
-
-```toml
-{ action = "grant_permission", app = "app", permission = "camera" }
-{ action = "revoke_permission", app = "app", permission = "location" }
-```
-
-**Cross-platform shorthands.** One vocabulary, mapped per platform:
-
-| Shorthand        | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
-|------------------|-----------------------------------------------------------|------------------------|
-| `camera`         | `CAMERA`                                                  | `camera`               |
-| `microphone`     | `RECORD_AUDIO`                                            | `microphone`           |
-| `location`       | `ACCESS_FINE_LOCATION` (foreground only)                  | `location`             |
-| `location-always`| `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION`     | `location-always`      |
-| `contacts`       | `READ_CONTACTS`                                           | `contacts`             |
-| `calendar`       | `READ_CALENDAR`                                           | `calendar`             |
-| `photos`         | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` |
-
-Unknown shorthands fail loudly at the action layer (no silent passthrough to `pm grant` / `simctl privacy`). You can also pass a full `android.permission.*` string and Android will use it verbatim.
-
-> **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
->
-> ```toml
-> { action = "tap", on_text = "Enable Notifications" }
-> { action = "accept_alert", if_fail = "ignore" }
-> ```
->
-> `if_fail = "ignore"` keeps the step happy on warm sims/emulators that have already recorded the user's prior choice and skipped the prompt.
-
-The test app's `AndroidManifest.xml` must declare every permission you intend to `grant_permission` — `pm grant` rejects undeclared permissions. The committed manifest in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml` declares all the shorthands above; copy that pattern for your own apps.
+App permissions are declared on a launch, not as a device control — see [App permissions](#app-permissions) under App Lifecycle.
 
 ## Capture
 

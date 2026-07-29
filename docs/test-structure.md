@@ -54,7 +54,7 @@ steps = [
 
 The flow runs on every device listed. Golem launches the first app automatically before executing blocks.
 
-The `name` you give an app here is the **canonical reference** for it from any action with an `app` field (`launch`, `stop`, `push_notification`, `grant_permission`, etc.). Use the name — `app = "app"` — rather than the bundle id. Bundle ids are accepted as a fallback but they're an implementation detail; the name keeps flows readable and survives bundle-id renames. The [Multi-App Flows](#multi-app-flows) section shows the pattern.
+The `name` you give an app here is the **canonical reference** for it from any action with an `app` field (`launch`, `stop`, `clear_data`, `push_notification`, etc.). Use the name — `app = "app"` — rather than the bundle id. Bundle ids are accepted as a fallback but they're an implementation detail; the name keeps flows readable and survives bundle-id renames. The [Multi-App Flows](#multi-app-flows) section shows the pattern.
 
 #### Launch-time permissions
 
@@ -66,7 +66,7 @@ name = "app"
 permissions = { photos = "allow", camera = "deny" }
 ```
 
-Keys use the same shorthand as the `grant_permission` action (`camera`, `microphone`, `location`, `photos`, …); each value is `"allow"` (grant) or `"deny"` (revoke). The `grant_permission` / `revoke_permission` actions remain for changing a permission mid-flow. On iOS, an app that requests a permission at runtime whose grant can't be pre-applied still surfaces the system prompt — accept it with `accept_alert` (the companion taps the affirmative button, including "Allow Full Access").
+Keys use the cross-platform permission shorthand (`camera`, `microphone`, `location`, `photos`, …); each value is `"allow"` (grant) or `"deny"` (revoke). To **change** a permission later in a flow, relaunch the app with the [`launch` action's own `permissions =` map](actions-reference.md#app-permissions) — a hard restart, which is the only reliable way to re-apply an iOS grant. On iOS, an app that requests a permission at runtime whose grant can't be pre-applied still surfaces the system prompt — accept it with `accept_alert` (the companion taps the affirmative button, including "Allow Full Access").
 
 ### Flow Options
 

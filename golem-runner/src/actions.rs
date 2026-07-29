@@ -16,13 +16,11 @@ use golem_vars::VariableStore;
 
 use crate::context::ExecutionContext;
 
+pub(crate) use app_lifecycle::apply_permissions_map;
 use app_lifecycle::{handle_clear_data, handle_launch, handle_stop};
 use assertion::{handle_assert_alert, handle_assert_not_visible, handle_assert_visible};
 use capture::handle_read;
-use device::{
-    handle_grant_permission, handle_press, handle_revoke_permission, handle_set_dark_mode,
-    handle_set_location,
-};
+use device::{handle_press, handle_set_dark_mode, handle_set_location};
 use external::{
     handle_accept_alert, handle_await_email, handle_bash, handle_create_inbox,
     handle_dismiss_alert, handle_fail, handle_http, handle_load_fixture, handle_open_link,
@@ -73,8 +71,6 @@ pub async fn execute_action(
         "set_dark_mode" => handle_set_dark_mode(step, driver).await,
         "set_location" => handle_set_location(step, driver).await,
         "press" => handle_press(step, driver).await,
-        "grant_permission" => handle_grant_permission(step, driver).await,
-        "revoke_permission" => handle_revoke_permission(step, driver).await,
         "screenshot" => handle_screenshot(step, driver).await,
         "add_media" => handle_add_media(step, driver).await,
         "open_link" => handle_open_link(step, driver).await,

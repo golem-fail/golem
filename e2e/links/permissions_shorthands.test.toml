@@ -4,10 +4,12 @@
 # BACKGROUND_LOCATION; iOS: maps to simctl `location-always` token)
 # and `photos` (Android: SDK-conditional grouping of READ_MEDIA_IMAGES
 # / READ_MEDIA_VISUAL_USER_SELECTED / READ_EXTERNAL_STORAGE; iOS:
-# simctl `photos` token). A failure in either shorthand surfaces as
-# the grant_permission step failing — `pm grant` / `simctl privacy`
-# rejects undeclared or wrong-API-level permissions loudly, which
-# propagates back through the driver and fails the step.
+# simctl `photos` token). Permissions are applied via a launch's
+# `permissions =` map; a normalization failure surfaces as the launch
+# step failing — `pm grant` / `simctl privacy` rejects undeclared or
+# wrong-API-level permissions loudly, which propagates through the
+# driver. The same normalizer serves grant and revoke, so the allow
+# path exercises both directions (revoke is unit-tested in golem-driver).
 name = "Permission shorthands"
 tags = ["permissions", "cross-platform"]
 
@@ -20,17 +22,13 @@ type = "phone"
 [[block]]
 name = "location_always_grants_foreground_and_background"
 steps = [
-  { action = "grant_permission", app = "fail.golem.test", permission = "location-always" },
-  { action = "launch", app = "fail.golem.test" },
+  { action = "launch", app = "app", permissions = { location-always = "allow" } },
   { action = "assert_visible", on_text = "Counter" },
-  { action = "revoke_permission", app = "fail.golem.test", permission = "location-always" },
 ]
 
 [[block]]
 name = "photos_sdk_conditional"
 steps = [
-  { action = "grant_permission", app = "fail.golem.test", permission = "photos" },
-  { action = "launch", app = "fail.golem.test" },
+  { action = "launch", app = "app", permissions = { photos = "allow" } },
   { action = "assert_visible", on_text = "Counter" },
-  { action = "revoke_permission", app = "fail.golem.test", permission = "photos" },
 ]

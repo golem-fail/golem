@@ -50,8 +50,6 @@ const KNOWN_ACTIONS: &[&str] = &[
     "set_location",
     "set_dark_mode",
     "rotate",
-    "grant_permission",
-    "revoke_permission",
     "push_notification",
     "open_link",
     "screenshot",

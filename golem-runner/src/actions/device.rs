@@ -57,54 +57,6 @@ pub(crate) async fn handle_press(step: &Step, driver: &dyn PlatformDriver) -> Re
     driver.press_button(button).await
 }
 
-/// Grant an app permission.
-pub(crate) async fn handle_grant_permission(
-    step: &Step,
-    driver: &dyn PlatformDriver,
-) -> Result<()> {
-    let bundle_id = step.app.as_deref().ok_or_else(|| {
-        golem_events::coded(
-            golem_events::FailureCode::ParseMissingParam,
-            anyhow::anyhow!("No app specified for {} action", step.action),
-        )
-    })?;
-    let permission = step
-        .params
-        .get("permission")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            golem_events::coded(
-                golem_events::FailureCode::ParseMissingParam,
-                anyhow::anyhow!("grant_permission action requires 'permission' param"),
-            )
-        })?;
-    driver.grant_permission(bundle_id, permission).await
-}
-
-/// Revoke an app permission.
-pub(crate) async fn handle_revoke_permission(
-    step: &Step,
-    driver: &dyn PlatformDriver,
-) -> Result<()> {
-    let bundle_id = step.app.as_deref().ok_or_else(|| {
-        golem_events::coded(
-            golem_events::FailureCode::ParseMissingParam,
-            anyhow::anyhow!("No app specified for {} action", step.action),
-        )
-    })?;
-    let permission = step
-        .params
-        .get("permission")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            golem_events::coded(
-                golem_events::FailureCode::ParseMissingParam,
-                anyhow::anyhow!("revoke_permission action requires 'permission' param"),
-            )
-        })?;
-    driver.revoke_permission(bundle_id, permission).await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,57 +150,6 @@ mod tests {
         let press_calls: Vec<_> = calls.iter().filter(|c| c.0 == "press_button").collect();
         assert_eq!(press_calls.len(), 1);
         assert_eq!(press_calls[0].1, vec!["home"]);
-    }
-
-    // ── grant_permission calls driver.grant_permission ────────────────
-
-    #[tokio::test]
-    async fn grant_permission_calls_driver_grant_permission() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("grant_permission");
-        step.app = Some("com.example.app".to_string());
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("camera".to_string()),
-        );
-
-        handle_grant_permission(&step, &driver)
-            .await
-            .expect("grant_permission should succeed");
-
-        let calls = driver.get_calls();
-        let gp_calls: Vec<_> = calls.iter().filter(|c| c.0 == "grant_permission").collect();
-        assert_eq!(gp_calls.len(), 1);
-        assert_eq!(gp_calls[0].1, vec!["com.example.app", "camera"]);
-    }
-
-    // ── revoke_permission calls driver.revoke_permission ──────────────
-
-    #[tokio::test]
-    async fn revoke_permission_calls_driver_revoke_permission() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("revoke_permission");
-        step.app = Some("com.example.app".to_string());
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("location".to_string()),
-        );
-
-        handle_revoke_permission(&step, &driver)
-            .await
-            .expect("revoke_permission should succeed");
-
-        let calls = driver.get_calls();
-        let rp_calls: Vec<_> = calls
-            .iter()
-            .filter(|c| c.0 == "revoke_permission")
-            .collect();
-        assert_eq!(rp_calls.len(), 1);
-        assert_eq!(rp_calls[0].1, vec!["com.example.app", "location"]);
     }
 
     // ── dark_mode without 'enabled' param fails with ParseMissingParam ─
@@ -405,108 +306,6 @@ mod tests {
         );
     }
 
-    // ── grant_permission without app fails with ParseMissingParam ─────
-
-    #[tokio::test]
-    async fn grant_permission_missing_app_errors() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("grant_permission");
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("camera".to_string()),
-        );
-
-        let err = handle_grant_permission(&step, &driver)
-            .await
-            .expect_err("missing app SHALL error");
-        assert_eq!(
-            golem_events::extract_code(&err),
-            Some(golem_events::FailureCode::ParseMissingParam),
-            "missing app SHALL be coded ParseMissingParam"
-        );
-        assert!(
-            format!("{err:#}").contains("No app specified for grant_permission action"),
-            "error SHALL name the action, got: {err:#}"
-        );
-    }
-
-    // ── grant_permission without 'permission' param fails ─────────────
-
-    #[tokio::test]
-    async fn grant_permission_missing_permission_param_errors() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("grant_permission");
-        step.app = Some("com.example.app".to_string());
-
-        let err = handle_grant_permission(&step, &driver)
-            .await
-            .expect_err("missing permission param SHALL error");
-        assert_eq!(
-            golem_events::extract_code(&err),
-            Some(golem_events::FailureCode::ParseMissingParam),
-            "missing permission param SHALL be coded ParseMissingParam"
-        );
-        assert!(
-            format!("{err:#}").contains("requires 'permission' param"),
-            "error SHALL mention permission param, got: {err:#}"
-        );
-    }
-
-    // ── revoke_permission without app fails with ParseMissingParam ────
-
-    #[tokio::test]
-    async fn revoke_permission_missing_app_errors() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("revoke_permission");
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("location".to_string()),
-        );
-
-        let err = handle_revoke_permission(&step, &driver)
-            .await
-            .expect_err("missing app SHALL error");
-        assert_eq!(
-            golem_events::extract_code(&err),
-            Some(golem_events::FailureCode::ParseMissingParam),
-            "missing app SHALL be coded ParseMissingParam"
-        );
-        assert!(
-            format!("{err:#}").contains("No app specified for revoke_permission action"),
-            "error SHALL name the action, got: {err:#}"
-        );
-    }
-
-    // ── revoke_permission without 'permission' param fails ────────────
-
-    #[tokio::test]
-    async fn revoke_permission_missing_permission_param_errors() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("revoke_permission");
-        step.app = Some("com.example.app".to_string());
-
-        let err = handle_revoke_permission(&step, &driver)
-            .await
-            .expect_err("missing permission param SHALL error");
-        assert_eq!(
-            golem_events::extract_code(&err),
-            Some(golem_events::FailureCode::ParseMissingParam),
-            "missing permission param SHALL be coded ParseMissingParam"
-        );
-        assert!(
-            format!("{err:#}").contains("requires 'permission' param"),
-            "error SHALL mention permission param, got: {err:#}"
-        );
-    }
-
     // ── set_dark_mode driver Err propagates ───────────────────────────
 
     #[tokio::test]
@@ -570,54 +369,6 @@ mod tests {
             .expect_err("driver Err SHALL propagate");
         assert!(
             format!("{err:#}").contains("keyevent rejected"),
-            "handler SHALL propagate the driver error, got: {err:#}"
-        );
-    }
-
-    // ── grant_permission driver Err propagates ────────────────────────
-
-    #[tokio::test]
-    async fn grant_permission_propagates_driver_error() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-        driver.set_error("grant_permission", "unknown permission");
-
-        let mut step = make_step("grant_permission");
-        step.app = Some("com.example.app".to_string());
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("camera".to_string()),
-        );
-
-        let err = handle_grant_permission(&step, &driver)
-            .await
-            .expect_err("driver Err SHALL propagate");
-        assert!(
-            format!("{err:#}").contains("unknown permission"),
-            "handler SHALL propagate the driver error, got: {err:#}"
-        );
-    }
-
-    // ── revoke_permission driver Err propagates ───────────────────────
-
-    #[tokio::test]
-    async fn revoke_permission_propagates_driver_error() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-        driver.set_error("revoke_permission", "permission not held");
-
-        let mut step = make_step("revoke_permission");
-        step.app = Some("com.example.app".to_string());
-        step.params.insert(
-            "permission".to_string(),
-            toml::Value::String("location".to_string()),
-        );
-
-        let err = handle_revoke_permission(&step, &driver)
-            .await
-            .expect_err("driver Err SHALL propagate");
-        assert!(
-            format!("{err:#}").contains("permission not held"),
             "handler SHALL propagate the driver error, got: {err:#}"
         );
     }

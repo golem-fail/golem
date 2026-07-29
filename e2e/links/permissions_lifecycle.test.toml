@@ -11,13 +11,10 @@ type = "phone"
 [[block]]
 name = "grant_permission_and_verify"
 steps = [
-  # Grant camera before launch — `simctl privacy grant` (iOS) and
-  # `pm grant` (Android) terminate any running instance of the target
-  # app, so granting after launch leaves the test on a dead UI.
-  { action = "grant_permission", app = "fail.golem.test", permission = "camera" },
-
-  # Launch the app
-  { action = "launch", app = "fail.golem.test" },
+  # Grant camera via a permissions-carrying launch — golem stops the app,
+  # applies the grant, then cold-starts, so the fresh process sees it.
+  # (`simctl privacy grant` / `pm grant` can't apply to a running process.)
+  { action = "launch", app = "app", permissions = { camera = "allow" } },
   # Permissions section is below the fold; menu nav lands on it
   # directly so the next assert doesn't have to wait on scroll.
   { action = "tap", on_accessibility_label = "menu-toggle" },
@@ -31,9 +28,11 @@ steps = [
 [[block]]
 name = "restart_app_and_verify_persistence"
 steps = [
-  # Stop and relaunch the app
-  { action = "stop", app = "fail.golem.test" },
-  { action = "launch", app = "fail.golem.test" },
+  # Plain stop + relaunch — NO permissions map, so nothing is re-applied.
+  # This asserts the grant from block 1 PERSISTS across an ordinary
+  # restart via OS-persisted TCC/runtime state, not a re-grant.
+  { action = "stop", app = "app" },
+  { action = "launch", app = "app" },
   # Re-navigate to the Permissions section after relaunch.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
@@ -46,11 +45,8 @@ steps = [
 [[block]]
 name = "revoke_and_verify"
 steps = [
-  # Revoke camera permission (terminates the app on both platforms)
-  { action = "revoke_permission", app = "fail.golem.test", permission = "camera" },
-
-  # Relaunch and re-navigate so we can assert the UI is still alive.
-  { action = "launch", app = "fail.golem.test" },
+  # Revoke camera by relaunching with deny (a cold start on both platforms).
+  { action = "launch", app = "app", permissions = { camera = "deny" } },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
 
