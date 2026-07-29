@@ -1365,9 +1365,13 @@ async fn apply_launch_permissions(
             app.name
         )
     })?;
-    crate::actions::apply_permissions_map(driver, bundle, &app.permissions)
+    let warnings = crate::actions::apply_permissions_map(driver, bundle, &app.permissions)
         .await
-        .with_context(|| format!("app '{}'", app.name))
+        .with_context(|| format!("app '{}'", app.name))?;
+    for warning in warnings {
+        eprintln!("warning: app '{}' launch permissions: {warning}", app.name);
+    }
+    Ok(())
 }
 
 /// Parse a human-readable duration string into a [`Duration`].
@@ -4317,9 +4321,9 @@ action = "screenshot"
         }
     }
 
-    // "allow" grants, "deny" revokes — keyed by the grant_permission shorthand.
+    // Each entry drives one driver.set_permission(bundle, permission, mode).
     #[tokio::test]
-    async fn launch_permissions_grant_and_revoke() {
+    async fn launch_permissions_apply_each_entry() {
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let app = app_with_permissions(
             Some("com.example"),
@@ -4332,14 +4336,14 @@ action = "screenshot"
         assert!(
             calls
                 .iter()
-                .any(|c| c.0 == "grant_permission" && c.1 == vec!["com.example", "photos"]),
-            "photos=allow SHALL grant: {calls:?}"
+                .any(|c| c.0 == "set_permission" && c.1 == vec!["com.example", "photos", "allow"]),
+            "photos=allow SHALL set_permission allow: {calls:?}"
         );
         assert!(
             calls
                 .iter()
-                .any(|c| c.0 == "revoke_permission" && c.1 == vec!["com.example", "camera"]),
-            "camera=deny SHALL revoke: {calls:?}"
+                .any(|c| c.0 == "set_permission" && c.1 == vec!["com.example", "camera", "deny"]),
+            "camera=deny SHALL set_permission deny: {calls:?}"
         );
     }
 
@@ -4349,20 +4353,16 @@ action = "screenshot"
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let app = app_with_permissions(Some("com.example"), &[]);
         apply_launch_permissions(&driver, &app).await.expect("noop");
-        assert!(driver
-            .get_calls()
-            .iter()
-            .all(|c| c.0 != "grant_permission" && c.0 != "revoke_permission"));
+        assert!(driver.get_calls().iter().all(|c| c.0 != "set_permission"));
     }
 
-    // Permissions without a bundle id, or an invalid mode, error loudly.
+    // Permissions without a bundle id error loudly. (Invalid *modes* are
+    // rejected earlier, at flow-parse time — see golem_parser::permissions.)
     #[tokio::test]
-    async fn launch_permissions_errors() {
+    async fn launch_permissions_without_bundle_errors() {
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let no_bundle = app_with_permissions(None, &[("photos", "allow")]);
         assert!(apply_launch_permissions(&driver, &no_bundle).await.is_err());
-        let bad_mode = app_with_permissions(Some("com.example"), &[("photos", "maybe")]);
-        assert!(apply_launch_permissions(&driver, &bad_mode).await.is_err());
     }
 
     // ---------------------------------------------------------------

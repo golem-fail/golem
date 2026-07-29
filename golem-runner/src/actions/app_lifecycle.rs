@@ -8,36 +8,31 @@ use golem_parser::{AppConfig, Step};
 
 use crate::context::ExecutionContext;
 
-/// Apply a permission map (`shorthand -> "allow" | "deny"`) to an app.
+/// Apply a permission map (`permission -> mode`) to an app, returning any
+/// non-fatal warnings the driver surfaced (e.g. a photos pre-grant that
+/// couldn't be applied prompt-free and will fall back to a runtime prompt).
 ///
-/// `"allow"` grants, `"deny"` revokes — via the platform's privacy database
-/// (`pm grant` on Android, `simctl privacy` on iOS). Keys are applied in
-/// sorted order so logs and `--seed` replay stay deterministic. The caller is
-/// responsible for the app being stopped first: iOS TCC ignores grants made to
-/// a running process. Shared by launch-time (`[[flow.apps]].permissions`) and
-/// the `launch` action's per-launch `permissions`.
+/// The mode (`allow`/`deny`/`limited`/`always`/`inuse`/`never`) is validated by
+/// the parser/runner before it reaches here; the driver maps it to the platform
+/// primitive (`simctl`/`applesimutils`/`pm`). Keys are applied in sorted order
+/// so logs and `--seed` replay stay deterministic. The caller is responsible
+/// for the app being stopped first: iOS TCC ignores grants made to a running
+/// process. Shared by launch-time (`[[flow.apps]].permissions`) and the
+/// `launch` action's per-launch `permissions`.
 pub(crate) async fn apply_permissions_map(
     driver: &dyn PlatformDriver,
     bundle_id: &str,
     permissions: &HashMap<String, String>,
-) -> Result<()> {
+) -> Result<Vec<String>> {
     let mut entries: Vec<(&String, &String)> = permissions.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
+    let mut warnings = Vec::new();
     for (permission, mode) in entries {
-        match mode.as_str() {
-            "allow" => driver.grant_permission(bundle_id, permission).await?,
-            "deny" => driver.revoke_permission(bundle_id, permission).await?,
-            other => {
-                return Err(golem_events::coded(
-                    golem_events::FailureCode::ParseMissingParam,
-                    anyhow::anyhow!(
-                        "permission '{permission}' must be \"allow\" or \"deny\", got {other:?}"
-                    ),
-                ))
-            }
+        if let Some(warning) = driver.set_permission(bundle_id, permission, mode).await? {
+            warnings.push(warning);
         }
     }
-    Ok(())
+    Ok(warnings)
 }
 
 /// Parse the `launch` action's optional `permissions = { … }` table into a
@@ -60,7 +55,13 @@ fn parse_launch_permissions(step: &Step) -> Result<HashMap<String, String>> {
         let mode = mode.as_str().ok_or_else(|| {
             golem_events::coded(
                 golem_events::FailureCode::ParseMissingParam,
-                anyhow::anyhow!("launch permission '{permission}' must be \"allow\" or \"deny\""),
+                anyhow::anyhow!("launch permission '{permission}' mode must be a string"),
+            )
+        })?;
+        golem_parser::permissions::validate_permission_entry(permission, mode).map_err(|msg| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("launch permissions: {msg}"),
             )
         })?;
         map.insert(permission.clone(), mode.to_string());
@@ -119,7 +120,9 @@ pub(crate) async fn handle_launch(
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     if !permissions.is_empty() {
-        apply_permissions_map(driver, bundle_id, &permissions).await?;
+        for warning in apply_permissions_map(driver, bundle_id, &permissions).await? {
+            ctx.substep(golem_events::SubstepEvent::DriverWarning { message: warning });
+        }
     }
     let start = Instant::now();
     // `launch_app` includes the post-launch settle gate (node-count
@@ -266,17 +269,13 @@ mod tests {
         assert!(stop_at < launch_at, "stop SHALL precede launch: {names:?}");
 
         let calls = driver.get_calls();
-        let grants: Vec<_> = calls.iter().filter(|c| c.0 == "grant_permission").collect();
-        let revokes: Vec<_> = calls
-            .iter()
-            .filter(|c| c.0 == "revoke_permission")
-            .collect();
-        // camera + microphone granted, location revoked — sorted key order.
-        assert_eq!(grants.len(), 2);
-        assert_eq!(grants[0].1, vec!["com.example.app", "camera"]);
-        assert_eq!(grants[1].1, vec!["com.example.app", "microphone"]);
-        assert_eq!(revokes.len(), 1);
-        assert_eq!(revokes[0].1, vec!["com.example.app", "location"]);
+        let sets: Vec<_> = calls.iter().filter(|c| c.0 == "set_permission").collect();
+        // Applied in sorted key order: camera, location, microphone — each
+        // carrying its mode (grant/revoke is the driver's business now).
+        assert_eq!(sets.len(), 3, "one set_permission per entry: {calls:?}");
+        assert_eq!(sets[0].1, vec!["com.example.app", "camera", "allow"]);
+        assert_eq!(sets[1].1, vec!["com.example.app", "location", "deny"]);
+        assert_eq!(sets[2].1, vec!["com.example.app", "microphone", "allow"]);
         // Every permission is applied before the launch.
         let first_launch = calls
             .iter()
@@ -286,7 +285,7 @@ mod tests {
             calls
                 .iter()
                 .take(first_launch)
-                .any(|c| c.0 == "grant_permission"),
+                .any(|c| c.0 == "set_permission"),
             "permissions SHALL be applied before launch: {names:?}"
         );
     }
@@ -311,9 +310,7 @@ mod tests {
             "soft foreground SHALL NOT stop the app: {calls:?}"
         );
         assert!(
-            calls
-                .iter()
-                .all(|c| c.0 != "grant_permission" && c.0 != "revoke_permission"),
+            calls.iter().all(|c| c.0 != "set_permission"),
             "no permissions declared SHALL apply none: {calls:?}"
         );
     }

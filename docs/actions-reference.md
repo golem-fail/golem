@@ -334,7 +334,7 @@ A `permissions` map on `launch` **always cold-starts** the app, even without `re
 
 ### App permissions
 
-Permissions are declared **on a launch**, not as a standalone step — the platform tooling (`pm grant` on Android, `simctl privacy` on iOS sims) terminates the app to apply a grant, so a permission change is inseparable from a (re)launch. Two places take the same `shorthand = "allow" | "deny"` map:
+Permissions are declared **on a launch**, not as a standalone step — the platform tooling (`pm grant` on Android, `simctl privacy` / `applesimutils` on iOS sims) terminates the app to apply a grant, so a permission change is inseparable from a (re)launch. Two places take the same `permission = mode` map:
 
 - **`[[flow.apps]].permissions`** — the baseline, applied once before the app's first launch (see [Test structure](test-structure.md#launch-time-permissions)).
 - **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow (a cold start, as above).
@@ -348,19 +348,30 @@ Permissions are declared **on a launch**, not as a standalone step — the platf
 
 > **Migrating from `grant_permission` / `revoke_permission`:** those step-level actions were removed. Replace `{ action = "grant_permission", app = "app", permission = "camera" }` immediately followed by a `launch` with a single `{ action = "launch", app = "app", permissions = { camera = "allow" } }` (`"deny"` for revoke). They always forced an app restart anyway, so this is a faithful — and shorter — replacement.
 
-**Cross-platform shorthands.** One vocabulary, mapped per platform:
+**Modes.** The value is a mode, not just on/off:
 
-| Shorthand        | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
-|------------------|-----------------------------------------------------------|------------------------|
-| `camera`         | `CAMERA`                                                  | `camera`               |
-| `microphone`     | `RECORD_AUDIO`                                            | `microphone`           |
-| `location`       | `ACCESS_FINE_LOCATION` (foreground only)                  | `location`             |
-| `location-always`| `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION`     | `location-always`      |
-| `contacts`       | `READ_CONTACTS`                                           | `contacts`             |
-| `calendar`       | `READ_CALENDAR`                                           | `calendar`             |
-| `photos`         | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` |
+| Mode | Applies to | Meaning |
+|------|-----------|---------|
+| `allow` / `deny` | any permission | grant / revoke |
+| `always` / `inuse` / `never` | `location` only | background + foreground / foreground only / revoked (`never` ≡ `deny`) |
+| `limited` | `photos` only | partial photo-library access (iOS limited library; Android 14+ user-selected subset) |
 
-Unknown shorthands fail loudly (no silent passthrough to `pm grant` / `simctl privacy`). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+An invalid mode for a permission (e.g. `camera = "limited"`) is a parse-time error.
+
+**Cross-platform permissions.** One vocabulary, mapped per platform:
+
+| Permission | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
+|------------|-----------------------------------------------------------|------------------------|
+| `camera`   | `CAMERA`                                                  | `camera`               |
+| `microphone` | `RECORD_AUDIO`                                          | `microphone`           |
+| `location` | `ACCESS_FINE_LOCATION` (+ `ACCESS_BACKGROUND_LOCATION` when `= "always"`) | `location` / `location-always` (per mode) |
+| `contacts` | `READ_CONTACTS`                                           | `contacts`             |
+| `calendar` | `READ_CALENDAR`                                           | `calendar`             |
+| `photos`   | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+; `= "limited"` grants only the latter) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` (via `applesimutils` — see below) |
+
+Unknown permissions fail loudly (no silent passthrough). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+
+> **iOS photos needs `applesimutils`.** `simctl privacy grant photos` accepts the command but does **not** suppress the iOS 26 full-library-access prompt, so golem routes `photos` pre-grants through [`applesimutils`](https://github.com/wix/AppleSimulatorUtils) (`brew tap wix/brew && brew install wix/brew/applesimutils`), which does. It's optional-but-recommended — `golem doctor` flags it. Without it, a `photos` grant can't be applied prompt-free: golem warns and the app prompts at runtime, so add `{ action = "accept_alert", if_fail = "ignore" }` after the step that triggers photo access. All other iOS permissions use `simctl privacy` and need no extra tooling.
 
 > **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
 >

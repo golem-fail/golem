@@ -349,12 +349,13 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.add_media(path).await
     }
 
-    async fn grant_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
-        self.inner.grant_permission(bundle_id, permission).await
-    }
-
-    async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> anyhow::Result<()> {
-        self.inner.revoke_permission(bundle_id, permission).await
+    async fn set_permission(
+        &self,
+        bundle_id: &str,
+        permission: &str,
+        mode: &str,
+    ) -> anyhow::Result<Option<String>> {
+        self.inner.set_permission(bundle_id, permission, mode).await
     }
 
     async fn start_recording(&self, name: &str) -> anyhow::Result<()> {

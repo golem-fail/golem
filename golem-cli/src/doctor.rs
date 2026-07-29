@@ -88,6 +88,11 @@ struct Facts {
     adb: Option<String>,
     xcrun: Option<String>,
     simctl: bool, // needs a working invocation, no clean version
+    /// `applesimutils` on PATH (iOS-sim only). Optional-but-recommended: the
+    /// only way to pre-grant iOS photos prompt-free (`simctl privacy` can't
+    /// suppress the iOS 26 library prompt). Without it, photos grants fall back
+    /// to a runtime prompt + `accept_alert`.
+    applesimutils: bool,
     ffmpeg: Option<String>,
     /// Physical Android devices currently connected (running emulators are AVDs,
     /// counted separately, so they are excluded here to avoid double counting).
@@ -228,6 +233,20 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
                 "iOS companion",
                 "not embedded",
                 "this binary shipped without the iOS companion — reinstall a macOS release built with Xcode",
+            ));
+        }
+        // applesimutils — optional but recommended. It's the only way to
+        // pre-grant iOS photos prompt-free (`simctl privacy grant photos`
+        // doesn't suppress the iOS 26 full-library prompt); without it a
+        // `permissions = { photos = "allow" }` grant falls back to a runtime
+        // prompt that `accept_alert` must dismiss. iOS-sim only.
+        if f.applesimutils {
+            checks.push(Check::ok("applesimutils (optional)", "found"));
+        } else {
+            checks.push(Check::warn(
+                "applesimutils (optional)",
+                "not on PATH",
+                "recommended for prompt-free iOS photo-library pre-grant (simctl can't suppress the iOS 26 prompt); without it, `permissions = { photos = \"allow\" }` prompts at runtime — accept with `accept_alert`. Install: `brew tap wix/brew && brew install wix/brew/applesimutils`",
             ));
         }
     } else {
@@ -552,6 +571,7 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
         if is_macos {
             f.xcrun = tool("xcrun", &["--version"]).await;
             f.simctl = runs_ok("xcrun", &["simctl", "help"]).await;
+            f.applesimutils = runs_ok("applesimutils", &["--help"]).await;
         }
         f.android_connected = if f.adb.is_some() {
             count_adb_physical(&stdout_of("adb", &["devices"]).await)
@@ -658,6 +678,7 @@ mod tests {
             adb: Some("1.0.41".to_string()),
             xcrun: Some(String::new()),
             simctl: true,
+            applesimutils: true,
             ffmpeg: Some("6.1.1".to_string()),
             android_connected: 0,
             android_avds: 1,
@@ -852,6 +873,47 @@ mod tests {
             .find(|c| c.label == "xcrun (iOS)")
             .expect("xcrun line");
         assert_eq!(xc.detail, "found");
+    }
+
+    // 9a. applesimutils is an optional-but-recommended macOS check: OK when
+    //     present, a non-gating WARN with an install hint when absent.
+    #[test]
+    fn applesimutils_optional_check() {
+        let checks = evaluate_runtime(&base_facts());
+        let present = checks
+            .iter()
+            .find(|c| c.label == "applesimutils (optional)")
+            .expect("applesimutils line on macOS");
+        assert_eq!(present.status, Status::Ok);
+
+        let mut absent = base_facts();
+        absent.applesimutils = false;
+        let checks = evaluate_runtime(&absent);
+        let warn = checks
+            .iter()
+            .find(|c| c.label == "applesimutils (optional)")
+            .expect("applesimutils line");
+        assert_eq!(warn.status, Status::Warn);
+        let remedy = warn.remedy.as_deref().unwrap_or("");
+        assert!(
+            remedy.contains("brew") && remedy.contains("accept_alert"),
+            "warn SHALL give install hint + fallback: {remedy}"
+        );
+        assert_eq!(
+            exit_code(&checks),
+            0,
+            "a missing optional tool SHALL NOT gate the exit code"
+        );
+
+        // Non-macOS: the iOS block is skipped, so no applesimutils line at all.
+        let mut linux = base_facts();
+        linux.is_macos = false;
+        assert!(
+            !evaluate_runtime(&linux)
+                .iter()
+                .any(|c| c.label == "applesimutils (optional)"),
+            "applesimutils check SHALL be macOS-only"
+        );
     }
 
     // 9b. Embedded companion sizes surface in the detail (sanity signal).
