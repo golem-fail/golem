@@ -22,6 +22,31 @@ golem is a Cargo workspace of focused crates. The CLI wires them together; a TOM
 | `golem-browser` | Host-side browser automation behind the `browse_*` actions (`session` grammar, suite preflight, `BrowserPool`). The engine (chromiumoxide/CDP) sits behind the `browser` cargo feature, on by default; a `--no-default-features` build still rejects browser flows with a clear reason rather than an unknown action. |
 | `golem-common` | Tiny shared helpers (e.g. the global debug flag). |
 
+### Browser steps: instrumentation, not a second system under test
+
+`browse_*` steps drive a real Chrome on the host so a mobile flow can reach web
+state it depends on — a supplier portal with no API, an admin console that flips
+a flag. **The mobile app is what golem tests.** The browser is how a flow
+arranges the world the app then has to cope with.
+
+That framing decides the behaviour, and it is deliberate rather than unfinished:
+
+- Browser steps are **not judged for coverage**. A device axis ticked by a
+  browser step would claim a platform was exercised when nothing ran on it.
+- They **never feed the accessibility audit**. golem's a11y findings describe an
+  app someone ships; a supplier's portal is not that app, and mixing the two
+  would bury real findings under someone else's markup.
+- They assert on **DOM presence**, not the [visible tree](#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints).
+  The visible-tree rule exists because golem judges what a user can see; what a
+  headless browser "sees" is not that, and pretending otherwise would be
+  theatre.
+- There is **no browser video**. `--record` captures the device; the browser
+  gets screenshots on demand. Recording instrumentation at the same fidelity as
+  the thing under test would invert the point.
+
+Each flow gets its own browser, launched only if a `browse_*` step actually
+runs, and closed when the flow ends whether it passed or failed.
+
 ### Dependency graph
 
 Intra-workspace edges only (each crate also pulls external deps). `golem-cli` sits on top and depends on all the others; the foundation crates (`golem-events`, `golem-element`, `golem-parser`, `golem-common`, `golem-email`) have no intra-workspace deps.

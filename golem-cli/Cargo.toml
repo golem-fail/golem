@@ -11,9 +11,13 @@ path = "src/main.rs"
 default = ["browser"]
 # Host-side browser automation for `browse_*` steps. On by default so every
 # shipped binary can serve a browse_* flow; `--no-default-features` is the
-# opt-out for a leaner build. Today it reaches only the suite preflight — the
-# runner side (dispatching browse_* steps) lands with #106.
-browser = ["golem-orchestrator/browser"]
+# opt-out for a leaner build.
+#
+# Both arms are load-bearing: the orchestrator's decides whether the suite
+# preflight can probe for a browser, the runner's decides whether a `browse_*`
+# step actually runs. With only the first, a suite plans happily and then
+# reports H501 on the first browser step.
+browser = ["golem-orchestrator/browser", "golem-runner/browser"]
 
 [dependencies]
 golem-browser = { path = "../golem-browser" }

@@ -1,0 +1,56 @@
+[flow]
+name = "browse portal"
+tags = ["cross-platform", "browser", "external"]
+
+# The browser leg end to end, in the shape it exists for: a mobile flow needs
+# web state it can only reach through a portal, drives that portal itself, then
+# carries the result back into the app under test. The page is served over
+# loopback rather than embedded as a `data:` URL — an opaque origin has no
+# cookies, no storage and no WebMCP, so only a real origin can exercise the
+# whole surface later.
+
+[flow.options]
+# One device is enough: the browser half is identical everywhere, and the mobile
+# half only proves the captured value crosses back into the app.
+coverage = "one"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "portal"
+steps = [
+  # Prints the URL; `save_to` captures stdout, so the port is never guessed.
+  { action = "run", script = "scripts/serve-browse-page.sh", save_to = "portal" },
+
+  { action = "browse_navigate", url = "${portal.stdout}" },
+  { action = "browse_assert_text", selector = "h1", text = "Golem Portal" },
+  { action = "browse_assert_exists", selector = "#fulfil" },
+
+  { action = "browse_type", selector = "#order", text = "o-42" },
+  { action = "browse_tap", selector = "#fulfil" },
+
+  # The page rewrites this after the click, so passing proves the assertion
+  # waits rather than reading whatever was there when the step began.
+  { action = "browse_assert_text", selector = "#status", text = "Fulfilled *" },
+  { action = "browse_assert_not_exists", selector = "#error" },
+
+  # An attribute carries the machine-readable value the rendered text buries.
+  { action = "browse_read", selector = "#status", attribute = "data-order", save_to = "order_id" },
+
+  # Back to the app under test: the browser is instrumentation, and this is the
+  # step that proves what it fetched actually reaches the thing golem tests.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+  { action = "type", on_text = "Search", input = "${order_id}", auto_scroll = true },
+  { action = "assert_visible", on_text = "o-42" },
+]
+
+[[teardown]]
+steps = [
+  { action = "browse_close" },
+  { action = "run", script = "scripts/stop-browse-page.sh" },
+]
