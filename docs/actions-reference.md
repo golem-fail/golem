@@ -61,6 +61,8 @@
   - [browse_assert_text](#browse_assert_text--the-element-says-what-you-expect)
   - [browse_wait_exists](#browse_wait_exists--wait-for-an-element-to-appear)
   - [browse_wait_not_exists](#browse_wait_not_exists--wait-for-an-element-to-disappear)
+  - [browse_scroll](#browse_scroll--scroll-by-a-distance)
+  - [browse_scroll_to](#browse_scroll_to--bring-an-element-into-view)
   - [browse_select](#browse_select--choose-an-option-in-a-select)
   - [browse_execute_js](#browse_execute_js--run-javascript-in-the-page)
   - [browse_close](#browse_close--close-a-tab-early)
@@ -829,6 +831,33 @@ the reason it exists.
 These wait on **DOM presence**, not visibility — an element hidden by CSS still
 counts as present. Browser steps are instrumentation, and visibility judgements
 belong to the mobile app under test.
+
+### `browse_scroll` — Scroll by a distance
+
+```toml
+{ action = "browse_scroll" }                                  # 300px down, the page
+{ action = "browse_scroll", direction = "up", amount = 800 }
+{ action = "browse_scroll", selector = ".results", amount = 500 }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `direction` | `"down"` | `up`, `down`, `left` or `right` — same default as the mobile `scroll` action |
+| `amount` | `300` | Distance in CSS pixels |
+| `selector` | — | Scroll this container instead of the window |
+
+Pixels, not scroll-until-found: a CSS selector reaches an element whether or not
+it's scrolled into view, so there's nothing to search for. This is for pages
+that load more content as you go; `browse_scroll_to` is for putting something
+in view.
+
+### `browse_scroll_to` — Bring an element into view
+
+```toml
+{ action = "browse_scroll_to", selector = "#order-footer" }
+```
+
+Useful before a `browse_screenshot`, or for a page that only renders on scroll.
 
 ### `browse_select` — Choose an option in a `<select>`
 
