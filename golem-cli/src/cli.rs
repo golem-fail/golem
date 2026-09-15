@@ -171,6 +171,11 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_teardown: bool,
 
+    /// Show the browser window for `browse_*` steps instead of running it
+    /// headless. Wins over `[flow.options].browser_headless`.
+    #[arg(long)]
+    pub browser_headed: bool,
+
     /// Keep devices running after flow
     #[arg(long)]
     pub keep_devices: bool,

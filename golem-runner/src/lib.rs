@@ -64,6 +64,7 @@ pub mod accessibility;
 pub mod actions;
 pub mod barrier;
 pub mod branch;
+pub mod browser;
 pub mod capture;
 pub mod cleanup;
 pub mod context;

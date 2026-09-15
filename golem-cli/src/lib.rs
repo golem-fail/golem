@@ -170,6 +170,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
+                browser_headed: args.browser_headed,
                 keep_devices: args.keep_devices,
                 seed: args.seed,
                 platform: platform_override,
@@ -526,6 +527,7 @@ fn build_config_json(
         "no_perf": config.no_perf,
         "no_clean": config.no_clean,
         "no_teardown": config.no_teardown,
+        "browser_headed": config.browser_headed,
         "keep_devices": config.keep_devices,
         "no_results": config.no_results,
         "start": config.start,

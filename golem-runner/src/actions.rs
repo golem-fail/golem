@@ -85,6 +85,14 @@ pub async fn execute_action(
         "put_http" => handle_http(step, vars, "PUT").await,
         "patch_http" => handle_http(step, vars, "PATCH").await,
         "delete_http" => handle_http(step, vars, "DELETE").await,
+        // Browser steps route on the verb prefix rather than a list of names:
+        // the browser's own dispatch (golem-browser) is the canonical set, and
+        // a second list here would drift from it every time an action lands.
+        // An unknown `browse_*` verb still fails as an unknown action — it just
+        // fails over there, where the real list is.
+        a if a.starts_with(golem_browser::BROWSE_PREFIX) => {
+            ctx.browser.lock().await.run_step(step, vars).await
+        }
         _ => crate::fail_code!(
             golem_events::FailureCode::ParseUnknownAction,
             "Unknown action: {}",
@@ -136,6 +144,31 @@ mod tests {
                 continue;
             }
             if t.starts_with("_ =>") {
+                break;
+            }
+            if line.contains("=>") {
+                for tok in tokens(line, '"') {
+                    in_code.insert(tok);
+                }
+            }
+        }
+
+        // 1b. Browser keywords come from golem-browser's own dispatch: the
+        //     runner routes `browse_*` on the prefix, so the canonical list of
+        //     browser actions lives over there and this test follows it rather
+        //     than letting the docs claim actions nothing implements.
+        let browser_code = include_str!("../../golem-browser/src/actions.rs");
+        let mut in_browser_match = false;
+        for line in browser_code.lines() {
+            let t = line.trim_start();
+            if t.starts_with("match step.action.as_str() {") {
+                in_browser_match = true;
+                continue;
+            }
+            if !in_browser_match {
+                continue;
+            }
+            if t.starts_with("other =>") {
                 break;
             }
             if line.contains("=>") {

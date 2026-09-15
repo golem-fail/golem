@@ -3,7 +3,15 @@ name = "golem-runner"
 version.workspace = true
 edition = "2021"
 
+[features]
+default = []
+# Empty by design — golem-cli owns the default; see golem-browser/Cargo.toml.
+# Forwards to golem-browser: with it, `browse_*` steps drive a real browser;
+# without it they report H501 instead of running.
+browser = ["golem-browser/browser"]
+
 [dependencies]
+golem-browser = { path = "../golem-browser" }
 golem-parser = { path = "../golem-parser" }
 golem-driver = { path = "../golem-driver" }
 golem-element = { path = "../golem-element" }
