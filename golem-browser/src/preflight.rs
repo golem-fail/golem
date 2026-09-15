@@ -3,6 +3,9 @@ use golem_parser::FlowFile;
 
 /// Verb prefix marking a step as host-side browser automation.
 pub const BROWSE_PREFIX: &str = "browse_";
+/// Verb prefix for the WebMCP subset, which needs a browser feature that ships
+/// switched off.
+pub const BROWSE_MCP_PREFIX: &str = "browse_mcp_";
 
 /// Whether any step in this flow file drives the browser.
 ///
@@ -22,6 +25,20 @@ pub fn flow_uses_browser(flow: &FlowFile) -> bool {
         .flat_map(|b| &b.steps)
         .chain(flow.teardown.iter().flat_map(|t| &t.steps))
         .any(|s| s.action.starts_with(BROWSE_PREFIX))
+}
+
+/// Whether this flow drives the page's WebMCP tools.
+///
+/// Kept separate from [`flow_uses_browser`] because the answer decides whether
+/// golem launches Chrome with an experimental Blink feature enabled. That
+/// changes what any page on the run can feature-detect, so it is worth doing
+/// only for the flows that asked.
+pub fn flow_uses_webmcp(flow: &FlowFile) -> bool {
+    flow.block
+        .iter()
+        .flat_map(|b| &b.steps)
+        .chain(flow.teardown.iter().flat_map(|t| &t.steps))
+        .any(|s| s.action.starts_with(BROWSE_MCP_PREFIX))
 }
 
 /// Check the host can serve whatever browser steps this suite contains.
@@ -125,6 +142,39 @@ mod tests {
             "#,
         );
         assert!(!flow_uses_browser(&f));
+    }
+
+    // 4b. WebMCP is detected on its own, so only the flows that use it pay for
+    //     an experimental browser feature.
+    #[test]
+    fn webmcp_is_detected_separately_from_ordinary_browser_use() {
+        let web = flow(
+            r#"
+            [flow]
+            name = "web"
+            [[block]]
+            steps = [{ action = "browse_navigate" }]
+            "#,
+        );
+        assert!(flow_uses_browser(&web));
+        assert!(
+            !flow_uses_webmcp(&web),
+            "a plain browser flow SHALL NOT need WebMCP"
+        );
+
+        let mcp = flow(
+            r#"
+            [flow]
+            name = "mcp"
+            [[block]]
+            steps = [{ action = "browse_mcp_call", tool = "fulfil" }]
+            "#,
+        );
+        assert!(flow_uses_webmcp(&mcp));
+        assert!(
+            flow_uses_browser(&mcp),
+            "an mcp step SHALL also count as browser use"
+        );
     }
 
     // 5. A suite without browser steps never consults the host, so it passes

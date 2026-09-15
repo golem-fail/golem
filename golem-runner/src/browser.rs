@@ -11,6 +11,26 @@ use anyhow::Result;
 use golem_parser::Step;
 use golem_vars::VariableStore;
 
+/// How a flow's browser should be launched, if it ever is.
+#[derive(Debug, Clone, Copy)]
+pub struct BrowserOptions {
+    /// Resolved from CLI flag, then flow option, then the default.
+    pub headless: bool,
+    /// Turn on the browser's WebMCP API. Set only for flows that use
+    /// `browse_mcp_*`, since it changes what every page on the run can
+    /// feature-detect.
+    pub webmcp: bool,
+}
+
+impl Default for BrowserOptions {
+    fn default() -> Self {
+        Self {
+            headless: true,
+            webmcp: false,
+        }
+    }
+}
+
 /// Holds a flow's browser once something asks for one.
 ///
 /// Lazy by design: a slot costs nothing, so every flow can carry one and only
@@ -19,31 +39,31 @@ pub struct BrowserSlot {
     #[cfg(feature = "browser")]
     pool: Option<golem_browser::BrowserPool>,
     #[cfg(feature = "browser")]
-    headless: bool,
+    options: BrowserOptions,
 }
 
 impl Default for BrowserSlot {
-    /// Headless. Spelled out rather than derived because `bool::default()` is
-    /// `false`, which would quietly make every unconfigured flow headed.
+    /// Headless, WebMCP off. Spelled out rather than derived because
+    /// `bool::default()` is `false`, which would quietly make every
+    /// unconfigured flow headed.
     fn default() -> Self {
-        Self::new(true)
+        Self::new(BrowserOptions::default())
     }
 }
 
 impl BrowserSlot {
-    /// A slot whose browser, if one is ever launched, runs headless or headed.
-    /// Resolved by the caller from CLI flag, then flow option, then the default.
-    pub fn new(headless: bool) -> Self {
+    /// A slot whose browser, if one is ever launched, uses these options.
+    pub fn new(options: BrowserOptions) -> Self {
         #[cfg(feature = "browser")]
         {
             Self {
                 pool: None,
-                headless,
+                options,
             }
         }
         #[cfg(not(feature = "browser"))]
         {
-            let _ = headless;
+            let _ = options;
             Self {}
         }
     }
@@ -71,7 +91,8 @@ impl BrowserSlot {
     ) -> Result<()> {
         let pool = self.pool.get_or_insert_with(|| {
             golem_browser::BrowserPool::new(golem_browser::PoolConfig {
-                headless: self.headless,
+                headless: self.options.headless,
+                webmcp: self.options.webmcp,
             })
         });
         golem_browser::execute_browser_action(
@@ -133,7 +154,11 @@ mod tests {
     #[test]
     fn a_fresh_slot_has_no_browser() {
         assert!(!BrowserSlot::default().is_active());
-        assert!(!BrowserSlot::new(false).is_active());
+        assert!(!BrowserSlot::new(BrowserOptions {
+            headless: false,
+            webmcp: true,
+        })
+        .is_active());
     }
 
     // 2. Closing a slot that never launched is a no-op — teardown runs on

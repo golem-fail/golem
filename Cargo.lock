@@ -934,6 +934,7 @@ dependencies = [
  "clap",
  "dialoguer",
  "dirs",
+ "golem-browser",
  "golem-common",
  "golem-devices",
  "golem-driver",

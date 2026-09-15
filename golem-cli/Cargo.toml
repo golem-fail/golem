@@ -16,6 +16,7 @@ default = ["browser"]
 browser = ["golem-orchestrator/browser"]
 
 [dependencies]
+golem-browser = { path = "../golem-browser" }
 golem-runner = { path = "../golem-runner" }
 golem-parser = { path = "../golem-parser" }
 golem-driver = { path = "../golem-driver" }

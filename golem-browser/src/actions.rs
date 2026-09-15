@@ -56,6 +56,8 @@ pub async fn execute_browser_action(
         "browse_select" => select(pool, step).await,
         "browse_scroll_by" => scroll_by(pool, step).await,
         "browse_scroll_to" => scroll_to(pool, step).await,
+        "browse_mcp_list_tools" => mcp_list_tools(pool, step, vars).await,
+        "browse_mcp_call" => mcp_call(pool, step, vars).await,
         "browse_set_cookie" => set_cookie(pool, step).await,
         "browse_get_cookie" => get_cookie(pool, step, vars).await,
         "browse_set_local_storage" => set_storage(pool, step, Storage::Local).await,
@@ -66,6 +68,163 @@ pub async fn execute_browser_action(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
+    }
+}
+
+/// The tools a page has registered with WebMCP.
+///
+/// A page that opts into WebMCP describes what it can do — "fulfil an order",
+/// "issue a refund" — as named tools with argument schemas. Driving those beats
+/// clicking through its UI: the page states its own contract, so a flow that
+/// calls one isn't coupled to a layout that may be redesigned next quarter.
+async fn mcp_list_tools(
+    pool: &mut BrowserPool,
+    step: &Step,
+    vars: &mut VariableStore,
+) -> Result<()> {
+    let (page, ua) = page_for(pool, step).await?;
+    require_webmcp(&page, &ua).await?;
+
+    let listed: serde_json::Value = page
+        .evaluate_function(
+            "async () => {
+                const tools = await document.modelContext.getTools();
+                return Object.fromEntries(tools.map((t) => [t.name, t.description ?? '']));
+            }",
+        )
+        .await
+        .map_err(|e| external_failure(format!("listing WebMCP tools: {e}"), &ua))?
+        .into_value()
+        .unwrap_or(serde_json::Value::Null);
+
+    if let Some(var_name) = &step.save_to {
+        // Keyed by tool name so `${tools.fulfil_order}` reads as a presence
+        // check as well as a description — an array would only be greppable
+        // text in a flow file.
+        vars.set_in_scope(ScopeLevel::Flow, var_name, json_to_var(listed));
+    }
+    Ok(())
+}
+
+/// Run one of the page's registered WebMCP tools.
+async fn mcp_call(pool: &mut BrowserPool, step: &Step, vars: &mut VariableStore) -> Result<()> {
+    let tool = required_param(step, "tool")?;
+    let arguments = match step.params.get("arguments") {
+        Some(value) => toml_to_json(value),
+        None => serde_json::Value::Object(serde_json::Map::new()),
+    };
+    let (page, ua) = page_for(pool, step).await?;
+    require_webmcp(&page, &ua).await?;
+
+    // `executeTool` takes its arguments as a JSON *string* and answers with
+    // one, which the explainer's `executeTool(tool, inputs)` signature doesn't
+    // convey — passing the object itself fails with "Failed to parse input
+    // arguments". Established against Chrome 153 rather than assumed.
+    let script = format!(
+        "async () => {{
+            const tools = await document.modelContext.getTools();
+            const tool = tools.find((t) => t.name === {name});
+            if (!tool) return {{ missing: true }};
+            const answer = await document.modelContext.executeTool(tool, {args});
+            let result = answer;
+            if (typeof answer === 'string') {{
+                try {{ result = JSON.parse(answer); }} catch {{ result = answer; }}
+            }}
+            return {{ result }};
+        }}",
+        name = js_literal(tool),
+        args = js_literal(&arguments.to_string()),
+    );
+    let outcome: serde_json::Value = page
+        .evaluate_function(script)
+        .await
+        .map_err(|e| external_failure(format!("calling WebMCP tool `{tool}`: {e}"), &ua))?
+        .into_value()
+        .unwrap_or(serde_json::Value::Null);
+
+    if outcome.get("missing").and_then(|v| v.as_bool()) == Some(true) {
+        return Err(golem_events::coded(
+            FailureCode::FlowElementNotFound,
+            anyhow!("this page registers no WebMCP tool named `{tool}` [browser: {ua}]"),
+        ));
+    }
+
+    if let Some(var_name) = &step.save_to {
+        let result = outcome.get("result").cloned().unwrap_or_default();
+        vars.set_in_scope(ScopeLevel::Flow, var_name, mcp_result_to_var(result));
+    }
+    Ok(())
+}
+
+/// Fail early, and specifically, when the browser has no WebMCP.
+///
+/// The API ships switched off, so "undefined" is the normal state of a browser
+/// golem didn't launch for this. Reported as a host problem: the flow is
+/// valid, the browser can't serve it.
+async fn require_webmcp(page: &Page, ua: &str) -> Result<()> {
+    let present: bool = page
+        .evaluate_expression("typeof document.modelContext !== 'undefined'")
+        .await
+        .ok()
+        .and_then(|r| r.into_value().ok())
+        .unwrap_or(false);
+    if present {
+        return Ok(());
+    }
+    Err(golem_events::coded(
+        FailureCode::HostBrowserFeatureMissing,
+        anyhow!(
+            "this page has no WebMCP API (`document.modelContext`). It needs a browser \
+             that supports it, and a secure origin — an https:// or localhost page, never \
+             a data: URL. [browser: {ua}]"
+        ),
+    ))
+}
+
+/// Unwrap the `{ content: [{ type: "text", text }] }` envelope MCP tools return.
+///
+/// A flow wants the answer, not the envelope. Text parts are joined; a result
+/// that is itself JSON nests, matching what reading storage does, so
+/// `${result.order_id}` works either way.
+fn mcp_result_to_var(result: serde_json::Value) -> VarValue {
+    let text = result
+        .get("content")
+        .and_then(|c| c.as_array())
+        .map(|parts| {
+            parts
+                .iter()
+                .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("")
+        });
+    match text {
+        Some(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(value @ serde_json::Value::Object(_)) => json_to_var(value),
+            _ => VarValue::string(text),
+        },
+        // Not an MCP envelope — hand back whatever the tool did return rather
+        // than inventing an empty string.
+        None => json_to_var(result),
+    }
+}
+
+/// Step params are TOML; a WebMCP tool's arguments are JSON.
+fn toml_to_json(value: &toml::Value) -> serde_json::Value {
+    match value {
+        toml::Value::String(s) => serde_json::Value::String(s.clone()),
+        toml::Value::Integer(i) => serde_json::Value::from(*i),
+        toml::Value::Float(f) => serde_json::Value::from(*f),
+        toml::Value::Boolean(b) => serde_json::Value::Bool(*b),
+        toml::Value::Datetime(d) => serde_json::Value::String(d.to_string()),
+        toml::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(toml_to_json).collect())
+        }
+        toml::Value::Table(table) => serde_json::Value::Object(
+            table
+                .iter()
+                .map(|(k, v)| (k.clone(), toml_to_json(v)))
+                .collect(),
+        ),
     }
 }
 
@@ -1041,6 +1200,7 @@ mod tests {
                 "action = \"browse_set_cookie\"\nname = \"session\"",
             ),
             ("get_cookie without a name", "action = \"browse_get_cookie\""),
+            ("mcp_call without a tool", "action = \"browse_mcp_call\""),
             (
                 "set_local_storage without a key",
                 "action = \"browse_set_local_storage\"\nvalue = \"x\"",
@@ -1874,7 +2034,135 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 18. Diagnostics: a missing element fails as not-found once the step's
+    // 18. WebMCP: a page registers a tool, golem lists it and calls it, the
+    //     `{content:[...]}` envelope is unwrapped, a JSON answer nests, and a
+    //     tool the page never registered fails as not found.
+    #[tokio::test]
+    async fn live_webmcp_lists_and_calls_page_tools() {
+        if !chrome_available() {
+            return;
+        }
+        // A secure origin: WebMCP is absent on `data:` and `about:blank`.
+        let server = TestServer::start(
+            "<body><script>
+               document.modelContext.registerTool({
+                 name: 'fulfil_order',
+                 description: 'Mark an order fulfilled',
+                 inputSchema: { type: 'object', properties: { order_id: { type: 'string' } } },
+                 execute: async ({ order_id }) => ({
+                   content: [{ type: 'text', text: JSON.stringify({ order_id, status: 'fulfilled' }) }],
+                 }),
+               });
+             </script></body>",
+        );
+        let mut p = BrowserPool::new(PoolConfig {
+            headless: true,
+            webmcp: true,
+        });
+        let mut v = vars();
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the served page SHALL load");
+
+        run(
+            &mut p,
+            &step("action = \"browse_mcp_list_tools\"\nsave_to = \"tools\""),
+            &mut v,
+        )
+        .await
+        .expect("listing tools SHALL work");
+        match v.get("tools") {
+            Some(VarValue::Object(tools)) => assert_eq!(
+                tools.get("fulfil_order"),
+                Some(&VarValue::string("Mark an order fulfilled")),
+                "tools SHALL be keyed by name"
+            ),
+            other => panic!("tools SHALL be an object, got {other:?}"),
+        }
+
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_mcp_call\"\ntool = \"fulfil_order\"\narguments = { order_id = \"o-42\" }\nsave_to = \"receipt\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("calling a tool SHALL work");
+        match v.get("receipt") {
+            Some(VarValue::Object(fields)) => {
+                assert_eq!(fields.get("order_id"), Some(&VarValue::string("o-42")));
+                assert_eq!(fields.get("status"), Some(&VarValue::string("fulfilled")));
+            }
+            other => panic!("the envelope SHALL be unwrapped and JSON nested, got {other:?}"),
+        }
+
+        let e = run(
+            &mut p,
+            &step("action = \"browse_mcp_call\"\ntool = \"refund_order\""),
+            &mut v,
+        )
+        .await
+        .expect_err("an unregistered tool SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowElementNotFound)
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 19. Without the browser feature there is no WebMCP, and saying so as a
+    //     host problem is the difference between "upgrade your browser" and a
+    //     flow author hunting a bug that isn't theirs.
+    #[tokio::test]
+    async fn live_webmcp_absent_is_a_host_failure() {
+        if !chrome_available() {
+            return;
+        }
+        let server = TestServer::start("<h1>No tools here</h1>");
+        // Default config: the WebMCP switch is off, as it is for any flow that
+        // doesn't use `browse_mcp_*`.
+        let mut p = pool();
+        let mut v = vars();
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the served page SHALL load");
+
+        let e = run(
+            &mut p,
+            &step("action = \"browse_mcp_list_tools\"\nsave_to = \"tools\""),
+            &mut v,
+        )
+        .await
+        .expect_err("WebMCP SHALL be reported as missing");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::HostBrowserFeatureMissing)
+        );
+        assert!(
+            format!("{e:#}").contains("secure origin"),
+            "the message SHALL mention the other reason it can be absent"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 20. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]
