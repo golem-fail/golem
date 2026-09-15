@@ -53,7 +53,7 @@ pub async fn execute_browser_action(
         "browse_wait_not_exists" => wait_not_exists(pool, step).await,
         "browse_execute_js" => execute_js(pool, step, vars, paths).await,
         "browse_select" => select(pool, step).await,
-        "browse_scroll" => scroll(pool, step).await,
+        "browse_scroll_by" => scroll_by(pool, step).await,
         "browse_scroll_to" => scroll_to(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
@@ -64,20 +64,27 @@ pub async fn execute_browser_action(
 
 /// Nudge the page, or one scrollable element, by a fixed distance.
 ///
-/// Pixels rather than "until you find it": a DOM query already reaches an
-/// element whether or not it is scrolled into view, so the mobile action's
-/// scroll-and-search has nothing to search for here. `browse_scroll_to` covers
-/// "put this in view"; this one is for pages that load more as you go.
-async fn scroll(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+/// Named for `scrollBy`, not for mobile's `scroll`. Mobile `scroll` keeps
+/// swiping until an element appears — a search that has no meaning here, since
+/// a CSS selector reaches an element whether or not it is on screen. Borrowing
+/// the bare word would promise that search; `_by` and `_to` say plainly which
+/// of the two jobs each action does.
+async fn scroll_by(pool: &mut BrowserPool, step: &Step) -> Result<()> {
     let direction = Direction::from_step(step)?;
     let amount = scroll_amount(step)?;
     let (dx, dy) = direction.delta(amount);
     let (page, ua) = page_for(pool, step).await?;
 
-    // A selector scrolls that container; without one the window moves.
-    match optional_param(step, "selector") {
-        Some(_) => {
-            let target = resolve_target(step)?;
+    // `container` scrolls that element; without one the window moves. It is
+    // deliberately not `selector`: every other browser action uses `selector`
+    // for the element the step acts *on*, and here the element being scrolled
+    // is scenery around the movement, not its subject.
+    match optional_param(step, "container") {
+        Some(container) => {
+            let target = BrowserTarget {
+                selector: container.to_string(),
+                index: 0,
+            };
             let element = find(&page, &target, find_timeout(step), &ua).await?;
             element
                 .call_js_fn(
@@ -832,11 +839,11 @@ mod tests {
             ("execute_js with neither script nor file", "action = \"browse_execute_js\""),
             (
                 "scroll in a direction that doesn't exist",
-                "action = \"browse_scroll\"\ndirection = \"sideways\"",
+                "action = \"browse_scroll_by\"\ndirection = \"sideways\"",
             ),
             (
                 "scroll by a negative distance",
-                "action = \"browse_scroll\"\namount = -100",
+                "action = \"browse_scroll_by\"\namount = -100",
             ),
             ("scroll_to without a selector", "action = \"browse_scroll_to\""),
             (
@@ -934,8 +941,8 @@ mod tests {
     // 5a. Scroll defaults match the mobile action a reader already knows, and
     //     each direction moves the axis it names.
     #[test]
-    fn scroll_defaults_to_300px_down() {
-        let bare = step(r#"action = "browse_scroll""#);
+    fn scroll_by_defaults_to_300px_down() {
+        let bare = step(r#"action = "browse_scroll_by""#);
         assert_eq!(scroll_amount(&bare).expect("default"), 300);
         assert_eq!(
             Direction::from_step(&bare).expect("default"),
@@ -1465,7 +1472,7 @@ mod tests {
 
         run(
             &mut p,
-            &step("action = \"browse_scroll\"\namount = 500"),
+            &step("action = \"browse_scroll_by\"\namount = 500"),
             &mut v,
         )
         .await
@@ -1481,7 +1488,7 @@ mod tests {
 
         run(
             &mut p,
-            &step("action = \"browse_scroll\"\nselector = \"#box\"\namount = 250"),
+            &step("action = \"browse_scroll_by\"\ncontainer = \"#box\"\namount = 250"),
             &mut v,
         )
         .await
@@ -1503,7 +1510,7 @@ mod tests {
 
         run(
             &mut p,
-            &step("action = \"browse_scroll\"\ndirection = \"up\"\namount = 500"),
+            &step("action = \"browse_scroll_by\"\ndirection = \"up\"\namount = 500"),
             &mut v,
         )
         .await
