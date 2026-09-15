@@ -914,6 +914,7 @@ dependencies = [
  "anyhow",
  "chromiumoxide",
  "futures",
+ "golem-element",
  "golem-events",
  "golem-parser",
  "golem-vars",
