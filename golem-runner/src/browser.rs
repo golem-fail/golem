@@ -5,6 +5,8 @@
 //! behind one type means the executor, policy and dispatch paths are written
 //! once, with no `#[cfg]` threaded through them.
 
+use std::path::Path;
+
 use anyhow::Result;
 use golem_parser::Step;
 use golem_vars::VariableStore;
@@ -60,13 +62,28 @@ impl BrowserSlot {
     }
 
     #[cfg(feature = "browser")]
-    pub async fn run_step(&mut self, step: &Step, vars: &mut VariableStore) -> Result<()> {
+    pub async fn run_step(
+        &mut self,
+        step: &Step,
+        vars: &mut VariableStore,
+        flow_dir: &Path,
+        project_root: &Path,
+    ) -> Result<()> {
         let pool = self.pool.get_or_insert_with(|| {
             golem_browser::BrowserPool::new(golem_browser::PoolConfig {
                 headless: self.headless,
             })
         });
-        golem_browser::execute_browser_action(pool, step, vars).await
+        golem_browser::execute_browser_action(
+            pool,
+            step,
+            vars,
+            golem_browser::ScriptPaths {
+                flow_dir,
+                project_root,
+            },
+        )
+        .await
     }
 
     /// Without the feature there is no browser to run the step on. This is the
@@ -74,7 +91,13 @@ impl BrowserSlot {
     /// step was authored fine and this build simply can't serve it, which is
     /// the operator's problem, not the test author's.
     #[cfg(not(feature = "browser"))]
-    pub async fn run_step(&mut self, step: &Step, _vars: &mut VariableStore) -> Result<()> {
+    pub async fn run_step(
+        &mut self,
+        step: &Step,
+        _vars: &mut VariableStore,
+        _flow_dir: &Path,
+        _project_root: &Path,
+    ) -> Result<()> {
         Err(golem_events::coded(
             golem_events::FailureCode::HostBrowserUnsupported,
             anyhow::anyhow!(
@@ -131,7 +154,12 @@ mod tests {
     async fn without_the_feature_a_browser_step_reports_h501() {
         let mut vars = VariableStore::new();
         let e = BrowserSlot::default()
-            .run_step(&step(r#"action = "browse_navigate""#), &mut vars)
+            .run_step(
+                &step(r#"action = "browse_navigate""#),
+                &mut vars,
+                Path::new("."),
+                Path::new("."),
+            )
             .await
             .expect_err("a browser step SHALL fail without browser support");
         assert_eq!(
@@ -149,7 +177,12 @@ mod tests {
         let mut vars = VariableStore::new();
         let mut slot = BrowserSlot::default();
         let e = slot
-            .run_step(&step(r#"action = "browse_navigate""#), &mut vars)
+            .run_step(
+                &step(r#"action = "browse_navigate""#),
+                &mut vars,
+                Path::new("."),
+                Path::new("."),
+            )
             .await
             .expect_err("navigate without a url SHALL fail");
         assert_eq!(

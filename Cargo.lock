@@ -918,6 +918,7 @@ dependencies = [
  "golem-events",
  "golem-parser",
  "golem-vars",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml",

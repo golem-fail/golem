@@ -61,6 +61,8 @@
   - [browse_assert_text](#browse_assert_text--the-element-says-what-you-expect)
   - [browse_wait_exists](#browse_wait_exists--wait-for-an-element-to-appear)
   - [browse_wait_not_exists](#browse_wait_not_exists--wait-for-an-element-to-disappear)
+  - [browse_select](#browse_select--choose-an-option-in-a-select)
+  - [browse_execute_js](#browse_execute_js--run-javascript-in-the-page)
   - [browse_close](#browse_close--close-a-tab-early)
 - [Flow Control](#flow-control)
   - [fail](#fail--fail-the-flow-immediately)
@@ -827,6 +829,47 @@ the reason it exists.
 These wait on **DOM presence**, not visibility — an element hidden by CSS still
 counts as present. Browser steps are instrumentation, and visibility judgements
 belong to the mobile app under test.
+
+### `browse_select` — Choose an option in a `<select>`
+
+```toml
+{ action = "browse_select", selector = "#status", value = "fulfilled" }
+{ action = "browse_select", selector = "#status", text = "Fulfilled" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `value` | — | Match the option's `value` attribute |
+| `text` | — | Match the option's visible label instead. Give one or the other, not both |
+
+Fires `input` and `change` the way a user's choice would, so a framework
+listening for them sees the update.
+
+### `browse_execute_js` — Run JavaScript in the page
+
+```toml
+{ action = "browse_execute_js", script = "return document.title", save_to = "title" }
+{ action = "browse_execute_js", file = "portal-helpers.js", script = "return fulfilOrder('${order_id}')" }
+{ action = "browse_execute_js", script = "const r = await fetch('/api/orders'); return (await r.json()).length", save_to = "count" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `script` | — | Inline JavaScript. Golem `${…}` variables are interpolated here |
+| `file` | — | A `.js` file to run first. A leading `/` resolves from the project root; anything else from the flow file's directory. `..` is rejected |
+| `save_to` | — | Save the result. Objects nest, so `${result.total}` works; anything else is stored as text |
+
+Give either, or both. **The file runs first** — it's the natural home for
+reusable functions, and the inline script is then the one-liner that calls one.
+They run as a single evaluation, so the inline script sees whatever the file
+declared.
+
+The script body runs inside an async function: `return` what you want to save,
+and `await` is available for anything the page has to fetch.
+
+Golem variables are interpolated into `script` but **not** into `file`: a shared
+helper shouldn't change meaning depending on which flow imported it. Both are
+JavaScript, not TypeScript.
 
 ### `browse_close` — Close a tab early
 

@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
@@ -22,11 +23,21 @@ const DEFAULT_FIND_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_WAIT_TIMEOUT_MS: u64 = 10_000;
 const FIND_POLL_MS: u64 = 50;
 
+/// Where a step's file params resolve from, mirroring the `run` action: a
+/// leading `/` means project-root-relative, anything else is relative to the
+/// flow file's own directory.
+#[derive(Debug, Clone, Copy)]
+pub struct ScriptPaths<'a> {
+    pub flow_dir: &'a Path,
+    pub project_root: &'a Path,
+}
+
 /// Run one `browse_*` step.
 pub async fn execute_browser_action(
     pool: &mut BrowserPool,
     step: &Step,
     vars: &mut VariableStore,
+    paths: ScriptPaths<'_>,
 ) -> Result<()> {
     match step.action.as_str() {
         "browse_navigate" => navigate(pool, step).await,
@@ -40,11 +51,173 @@ pub async fn execute_browser_action(
         "browse_assert_text" => assert_text(pool, step).await,
         "browse_wait_exists" => wait_exists(pool, step).await,
         "browse_wait_not_exists" => wait_not_exists(pool, step).await,
+        "browse_execute_js" => execute_js(pool, step, vars, paths).await,
+        "browse_select" => select(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
     }
+}
+
+/// Run JavaScript in the page.
+///
+/// A file and an inline script can both be given, and the file runs first: it
+/// is the natural home for reusable functions, and the inline script is then
+/// the one-liner that calls one. They are concatenated into a single
+/// evaluation rather than run as two — separate evaluations would rely on the
+/// file's top-level declarations leaking into the realm, which `const` and
+/// `let` don't reliably do.
+///
+/// Only the inline script sees golem variables. Step params are interpolated
+/// before any handler runs, so `${order_id}` resolves there; the file is read
+/// straight off disk, because a shared helper shouldn't silently change
+/// meaning based on which flow imported it.
+async fn execute_js(
+    pool: &mut BrowserPool,
+    step: &Step,
+    vars: &mut VariableStore,
+    paths: ScriptPaths<'_>,
+) -> Result<()> {
+    let inline = optional_param(step, "script");
+    let file = optional_param(step, "file");
+    if inline.is_none() && file.is_none() {
+        return Err(golem_events::coded(
+            FailureCode::ParseMissingParam,
+            anyhow!("browse_execute_js requires a `script` param, a `file` param, or both"),
+        ));
+    }
+
+    // Wrapped in an async arrow and run through `evaluate_function`, for three
+    // reasons: a bare `function foo(){}` at the start of a script is otherwise
+    // mistaken for the function to call; `await` works, which a portal that
+    // fetches needs; and the value a step saves is whatever the script
+    // `return`s, which is one rule rather than "the last expression, unless…".
+    let mut source = String::from("async () => {\n");
+    if let Some(file) = file {
+        let path = resolve_script_file(file, paths)?;
+        let contents = std::fs::read_to_string(&path).map_err(|e| {
+            golem_events::coded(
+                FailureCode::ParseMissingParam,
+                anyhow!("reading browse_execute_js file {}: {e}", path.display()),
+            )
+        })?;
+        source.push_str(&contents);
+        source.push('\n');
+    }
+    if let Some(inline) = inline {
+        source.push_str(inline);
+    }
+    source.push_str("\n}");
+
+    let (page, ua) = page_for(pool, step).await?;
+    let result = page
+        .evaluate_function(source.as_str())
+        .await
+        .map_err(|e| external_failure(format!("evaluating script: {e}"), &ua))?;
+
+    if let Some(var_name) = &step.save_to {
+        let value: serde_json::Value = result.into_value().unwrap_or(serde_json::Value::Null);
+        vars.set_in_scope(ScopeLevel::Flow, var_name, json_to_var(value));
+    }
+    Ok(())
+}
+
+/// Resolve a script file the way the `run` action resolves its scripts, so a
+/// flow author has one rule to remember rather than one per action.
+fn resolve_script_file(file: &str, paths: ScriptPaths<'_>) -> Result<PathBuf> {
+    if file.contains("..") {
+        return Err(golem_events::coded(
+            FailureCode::ParseMissingParam,
+            anyhow!("browse_execute_js: path traversal ('..') is not allowed in `file`"),
+        ));
+    }
+    Ok(if let Some(rooted) = file.strip_prefix('/') {
+        paths.project_root.join(rooted)
+    } else {
+        paths.flow_dir.join(file)
+    })
+}
+
+/// Flatten a JSON result into the variable store's two shapes.
+///
+/// Objects nest so `${result.total}` works; everything else becomes the text a
+/// flow would compare against. Arrays keep their JSON form rather than becoming
+/// index-keyed objects — a `${rows.0}` that only worked for arrays would be a
+/// second indexing dialect to learn.
+fn json_to_var(value: serde_json::Value) -> VarValue {
+    match value {
+        serde_json::Value::Object(map) => VarValue::Object(
+            map.into_iter()
+                .map(|(k, v)| (k, json_to_var(v)))
+                .collect::<std::collections::HashMap<_, _>>(),
+        ),
+        serde_json::Value::String(s) => VarValue::string(s),
+        other => VarValue::string(other.to_string()),
+    }
+}
+
+/// Choose an option in a `<select>`.
+///
+/// Sets the value and fires `input` + `change` the way a user's choice would:
+/// frameworks listen for those events, and a select whose value changed without
+/// them leaves the page's own state stale.
+async fn select(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let (wanted, by_text) = match (optional_param(step, "value"), optional_param(step, "text")) {
+        (Some(value), None) => (value, false),
+        (None, Some(text)) => (text, true),
+        (Some(_), Some(_)) => {
+            return Err(golem_events::coded(
+                FailureCode::ParseMissingParam,
+                anyhow!("browse_select takes `value` or `text`, not both"),
+            ))
+        }
+        (None, None) => {
+            return Err(golem_events::coded(
+                FailureCode::ParseMissingParam,
+                anyhow!("browse_select requires a `value` or `text` param naming the option"),
+            ))
+        }
+    };
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    let element = find(&page, &target, find_timeout(step), &ua).await?;
+
+    // The wanted value is inlined as a JSON literal because `call_js_fn` takes
+    // no arguments — JSON encoding is what makes an option label containing a
+    // quote or a newline safe to embed.
+    let wanted_literal = serde_json::to_string(wanted).unwrap_or_else(|_| "\"\"".to_string());
+    let script = format!(
+        "function() {{
+            const wanted = {wanted_literal};
+            const byText = {by_text};
+            const option = Array.from(this.options).find(
+                (o) => (byText ? o.text : o.value) === wanted
+            );
+            if (!option) return false;
+            this.value = option.value;
+            this.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            this.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            return true;
+        }}"
+    );
+    let chosen = element
+        .call_js_fn(script, false)
+        .await
+        .map_err(|e| external_failure(format!("selecting in {target}: {e}"), &ua))?
+        .result
+        .value
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !chosen {
+        let how = if by_text { "text" } else { "value" };
+        return Err(golem_events::coded(
+            FailureCode::FlowElementNotFound,
+            anyhow!("{target} has no option with {how} {wanted:?} [browser: {ua}]"),
+        ));
+    }
+    Ok(())
 }
 
 /// Block until the element is in the DOM.
@@ -469,7 +642,26 @@ mod tests {
     }
 
     async fn run(pool: &mut BrowserPool, s: &Step, v: &mut VariableStore) -> Result<()> {
-        execute_browser_action(pool, s, v).await
+        run_from(pool, s, v, Path::new(".")).await
+    }
+
+    /// Same, with a directory for `file` params to resolve against.
+    async fn run_from(
+        pool: &mut BrowserPool,
+        s: &Step,
+        v: &mut VariableStore,
+        dir: &Path,
+    ) -> Result<()> {
+        execute_browser_action(
+            pool,
+            s,
+            v,
+            ScriptPaths {
+                flow_dir: dir,
+                project_root: dir,
+            },
+        )
+        .await
     }
 
     /// `expect_err` that names the case being exercised.
@@ -533,6 +725,15 @@ mod tests {
             (
                 "assert_text without an expected value",
                 "action = \"browse_assert_text\"\nselector = \"#status\"",
+            ),
+            ("execute_js with neither script nor file", "action = \"browse_execute_js\""),
+            (
+                "select without an option",
+                "action = \"browse_select\"\nselector = \"#status\"",
+            ),
+            (
+                "select given both ways to name an option",
+                "action = \"browse_select\"\nselector = \"#status\"\nvalue = \"a\"\ntext = \"A\"",
             ),
             (
                 "navigate with an unknown settle point",
@@ -983,7 +1184,139 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 13. Diagnostics: a missing element fails as not-found once the step's
+    // 13. JavaScript: an inline script's result lands in a variable, a file
+    //     runs first so the inline script can call what it declared, and an
+    //     object result nests for `${var.field}` access.
+    #[tokio::test]
+    async fn live_execute_js_runs_inline_scripts_and_files() {
+        if !chrome_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().expect("tempdir SHALL be created");
+        std::fs::write(
+            dir.path().join("helpers.js"),
+            "function orderTotal() { return { total: 1499, currency: 'GBP' } }",
+        )
+        .expect("helper SHALL be written");
+
+        let mut p = pool();
+        let mut v = vars();
+        page_with(&mut p, "<h1>Portal</h1>").await;
+
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_execute_js\"\nscript = \"document.title = 'Orders'; return document.title\"\nsave_to = \"title\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("an inline script SHALL run");
+        assert_eq!(saved(&v, "title"), "Orders");
+
+        run_from(
+            &mut p,
+            &step(
+                "action = \"browse_execute_js\"\nfile = \"helpers.js\"\nscript = \"return orderTotal()\"\nsave_to = \"order\"",
+            ),
+            &mut v,
+            dir.path(),
+        )
+        .await
+        .expect("the inline script SHALL see what the file declared");
+        match v.get("order") {
+            Some(VarValue::Object(fields)) => {
+                assert_eq!(fields.get("total"), Some(&VarValue::string("1499")));
+                assert_eq!(fields.get("currency"), Some(&VarValue::string("GBP")));
+            }
+            other => panic!("an object result SHALL nest, got {other:?}"),
+        }
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 14. A `file` that escapes the flow directory is refused before anything
+    //     is read — the same rule the `run` action applies to its scripts.
+    #[tokio::test]
+    async fn execute_js_rejects_path_traversal() {
+        let mut p = pool();
+        let e = run(
+            &mut p,
+            &step("action = \"browse_execute_js\"\nfile = \"../secrets.js\""),
+            &mut vars(),
+        )
+        .await
+        .expect_err("traversal SHALL be refused");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::ParseMissingParam)
+        );
+        assert!(!p.is_running(), "a refused path SHALL NOT launch a browser");
+    }
+
+    // 15. A select can be driven by option value or by visible label, the page
+    //     sees the `change` event either way, and an option that isn't there
+    //     fails rather than silently leaving the old value.
+    #[tokio::test]
+    async fn live_select_chooses_by_value_or_label() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(
+            &mut p,
+            "<select id='status' onchange=\"document.getElementById('seen').textContent = this.value\">\
+               <option value='pending'>Pending</option>\
+               <option value='fulfilled'>Fulfilled</option>\
+             </select><span id='seen'></span>",
+        )
+        .await;
+
+        run(
+            &mut p,
+            &step("action = \"browse_select\"\nselector = \"#status\"\nvalue = \"fulfilled\""),
+            &mut v,
+        )
+        .await
+        .expect("selecting by value SHALL work");
+        run(
+            &mut p,
+            &step("action = \"browse_read\"\nselector = \"#seen\"\nsave_to = \"seen\""),
+            &mut v,
+        )
+        .await
+        .expect("read SHALL succeed");
+        assert_eq!(
+            saved(&v, "seen"),
+            "fulfilled",
+            "the page's change handler SHALL see the new value"
+        );
+
+        run(
+            &mut p,
+            &step("action = \"browse_select\"\nselector = \"#status\"\ntext = \"Pending\""),
+            &mut v,
+        )
+        .await
+        .expect("selecting by label SHALL work");
+
+        let e = run(
+            &mut p,
+            &step("action = \"browse_select\"\nselector = \"#status\"\nvalue = \"cancelled\""),
+            &mut v,
+        )
+        .await
+        .expect_err("an option that isn't there SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowElementNotFound)
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 16. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]
