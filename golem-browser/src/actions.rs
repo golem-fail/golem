@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
+use chromiumoxide::cdp::browser_protocol::network::CookieParam;
 use chromiumoxide::element::Element;
 use chromiumoxide::page::{Page, ScreenshotParams};
 use golem_element::glob::glob_match;
@@ -55,11 +56,140 @@ pub async fn execute_browser_action(
         "browse_select" => select(pool, step).await,
         "browse_scroll_by" => scroll_by(pool, step).await,
         "browse_scroll_to" => scroll_to(pool, step).await,
+        "browse_set_cookie" => set_cookie(pool, step).await,
+        "browse_get_cookie" => get_cookie(pool, step, vars).await,
+        "browse_set_local_storage" => set_storage(pool, step, Storage::Local).await,
+        "browse_get_local_storage" => get_storage(pool, step, vars, Storage::Local).await,
+        "browse_set_session_storage" => set_storage(pool, step, Storage::Session).await,
+        "browse_get_session_storage" => get_storage(pool, step, vars, Storage::Session).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
     }
+}
+
+/// Set a cookie for the current page.
+///
+/// Through CDP rather than `document.cookie`, which is the whole point: the
+/// cookie a portal login hands out is usually `HttpOnly`, and script can
+/// neither read nor write those. `domain` and `path` are optional because the
+/// common case is "this cookie, for the page I'm on".
+async fn set_cookie(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let name = required_param(step, "name")?;
+    let value = required_param(step, "value")?;
+    let (page, ua) = page_for(pool, step).await?;
+
+    let mut cookie = CookieParam::new(name, value);
+    cookie.domain = optional_param(step, "domain").map(str::to_string);
+    cookie.path = optional_param(step, "path").map(str::to_string);
+    page.set_cookie(cookie)
+        .await
+        .map_err(|e| external_failure(format!("setting cookie `{name}`: {e}"), &ua))?;
+    Ok(())
+}
+
+/// Read a cookie visible to the current page into a variable.
+async fn get_cookie(pool: &mut BrowserPool, step: &Step, vars: &mut VariableStore) -> Result<()> {
+    let name = required_param(step, "name")?;
+    let (page, ua) = page_for(pool, step).await?;
+
+    let cookies = page
+        .get_cookies()
+        .await
+        .map_err(|e| external_failure(format!("reading cookies: {e}"), &ua))?;
+    let Some(cookie) = cookies.into_iter().find(|c| c.name == name) else {
+        return Err(golem_events::coded(
+            FailureCode::FlowElementNotFound,
+            anyhow!("no cookie named `{name}` for this page [browser: {ua}]"),
+        ));
+    };
+
+    if let Some(var_name) = &step.save_to {
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::string(&cookie.value));
+    }
+    Ok(())
+}
+
+/// Which web-storage area a step is talking about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Storage {
+    Local,
+    Session,
+}
+
+impl Storage {
+    fn js(self) -> &'static str {
+        match self {
+            Self::Local => "localStorage",
+            Self::Session => "sessionStorage",
+        }
+    }
+}
+
+async fn set_storage(pool: &mut BrowserPool, step: &Step, area: Storage) -> Result<()> {
+    let key = required_param(step, "key")?;
+    let value = required_param(step, "value")?;
+    let (page, ua) = page_for(pool, step).await?;
+
+    let script = format!(
+        "async () => {{ {}.setItem({}, {}); }}",
+        area.js(),
+        js_literal(key),
+        js_literal(value)
+    );
+    page.evaluate_function(script)
+        .await
+        .map_err(|e| external_failure(format!("writing {} `{key}`: {e}", area.js()), &ua))?;
+    Ok(())
+}
+
+/// Read a storage key into a variable, parsing JSON objects as they go.
+///
+/// Web apps keep structured state in storage as JSON text, so a raw string
+/// would force every flow to pick it apart by hand. An object nests for
+/// `${session.user.id}`; anything else — an array, a number, plain text —
+/// stays the text it was, because inventing an indexing dialect for arrays
+/// would be a second thing to learn.
+async fn get_storage(
+    pool: &mut BrowserPool,
+    step: &Step,
+    vars: &mut VariableStore,
+    area: Storage,
+) -> Result<()> {
+    let key = required_param(step, "key")?;
+    let (page, ua) = page_for(pool, step).await?;
+
+    let script = format!("async () => {}.getItem({})", area.js(), js_literal(key));
+    let raw: Option<String> = page
+        .evaluate_function(script)
+        .await
+        .map_err(|e| external_failure(format!("reading {} `{key}`: {e}", area.js()), &ua))?
+        .into_value()
+        .ok()
+        .flatten();
+
+    let Some(raw) = raw else {
+        return Err(golem_events::coded(
+            FailureCode::FlowElementNotFound,
+            anyhow!("no `{key}` in {} for this page [browser: {ua}]", area.js()),
+        ));
+    };
+
+    if let Some(var_name) = &step.save_to {
+        let parsed = match serde_json::from_str::<serde_json::Value>(&raw) {
+            Ok(value @ serde_json::Value::Object(_)) => json_to_var(value),
+            _ => VarValue::string(&raw),
+        };
+        vars.set_in_scope(ScopeLevel::Flow, var_name, parsed);
+    }
+    Ok(())
+}
+
+/// A string as a JS literal — quotes, newlines and backslashes handled by the
+/// JSON encoder rather than by hand.
+fn js_literal(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
 }
 
 /// Nudge the page, or one scrollable element, by a fixed distance.
@@ -296,7 +426,7 @@ async fn select(pool: &mut BrowserPool, step: &Step) -> Result<()> {
     // The wanted value is inlined as a JSON literal because `call_js_fn` takes
     // no arguments — JSON encoding is what makes an option label containing a
     // quote or a newline safe to embed.
-    let wanted_literal = serde_json::to_string(wanted).unwrap_or_else(|_| "\"\"".to_string());
+    let wanted_literal = js_literal(wanted);
     let script = format!(
         "function() {{
             const wanted = {wanted_literal};
@@ -739,6 +869,65 @@ mod tests {
         crate::chrome::locate().is_ok()
     }
 
+    /// A one-page HTTP server on an ephemeral port, returning its base URL.
+    ///
+    /// Cookies and web storage need a real origin. `about:blank` and `data:`
+    /// URLs get an opaque one, where `localStorage` throws and a cookie has
+    /// nowhere to live — so these tests serve the page for real rather than
+    /// writing it into the tab.
+    struct TestServer {
+        url: String,
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl TestServer {
+        fn start(html: &'static str) -> Self {
+            use std::io::{Read, Write};
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("SHALL bind a port");
+            let port = listener.local_addr().expect("SHALL have an address").port();
+            let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let flag = stop.clone();
+
+            let thread = std::thread::spawn(move || {
+                for stream in listener.incoming() {
+                    if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
+                    let Ok(mut stream) = stream else { continue };
+                    let mut buf = [0u8; 1024];
+                    let _ = stream.read(&mut buf);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{html}",
+                        html.len()
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                }
+            });
+
+            Self {
+                url: format!("http://127.0.0.1:{port}/"),
+                stop,
+                thread: Some(thread),
+            }
+        }
+    }
+
+    impl Drop for TestServer {
+        /// Unblock the accept loop with one throwaway connection and join, so
+        /// no thread outlives the test — nextest reports a lingering one as a
+        /// leak, and a leak report that means nothing trains people to ignore
+        /// the ones that do.
+        fn drop(&mut self) {
+            self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            let addr = self.url.trim_start_matches("http://").trim_end_matches('/');
+            let _ = std::net::TcpStream::connect(addr);
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+
     /// A page built from markup, in the default session. Written through the
     /// page rather than served, so the tests need no localhost server: the
     /// e2e flow in #107 is where a real server earns its keep.
@@ -846,6 +1035,20 @@ mod tests {
                 "action = \"browse_scroll_by\"\namount = -100",
             ),
             ("scroll_to without a selector", "action = \"browse_scroll_to\""),
+            ("set_cookie without a name", "action = \"browse_set_cookie\""),
+            (
+                "set_cookie without a value",
+                "action = \"browse_set_cookie\"\nname = \"session\"",
+            ),
+            ("get_cookie without a name", "action = \"browse_get_cookie\""),
+            (
+                "set_local_storage without a key",
+                "action = \"browse_set_local_storage\"\nvalue = \"x\"",
+            ),
+            (
+                "get_session_storage without a key",
+                "action = \"browse_get_session_storage\"",
+            ),
             (
                 "select without an option",
                 "action = \"browse_select\"\nselector = \"#status\"",
@@ -1547,7 +1750,131 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 17. Diagnostics: a missing element fails as not-found once the step's
+    // 17. Cookies and storage, against a real origin. A cookie round-trips
+    //     through CDP; storage round-trips per area; a JSON object nests for
+    //     dot-path access while plain text stays text; and asking for
+    //     something that was never set fails rather than saving nothing.
+    #[tokio::test]
+    async fn live_cookies_and_storage_round_trip() {
+        if !chrome_available() {
+            return;
+        }
+        let server = TestServer::start("<h1>Portal</h1>");
+        let mut p = pool();
+        let mut v = vars();
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the served page SHALL load");
+
+        run(
+            &mut p,
+            &step("action = \"browse_set_cookie\"\nname = \"session\"\nvalue = \"abc123\""),
+            &mut v,
+        )
+        .await
+        .expect("setting a cookie SHALL work");
+        run(
+            &mut p,
+            &step("action = \"browse_get_cookie\"\nname = \"session\"\nsave_to = \"session\""),
+            &mut v,
+        )
+        .await
+        .expect("reading it back SHALL work");
+        assert_eq!(saved(&v, "session"), "abc123");
+
+        for (set, get, area) in [
+            (
+                "browse_set_local_storage",
+                "browse_get_local_storage",
+                "local",
+            ),
+            (
+                "browse_set_session_storage",
+                "browse_get_session_storage",
+                "session",
+            ),
+        ] {
+            run(
+                &mut p,
+                &step(&format!(
+                    "action = \"{set}\"\nkey = \"where\"\nvalue = \"{area}\""
+                )),
+                &mut v,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("writing {area} storage SHALL work: {e:#}"));
+            run(
+                &mut p,
+                &step(&format!(
+                    "action = \"{get}\"\nkey = \"where\"\nsave_to = \"where_{area}\""
+                )),
+                &mut v,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("reading {area} storage SHALL work: {e:#}"));
+            assert_eq!(saved(&v, &format!("where_{area}")), area);
+        }
+
+        // JSON objects nest so a flow can reach into them.
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_set_local_storage\"\nkey = \"user\"\nvalue = \"{\\\"id\\\": \\\"u-7\\\", \\\"plan\\\": \\\"pro\\\"}\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("writing JSON SHALL work");
+        run(
+            &mut p,
+            &step("action = \"browse_get_local_storage\"\nkey = \"user\"\nsave_to = \"user\""),
+            &mut v,
+        )
+        .await
+        .expect("reading JSON SHALL work");
+        match v.get("user") {
+            Some(VarValue::Object(fields)) => {
+                assert_eq!(fields.get("id"), Some(&VarValue::string("u-7")));
+                assert_eq!(fields.get("plan"), Some(&VarValue::string("pro")));
+            }
+            other => panic!("a JSON object SHALL nest, got {other:?}"),
+        }
+
+        let e = run(
+            &mut p,
+            &step("action = \"browse_get_cookie\"\nname = \"absent\"\nsave_to = \"nope\""),
+            &mut v,
+        )
+        .await
+        .expect_err("an unset cookie SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowElementNotFound)
+        );
+        let e = run(
+            &mut p,
+            &step("action = \"browse_get_local_storage\"\nkey = \"absent\"\nsave_to = \"nope\""),
+            &mut v,
+        )
+        .await
+        .expect_err("an unset storage key SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowElementNotFound)
+        );
+        assert!(v.get("nope").is_none(), "nothing SHALL be saved on failure");
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 18. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]

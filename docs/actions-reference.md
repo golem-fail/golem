@@ -65,6 +65,9 @@
   - [browse_scroll_to](#browse_scroll_to--bring-an-element-into-view)
   - [browse_select](#browse_select--choose-an-option-in-a-select)
   - [browse_execute_js](#browse_execute_js--run-javascript-in-the-page)
+  - [browse_set_cookie / browse_get_cookie](#browse_set_cookie--browse_get_cookie--cookies)
+  - [browse_set_local_storage / browse_get_local_storage](#browse_set_local_storage--browse_get_local_storage--local-storage)
+  - [browse_set_session_storage / browse_get_session_storage](#browse_set_session_storage--browse_get_session_storage--session-storage)
   - [browse_close](#browse_close--close-a-tab-early)
 - [Flow Control](#flow-control)
   - [fail](#fail--fail-the-flow-immediately)
@@ -903,6 +906,54 @@ and `await` is available for anything the page has to fetch.
 Golem variables are interpolated into `script` but **not** into `file`: a shared
 helper shouldn't change meaning depending on which flow imported it. Both are
 JavaScript, not TypeScript.
+
+### `browse_set_cookie` / `browse_get_cookie` — Cookies
+
+```toml
+{ action = "browse_set_cookie", name = "session", value = "${portal_session}" }
+{ action = "browse_set_cookie", name = "region", value = "eu", domain = "portal.example.com", path = "/" }
+{ action = "browse_get_cookie", name = "session", save_to = "portal_session" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `name` | — | Cookie name. Required |
+| `value` | — | Required for `browse_set_cookie` |
+| `domain` | current page | Restrict the cookie to a domain |
+| `path` | current page | Restrict the cookie to a path |
+
+These go through CDP, not `document.cookie` — which is the point: the cookie a
+portal login hands out is usually `HttpOnly`, and script can neither read nor
+write those. A `browse_get_cookie` for a name that isn't set fails with `F404`.
+
+### `browse_set_local_storage` / `browse_get_local_storage` — Local storage
+
+```toml
+{ action = "browse_set_local_storage", key = "feature_flags", value = "{\"beta\": true}" }
+{ action = "browse_get_local_storage", key = "session", save_to = "session" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `key` | — | Required |
+| `value` | — | Required for the setter |
+
+**Reading parses JSON objects.** Web apps keep structured state in storage as
+JSON text, so an object nests and `${session.user.id}` works. Anything else — an
+array, a number, plain text — stays the text it was. A key that isn't set fails
+with `F404`.
+
+### `browse_set_session_storage` / `browse_get_session_storage` — Session storage
+
+```toml
+{ action = "browse_set_session_storage", key = "step", value = "2" }
+{ action = "browse_get_session_storage", key = "step", save_to = "step" }
+```
+
+Identical to the local-storage pair, against `sessionStorage`.
+
+Storage and cookies need a real origin: a page reached by `browse_navigate` has
+one, but `about:blank` doesn't, and both will fail there.
 
 ### `browse_close` — Close a tab early
 
