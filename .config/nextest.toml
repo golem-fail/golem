@@ -27,3 +27,17 @@ slow-timeout = { period = "2s", terminate-after = 5 }
 [[profile.default.overrides]]
 filter = 'test(/installer::tests::(script_timeout_kills_process|timeout_is_coded_install_timeout)/)'
 slow-timeout = { period = "2s", terminate-after = 15 }
+
+# Tests that drive a real Chrome (named `live_*`, in golem-browser). Each one
+# launches a browser, so they are legitimately slow and — more importantly —
+# expensive in parallel: a CI runner with two cores cannot start eight Chromes
+# at once, and the default 10s kill turns that contention into a false failure.
+# Capping the group is the honest fix; raising the timeout alone would only
+# hide the contention.
+[test-groups]
+browser = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = 'test(/::live_/)'
+test-group = 'browser'
+slow-timeout = { period = "15s", terminate-after = 4 }

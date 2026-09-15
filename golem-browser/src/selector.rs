@@ -19,6 +19,16 @@ pub struct BrowserTarget {
     pub index: usize,
 }
 
+impl std::fmt::Display for BrowserTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "`{}`", self.selector)?;
+        if self.index > 0 {
+            write!(f, " (match {})", self.index)?;
+        }
+        Ok(())
+    }
+}
+
 /// Resolve what a browser step targets from its params.
 ///
 /// The selector is trimmed but never parsed or rewritten: CSS semantics belong
