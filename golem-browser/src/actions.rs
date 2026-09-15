@@ -17,6 +17,9 @@ use crate::selector::{resolve_target, BrowserTarget};
 /// every dynamic page a race. Explicit waiting is still `browse_wait` (#101) —
 /// this is only the floor that stops ordinary steps flaking.
 const DEFAULT_FIND_TIMEOUT_MS: u64 = 5_000;
+/// A wait is an explicit "this may take a while", so it gets a longer budget
+/// than the incidental lookup an ordinary action does.
+const DEFAULT_WAIT_TIMEOUT_MS: u64 = 10_000;
 const FIND_POLL_MS: u64 = 50;
 
 /// Run one `browse_*` step.
@@ -35,10 +38,65 @@ pub async fn execute_browser_action(
         "browse_assert_exists" => assert_exists(pool, step).await,
         "browse_assert_not_exists" => assert_not_exists(pool, step).await,
         "browse_assert_text" => assert_text(pool, step).await,
+        "browse_wait_exists" => wait_exists(pool, step).await,
+        "browse_wait_not_exists" => wait_not_exists(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
+    }
+}
+
+/// Block until the element is in the DOM.
+///
+/// Reports a step timeout rather than "not found": a wait that runs out is a
+/// synchronisation failure — the page never got where the flow expected — while
+/// `browse_assert_exists` failing says the page is wrong. Both poll the same
+/// way; they differ in what the report will tell you afterwards.
+async fn wait_exists(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    let timeout_ms = wait_timeout(step);
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        if locate(&page, &target).await.is_some() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            let url = page.url().await.ok().flatten().unwrap_or_default();
+            return Err(golem_events::coded(
+                FailureCode::FlowStepTimeout,
+                anyhow!("{target} never appeared within {timeout_ms}ms on {url} [browser: {ua}]"),
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(FIND_POLL_MS)).await;
+    }
+}
+
+/// Block until the element is gone from the DOM.
+///
+/// The one thing no assertion can do: `browse_assert_not_exists` answers "is it
+/// gone now", this one answers "let it finish going". Spinners, toasts and
+/// progress rows are the reason it exists.
+async fn wait_not_exists(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    let timeout_ms = wait_timeout(step);
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        if locate(&page, &target).await.is_none() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            let url = page.url().await.ok().flatten().unwrap_or_default();
+            return Err(golem_events::coded(
+                FailureCode::FlowStepTimeout,
+                anyhow!("{target} was still present after {timeout_ms}ms on {url} [browser: {ua}]"),
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(FIND_POLL_MS)).await;
     }
 }
 
@@ -319,6 +377,10 @@ fn find_timeout(step: &Step) -> u64 {
     step.timeout.unwrap_or(DEFAULT_FIND_TIMEOUT_MS)
 }
 
+fn wait_timeout(step: &Step) -> u64 {
+    step.timeout.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS)
+}
+
 fn optional_param<'a>(step: &'a Step, name: &str) -> Option<&'a str> {
     step.params
         .get(name)
@@ -459,6 +521,11 @@ mod tests {
                 "action = \"browse_type\"\nselector = \"#name\"",
             ),
             ("assert_exists without a selector", "action = \"browse_assert_exists\""),
+            ("wait_exists without a selector", "action = \"browse_wait_exists\""),
+            (
+                "wait_not_exists without a selector",
+                "action = \"browse_wait_not_exists\"",
+            ),
             (
                 "assert_not_exists without a selector",
                 "action = \"browse_assert_not_exists\"",
@@ -550,6 +617,19 @@ mod tests {
     }
 
     // ── live browser ──
+
+    // 5b. A wait gets a longer default budget than an incidental lookup, and
+    //     both still honour an explicit step timeout.
+    #[test]
+    fn waits_get_a_longer_default_budget_than_lookups() {
+        let bare = step(r#"action = "browse_wait_exists""#);
+        assert_eq!(wait_timeout(&bare), 10_000);
+        assert_eq!(find_timeout(&bare), 5_000);
+
+        let explicit = step("action = \"browse_wait_exists\"\ntimeout = 250");
+        assert_eq!(wait_timeout(&explicit), 250);
+        assert_eq!(find_timeout(&explicit), 250);
+    }
 
     // 6. navigate then read: the default settle leaves the DOM queryable, so
     //    the very next step finds server-sent markup without an explicit wait.
@@ -825,7 +905,85 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 11. Diagnostics: a missing element fails as not-found once the step's
+    // 11. Waits track the page: one element arrives late and the other leaves
+    //     late, and both waits return as soon as that happens rather than
+    //     burning their budget.
+    #[tokio::test]
+    async fn live_waits_follow_elements_appearing_and_disappearing() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(
+            &mut p,
+            "<div class='spinner'></div>\
+             <script>setTimeout(() => {\
+               document.querySelector('.spinner').remove();\
+               const row = document.createElement('p');\
+               row.className = 'order-row';\
+               document.body.appendChild(row);\
+             }, 300)</script>",
+        )
+        .await;
+
+        let started = std::time::Instant::now();
+        run(
+            &mut p,
+            &step("action = \"browse_wait_not_exists\"\nselector = \".spinner\""),
+            &mut v,
+        )
+        .await
+        .expect("the spinner SHALL be waited out");
+        run(
+            &mut p,
+            &step("action = \"browse_wait_exists\"\nselector = \".order-row\""),
+            &mut v,
+        )
+        .await
+        .expect("the late row SHALL be waited for");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "a wait SHALL return when the page changes, not when its budget runs out"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 12. A wait that runs out is a step timeout, not a missing element: the
+    //     page never got where the flow expected, which is a different report
+    //     from "the page is wrong".
+    #[tokio::test]
+    async fn live_expired_waits_report_step_timeouts() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(&mut p, "<div class='spinner'></div>").await;
+
+        for src in [
+            "action = \"browse_wait_exists\"\nselector = \"#never\"\ntimeout = 150",
+            "action = \"browse_wait_not_exists\"\nselector = \".spinner\"\ntimeout = 150",
+        ] {
+            let e = run(&mut p, &step(src), &mut v)
+                .await
+                .unwrap_err_or_else(src);
+            assert_eq!(
+                golem_events::extract_code(&e),
+                Some(FailureCode::FlowStepTimeout),
+                "an expired wait SHALL be a step timeout: {src}"
+            );
+            assert!(
+                format!("{e:#}").contains("browser:"),
+                "the failure SHALL quote the user agent: {src}"
+            );
+        }
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 13. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]

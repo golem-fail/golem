@@ -785,6 +785,36 @@ Polls until the text matches or `timeout` runs out, so a page that updates after
 a click isn't judged on what it said beforehand. The failure (`F412`) quotes what
 the page actually said.
 
+### `browse_wait_exists` — Wait for an element to appear
+
+```toml
+{ action = "browse_wait_exists", selector = ".order-row" }
+{ action = "browse_wait_exists", selector = "#receipt", timeout = 30000 }
+```
+
+Polls until the element is in the DOM. Default `timeout` is 10000ms here — a
+wait is an explicit "this may take a while", unlike the incidental lookup an
+ordinary action does.
+
+Running out reports `F408` (step timeout), not `F404`: a wait that expires means
+the page never got where the flow expected, while a failed
+`browse_assert_exists` means the page is wrong. Both poll identically; they
+differ in what the report tells you afterwards.
+
+### `browse_wait_not_exists` — Wait for an element to disappear
+
+```toml
+{ action = "browse_wait_not_exists", selector = ".spinner" }
+```
+
+The one thing no assertion does: `browse_assert_not_exists` answers "is it gone
+now", this answers "let it finish going". Spinners, toasts and progress rows are
+the reason it exists.
+
+These wait on **DOM presence**, not visibility — an element hidden by CSS still
+counts as present. Browser steps are instrumentation, and visibility judgements
+belong to the mobile app under test.
+
 ### `browse_close` — Close a tab early
 
 ```toml
