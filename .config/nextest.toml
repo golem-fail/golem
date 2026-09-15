@@ -37,7 +37,11 @@ slow-timeout = { period = "2s", terminate-after = 15 }
 [test-groups]
 browser = { max-threads = 2 }
 
+# `(^|::)` matters: an integration test's name has no module path, so a
+# `::live_` filter silently misses every `tests/*.rs` case — which is how the
+# CLI browser test ended up outside the group and killed at the default 10s on
+# a runner slower than a laptop.
 [[profile.default.overrides]]
-filter = 'test(/::live_/)'
+filter = 'test(/(^|::)live_/)'
 test-group = 'browser'
 slow-timeout = { period = "15s", terminate-after = 4 }
