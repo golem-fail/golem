@@ -710,8 +710,13 @@ rest) describe a native view tree and are ignored by a browser step.
 | `session` | `_default` | Named tab. Tabs in a flow share cookies, so a login carries between them |
 | `timeout` | `5000` | How long to keep looking for the element, in ms |
 
-Requires a Chrome or Chromium on the host; set `$CHROME` to point at a specific
-binary. A suite whose flows contain no `browse_*` step never looks for one.
+**Requires a Chrome or Chromium on the host.** golem drives whichever one it
+finds (`$CHROME` points it at a specific binary) and never downloads one. macOS:
+install Google Chrome normally. Debian/Ubuntu: `apt install chromium` or
+Google's `google-chrome-stable` package. A suite whose flows contain no
+`browse_*` step never looks for one, so a mobile-only run needs nothing
+installed — and a browser flow on a machine without one fails at plan time with
+`H424`, before any device boots.
 Each flow gets its own browser, so concurrent flows never share cookies or
 storage, and it is closed when the flow ends whether it passed or failed.
 

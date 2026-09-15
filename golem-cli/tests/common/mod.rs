@@ -101,6 +101,39 @@ steps = [
     )
 }
 
+/// A flow whose only step drives the browser, against a `data:` URL so no
+/// server is needed. Used to prove the CLI actually reaches the browser
+/// dispatch — a path no unit test covers, because a unit test compiles the
+/// browser feature in itself and so cannot notice the binary shipping without
+/// it.
+pub fn browser_flow() -> String {
+    format!(
+        r#"[flow]
+name = "Stub browser"
+
+[flow.options]
+step_timeout = 5000
+a11y = "off"
+perf = false
+
+[[flow.apps]]
+name = "app"
+bundle = "{bundle}"
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "web"
+steps = [
+  {{ action = "browse_navigate", url = "data:text/html,<h1>Greetings</h1>" }},
+  {{ action = "browse_assert_text", selector = "h1", text = "Greetings" }},
+]
+"#,
+        bundle = golem_driver::stub::STUB_BUNDLE_ID,
+    )
+}
+
 /// Build a temp project (golem.toml + the fixture flow + a stub script),
 /// then run `golem run <flow> --stub <script> --platform android <extra>`
 /// in-process against the stub driver, capturing fd-level stdout/stderr.
@@ -114,6 +147,7 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
     let root = tmp.path().to_path_buf();
     std::fs::write(root.join("golem.toml"), golem_toml()).expect("write golem.toml");
     std::fs::write(root.join("fixture.test.toml"), fixture_flow()).expect("write flow");
+    std::fs::write(root.join("browser.test.toml"), browser_flow()).expect("write browser flow");
     std::fs::write(root.join("stub.toml"), stub_script_toml).expect("write stub script");
 
     // Point cwd + $HOME at the temp project. Saved and restored around the
@@ -123,10 +157,34 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
     std::env::set_current_dir(&root).expect("set cwd");
     std::env::set_var("HOME", &root);
 
+    let flow = extra_args
+        .iter()
+        .position(|a| *a == "--flow")
+        .and_then(|i| extra_args.get(i + 1))
+        .copied()
+        .unwrap_or("fixture.test.toml");
+    let extra_args: Vec<&str> = {
+        let mut kept = Vec::new();
+        let mut skip = 0;
+        for (i, arg) in extra_args.iter().enumerate() {
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            if *arg == "--flow" {
+                skip = 1;
+                continue;
+            }
+            let _ = i;
+            kept.push(*arg);
+        }
+        kept
+    };
+
     let mut argv: Vec<String> = vec![
         "golem".into(),
         "run".into(),
-        "fixture.test.toml".into(),
+        flow.into(),
         "--stub".into(),
         "stub.toml".into(),
         "--platform".into(),

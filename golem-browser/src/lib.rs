@@ -29,7 +29,7 @@ mod chrome;
 mod pool;
 
 #[cfg(feature = "browser")]
-pub use actions::execute_browser_action;
+pub use actions::{execute_browser_action, ScriptPaths};
 #[cfg(feature = "browser")]
 pub use chrome::locate;
 #[cfg(feature = "browser")]

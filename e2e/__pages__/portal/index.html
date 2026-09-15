@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Golem Portal</title>
+<!--
+  Stand-in for the kind of page a browser step actually exists for: a supplier
+  portal with no API, where a mobile flow has to drive web state it depends on.
+  Deliberately plain — no framework, no network — so a failure in the e2e means
+  golem's browser leg broke, not that a build step did.
+-->
+<body>
+  <h1>Golem Portal</h1>
+
+  <label for="order">Order</label>
+  <input id="order" placeholder="order id">
+
+  <button id="fulfil">Fulfil</button>
+
+  <p id="status" data-order="">Pending</p>
+
+  <script>
+    document.getElementById('fulfil').addEventListener('click', () => {
+      const order = document.getElementById('order').value.trim();
+      const status = document.getElementById('status');
+      status.dataset.order = order;
+      status.textContent = 'Fulfilled ' + order;
+    });
+  </script>
+</body>

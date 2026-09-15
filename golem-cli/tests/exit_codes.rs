@@ -31,3 +31,35 @@ fn failing_flow_exits_one() {
     let v = read_results_json(&r, "");
     assert_eq!(v["suite"]["failed"], 1, "json={v}");
 }
+
+// A browser step reaches the browser through the real CLI: args → orchestrator
+// → runner dispatch → golem-browser. Unit tests can't see this path break,
+// because each one compiles the browser feature in itself; only a run of the
+// assembled binary notices it shipping without the feature forwarded.
+//
+// That is not hypothetical — it is how this test came to exist. `golem-cli`'s
+// `browser` feature forwarded to the orchestrator but not the runner, so every
+// suite planned happily and then reported EH501 on its first browser step, and
+// nothing in the default test lane disagreed.
+//
+// Drives a real Chrome (nextest `live_` group); skipped where none exists.
+// Gated on the feature because `--no-default-features` is the build that
+// legitimately has no browser — there, H501 is the correct answer, not a bug.
+#[cfg(feature = "browser")]
+#[test]
+fn live_browser_step_runs_through_the_cli() {
+    if golem_browser::locate().is_err() {
+        return;
+    }
+    let run = common::run_stub("", &["--flow", "browser.test.toml"]);
+    assert!(
+        !run.stdout.contains("EH501"),
+        "the shipped binary SHALL carry browser support, got:\n{}",
+        run.stdout
+    );
+    assert_eq!(
+        run.code, 0,
+        "the browser flow SHALL pass:\n{}\n{}",
+        run.stdout, run.stderr
+    );
+}
