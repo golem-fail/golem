@@ -4,12 +4,12 @@ version.workspace = true
 edition = "2021"
 
 [features]
+# Deliberately empty. `golem-cli` owns the default (`browser` is on there), and
+# the libraries only forward it — a default here would re-enable the engine
+# through the dependency chain and make `--no-default-features` on the binary a
+# lie. Everything that *diagnoses* a browser flow — session grammar, preflight,
+# failure codes — compiles without the engine either way.
 default = []
-# Pulls in the actual engine. Off by default because chromiumoxide's generated
-# CDP bindings dominate a cold workspace build and a Chrome binary isn't
-# guaranteed on a dev box or in CI. Everything needed to *diagnose* a browser
-# flow — session grammar, preflight, failure codes — compiles without it, so a
-# default build explains itself instead of dying on an unknown action.
 browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio"]
 
 [dependencies]

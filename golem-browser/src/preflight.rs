@@ -50,7 +50,8 @@ fn browser_support(flow_name: &str) -> Result<()> {
         golem_events::FailureCode::HostBrowserUnsupported,
         anyhow::anyhow!(
             "flow `{flow_name}` uses browse_* steps, but this golem was built without \
-             browser support — rebuild with `--features browser`"
+             browser support — rebuild without `--no-default-features`, or with \
+             `--features browser`"
         ),
     ))
 }

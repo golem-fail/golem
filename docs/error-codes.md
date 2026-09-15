@@ -70,6 +70,6 @@ Codes appear in every output format:
 | `H404` | Toolchain / artifact missing (avdmanager, iOS runtime, companion binary) |
 | `H424` | No Chrome / Chromium found for `browse_*` steps — install one, or point `$CHROME` at the binary |
 | `H429` | Port allocation exhausted |
-| `H501` | Flow uses `browse_*` but this golem was built without the `browser` feature |
+| `H501` | Flow uses `browse_*` but this golem was built `--no-default-features` (no `browser`) |
 | `H502` | Orchestrator socket / IPC failure |
 | `X000` | Uncoded failure — unclassified, reached output without a domain tag |
