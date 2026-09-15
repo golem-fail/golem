@@ -91,7 +91,11 @@ pub async fn execute_action(
         // An unknown `browse_*` verb still fails as an unknown action — it just
         // fails over there, where the real list is.
         a if a.starts_with(golem_browser::BROWSE_PREFIX) => {
-            ctx.browser.lock().await.run_step(step, vars).await
+            ctx.browser
+                .lock()
+                .await
+                .run_step(step, vars, ctx.flow_dir, ctx.project_root)
+                .await
         }
         _ => crate::fail_code!(
             golem_events::FailureCode::ParseUnknownAction,

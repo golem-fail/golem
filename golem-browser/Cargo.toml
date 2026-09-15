@@ -10,7 +10,7 @@ edition = "2021"
 # lie. Everything that *diagnoses* a browser flow — session grammar, preflight,
 # failure codes — compiles without the engine either way.
 default = []
-browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio", "dep:golem-vars", "dep:tempfile", "dep:golem-element"]
+browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio", "dep:golem-vars", "dep:tempfile", "dep:golem-element", "dep:serde_json"]
 
 [dependencies]
 golem-events = { path = "../golem-events" }
@@ -20,6 +20,8 @@ golem-parser = { path = "../golem-parser" }
 golem-vars = { path = "../golem-vars", optional = true }
 # `glob_match` — browser text assertions match the way mobile ones do.
 golem-element = { path = "../golem-element", optional = true }
+# Results of `browse_execute_js`, and safe JS literals for `browse_select`.
+serde_json = { workspace = true, optional = true }
 anyhow = { workspace = true }
 chromiumoxide = { workspace = true, optional = true }
 futures = { version = "0.3", optional = true }
