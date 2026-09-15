@@ -64,6 +64,14 @@ sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION
 sed -i '' "s/\"version\", \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\", \"$NEW_VERSION\"/" \
     "$ROOT/companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServerTest.java"
 
+# 5. Lockfiles that record the test app's own version. Both are scoped
+#    deliberately: `--workspace` re-resolves only the local package, and
+#    `--package-lock-only` leaves node_modules alone. A full regeneration
+#    here would fold dependency upgrades into a release bump, which is
+#    dependabot's job, not this script's.
+cargo update --workspace --manifest-path "$ROOT/test-app/src-tauri/Cargo.toml"
+(cd "$ROOT/test-app" && npm install --package-lock-only)
+
 # Verify
 echo ""
 echo "Verifying..."
