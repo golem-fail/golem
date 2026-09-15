@@ -189,8 +189,9 @@ pub enum FailureCode {
     /// repairing the mobile toolchain.
     HostBrowserMissing,
     /// H501: the flow uses `browse_*` steps but this golem was built without
-    /// the `browser` feature. A build-configuration problem, not a test one —
-    /// the flow is valid, this binary just can't serve it.
+    /// the `browser` feature (on by default, so this means a deliberate
+    /// `--no-default-features` build). A build-configuration problem, not a
+    /// test one — the flow is valid, this binary just can't serve it.
     HostBrowserUnsupported,
 }
 

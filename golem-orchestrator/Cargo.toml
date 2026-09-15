@@ -4,6 +4,7 @@ version.workspace = true
 edition = "2021"
 
 [features]
+# Empty by design — see golem-browser/Cargo.toml; the binary owns the default.
 default = []
 # Forwards to golem-browser: with it the suite preflight probes for a real
 # Chrome, without it a browser flow is rejected as unservable by this build.

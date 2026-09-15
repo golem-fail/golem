@@ -8,11 +8,11 @@ name = "golem"
 path = "src/main.rs"
 
 [features]
-default = []
-# Host-side browser automation for `browse_*` steps. Off by default: it pulls
-# chromiumoxide (heavy build) and needs a Chrome on the host, neither of which
-# a mobile-only run should pay for. Today it reaches only the suite preflight —
-# the runner side (dispatching browse_* steps) lands with #106.
+default = ["browser"]
+# Host-side browser automation for `browse_*` steps. On by default so every
+# shipped binary can serve a browse_* flow; `--no-default-features` is the
+# opt-out for a leaner build. Today it reaches only the suite preflight — the
+# runner side (dispatching browse_* steps) lands with #106.
 browser = ["golem-orchestrator/browser"]
 
 [dependencies]

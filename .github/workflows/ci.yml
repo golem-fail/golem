@@ -97,6 +97,11 @@ jobs:
       # platform-specific, e.g. a cast that's redundant on Linux but needed on
       # macOS). Add `-- -D warnings` later if the repo does a warning-clean pass.
       - run: cargo clippy --workspace --all-targets
+      # The browser engine is on by default, so the `--no-default-features`
+      # build — the one that reports H501 instead of driving Chrome — is never
+      # compiled above. Typecheck it here so that path can't bit-rot unnoticed.
+      # Cheap: it compiles strictly less than the default build.
+      - run: cargo check --workspace --all-targets --no-default-features
 
   test:
     needs: classify
