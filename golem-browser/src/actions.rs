@@ -53,11 +53,121 @@ pub async fn execute_browser_action(
         "browse_wait_not_exists" => wait_not_exists(pool, step).await,
         "browse_execute_js" => execute_js(pool, step, vars, paths).await,
         "browse_select" => select(pool, step).await,
+        "browse_scroll_by" => scroll_by(pool, step).await,
+        "browse_scroll_to" => scroll_to(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
     }
+}
+
+/// Nudge the page, or one scrollable element, by a fixed distance.
+///
+/// Named for `scrollBy`, not for mobile's `scroll`. Mobile `scroll` keeps
+/// swiping until an element appears — a search that has no meaning here, since
+/// a CSS selector reaches an element whether or not it is on screen. Borrowing
+/// the bare word would promise that search; `_by` and `_to` say plainly which
+/// of the two jobs each action does.
+async fn scroll_by(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let direction = Direction::from_step(step)?;
+    let amount = scroll_amount(step)?;
+    let (dx, dy) = direction.delta(amount);
+    let (page, ua) = page_for(pool, step).await?;
+
+    // `container` scrolls that element; without one the window moves. It is
+    // deliberately not `selector`: every other browser action uses `selector`
+    // for the element the step acts *on*, and here the element being scrolled
+    // is scenery around the movement, not its subject.
+    match optional_param(step, "container") {
+        Some(container) => {
+            let target = BrowserTarget {
+                selector: container.to_string(),
+                index: 0,
+            };
+            let element = find(&page, &target, find_timeout(step), &ua).await?;
+            element
+                .call_js_fn(
+                    format!("function() {{ this.scrollBy({dx}, {dy}); return true; }}"),
+                    false,
+                )
+                .await
+                .map_err(|e| external_failure(format!("scrolling {target}: {e}"), &ua))?;
+        }
+        None => {
+            page.evaluate_function(format!("async () => {{ window.scrollBy({dx}, {dy}); }}"))
+                .await
+                .map_err(|e| external_failure(format!("scrolling the page: {e}"), &ua))?;
+        }
+    }
+    Ok(())
+}
+
+/// Bring an element into view.
+async fn scroll_to(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    let element = find(&page, &target, find_timeout(step), &ua).await?;
+    element
+        .scroll_into_view()
+        .await
+        .map_err(|e| external_failure(format!("scrolling {target} into view: {e}"), &ua))?;
+    Ok(())
+}
+
+/// Which way `browse_scroll` moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Direction {
+    /// Defaults to down, like the mobile `scroll` action — the same word should
+    /// mean the same thing whichever tree a step is aimed at.
+    fn from_step(step: &Step) -> Result<Self> {
+        match optional_param(step, "direction") {
+            None | Some("down") => Ok(Self::Down),
+            Some("up") => Ok(Self::Up),
+            Some("left") => Ok(Self::Left),
+            Some("right") => Ok(Self::Right),
+            Some(other) => Err(golem_events::coded(
+                FailureCode::ParseMissingParam,
+                anyhow!("unknown scroll direction `{other}` — expected up, down, left, or right"),
+            )),
+        }
+    }
+
+    fn delta(self, amount: i64) -> (i64, i64) {
+        match self {
+            Self::Down => (0, amount),
+            Self::Up => (0, -amount),
+            Self::Right => (amount, 0),
+            Self::Left => (-amount, 0),
+        }
+    }
+}
+
+/// How far to scroll, in CSS pixels.
+fn scroll_amount(step: &Step) -> Result<i64> {
+    let Some(raw) = step.params.get("amount") else {
+        return Ok(300);
+    };
+    let invalid = |detail: String| {
+        golem_events::coded(
+            FailureCode::ParseMissingParam,
+            anyhow!("browser step `amount` {detail} — expected a positive number of pixels"),
+        )
+    };
+    let n = raw
+        .as_integer()
+        .ok_or_else(|| invalid(format!("must be a number, got `{raw}`")))?;
+    if n <= 0 {
+        return Err(invalid(format!("must be positive, got `{n}`")));
+    }
+    Ok(n)
 }
 
 /// Run JavaScript in the page.
@@ -728,6 +838,15 @@ mod tests {
             ),
             ("execute_js with neither script nor file", "action = \"browse_execute_js\""),
             (
+                "scroll in a direction that doesn't exist",
+                "action = \"browse_scroll_by\"\ndirection = \"sideways\"",
+            ),
+            (
+                "scroll by a negative distance",
+                "action = \"browse_scroll_by\"\namount = -100",
+            ),
+            ("scroll_to without a selector", "action = \"browse_scroll_to\""),
+            (
                 "select without an option",
                 "action = \"browse_select\"\nselector = \"#status\"",
             ),
@@ -818,6 +937,23 @@ mod tests {
     }
 
     // ── live browser ──
+
+    // 5a. Scroll defaults match the mobile action a reader already knows, and
+    //     each direction moves the axis it names.
+    #[test]
+    fn scroll_by_defaults_to_300px_down() {
+        let bare = step(r#"action = "browse_scroll_by""#);
+        assert_eq!(scroll_amount(&bare).expect("default"), 300);
+        assert_eq!(
+            Direction::from_step(&bare).expect("default"),
+            Direction::Down
+        );
+
+        assert_eq!(Direction::Down.delta(300), (0, 300));
+        assert_eq!(Direction::Up.delta(300), (0, -300));
+        assert_eq!(Direction::Right.delta(300), (300, 0));
+        assert_eq!(Direction::Left.delta(300), (-300, 0));
+    }
 
     // 5b. A wait gets a longer default budget than an incidental lookup, and
     //     both still honour an explicit step timeout.
@@ -1316,7 +1452,102 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 16. Diagnostics: a missing element fails as not-found once the step's
+    // 16. Scrolling moves the window and a container independently, and
+    //     `browse_scroll_to` brings a far-down element into view.
+    #[tokio::test]
+    async fn live_scroll_moves_the_page_and_a_container() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(
+            &mut p,
+            "<div id='box' style='height:100px;overflow:auto'>\
+               <div style='height:2000px'></div></div>\
+             <div style='height:3000px'></div>\
+             <p id='bottom'>bottom</p>",
+        )
+        .await;
+
+        run(
+            &mut p,
+            &step("action = \"browse_scroll_by\"\namount = 500"),
+            &mut v,
+        )
+        .await
+        .expect("the page SHALL scroll");
+        run(
+            &mut p,
+            &step("action = \"browse_execute_js\"\nscript = \"return String(window.scrollY)\"\nsave_to = \"y\""),
+            &mut v,
+        )
+        .await
+        .expect("reading scrollY SHALL work");
+        assert_eq!(saved(&v, "y"), "500", "the window SHALL have moved");
+
+        run(
+            &mut p,
+            &step("action = \"browse_scroll_by\"\ncontainer = \"#box\"\namount = 250"),
+            &mut v,
+        )
+        .await
+        .expect("a container SHALL scroll");
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_execute_js\"\nscript = \"return String(document.getElementById('box').scrollTop)\"\nsave_to = \"box_y\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("reading scrollTop SHALL work");
+        assert_eq!(
+            saved(&v, "box_y"),
+            "250",
+            "the container SHALL have moved on its own"
+        );
+
+        run(
+            &mut p,
+            &step("action = \"browse_scroll_by\"\ndirection = \"up\"\namount = 500"),
+            &mut v,
+        )
+        .await
+        .expect("scrolling back up SHALL work");
+        run(
+            &mut p,
+            &step("action = \"browse_execute_js\"\nscript = \"return String(window.scrollY)\"\nsave_to = \"y2\"",),
+            &mut v,
+        )
+        .await
+        .expect("reading scrollY SHALL work");
+        assert_eq!(saved(&v, "y2"), "0", "up SHALL undo down");
+
+        run(
+            &mut p,
+            &step("action = \"browse_scroll_to\"\nselector = \"#bottom\""),
+            &mut v,
+        )
+        .await
+        .expect("scroll_to SHALL reach a far-down element");
+        run(
+            &mut p,
+            &step("action = \"browse_execute_js\"\nscript = \"return String(window.scrollY > 0)\"\nsave_to = \"moved\"",),
+            &mut v,
+        )
+        .await
+        .expect("reading scrollY SHALL work");
+        assert_eq!(
+            saved(&v, "moved"),
+            "true",
+            "scroll_to SHALL have moved the page"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 17. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]
