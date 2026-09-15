@@ -33,6 +33,17 @@ jobs:
             *,no-release-note,*) echo "'no-release-note' label — exempt."; exit 0 ;;
           esac
 
+          # Both markers, in order. An unclosed block captures to end-of-body, so
+          # any later line that happens to read like a category (a "Testing"
+          # section saying `fixed: the flaky test`) would ship as a phantom note.
+          open_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *release-notes *-->' | head -1 | cut -d: -f1)"
+          close_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *\/release-notes *-->' | head -1 | cut -d: -f1)"
+          if [ -n "$open_at" ] && { [ -z "$close_at" ] || [ "$close_at" -lt "$open_at" ]; }; then
+            echo "::error::The release-notes block opens with <!-- release-notes --> but never closes."
+            echo "Close it with <!-- /release-notes --> (note the slash) — see the PR template."
+            exit 1
+          fi
+
           # Extract the block interior, then strip HTML comments (single/multi-line)
           # so leftover template guidance never counts as a real note.
           block="$(printf '%s\n' "$BODY" \
@@ -42,10 +53,15 @@ jobs:
                      gsub(/<!--.*-->/,"",l)
                      if (l ~ /<!--/) { sub(/<!--.*/,"",l); inc=1 }
                      print l }')"
-          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-?[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'; then
+          # The leading `- ` is required: `scripts/sync-pr-notes.sh` only recognises
+          # bulleted lines, so a bare entry is invisible to the trailer sync and
+          # would be duplicated rather than deduped against. Release-time
+          # extraction still accepts both, so merged PRs keep working.
+          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]+(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'; then
             echo "✓ release-notes block present."
           else
-            echo "::error::No release-notes block with a category line (breaking/added/improved/fixed/security/deprecated/internal) was found in the PR description."
+            echo "::error::No release-notes block with a bulleted category line (breaking/added/improved/fixed/security/deprecated/internal) was found in the PR description."
+            echo "Each entry needs a leading '- ', e.g. '- fixed: tap lands correctly under the keyboard'."
             echo "Add one (see the PR template), or apply the 'no-release-note' label if this PR ships nothing user-facing."
             exit 1
           fi
