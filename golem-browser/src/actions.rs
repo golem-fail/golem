@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use chromiumoxide::element::Element;
 use chromiumoxide::page::{Page, ScreenshotParams};
+use golem_element::glob::glob_match;
 use golem_events::FailureCode;
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
@@ -31,11 +32,90 @@ pub async fn execute_browser_action(
         "browse_read" => read(pool, step, vars).await,
         "browse_screenshot" => screenshot(pool, step).await,
         "browse_close" => close(pool, step).await,
+        "browse_assert_exists" => assert_exists(pool, step).await,
+        "browse_assert_not_exists" => assert_not_exists(pool, step).await,
+        "browse_assert_text" => assert_text(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
     }
+}
+
+/// The element must be in the DOM.
+///
+/// DOM presence, not visibility: the browser is instrumentation, and what a
+/// headless Chrome "sees" is not what a user sees. Visibility judgements belong
+/// to the mobile app under test.
+async fn assert_exists(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    find(&page, &target, find_timeout(step), &ua)
+        .await
+        .map(drop)
+}
+
+/// The element must not be in the DOM.
+///
+/// One look, deliberately. Retrying would mean waiting the whole timeout to
+/// confirm every absence — slow when the assertion passes, which is the common
+/// case. Waiting for something to *go away* is `browse_wait_not` (#101).
+async fn assert_not_exists(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let target = resolve_target(step)?;
+    let (page, ua) = page_for(pool, step).await?;
+    if locate(&page, &target).await.is_none() {
+        return Ok(());
+    }
+    let url = page.url().await.ok().flatten().unwrap_or_default();
+    Err(golem_events::coded(
+        FailureCode::FlowUnexpectedlyPresent,
+        anyhow!("{target} is still present on {url} [browser: {ua}]"),
+    ))
+}
+
+/// The element's text (or one attribute) must match a pattern.
+///
+/// Polls until it matches rather than reading once: a page that updates text
+/// after a click would otherwise be judged on whatever it happened to say when
+/// the step began. The wait is bounded by the step's timeout, and the failure
+/// quotes what the page actually said.
+async fn assert_text(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    let expected = required_param(step, "text")?;
+    let target = resolve_target(step)?;
+    let attribute = optional_param(step, "attribute");
+    let (page, ua) = page_for(pool, step).await?;
+
+    let deadline = Instant::now() + Duration::from_millis(find_timeout(step));
+    let mut seen: Option<String> = None;
+    loop {
+        if let Some(element) = locate(&page, &target).await {
+            let actual = match attribute {
+                Some(name) => element.attribute(name).await.ok().flatten(),
+                None => element.inner_text().await.ok().flatten(),
+            };
+            if actual.as_deref().is_some_and(|a| glob_match(expected, a)) {
+                return Ok(());
+            }
+            seen = actual;
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(FIND_POLL_MS)).await;
+    }
+
+    let what = match attribute {
+        Some(name) => format!("`{name}` of {target}"),
+        None => format!("text of {target}"),
+    };
+    let actual = match seen {
+        Some(text) => format!("{text:?}"),
+        None => "nothing (no such element or attribute)".to_string(),
+    };
+    Err(golem_events::coded(
+        FailureCode::FlowAssertionMismatch,
+        anyhow!("{what} is {actual}, expected {expected:?} [browser: {ua}]"),
+    ))
 }
 
 /// Hand back a tab the flow is finished with. Flow-end teardown still closes
@@ -378,6 +458,15 @@ mod tests {
                 "type without a value",
                 "action = \"browse_type\"\nselector = \"#name\"",
             ),
+            ("assert_exists without a selector", "action = \"browse_assert_exists\""),
+            (
+                "assert_not_exists without a selector",
+                "action = \"browse_assert_not_exists\"",
+            ),
+            (
+                "assert_text without an expected value",
+                "action = \"browse_assert_text\"\nselector = \"#status\"",
+            ),
             (
                 "navigate with an unknown settle point",
                 "action = \"browse_navigate\"\nurl = \"https://example.com\"\nwait_until = \"eventually\"",
@@ -619,7 +708,124 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
-    // 9. Diagnostics: a missing element fails as not-found once the step's
+    // 9. Assertions, on one page: presence and absence hold; a present element
+    //    fails an absence check; text matches exactly and by glob; a mismatch
+    //    quotes what the page actually said; and an attribute can be asserted
+    //    the same way it can be read.
+    #[tokio::test]
+    async fn live_assertions_judge_dom_presence_and_text() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(
+            &mut p,
+            "<span id='status'>Fulfilled</span><span id='total' data-total='1499'>Total: £14.99</span>",
+        )
+        .await;
+
+        run(
+            &mut p,
+            &step("action = \"browse_assert_exists\"\nselector = \"#status\""),
+            &mut v,
+        )
+        .await
+        .expect("a present element SHALL satisfy assert_exists");
+        run(
+            &mut p,
+            &step("action = \"browse_assert_not_exists\"\nselector = \"#error-banner\""),
+            &mut v,
+        )
+        .await
+        .expect("an absent element SHALL satisfy assert_not_exists");
+
+        let e = run(
+            &mut p,
+            &step("action = \"browse_assert_not_exists\"\nselector = \"#status\""),
+            &mut v,
+        )
+        .await
+        .expect_err("a present element SHALL fail assert_not_exists");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowUnexpectedlyPresent)
+        );
+
+        run(
+            &mut p,
+            &step("action = \"browse_assert_text\"\nselector = \"#status\"\ntext = \"Fulfilled\""),
+            &mut v,
+        )
+        .await
+        .expect("an exact match SHALL pass");
+        run(
+            &mut p,
+            &step("action = \"browse_assert_text\"\nselector = \"#total\"\ntext = \"Total: *\""),
+            &mut v,
+        )
+        .await
+        .expect("a glob SHALL match the way mobile text matchers do");
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_assert_text\"\nselector = \"#total\"\nattribute = \"data-total\"\ntext = \"1499\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("an attribute SHALL be assertable");
+
+        let e = run(
+            &mut p,
+            &step(
+                "action = \"browse_assert_text\"\nselector = \"#status\"\ntext = \"Cancelled\"\ntimeout = 150",
+            ),
+            &mut v,
+        )
+        .await
+        .expect_err("a mismatch SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowAssertionMismatch)
+        );
+        let msg = format!("{e:#}");
+        assert!(
+            msg.contains("Fulfilled") && msg.contains("Cancelled"),
+            "the failure SHALL quote both what was found and what was expected: {msg}"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 10. A text assertion waits for the page to catch up, so an element
+    //     updated after a click isn't judged on what it said beforehand.
+    #[tokio::test]
+    async fn live_assert_text_waits_for_the_page_to_update() {
+        if !chrome_available() {
+            return;
+        }
+        let mut p = pool();
+        let mut v = vars();
+        page_with(
+            &mut p,
+            "<span id='status'>Pending</span>\
+             <script>setTimeout(() => document.getElementById('status').textContent = 'Fulfilled', 300)</script>",
+        )
+        .await;
+
+        run(
+            &mut p,
+            &step("action = \"browse_assert_text\"\nselector = \"#status\"\ntext = \"Fulfilled\""),
+            &mut v,
+        )
+        .await
+        .expect("the assertion SHALL wait for the later update");
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 11. Diagnostics: a missing element fails as not-found once the step's
     //    timeout is up, naming the selector and quoting the browser; and a
     //    screenshot writes a real PNG when a path is given.
     #[tokio::test]
