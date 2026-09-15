@@ -48,11 +48,24 @@
   - [create_inbox](#create_inbox--provision-a-disposable-email-inbox)
   - [await_email](#await_email--poll-imap-inbox)
   - [load_fixture](#load_fixture--load-fixture-data)
+  - [load_mixin](#load_mixin--inline-a-reusable-step-sequence)
   - [*_http](#get_http-post_http-put_http-patch_http-delete_http--http-requests)
+- [Browser](#browser)
+  - [browse_navigate](#browse_navigate--load-a-url)
+  - [browse_tap](#browse_tap--click-an-element)
+  - [browse_type](#browse_type--type-into-a-field)
+  - [browse_read](#browse_read--read-text-or-an-attribute-into-a-variable)
+  - [browse_screenshot](#browse_screenshot--capture-the-tab)
+  - [browse_assert_exists](#browse_assert_exists--the-element-is-in-the-dom)
+  - [browse_assert_not_exists](#browse_assert_not_exists--the-element-is-not-in-the-dom)
+  - [browse_assert_text](#browse_assert_text--the-element-says-what-you-expect)
+  - [browse_wait_exists](#browse_wait_exists--wait-for-an-element-to-appear)
+  - [browse_wait_not_exists](#browse_wait_not_exists--wait-for-an-element-to-disappear)
+  - [browse_close](#browse_close--close-a-tab-early)
 - [Flow Control](#flow-control)
   - [fail](#fail--fail-the-flow-immediately)
 
-<!-- The canonical list of action keywords is the dispatch match in [`golem-runner/src/actions.rs`](../golem-runner/src/actions.rs). If you add a handler there, document it here. -->
+<!-- The canonical list of action keywords is the dispatch match in [`golem-runner/src/actions.rs`](../golem-runner/src/actions.rs), plus [`golem-browser/src/actions.rs`](../golem-browser/src/actions.rs) for the `browse_*` family. If you add a handler in either, document it here AND list it in the Contents above — `actions_reference_doc_lists_every_action` and `actions_reference_contents_links_every_entry` enforce both. -->
 
 ## Interaction
 

@@ -116,6 +116,63 @@ mod tests {
     // added, removed, or renamed in the `match` above without the doc being updated to
     // match (or vice versa). It does NOT catch a wrong description or param — that still
     // needs human review; this only catches drift in which actions exist.
+    // Every `###` entry in the reference is reachable from its Contents list.
+    // The dispatch-sync test above catches an undocumented *action*, but said
+    // nothing about a section that exists and can't be found — which is how the
+    // whole Browser family sat in the document, unlinked, for three PRs.
+    #[test]
+    fn actions_reference_contents_links_every_entry() {
+        use std::collections::BTreeSet;
+
+        /// GitHub's heading anchor: drop backticks and punctuation, lowercase,
+        /// spaces to hyphens. An em dash vanishes and leaves its two spaces
+        /// behind, which is why entries render as `#tap--tap-an-element`.
+        fn slug(header: &str) -> String {
+            let cleaned: String = header
+                .replace('`', "")
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-' || *c == '_')
+                .collect();
+            cleaned.trim().replace(' ', "-")
+        }
+
+        let doc = include_str!("../../docs/actions-reference.md");
+        // `entries` are the per-action headings that MUST be linked; `anchors`
+        // also holds section headings, which the Contents links but which
+        // aren't entries in their own right.
+        let (mut entries, mut anchors, mut linked) =
+            (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+        for line in doc.lines() {
+            let t = line.trim_start();
+            if let Some(header) = t.strip_prefix("### ") {
+                entries.insert(slug(header));
+                anchors.insert(slug(header));
+            } else if let Some(header) = t.strip_prefix("## ") {
+                anchors.insert(slug(header));
+            }
+            // Contents entries are list items linking to an in-page anchor.
+            if t.starts_with("- [") {
+                if let Some((_, anchor)) = t.split_once("](#") {
+                    if let Some(anchor) = anchor.split(')').next() {
+                        linked.insert(anchor.to_string());
+                    }
+                }
+            }
+        }
+
+        let unlinked: Vec<_> = entries.difference(&linked).collect();
+        let dangling: Vec<_> = linked.difference(&anchors).collect();
+        assert!(
+            unlinked.is_empty(),
+            "docs/actions-reference.md has entries missing from its Contents: {unlinked:?}"
+        );
+        assert!(
+            dangling.is_empty(),
+            "docs/actions-reference.md Contents links nothing: {dangling:?}"
+        );
+    }
+
     #[test]
     fn actions_reference_doc_lists_every_action() {
         use std::collections::BTreeSet;
