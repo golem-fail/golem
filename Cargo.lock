@@ -1075,6 +1075,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "golem-browser",
  "golem-common",
  "golem-devices",
  "golem-driver",

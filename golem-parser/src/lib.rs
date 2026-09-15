@@ -535,6 +535,10 @@ pub struct FlowOptions {
     /// - `"launch"` — launch first app if not running; preserves state.
     /// - `"manual"` — do nothing; flow manages its own lifecycle.
     pub app_lifecycle: Option<AppLifecycle>,
+    /// Run `browse_*` steps in a headless browser. Default: true. The CLI
+    /// `--browser-headed` flag overrides this, so a flow can be watched
+    /// without editing it.
+    pub browser_headless: Option<bool>,
     /// Enable/disable automatic performance capture. Default: true.
     pub perf: Option<bool>,
     /// Memory warning threshold in MB.

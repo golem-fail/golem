@@ -301,6 +301,7 @@ struct SubmitConfigFields {
     no_perf: bool,
     no_clean: bool,
     no_teardown: bool,
+    browser_headed: bool,
     keep_devices: bool,
     no_results: bool,
     start: Option<String>,
@@ -337,6 +338,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     let no_perf = cfg["no_perf"].as_bool().unwrap_or(false);
     let no_clean = cfg["no_clean"].as_bool().unwrap_or(false);
     let no_teardown = cfg["no_teardown"].as_bool().unwrap_or(false);
+    let browser_headed = cfg["browser_headed"].as_bool().unwrap_or(false);
     let keep_devices = cfg["keep_devices"].as_bool().unwrap_or(false);
     let no_results = cfg["no_results"].as_bool().unwrap_or(false);
     let start = cfg["start"].as_str().map(String::from);
@@ -405,6 +407,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         no_perf,
         no_clean,
         no_teardown,
+        browser_headed,
         keep_devices,
         no_results,
         start,
@@ -458,6 +461,7 @@ async fn handle_submit(
         no_perf,
         no_clean,
         no_teardown,
+        browser_headed,
         keep_devices,
         no_results,
         start,
@@ -524,6 +528,7 @@ async fn handle_submit(
         no_perf,
         no_clean,
         no_teardown,
+        browser_headed,
         keep_devices,
         no_results,
         start,

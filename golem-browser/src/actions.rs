@@ -30,11 +30,18 @@ pub async fn execute_browser_action(
         "browse_type" => type_text(pool, step).await,
         "browse_read" => read(pool, step, vars).await,
         "browse_screenshot" => screenshot(pool, step).await,
+        "browse_close" => close(pool, step).await,
         other => Err(golem_events::coded(
             FailureCode::ParseUnknownAction,
             anyhow!("unknown browser action `{other}`"),
         )),
     }
+}
+
+/// Hand back a tab the flow is finished with. Flow-end teardown still closes
+/// whatever is left, so this is an early release, never a requirement.
+async fn close(pool: &mut BrowserPool, step: &Step) -> Result<()> {
+    pool.close_session(optional_param(step, "session")).await
 }
 
 async fn navigate(pool: &mut BrowserPool, step: &Step) -> Result<()> {
@@ -537,6 +544,16 @@ mod tests {
         .await
         .expect("read SHALL succeed");
         assert_eq!(saved(&v, "echo"), "ada", "typing SHALL fire `oninput`");
+
+        // `browse_close` hands the tab back early; doing it twice is fine,
+        // because the caller's intent (this tab should not be open) holds
+        // either way, and flow-end teardown will close whatever is left.
+        run(&mut p, &step(r#"action = "browse_close""#), &mut v)
+            .await
+            .expect("close SHALL succeed");
+        run(&mut p, &step(r#"action = "browse_close""#), &mut v)
+            .await
+            .expect("closing an already-closed session SHALL be a no-op");
 
         p.close().await.expect("close SHALL succeed");
     }

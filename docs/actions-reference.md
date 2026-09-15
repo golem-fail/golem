@@ -665,6 +665,100 @@ whole scenario as a child, use a [subflow](test-structure.md#subflow) instead.
 
 Fails on non-2xx status codes.
 
+## Browser
+
+Host-side browser automation, for flows whose mobile app depends on web state
+nothing else can reach — a supplier fulfilling an order through a portal with no
+API, an admin console that flips a feature flag.
+
+**The browser is instrumentation, not the system under test.** The mobile app is
+what golem tests, so browser steps are not judged for coverage, never feed the
+accessibility audit, and assert on DOM presence rather than the
+[visible tree](architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints)
+— what a headless browser "sees" is not what a user sees, and pretending
+otherwise would be theatre.
+
+Targeting is **CSS only**. golem's mobile selectors (`text`, `on_below`, and the
+rest) describe a native view tree and are ignored by a browser step.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `selector` | — | CSS selector, passed to the page verbatim. Required by every action except `browse_navigate` and `browse_screenshot` |
+| `index` | `0` | Which match to act on when the selector matches several, 0-based — same numbering as [`on_index`](selectors.md) |
+| `session` | `_default` | Named tab. Tabs in a flow share cookies, so a login carries between them |
+| `timeout` | `5000` | How long to keep looking for the element, in ms |
+
+Requires a Chrome or Chromium on the host; set `$CHROME` to point at a specific
+binary. A suite whose flows contain no `browse_*` step never looks for one.
+Each flow gets its own browser, so concurrent flows never share cookies or
+storage, and it is closed when the flow ends whether it passed or failed.
+
+### `browse_navigate` — Load a URL
+
+```toml
+{ action = "browse_navigate", url = "https://portal.example.com/orders" }
+{ action = "browse_navigate", url = "${portal_url}", wait_until = "load" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `url` | — | Required |
+| `wait_until` | `"domcontentloaded"` | When the step returns: `none` (as soon as Chrome accepts it), `domcontentloaded` (the DOM is parsed and queryable), `load` (sub-resources finished too) |
+
+### `browse_tap` — Click an element
+
+```toml
+{ action = "browse_tap", selector = "#submit" }
+{ action = "browse_tap", selector = "button.fulfil", index = 1 }
+```
+
+A real click, so the page's own handlers run.
+
+### `browse_type` — Type into a field
+
+```toml
+{ action = "browse_type", selector = "#email", text = "${inbox.address}" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `text` | — | The value to type. `input` is accepted as a synonym, matching the mobile `type` action |
+
+The field is clicked first, so the keystrokes land in it rather than wherever
+focus happened to be.
+
+### `browse_read` — Read text or an attribute into a variable
+
+```toml
+{ action = "browse_read", selector = "#order-total", save_to = "total" }
+{ action = "browse_read", selector = "#order-total", attribute = "data-total", save_to = "total_raw" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `attribute` | — | Read this attribute instead of the element's text. Useful when the rendered text is formatted for humans (`£14.99`) and the page already carries the value you want (`data-total="1499"`) |
+
+Fails if the element has no such attribute, rather than saving an empty string.
+
+### `browse_screenshot` — Capture the tab
+
+```toml
+{ action = "browse_screenshot", path = "portal-state.png" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `path` | — | Where to write the PNG. Omitted, the capture is taken and discarded — same as the mobile `screenshot` action |
+
+### `browse_close` — Close a tab early
+
+```toml
+{ action = "browse_close" }
+{ action = "browse_close", session = "admin" }
+```
+
+Optional. Every tab is closed when the flow ends; this hands one back sooner.
+
 ## Flow Control
 
 ### `fail` — Fail the flow immediately

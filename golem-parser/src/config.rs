@@ -159,6 +159,9 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
         coverage: flow_opts.coverage.or(proj_opts.coverage),
         app_lifecycle: flow_opts.app_lifecycle.or(proj_opts.app_lifecycle),
+        // Flow-level only: whether a browser is visible is a per-flow debugging
+        // choice, and `--browser-headed` already covers "show me this run".
+        browser_headless: flow_opts.browser_headless,
         perf: flow_opts.perf.or(proj_opts.perf),
         perf_memory_warn_mb: flow_opts
             .perf_memory_warn_mb

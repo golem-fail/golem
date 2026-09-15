@@ -72,6 +72,11 @@ pub struct ExecutionContext<'a> {
     /// that settle, so it only stretches the one settle immediately
     /// following the un-verified mutation.
     pub extend_next_settle: AtomicBool,
+    /// The flow's browser, shared with any sub-flow so a login carries across
+    /// a `run_flow` boundary the way it would inside one file. An async close
+    /// is the only correct teardown, so this is never dropped silently by a
+    /// path that matters — `execute_flow_with_teardown` closes it explicitly.
+    pub browser: std::sync::Arc<tokio::sync::Mutex<crate::browser::BrowserSlot>>,
     /// Companion restart-and-reconnect hook. `Some` enables step-level,
     /// commit-aware recovery: on a companion death mid-flow the step loop
     /// restarts the companion and retries safely (see [`crate::recovery`]).
@@ -211,6 +216,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         rng: Mutex::new(FakeRng::from_optional_seed(None)),
         inherited_record_default: false,
         extend_next_settle: AtomicBool::new(false),
+        browser: Default::default(),
         recovery: None,
     }
 }
@@ -283,6 +289,7 @@ impl TestHarness {
             rng: Mutex::new(FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: AtomicBool::new(false),
+            browser: Default::default(),
             recovery: None,
         }
     }

@@ -244,6 +244,9 @@ pub struct SuiteConfig {
     /// every boundary). Implies recording, but explicit `--no-record`
     /// still wins.
     pub trace: bool,
+    /// `--browser-headed`: show the browser window. Wins over a flow's
+    /// `[flow.options].browser_headless`.
+    pub browser_headed: bool,
     /// `--repeat N`: run the whole suite N times. Plan-phase fans
     /// every FlowRun out N times, each tagged with a `repeat_index`.
     /// Each repeat writes to `{output_dir}/run_{i}/`. Capped 1..=100
@@ -298,6 +301,7 @@ impl Default for SuiteConfig {
             no_record: false,
             project_record: None,
             trace: false,
+            browser_headed: false,
             repeat: 1,
             max_device_wait: None,
             stub_fail_on_runs: None,
@@ -677,6 +681,7 @@ impl SuiteRunner {
             let no_results = self.config.no_results;
             let no_perf = self.config.no_perf;
             let no_teardown = self.config.no_teardown;
+            let browser_headed = self.config.browser_headed;
             let a11y_override = self.config.a11y_override;
             let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
@@ -745,6 +750,7 @@ impl SuiteRunner {
                         max_device_wait,
                         stub_fail_on_runs,
                         no_teardown,
+                        browser_headed,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -1002,6 +1008,8 @@ struct FlowRunConfig {
     stub_fail_on_runs: Option<Vec<u32>>,
     /// CLI `--no-teardown` — skip `[[teardown]]` execution after each flow.
     no_teardown: bool,
+    /// CLI `--browser-headed` — show the browser window for `browse_*` steps.
+    browser_headed: bool,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1407,6 +1415,7 @@ async fn execute_flow_run(
                     a11y_min_confidence_override,
                     stub_fail_on_runs: stub_fail_on_runs_c,
                     no_teardown: cfg.no_teardown,
+                    browser_headed: cfg.browser_headed,
                 },
             )
             .await
@@ -3285,6 +3294,24 @@ struct FlowRunPolicy {
     a11y_min_confidence_override: Option<f32>,
     stub_fail_on_runs: Option<Vec<u32>>,
     no_teardown: bool,
+    browser_headed: bool,
+}
+
+/// Whether this flow's browser runs headless.
+///
+/// `--browser-headed` wins over `[flow.options].browser_headless`: it's a
+/// debugging switch, and someone who typed it is watching the screen right now,
+/// which beats what the file asked for weeks ago. Headless otherwise — CI is
+/// the common case and a window it can't show is a failure, not a feature.
+fn resolve_browser_headless(browser_headed: bool, flow: &FlowFile) -> bool {
+    if browser_headed {
+        return false;
+    }
+    flow.flow
+        .options
+        .as_ref()
+        .and_then(|o| o.browser_headless)
+        .unwrap_or(true)
 }
 
 /// Execute a flow on a single device. This is a free function (not a method)
@@ -3331,6 +3358,7 @@ async fn run_flow_on_device(
         a11y_min_confidence_override,
         stub_fail_on_runs,
         no_teardown,
+        browser_headed,
     } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -3483,6 +3511,7 @@ async fn run_flow_on_device(
             golem_events::DeviceId(device_label.clone()),
         )
     });
+    let browser_headless = resolve_browser_headless(browser_headed, &flow);
     let mut ctx = ExecutionContext {
         flow_dir: &flow_dir,
         project_root: &project_root,
@@ -3507,6 +3536,9 @@ async fn run_flow_on_device(
         // refine again from their own options.
         inherited_record_default: project_record.unwrap_or(false),
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+        browser: std::sync::Arc::new(tokio::sync::Mutex::new(
+            golem_runner::browser::BrowserSlot::new(browser_headless),
+        )),
         recovery: recovery_impl
             .as_ref()
             .map(|r| r as &dyn golem_runner::recovery::CompanionRecovery),
@@ -5580,5 +5612,48 @@ mod tests {
             !code_warrants_recovery(None),
             "a failure with no code SHALL NOT trigger recovery"
         );
+    }
+    // ── browser headless precedence ──
+
+    fn flow_with_headless(headless: Option<bool>) -> FlowFile {
+        let mut flow: FlowFile = toml::from_str(
+            r#"
+            [flow]
+            name = "web"
+            "#,
+        )
+        .expect("fixture SHALL parse");
+        flow.flow.options = Some(golem_parser::FlowOptions {
+            browser_headless: headless,
+            ..Default::default()
+        });
+        flow
+    }
+
+    // 1. Nothing said anywhere: headless. CI is the common case, and a window
+    //    it can't display is a failure rather than a feature.
+    #[test]
+    fn browser_is_headless_by_default() {
+        assert!(resolve_browser_headless(false, &flow_with_headless(None)));
+    }
+
+    // 2. A flow can ask to be watched.
+    #[test]
+    fn flow_option_can_request_a_window() {
+        assert!(!resolve_browser_headless(
+            false,
+            &flow_with_headless(Some(false))
+        ));
+    }
+
+    // 3. `--browser-headed` wins over the flow, including over a flow that
+    //    explicitly asked for headless — whoever typed the flag is watching now.
+    #[test]
+    fn cli_headed_flag_overrides_the_flow() {
+        assert!(!resolve_browser_headless(true, &flow_with_headless(None)));
+        assert!(!resolve_browser_headless(
+            true,
+            &flow_with_headless(Some(true))
+        ));
     }
 }

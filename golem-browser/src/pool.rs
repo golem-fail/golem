@@ -87,6 +87,28 @@ impl BrowserPool {
         Ok(page)
     }
 
+    /// Close one named tab, leaving the browser (and every other tab) alone.
+    ///
+    /// Backs `browse_close`, which exists so a long flow can hand back a tab it
+    /// is finished with. Closing a session that was never opened is a no-op —
+    /// the caller's intent (this tab should not be open) already holds.
+    pub async fn close_session(&mut self, session: Option<&str>) -> Result<()> {
+        let session = parse_session(session)?;
+        let Some(running) = self.running.as_mut() else {
+            return Ok(());
+        };
+        let Some(page) = running
+            .contexts
+            .get_mut(&session.context)
+            .and_then(|tabs| tabs.remove(&session.session))
+        else {
+            return Ok(());
+        };
+        page.close()
+            .await
+            .map_err(|e| anyhow!("closing browser tab `{}`: {e}", session.session))
+    }
+
     /// The launched browser's user-agent string.
     pub async fn user_agent(&mut self) -> Result<&str> {
         Ok(&self.ensure_running().await?.user_agent)

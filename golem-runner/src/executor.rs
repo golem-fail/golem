@@ -552,6 +552,9 @@ pub async fn execute_flow<'a>(
                 last_settled_tree: std::sync::Mutex::new(None),
                 trace_pair: std::sync::Mutex::new(None),
                 rng: std::sync::Mutex::new(child_rng),
+                // Same flowrun, same browser: a sub-flow inherits whatever the
+                // parent logged into, exactly as if its steps were inline.
+                browser: ctx.browser.clone(),
                 // Carry parent's effective default in as the child's
                 // starting point — `execute_flow` will refine it from
                 // the child's own `[flow.options].record` if set.
@@ -1921,6 +1924,28 @@ pub async fn execute_flow_with_teardown<'a>(
             for e in teardown.errors {
                 r.warnings.push(format!("Teardown error: {e}"));
             }
+        }
+    }
+
+    // Manual finally: the browser closes whether the flow passed, failed, or
+    // bailed early. `execute_flow` returns through `?` in a dozen places, so a
+    // close written as the last statement of *that* function would be skipped
+    // on precisely the paths that matter. `Drop` can't do it either — closing
+    // is async.
+    //
+    // `--no-teardown` is deliberately not consulted: that flag governs the
+    // author's `[[teardown]]` steps, while an orphaned Chrome is resource
+    // hygiene. Teardown steps run first, so a `browse_*` cleanup step still
+    // gets a live browser.
+    let close = {
+        let mut browser = ctx.browser.lock().await;
+        let was_active = browser.is_active();
+        let outcome = browser.close().await;
+        (was_active, outcome)
+    };
+    if let (true, Err(e)) = close {
+        if let Ok(ref mut r) = result {
+            r.warnings.push(format!("Browser teardown error: {e:#}"));
         }
     }
 
@@ -4367,6 +4392,60 @@ action = "screenshot"
 
     // ---------------------------------------------------------------
     // Where clause: block skipped when device doesn't match
+    // A flow reaches the browser through ordinary dispatch, and the browser is
+    // gone once the flow is over. This is the whole point of the runner
+    // integration: before it, `browse_*` steps existed but nothing could run
+    // them from a `.test.toml`.
+    //
+    // Drives a real Chrome (nextest `live_` group); skipped where none exists.
+    #[cfg(feature = "browser")]
+    #[tokio::test]
+    async fn live_flow_runs_browse_steps_and_closes_the_browser() {
+        if golem_browser::locate().is_err() {
+            return;
+        }
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let browse = |action: &str, param: (&str, &str), save_to: Option<&str>| Step {
+            action: action.to_string(),
+            params: HashMap::from([(
+                param.0.to_string(),
+                toml::Value::String(param.1.to_string()),
+            )]),
+            save_to: save_to.map(str::to_string),
+            ..Default::default()
+        };
+        let navigate = browse(
+            "browse_navigate",
+            ("url", "data:text/html,<h1>Greetings</h1>"),
+            None,
+        );
+        let read = browse("browse_read", ("selector", "h1"), Some("title"));
+
+        let flow = make_flow(vec![make_block(Some("web"), vec![navigate, read])]);
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+        let capture = crate::capture::CaptureConfig::default();
+        let mut ctx = crate::context::test_ctx(&tmp);
+        ctx.capture_config = &capture;
+
+        let result = execute_flow_with_teardown(
+            &flow, &driver, &mut vars, None, 5_000, &mut ctx, None, true,
+        )
+        .await
+        .expect("the flow SHALL run");
+
+        assert!(result.success, "the browser steps SHALL pass: {result:?}");
+        assert_eq!(
+            vars.get("title"),
+            Some(&golem_vars::VarValue::string("Greetings")),
+            "browse_read SHALL save through the normal variable store"
+        );
+        assert!(
+            !ctx.browser.lock().await.is_active(),
+            "the browser SHALL be closed once the flow ends"
+        );
+    }
+
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn where_clause_skips_non_matching_block() {
@@ -4424,6 +4503,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            browser: Default::default(),
             recovery: None,
         };
 
@@ -4496,6 +4576,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            browser: Default::default(),
             recovery: None,
         };
 
@@ -4577,6 +4658,7 @@ action = "screenshot"
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+            browser: Default::default(),
             recovery: None,
         };
 
