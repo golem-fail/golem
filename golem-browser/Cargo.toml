@@ -10,18 +10,24 @@ edition = "2021"
 # lie. Everything that *diagnoses* a browser flow — session grammar, preflight,
 # failure codes — compiles without the engine either way.
 default = []
-browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio"]
+browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio", "dep:golem-vars", "dep:tempfile"]
 
 [dependencies]
 golem-events = { path = "../golem-events" }
 golem-parser = { path = "../golem-parser" }
+# Only the action handlers touch the variable store (`save_to`), and they are
+# feature-gated, so the no-engine build doesn't pull it in.
+golem-vars = { path = "../golem-vars", optional = true }
 anyhow = { workspace = true }
 chromiumoxide = { workspace = true, optional = true }
 futures = { version = "0.3", optional = true }
 tokio = { workspace = true, optional = true }
+# Per-pool Chrome profile directory (see pool::launch).
+tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 toml = { workspace = true }
+tempfile = "3"
 
 [lints]
 workspace = true

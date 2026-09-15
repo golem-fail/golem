@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Context, Result};
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures::StreamExt;
+use tempfile::TempDir;
 use tokio::task::JoinHandle;
 
 use crate::session::parse_session;
@@ -47,6 +48,9 @@ struct Running {
     /// v1 (see [`crate::session::parse_session`]), but the map is the shape
     /// #109 needs, so adding contexts won't move the tabs around.
     contexts: HashMap<String, HashMap<String, Page>>,
+    /// This browser's own Chrome profile, removed when the pool drops. Held
+    /// only to keep the directory alive for the process's lifetime.
+    _profile: TempDir,
 }
 
 impl BrowserPool {
@@ -159,7 +163,20 @@ async fn launch(config: &PoolConfig) -> Result<Running> {
     // Resolve the binary ourselves and hand it over, so the browser a flow
     // drives is provably the one preflight approved.
     let executable = crate::chrome::locate()?;
-    let mut builder = BrowserConfig::builder().chrome_executable(executable);
+
+    // Every pool gets its own profile directory. Chrome refuses to start a
+    // second instance against a profile another process holds (ProcessSingleton
+    // aborts "to avoid profile corruption"), and chromiumoxide's default is one
+    // shared directory — so without this, two flows launching at the same
+    // moment would kill the second, which is precisely the concurrency the
+    // per-flow browser exists to support.
+    let profile = tempfile::Builder::new()
+        .prefix("golem-browser-")
+        .tempdir()
+        .context("creating the browser profile directory")?;
+    let mut builder = BrowserConfig::builder()
+        .chrome_executable(executable)
+        .user_data_dir(profile.path());
     if !config.headless {
         builder = builder.with_head();
     }
@@ -187,6 +204,7 @@ async fn launch(config: &PoolConfig) -> Result<Running> {
         handler,
         user_agent,
         contexts: HashMap::new(),
+        _profile: profile,
     })
 }
 
@@ -232,14 +250,40 @@ mod tests {
         assert!(!pool.is_running(), "a rejected session SHALL NOT launch");
     }
 
-    // 4. The same session name returns the same tab; a different one opens a
+    // 4. Two pools launch at the same time without fighting over a profile.
+    //    Concurrent flows are the normal case for golem, and Chrome aborts on
+    //    a profile another process holds, so a shared profile directory would
+    //    make the second flow's browser die on start.
+    #[tokio::test]
+    async fn live_concurrent_pools_each_get_their_own_browser() {
+        if !chrome_available() {
+            return;
+        }
+        let mut first = BrowserPool::new(PoolConfig::default());
+        let mut second = BrowserPool::new(PoolConfig::default());
+        let (a, b) = tokio::join!(
+            first.get_or_create_session(None),
+            second.get_or_create_session(None)
+        );
+        let a = a.expect("the first browser SHALL launch");
+        let b = b.expect("the second browser SHALL launch alongside it");
+        assert_ne!(
+            a.target_id(),
+            b.target_id(),
+            "separate pools SHALL NOT share a tab"
+        );
+        first.close().await.expect("closing SHALL succeed");
+        second.close().await.expect("closing SHALL succeed");
+    }
+
+    // 5. The same session name returns the same tab; a different one opens a
     //    new tab. Both live in one browser.
     //
     //    Runs long (nextest SLOW) because it launches a real Chrome — the only
     //    way to prove tab reuse, user-agent capture and teardown actually work
     //    against CDP. It is feature-gated, so the default lane never pays it.
     #[tokio::test]
-    async fn sessions_are_named_tabs_in_one_browser() {
+    async fn live_sessions_are_named_tabs_in_one_browser() {
         if !chrome_available() {
             return;
         }

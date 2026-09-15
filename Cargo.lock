@@ -916,6 +916,8 @@ dependencies = [
  "futures",
  "golem-events",
  "golem-parser",
+ "golem-vars",
+ "tempfile",
  "tokio",
  "toml",
 ]
