@@ -3,7 +3,14 @@ name = "golem-orchestrator"
 version.workspace = true
 edition = "2021"
 
+[features]
+default = []
+# Forwards to golem-browser: with it the suite preflight probes for a real
+# Chrome, without it a browser flow is rejected as unservable by this build.
+browser = ["golem-browser/browser"]
+
 [dependencies]
+golem-browser = { path = "../golem-browser" }
 golem-parser = { path = "../golem-parser" }
 golem-devices = { path = "../golem-devices" }
 golem-runner = { path = "../golem-runner" }

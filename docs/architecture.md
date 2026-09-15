@@ -19,6 +19,7 @@ golem is a Cargo workspace of focused crates. The CLI wires them together; a TOM
 | `golem-report` | Output formats and result accumulation: `human`, `json`, `junit`, `toon`, plus the streaming reporter and flake summary. |
 | `golem-events` | Structured event stream that carries the suite narrative, plus the failure-code system (`code` — see [Error Codes](error-codes.md)). |
 | `golem-email` | IMAP polling behind the `await_email` action. |
+| `golem-browser` | Host-side browser automation behind the `browse_*` actions (`session` grammar, suite preflight, `BrowserPool`). The engine (chromiumoxide/CDP) sits behind the `browser` cargo feature; without it the crate still rejects browser flows with a clear reason. |
 | `golem-common` | Tiny shared helpers (e.g. the global debug flag). |
 
 ### Dependency graph
@@ -37,6 +38,7 @@ flowchart TD
     parser[golem-parser]
     element[golem-element]
     email[golem-email]
+    browser[golem-browser]
     events[golem-events]
     common[golem-common]
 
@@ -48,6 +50,10 @@ flowchart TD
     orch --> parser
     orch --> devices
     orch --> events
+    orch --> browser
+
+    browser --> parser
+    browser --> events
 
     runner --> parser
     runner --> driver

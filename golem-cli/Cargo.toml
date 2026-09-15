@@ -7,6 +7,14 @@ edition = "2021"
 name = "golem"
 path = "src/main.rs"
 
+[features]
+default = []
+# Host-side browser automation for `browse_*` steps. Off by default: it pulls
+# chromiumoxide (heavy build) and needs a Chrome on the host, neither of which
+# a mobile-only run should pay for. Today it reaches only the suite preflight —
+# the runner side (dispatching browse_* steps) lands with #106.
+browser = ["golem-orchestrator/browser"]
+
 [dependencies]
 golem-runner = { path = "../golem-runner" }
 golem-parser = { path = "../golem-parser" }

@@ -1,0 +1,27 @@
+[package]
+name = "golem-browser"
+version.workspace = true
+edition = "2021"
+
+[features]
+default = []
+# Pulls in the actual engine. Off by default because chromiumoxide's generated
+# CDP bindings dominate a cold workspace build and a Chrome binary isn't
+# guaranteed on a dev box or in CI. Everything needed to *diagnose* a browser
+# flow — session grammar, preflight, failure codes — compiles without it, so a
+# default build explains itself instead of dying on an unknown action.
+browser = ["dep:chromiumoxide", "dep:futures", "dep:tokio"]
+
+[dependencies]
+golem-events = { path = "../golem-events" }
+golem-parser = { path = "../golem-parser" }
+anyhow = { workspace = true }
+chromiumoxide = { workspace = true, optional = true }
+futures = { version = "0.3", optional = true }
+tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+toml = { workspace = true }
+
+[lints]
+workspace = true
