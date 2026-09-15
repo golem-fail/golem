@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
+use chromiumoxide::browser::BrowserConfigBuilder;
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures::StreamExt;
 use tempfile::TempDir;
@@ -14,11 +16,21 @@ pub struct PoolConfig {
     /// Run without a visible window. Headed is for watching a flow drive the
     /// portal by hand; CI always wants headless.
     pub headless: bool,
+    /// Turn on Chrome's WebMCP API, which ships switched off.
+    ///
+    /// Only set for flows that actually use `browse_mcp_*`: enabling an
+    /// experimental Blink feature changes what a page can feature-detect, and
+    /// a portal that behaves differently under it would be a strange thing to
+    /// inflict on flows that never asked.
+    pub webmcp: bool,
 }
 
 impl Default for PoolConfig {
     fn default() -> Self {
-        Self { headless: true }
+        Self {
+            headless: true,
+            webmcp: false,
+        }
     }
 }
 
@@ -181,6 +193,29 @@ impl Drop for BrowserPool {
     }
 }
 
+/// Switch on the browser's WebMCP API for this profile.
+///
+/// Written into the profile's `Local State` — the same place chrome://flags
+/// records an enabled experiment — rather than relying on the command line
+/// alone. chromiumoxide already passes `--enable-features=NetworkService,…`,
+/// Chrome honours only the *last* `--enable-features` switch, and chromiumoxide
+/// emits its arguments from a `HashMap`, so a second switch wins or loses on
+/// iteration order. That is a coin flip per launch, and a flaky browser feature
+/// is worse than an absent one.
+///
+/// The switch is passed too, carrying chromiumoxide's own values so that
+/// whichever ends up last the feature set is a superset. Belt and braces: the
+/// two mechanisms fail independently, and a flow that gets neither is told so
+/// by the WebMCP probe rather than silently running without tools.
+fn enable_webmcp(profile: &Path, builder: BrowserConfigBuilder) -> Result<BrowserConfigBuilder> {
+    std::fs::write(
+        profile.join("Local State"),
+        r#"{"browser":{"enabled_labs_experiments":["enable-webmcp-testing@1"]}}"#,
+    )
+    .context("enabling WebMCP in the browser profile")?;
+    Ok(builder.arg("enable-features=NetworkService,NetworkServiceInProcess,WebMCP"))
+}
+
 async fn launch(config: &PoolConfig) -> Result<Running> {
     // Resolve the binary ourselves and hand it over, so the browser a flow
     // drives is provably the one preflight approved.
@@ -201,6 +236,9 @@ async fn launch(config: &PoolConfig) -> Result<Running> {
         .user_data_dir(profile.path());
     if !config.headless {
         builder = builder.with_head();
+    }
+    if config.webmcp {
+        builder = enable_webmcp(profile.path(), builder)?;
     }
     let browser_config = builder
         .build()

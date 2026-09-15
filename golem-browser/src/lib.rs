@@ -15,7 +15,9 @@ mod preflight;
 mod selector;
 mod session;
 
-pub use preflight::{flow_uses_browser, preflight, BROWSE_PREFIX};
+pub use preflight::{
+    flow_uses_browser, flow_uses_webmcp, preflight, BROWSE_MCP_PREFIX, BROWSE_PREFIX,
+};
 pub use selector::{resolve_target, BrowserTarget};
 pub use session::{parse_session, SessionRef, DEFAULT_CONTEXT, DEFAULT_SESSION};
 

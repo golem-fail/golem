@@ -3511,7 +3511,11 @@ async fn run_flow_on_device(
             golem_events::DeviceId(device_label.clone()),
         )
     });
-    let browser_headless = resolve_browser_headless(browser_headed, &flow);
+    let browser_options = golem_runner::browser::BrowserOptions {
+        headless: resolve_browser_headless(browser_headed, &flow),
+        // Only flows that drive WebMCP get the browser feature that serves it.
+        webmcp: golem_browser::flow_uses_webmcp(&flow),
+    };
     let mut ctx = ExecutionContext {
         flow_dir: &flow_dir,
         project_root: &project_root,
@@ -3537,7 +3541,7 @@ async fn run_flow_on_device(
         inherited_record_default: project_record.unwrap_or(false),
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         browser: std::sync::Arc::new(tokio::sync::Mutex::new(
-            golem_runner::browser::BrowserSlot::new(browser_headless),
+            golem_runner::browser::BrowserSlot::new(browser_options),
         )),
         recovery: recovery_impl
             .as_ref()

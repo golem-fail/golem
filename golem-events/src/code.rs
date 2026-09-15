@@ -188,6 +188,11 @@ pub enum FailureCode {
     /// and the fix is installing Chrome or pointing `$CHROME` at it, not
     /// repairing the mobile toolchain.
     HostBrowserMissing,
+    /// H505: the browser is running but lacks a feature the flow needs (today:
+    /// WebMCP). Distinct from H424 (no browser at all) and H501 (golem built
+    /// without browser support) because the fix differs again — upgrade the
+    /// browser, or let golem enable the feature it hides behind a switch.
+    HostBrowserFeatureMissing,
     /// H501: the flow uses `browse_*` steps but this golem was built without
     /// the `browser` feature (on by default, so this means a deliberate
     /// `--no-default-features` build). A build-configuration problem, not a
@@ -238,7 +243,8 @@ impl FailureCode {
             | HostPortsExhausted
             | HostOrchestratorIpc
             | HostBrowserMissing
-            | HostBrowserUnsupported => Domain::Host,
+            | HostBrowserUnsupported
+            | HostBrowserFeatureMissing => Domain::Host,
         }
     }
 
@@ -285,6 +291,7 @@ impl FailureCode {
             HostOrchestratorIpc => 502,
             HostBrowserMissing => 424,
             HostBrowserUnsupported => 501,
+            HostBrowserFeatureMissing => 505,
         }
     }
 
@@ -560,6 +567,7 @@ mod tests {
         assert_eq!(FailureCode::HostPortsExhausted.number(), 429);
         assert_eq!(FailureCode::HostBrowserMissing.number(), 424);
         assert_eq!(FailureCode::HostBrowserUnsupported.number(), 501);
+        assert_eq!(FailureCode::HostBrowserFeatureMissing.number(), 505);
     }
 
     // 7b. Browser codes are Host-domain: a missing Chrome or a golem built
