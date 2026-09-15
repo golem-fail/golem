@@ -12,6 +12,7 @@ members = [
     "golem-events",
     "golem-orchestrator",
     "golem-common",
+    "golem-browser",
 ]
 exclude = ["test-app/src-tauri"]
 resolver = "2"
@@ -43,3 +44,7 @@ async-trait = "0.1"
 sha1 = "0.10"
 ignore = "0.4"
 indexmap = { version = "2", features = ["serde"] }
+# Host-side browser automation (golem-browser, `browser` feature). CDP over a
+# websocket — no chromedriver — and `fetcher` stays off so the build never
+# downloads a browser.
+chromiumoxide = { version = "0.9.1", default-features = false, features = ["bytes"] }

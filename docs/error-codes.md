@@ -68,6 +68,8 @@ Codes appear in every output format:
 | `D505` | Companion unreachable — connection refused mid-request (process gone / not yet accepting); death or cold-start drop |
 | `D520` | Driver op failed (adb forward, unsupported button) |
 | `H404` | Toolchain / artifact missing (avdmanager, iOS runtime, companion binary) |
+| `H424` | No Chrome / Chromium found for `browse_*` steps — install one, or point `$CHROME` at the binary |
 | `H429` | Port allocation exhausted |
+| `H501` | Flow uses `browse_*` but this golem was built without the `browser` feature |
 | `H502` | Orchestrator socket / IPC failure |
 | `X000` | Uncoded failure — unclassified, reached output without a domain tag |

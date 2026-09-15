@@ -182,6 +182,16 @@ pub enum FailureCode {
     HostPortsExhausted,
     /// H502: orchestrator socket/IPC failure.
     HostOrchestratorIpc,
+    /// H424: no Chrome/Chromium binary found for host-side browser steps.
+    /// Separate from H404 (toolchain missing) because the triage differs: the
+    /// browser is an optional dependency only browser-using suites pull in,
+    /// and the fix is installing Chrome or pointing `$CHROME` at it, not
+    /// repairing the mobile toolchain.
+    HostBrowserMissing,
+    /// H501: the flow uses `browse_*` steps but this golem was built without
+    /// the `browser` feature. A build-configuration problem, not a test one —
+    /// the flow is valid, this binary just can't serve it.
+    HostBrowserUnsupported,
 }
 
 impl FailureCode {
@@ -223,7 +233,11 @@ impl FailureCode {
             | DeviceCompanionDropped
             | DeviceCompanionUnrecoverable
             | DeviceDriverOpFailed => Domain::Device,
-            HostToolchainMissing | HostPortsExhausted | HostOrchestratorIpc => Domain::Host,
+            HostToolchainMissing
+            | HostPortsExhausted
+            | HostOrchestratorIpc
+            | HostBrowserMissing
+            | HostBrowserUnsupported => Domain::Host,
         }
     }
 
@@ -268,6 +282,8 @@ impl FailureCode {
             HostToolchainMissing => 404,
             HostPortsExhausted => 429,
             HostOrchestratorIpc => 502,
+            HostBrowserMissing => 424,
+            HostBrowserUnsupported => 501,
         }
     }
 
@@ -541,6 +557,20 @@ mod tests {
         assert_eq!(FailureCode::DeviceWebviewComms.number(), 502);
         assert_eq!(FailureCode::DeviceRegistrationTimeout.number(), 504);
         assert_eq!(FailureCode::HostPortsExhausted.number(), 429);
+        assert_eq!(FailureCode::HostBrowserMissing.number(), 424);
+        assert_eq!(FailureCode::HostBrowserUnsupported.number(), 501);
+    }
+
+    // 7b. Browser codes are Host-domain: a missing Chrome or a golem built
+    //     without the feature is the operator's problem, never the author's.
+    #[test]
+    fn browser_codes_are_host_domain() {
+        assert_eq!(FailureCode::HostBrowserMissing.fragment(), "H424");
+        assert_eq!(FailureCode::HostBrowserUnsupported.fragment(), "H501");
+        assert!(
+            FailureCode::HostBrowserMissing.domain().is_infrastructure(),
+            "a missing browser SHALL be reported as infrastructure, not a test failure"
+        );
     }
 
     // 8. extract_code returns the OUTERMOST tag when two are chained.

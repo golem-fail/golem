@@ -171,6 +171,11 @@ pub async fn plan(
         }
     }
 
+    // Before any device work: a suite that drives a browser needs one on the
+    // host, and finding that out after a 70-second emulator boot wastes the
+    // run. Suites with no `browse_*` step never probe.
+    golem_browser::preflight(flows.iter().map(|pf| &pf.flow))?;
+
     let snapshot = if stub {
         Vec::new()
     } else {
@@ -1195,6 +1200,64 @@ mod tests {
             .map(|e| e.bundle_id.clone())
             .collect();
         assert_eq!(bundles, vec!["com.b".to_string()]);
+    }
+
+    // A browser-free suite plans without ever consulting the host for a
+    // browser — Chrome is a dependency of the flows that ask for it, not of
+    // golem. `stub` keeps the plan device-free so this holds on any host.
+    #[tokio::test]
+    async fn plan_does_not_preflight_browser_for_mobile_only_flows() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        let flow = write_flow(
+            tmp.path(),
+            "mobile.test.toml",
+            r#"
+            [flow]
+            name = "mobile"
+            [[flow.apps]]
+            name = "a"
+            [[flow.apps.devices]]
+            os = "ios"
+            [[block]]
+            steps = [{ action = "tap", on_text = "Login" }]
+        "#,
+        );
+        let apps = vec![project_app("a", "com.a", None)];
+        plan(&[flow], &apps, tmp.path(), None, None, 1, None, true)
+            .await
+            .expect("a mobile-only suite SHALL plan without a browser");
+    }
+
+    // Without the `browser` feature a browse_* suite is rejected at plan time,
+    // before any device is booted, and as a HOST failure — the flow is fine,
+    // this build just can't serve it.
+    #[cfg(not(feature = "browser"))]
+    #[tokio::test]
+    async fn plan_rejects_browser_flows_when_built_without_support() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        let flow = write_flow(
+            tmp.path(),
+            "web.test.toml",
+            r#"
+            [flow]
+            name = "web"
+            [[flow.apps]]
+            name = "a"
+            [[flow.apps.devices]]
+            os = "ios"
+            [[block]]
+            steps = [{ action = "browse_navigate", url = "https://example.com" }]
+        "#,
+        );
+        let apps = vec![project_app("a", "com.a", None)];
+        let e = plan(&[flow], &apps, tmp.path(), None, None, 1, None, true)
+            .await
+            .expect_err("a browse_* suite SHALL fail preflight without browser support");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(golem_events::FailureCode::HostBrowserUnsupported),
+            "SHALL be a host failure, not a parse failure"
+        );
     }
 
     #[tokio::test]
