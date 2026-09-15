@@ -12,9 +12,11 @@
 //! a flow asks for a browser it can't provide.
 
 mod preflight;
+mod selector;
 mod session;
 
 pub use preflight::{flow_uses_browser, preflight, BROWSE_PREFIX};
+pub use selector::{resolve_target, BrowserTarget};
 pub use session::{parse_session, SessionRef, DEFAULT_CONTEXT, DEFAULT_SESSION};
 
 #[cfg(feature = "browser")]
