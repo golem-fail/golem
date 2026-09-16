@@ -171,6 +171,57 @@ pub fn build_tree_path(
     screenshot_dir(config).join(filename)
 }
 
+/// Path for the page sidecar that accompanies a browser capture.
+///
+/// `_page.json` rather than `_tree.json`: it sits beside mobile dumps in the
+/// same directory, holds a different schema, and a reader — human or tool —
+/// should be able to tell which is which from the name alone.
+pub fn build_page_path(
+    config: &CaptureConfig,
+    block_name: &str,
+    global_step_index: u64,
+    block_iteration: u32,
+    step_index: usize,
+    failure_type: &str,
+) -> PathBuf {
+    let filename = format!(
+        "{}_{}_{}_{}_{}_page.json",
+        global_step_index,
+        sanitize_filename(block_name),
+        block_iteration,
+        step_index,
+        failure_type,
+    );
+    screenshot_dir(config).join(filename)
+}
+
+/// Write a browser capture: the tab's PNG, and a sidecar describing the page.
+///
+/// The sidecar replaces the mobile a11y-tree dump rather than joining it.
+/// Browser steps aren't accessibility-judged — a supplier's portal is not the
+/// app under test — so the useful post-mortem facts are where the tab was and
+/// what it was showing.
+pub fn write_browser_capture(
+    png_path: &Path,
+    page_path: &Path,
+    capture: &crate::browser::BrowserCapture,
+    action: &str,
+) -> Result<()> {
+    if let Some(parent) = png_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(png_path, &capture.png)?;
+    let sidecar = serde_json::json!({
+        "action": action,
+        "url": capture.url,
+        "title": capture.title,
+        "html": capture.html,
+        "golem_version": env!("CARGO_PKG_VERSION"),
+    });
+    std::fs::write(page_path, serde_json::to_string_pretty(&sidecar)?)?;
+    Ok(())
+}
+
 /// Dump the accessibility tree alongside the failure screenshot.
 ///
 /// Cheap to run (~30KB JSON, single hierarchy fetch) and dramatically

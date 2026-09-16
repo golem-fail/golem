@@ -31,6 +31,18 @@ impl Default for BrowserOptions {
     }
 }
 
+/// What the browser looked like when something worth recording happened.
+///
+/// Plain data so the capture paths in `policy` and `executor` are written once,
+/// whether or not this build has a browser to capture.
+#[derive(Debug, Clone)]
+pub struct BrowserCapture {
+    pub png: Vec<u8>,
+    pub url: String,
+    pub title: String,
+    pub html: String,
+}
+
 /// Holds a flow's browser once something asks for one.
 ///
 /// Lazy by design: a slot costs nothing, so every flow can carry one and only
@@ -127,6 +139,29 @@ impl BrowserSlot {
                 step.action
             ),
         ))
+    }
+
+    /// Photograph the tab a step was acting on, if there is one.
+    ///
+    /// `None` covers every case where a picture would be a lie: no browser was
+    /// launched, the session was never opened, or this build has no browser at
+    /// all. Capture is best-effort evidence — a failure here must never replace
+    /// the failure being reported.
+    #[cfg(feature = "browser")]
+    pub async fn capture(&mut self, session: Option<&str>) -> Option<BrowserCapture> {
+        let pool = self.pool.as_mut()?;
+        let tab = pool.capture_session(session).await.ok().flatten()?;
+        Some(BrowserCapture {
+            png: tab.png,
+            url: tab.url,
+            title: tab.title,
+            html: tab.html,
+        })
+    }
+
+    #[cfg(not(feature = "browser"))]
+    pub async fn capture(&mut self, _session: Option<&str>) -> Option<BrowserCapture> {
+        None
     }
 
     /// Release the browser. Safe to call when nothing was ever launched.

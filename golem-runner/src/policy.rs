@@ -357,6 +357,15 @@ pub async fn execute_step_with_policy(
     // policies, not "ignore". Both fail-tolerantly: one missing
     // doesn't suppress the other.
     if if_fail != "ignore" {
+        // A browser step failed in the browser, so the phone is the wrong
+        // subject: a screenshot of an unchanged app screen is evidence of
+        // nothing, and the mobile a11y dump would describe a tree the step
+        // never touched. Photograph the tab instead, and skip the pair cache —
+        // that pair feeds the a11y audit, which browser steps are exempt from.
+        if step.action.starts_with(golem_browser::BROWSE_PREFIX) {
+            capture_browser_failure(step, ctx, if_fail).await;
+            return finish_failed_step(last_error, if_fail);
+        }
         let shot = capture_failure_screenshot(
             driver,
             ctx.capture_config,
@@ -387,6 +396,45 @@ pub async fn execute_step_with_policy(
         }
     }
 
+    finish_failed_step(last_error, if_fail)
+}
+
+/// Photograph the failing tab, best-effort.
+///
+/// Every failure here is swallowed: this is evidence-gathering after something
+/// already went wrong, and a capture that fails must not replace the failure
+/// the flow is about to report.
+async fn capture_browser_failure(step: &Step, ctx: &ExecutionContext<'_>, if_fail: &str) {
+    let config = ctx.capture_config;
+    if !config.screenshot_on_failure || !config.write_to_disk {
+        return;
+    }
+    let session = step.params.get("session").and_then(|v| v.as_str());
+    let Some(capture) = ctx.browser.lock().await.capture(session).await else {
+        return;
+    };
+    let block_name = ctx.block_name.unwrap_or("unnamed");
+    let png = crate::capture::build_screenshot_path(
+        config,
+        block_name,
+        ctx.global_step_index,
+        ctx.block_iteration,
+        ctx.step_index,
+        if_fail,
+    );
+    let page = crate::capture::build_page_path(
+        config,
+        block_name,
+        ctx.global_step_index,
+        ctx.block_iteration,
+        ctx.step_index,
+        if_fail,
+    );
+    let _ = crate::capture::write_browser_capture(&png, &page, &capture, &step.action);
+}
+
+/// Apply `if_fail` to a step that ran out of attempts.
+fn finish_failed_step(last_error: Option<anyhow::Error>, if_fail: &str) -> Result<StepOutcome> {
     let error = last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     // Companion-death codes (D505/D507/D503) bypass `if_fail` here so the step
     // loop's commit-aware recovery sees the RAW `Err`. Translating them to a
@@ -1412,5 +1460,109 @@ mod tests {
             MAX_AUTO_TIMEOUT_MS * 5,
             "explicit step.timeout SHALL NOT be capped",
         );
+    }
+}
+
+#[cfg(all(test, feature = "browser"))]
+mod browser_capture_tests {
+    use super::*;
+    use crate::capture::CaptureConfig;
+
+    /// A failing browser step files the browser as evidence, not the phone.
+    ///
+    /// The distinction is the whole of #110: before this, a `browse_*` failure
+    /// saved a screenshot of an untouched mobile screen and dumped the mobile
+    /// accessibility tree beside it — an artifact that says nothing about what
+    /// broke. Drives a real Chrome (nextest `live_` group).
+    #[tokio::test]
+    async fn live_browser_failure_captures_the_tab_not_the_device() {
+        if golem_browser::locate().is_err() {
+            return;
+        }
+        let tmp = tempfile::tempdir().expect("tempdir SHALL be created");
+        let config = CaptureConfig {
+            screenshot_on_failure: true,
+            write_to_disk: true,
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "browse".to_string(),
+            device_name: "device".to_string(),
+            ..CaptureConfig::default()
+        };
+        let mut ctx = crate::context::test_ctx(tmp.path());
+        ctx.capture_config = &config;
+        ctx.block_name = Some("portal");
+
+        // Open a tab and put something on it, so the capture has a subject.
+        {
+            let mut slot = ctx.browser.lock().await;
+            let open = golem_parser::Step {
+                action: "browse_navigate".to_string(),
+                params: std::collections::HashMap::from([(
+                    "url".to_string(),
+                    toml::Value::String("data:text/html,<h1>Portal</h1>".to_string()),
+                )]),
+                ..Default::default()
+            };
+            let mut vars = golem_vars::VariableStore::new();
+            slot.run_step(&open, &mut vars, tmp.path(), tmp.path())
+                .await
+                .expect("the tab SHALL open");
+        }
+
+        // A browser step that cannot succeed: the element isn't there.
+        let step = golem_parser::Step {
+            action: "browse_tap".to_string(),
+            timeout: Some(100),
+            params: std::collections::HashMap::from([(
+                "selector".to_string(),
+                toml::Value::String("#absent".to_string()),
+            )]),
+            ..Default::default()
+        };
+        // Through the real policy path, so the branch that chooses browser
+        // over device is what's under test — not just the helper it calls.
+        let driver =
+            golem_driver::MockPlatformDriver::new(crate::actions::test_helpers::make_element(
+                "View",
+                golem_element::Bounds::new(0, 0, 375, 812),
+            ));
+        let mut vars = golem_vars::VariableStore::new();
+        let outcome = execute_step_with_policy(&step, &driver, &mut vars, 100, &ctx, &[]).await;
+        assert!(outcome.is_err(), "the step SHALL fail: {outcome:?}");
+
+        let dir = crate::capture::build_page_path(&config, "portal", 0, 0, 0, "error")
+            .parent()
+            .expect("capture paths SHALL have a directory")
+            .to_path_buf();
+        let files: Vec<String> = std::fs::read_dir(&dir)
+            .expect("the capture directory SHALL exist")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(
+            files.iter().any(|f| f.ends_with("_error.png")),
+            "the failing tab SHALL be photographed: {files:?}"
+        );
+        assert!(
+            files.iter().any(|f| f.ends_with("_page.json")),
+            "a page sidecar SHALL sit beside it: {files:?}"
+        );
+        assert!(
+            !files.iter().any(|f| f.ends_with("_tree.json")),
+            "the mobile a11y tree SHALL NOT be dumped for a browser failure: {files:?}"
+        );
+
+        let sidecar = files
+            .iter()
+            .find(|f| f.ends_with("_page.json"))
+            .expect("sidecar");
+        let body =
+            std::fs::read_to_string(dir.join(sidecar)).expect("the sidecar SHALL be readable");
+        assert!(
+            body.contains("browse_tap") && body.contains("Portal"),
+            "the sidecar SHALL record the step and what the page showed: {body}"
+        );
+
+        let _ = ctx.browser.lock().await.close().await;
     }
 }
