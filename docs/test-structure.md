@@ -16,7 +16,7 @@ Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-le
 - [Lifecycle: Setup & Teardown](#lifecycle-setup--teardown)
 - [Teardown](#teardown)
 - [Data-Driven Tests](#data-driven-tests)
-- [Variables](#variables)
+- [Variables](#variables) — [Built-in variables](#built-in-variables)
 - [Fake Data Generators](#fake-data-generators)
 - [Multi-App Flows](#multi-app-flows)
 
@@ -519,6 +519,26 @@ steps = [
   { action = "bash", run = "echo ${current_status}", save_to = "result" },
 ]
 ```
+
+### Built-in variables
+
+golem reserves the `_` prefix and fills these in per step:
+
+| Variable | Value |
+|---|---|
+| `_device` | Device name (`Pixel 9`) |
+| `_os` | OS major version (`34`) |
+| `_platform` | `android` / `ios` |
+| `_type` | Device type (`phone`, `tablet`) |
+| `_udid` | Device UDID |
+| `_app` | App registry name of the step's app |
+| `_hardware` | `virtual` on a sim/emulator, `real` on a physical device — same vocabulary as the `hardware` device constraint |
+| `_loop` | 0-based count of times the current block has been entered |
+| `_perf` | Last perf snapshot (object — see [Performance Monitoring](#performance-monitoring)) |
+
+`_hardware`, `_loop` and `_perf` are also readable by a branch condition
+(`[[block.branch]] if_var = "_hardware", equals = "real"`); the device and app
+builtins resolve in `${…}` interpolation only.
 
 ## Fake Data Generators
 

@@ -86,6 +86,13 @@ steps = [
   { action = "type", on_text = "Search", input = "os-${_os}", auto_scroll = true },
   { action = "assert_visible", on_text = "os-${_os}" },
 
+  # `_hardware` is asserted against its literal value, not via the builtin:
+  # e2e runs on a sim/emulator, so "virtual" is the answer, and comparing the
+  # builtin to itself would pass just as well on an empty string.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "hw-${_hardware}", auto_scroll = true },
+  { action = "assert_visible", on_text = "hw-virtual" },
+
   # 6. Remaining generators — one type→assert cycle each, reusing the Search
   #    field via Reset. Each asserts via the same var, so the match is
   #    seed-deterministic and the generator's output shape is exercised end to

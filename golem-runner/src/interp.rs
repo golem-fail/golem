@@ -34,11 +34,28 @@ pub(crate) fn step_builtins(
         m.insert("_platform".to_string(), d.platform.to_string());
         m.insert("_type".to_string(), d.device_type.to_string());
         m.insert("_udid".to_string(), d.udid.clone());
+        m.insert(
+            "_hardware".to_string(),
+            hardware_label(d.physical).to_string(),
+        );
     }
     if let Some(app) = app_name {
         m.insert("_app".to_string(), app.to_string());
     }
     m
+}
+
+/// Map a device's `physical` flag onto the `virtual` / `real` vocabulary.
+///
+/// Not a bool: this is the same vocabulary `[[flow.apps.devices]] hardware`
+/// takes, so a flow branches on `_hardware` against the value it constrained
+/// the device with.
+pub(crate) fn hardware_label(physical: bool) -> &'static str {
+    if physical {
+        "real"
+    } else {
+        "virtual"
+    }
 }
 
 /// Return an interpolated clone of `step`, resolving `${…}` in all of its
@@ -316,6 +333,27 @@ mod tests {
     }
 
     #[test]
+    fn step_builtins_maps_hardware_from_the_physical_flag() {
+        let mut d = device("Pixel 9", golem_devices::Platform::Android, 34);
+        assert_eq!(
+            step_builtins(Some(&d), None)
+                .get("_hardware")
+                .map(String::as_str),
+            Some("virtual"),
+            "a simulator SHALL report _hardware=virtual"
+        );
+
+        d.physical = true;
+        assert_eq!(
+            step_builtins(Some(&d), None)
+                .get("_hardware")
+                .map(String::as_str),
+            Some("real"),
+            "a physical device SHALL report _hardware=real"
+        );
+    }
+
+    #[test]
     fn step_builtins_omits_device_keys_when_no_device() {
         let m = step_builtins(None, Some("shopper"));
         assert!(
@@ -323,6 +361,7 @@ mod tests {
             "no device SHALL yield no _device key"
         );
         assert!(!m.contains_key("_udid"));
+        assert!(!m.contains_key("_hardware"));
         assert_eq!(
             m.get("_app").map(String::as_str),
             Some("shopper"),
