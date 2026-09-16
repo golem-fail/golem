@@ -60,7 +60,7 @@ Codes appear in every output format:
 | `A503` | App launch / stop failed |
 | `D404` | Device not found / discovery failed |
 | `D408` | Device boot timeout |
-| `D409` | Device busy / `--max-wait` exceeded |
+| `D409` | Device busy / `--max-device-wait` exceeded |
 | `D500` | Device / simulator creation failed |
 | `D502` | Webview driver comms failed (CDP / WebKit) |
 | `D503` | Companion wedged — alive but a main-thread call is stuck (incl. a `504` from the companion's own watchdog, or a client-side request timeout) |

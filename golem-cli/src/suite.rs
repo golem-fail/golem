@@ -359,6 +359,30 @@ pub struct SuiteRunner {
     pub lint_event: Option<golem_events::EventKind>,
 }
 
+/// Resolve how long a FlowRun may wait for a device: `--max-device-wait`,
+/// else the flow's own `[flow.options].max_device_wait`.
+///
+/// Only two levels appear here because the third is already folded in:
+/// `merge_config` copies `golem.toml [options].max_device_wait` into the
+/// flow's options when the flow doesn't state one, so a project value
+/// arrives as a flow value by the time the plan hands it over.
+///
+/// An unparseable flow value degrades to unbounded rather than failing the
+/// run — the CLI warns about its own flag, but one bad character in a
+/// project file shouldn't sink every flow in the suite.
+fn effective_device_wait(
+    cli: Option<std::time::Duration>,
+    flow: &golem_parser::FlowFile,
+) -> Option<std::time::Duration> {
+    cli.or_else(|| {
+        flow.flow
+            .options
+            .as_ref()
+            .and_then(|o| o.max_device_wait.as_deref())
+            .and_then(golem_runner::executor::parse_duration)
+    })
+}
+
 impl SuiteRunner {
     pub fn new(config: SuiteConfig) -> Self {
         Self {
@@ -708,7 +732,7 @@ impl SuiteRunner {
             let no_record = self.config.no_record;
             let project_record = self.config.project_record;
             let trace = self.config.trace;
-            let max_device_wait = self.config.max_device_wait;
+            let max_device_wait = effective_device_wait(self.config.max_device_wait, &flow);
             let stub_fail_on_runs = self.config.stub_fail_on_runs.clone();
             // RepeatContext only attached when --repeat > 1 so default
             // event payloads are unchanged for single-run suites.
@@ -4199,7 +4223,9 @@ async fn find_available_device(
         if let Some(d) = deadline {
             if tokio::time::Instant::now() >= d {
                 anyhow::bail!(
-                    "Timed out waiting for a free {wait_label} device after --max-wait ({} in use)",
+                    "Timed out waiting for a free {wait_label} device — device-wait cap \
+                     reached ({} in use). Raise or drop it with --max-device-wait, \
+                     [flow.options].max_device_wait, or [options].max_device_wait",
                     booted_owned.len()
                 );
             }
@@ -4256,6 +4282,61 @@ pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- device-wait precedence -------------------------------------------
+    mod device_wait {
+        use super::super::effective_device_wait;
+        use std::time::Duration;
+
+        fn flow_with_wait(value: Option<&str>) -> golem_parser::FlowFile {
+            let toml = match value {
+                Some(v) => {
+                    format!("[flow]\nname = \"f\"\n[flow.options]\nmax_device_wait = \"{v}\"\n")
+                }
+                None => "[flow]\nname = \"f\"\n".to_string(),
+            };
+            golem_parser::parse_flow(&toml).expect("fixture flow SHALL parse")
+        }
+
+        #[test]
+        fn cli_flag_wins_over_the_flow() {
+            let got =
+                effective_device_wait(Some(Duration::from_secs(60)), &flow_with_wait(Some("30m")));
+            assert_eq!(
+                got,
+                Some(Duration::from_secs(60)),
+                "--max-device-wait SHALL beat the flow's own cap"
+            );
+        }
+
+        #[test]
+        fn flow_value_applies_without_the_flag() {
+            let got = effective_device_wait(None, &flow_with_wait(Some("90s")));
+            assert_eq!(
+                got,
+                Some(Duration::from_secs(90)),
+                "the flow's cap SHALL apply when the flag is absent"
+            );
+        }
+
+        #[test]
+        fn absent_everywhere_stays_unbounded() {
+            assert_eq!(
+                effective_device_wait(None, &flow_with_wait(None)),
+                None,
+                "no cap anywhere SHALL leave the wait unbounded"
+            );
+        }
+
+        #[test]
+        fn unparseable_flow_value_degrades_to_unbounded() {
+            assert_eq!(
+                effective_device_wait(None, &flow_with_wait(Some("soon"))),
+                None,
+                "a bad project/flow value SHALL NOT fail the run"
+            );
+        }
+    }
 
     // --- install_env interpolation (A1) ----------------------------------
     mod install_env {

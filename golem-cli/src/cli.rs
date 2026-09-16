@@ -239,9 +239,10 @@ pub struct RunArgs {
     /// failing with "no device available". Format: `30m`, `1h`, `90s`,
     /// `1h30m`. Default: unbounded — the per-flow `max_runtime` breaker
     /// guarantees forward progress by freeing wedged devices. Set for
-    /// CI usage with a wall-clock budget.
-    #[arg(long = "max-wait")]
-    pub max_wait: Option<String>,
+    /// CI usage with a wall-clock budget. `[options].max_device_wait` in
+    /// golem.toml sets the same cap project-wide; this flag wins over it.
+    #[arg(long = "max-device-wait")]
+    pub max_device_wait: Option<String>,
 
     /// Hidden: drive the suite against the device-free StubDriver using the
     /// TOML stub script at this path (in-process integration tests only).
@@ -572,7 +573,7 @@ mod tests {
             "--no-build",
             "--max-concurrency",
             "4",
-            "--max-wait",
+            "--max-device-wait",
             "1h30m",
         ]);
         let Commands::Run(run) = cli.command else {
@@ -581,7 +582,7 @@ mod tests {
         assert!(run.rebuild, "rebuild SHALL be set");
         assert!(run.no_build, "no_build SHALL be set");
         assert_eq!(run.max_concurrency, Some(4));
-        assert_eq!(run.max_wait.as_deref(), Some("1h30m"));
+        assert_eq!(run.max_device_wait.as_deref(), Some("1h30m"));
     }
 
     // 26. --platform and --coverage overrides
@@ -611,7 +612,10 @@ mod tests {
             run.max_concurrency.is_none(),
             "max_concurrency SHALL default None"
         );
-        assert!(run.max_wait.is_none(), "max_wait SHALL default None");
+        assert!(
+            run.max_device_wait.is_none(),
+            "max_device_wait SHALL default None"
+        );
     }
 
     // 28. `tree` with no args: all options None/false

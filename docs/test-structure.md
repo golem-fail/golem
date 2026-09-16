@@ -588,6 +588,7 @@ base_url = "https://staging.example.com"
 [options]                   # defaults for every flow's [flow.options]
 step_timeout = 8000
 record = true
+max_device_wait = "30m"     # queue-wait cap; --max-device-wait beats it
 
 [[apps]]                    # app registry — flows reference by name
 name = "app"

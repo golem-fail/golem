@@ -80,8 +80,8 @@ RAM/CPU/GPU + shared adb server) — mitigated by capping the concurrent burst.
 
 ## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
-Queue wait is now unbounded by default; `--max-wait` opts into a
-hard cap. Remaining items from the original scheduling rework:
+Queue wait is now unbounded by default; `--max-device-wait` opts into
+a hard cap. Remaining items from the original scheduling rework:
 
 1. **Concurrency cap follows device count.** Instead of the static
    `ConcurrencyConfig.max_concurrency = 4` racing against actual
