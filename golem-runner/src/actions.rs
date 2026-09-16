@@ -7,7 +7,7 @@ pub(crate) mod interaction;
 mod media;
 
 #[cfg(test)]
-mod test_helpers;
+pub(crate) mod test_helpers;
 
 use anyhow::Result;
 use golem_driver::PlatformDriver;

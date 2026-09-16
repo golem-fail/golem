@@ -34,6 +34,22 @@ impl Default for PoolConfig {
     }
 }
 
+/// What a tab looked like at a moment worth recording.
+///
+/// The `html` is trimmed: a post-mortem wants to see what the page was showing,
+/// and an un-capped dump of a real portal would bury that in framework markup
+/// while filling the results directory.
+#[derive(Debug, Clone)]
+pub struct TabCapture {
+    pub png: Vec<u8>,
+    pub url: String,
+    pub title: String,
+    pub html: String,
+}
+
+/// How much `outerHTML` a capture keeps.
+const HTML_BUDGET: usize = 8 * 1024;
+
 /// One flow's browser: at most one Chrome process, the contexts inside it, and
 /// the named tabs inside those.
 ///
@@ -97,6 +113,44 @@ impl BrowserPool {
             .or_default()
             .insert(session.session, page.clone());
         Ok(page)
+    }
+
+    /// Photograph an already-open session, for a failure or a trace boundary.
+    ///
+    /// Never opens a tab: a step that failed before reaching the browser has
+    /// nothing to photograph, and creating a blank one to satisfy the capture
+    /// would file a picture of nothing as evidence.
+    pub async fn capture_session(&mut self, session: Option<&str>) -> Result<Option<TabCapture>> {
+        let session = parse_session(session)?;
+        let Some(page) = self.running.as_ref().and_then(|running| {
+            running
+                .contexts
+                .get(&session.context)
+                .and_then(|tabs| tabs.get(&session.session))
+                .cloned()
+        }) else {
+            return Ok(None);
+        };
+
+        let png = page
+            .screenshot(chromiumoxide::page::ScreenshotParams::builder().build())
+            .await
+            .map_err(|e| anyhow!("capturing the browser tab: {e}"))?;
+        let url = page.url().await.ok().flatten().unwrap_or_default();
+        let title = page.get_title().await.ok().flatten().unwrap_or_default();
+        let mut html = page.content().await.unwrap_or_default();
+        html.truncate(
+            html.char_indices()
+                .nth(HTML_BUDGET)
+                .map_or(html.len(), |(i, _)| i),
+        );
+
+        Ok(Some(TabCapture {
+            png,
+            url,
+            title,
+            html,
+        }))
     }
 
     /// Close one named tab, leaving the browser (and every other tab) alone.
@@ -334,6 +388,54 @@ mod tests {
         );
         first.close().await.expect("closing SHALL succeed");
         second.close().await.expect("closing SHALL succeed");
+    }
+
+    // 4b. Capturing a session that was never opened yields nothing rather than
+    //     opening a blank tab — a picture of nothing is not evidence.
+    #[tokio::test]
+    async fn capturing_an_unopened_session_yields_nothing() {
+        let mut pool = BrowserPool::new(PoolConfig::default());
+        assert!(pool
+            .capture_session(None)
+            .await
+            .expect("capturing SHALL NOT error")
+            .is_none());
+        assert!(!pool.is_running(), "a capture SHALL NOT launch a browser");
+    }
+
+    // 4c. An open tab photographs itself, with the facts a post-mortem needs:
+    //     a real PNG, where the tab was, and what it was showing.
+    #[tokio::test]
+    async fn live_capturing_an_open_session_records_the_page() {
+        if !chrome_available() {
+            return;
+        }
+        let mut pool = BrowserPool::new(PoolConfig::default());
+        let page = pool
+            .get_or_create_session(None)
+            .await
+            .expect("session SHALL open");
+        page.set_content("<title>Portal</title><h1>Orders</h1>")
+            .await
+            .expect("content SHALL load");
+
+        let capture = pool
+            .capture_session(None)
+            .await
+            .expect("capturing SHALL succeed")
+            .expect("an open session SHALL be capturable");
+        assert_eq!(
+            &capture.png[..8],
+            b"\x89PNG\r\n\x1a\n",
+            "the capture SHALL be a PNG"
+        );
+        assert_eq!(capture.title, "Portal");
+        assert!(
+            capture.html.contains("Orders"),
+            "the sidecar HTML SHALL show what the page displayed: {}",
+            capture.html
+        );
+        pool.close().await.expect("closing SHALL succeed");
     }
 
     // 5. The same session name returns the same tab; a different one opens a

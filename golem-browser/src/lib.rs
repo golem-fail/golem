@@ -33,4 +33,4 @@ pub use actions::{execute_browser_action, ScriptPaths};
 #[cfg(feature = "browser")]
 pub use chrome::locate;
 #[cfg(feature = "browser")]
-pub use pool::{BrowserPool, PoolConfig};
+pub use pool::{BrowserPool, PoolConfig, TabCapture};

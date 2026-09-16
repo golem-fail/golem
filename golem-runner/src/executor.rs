@@ -886,28 +886,37 @@ pub async fn execute_flow<'a>(
                     block_iter_for_recording,
                     step_idx + 1,
                 );
-                match crate::capture::capture_trace_boundary(
-                    driver,
-                    ctx.capture_config,
-                    step_count,
-                    &suffix,
-                    crate::capture::TraceMeta {
-                        after_step: Some(step_count),
-                        action: Some(&step.action),
-                        wall_clock: &iso8601_now(),
-                    },
-                    defer_frames,
-                )
-                .await
-                {
-                    Ok(cap) => {
-                        // When deferred, remember this boundary's PNG target +
-                        // capture time so the frame is pulled from the recording
-                        // post-block (end-anchored on the recording's stop).
-                        if defer_frames {
-                            deferred_frames.push((cap.png_path, std::time::Instant::now()));
-                        }
-                        if let Some(ref mut bt) = block_trace {
+                // A boundary after a browser step belongs to the browser. The
+                // mobile surface is unchanged — capturing it would file the
+                // same phone screenshot after every browse step — and the
+                // hierarchy fetch is a live device round-trip for a step that
+                // never touched the device. The deferred path is skipped too:
+                // it pulls a frame from the block recording, and the tab is
+                // not in that video.
+                if step.action.starts_with(golem_browser::BROWSE_PREFIX) {
+                    let session = step.params.get("session").and_then(|v| v.as_str());
+                    if let Some(capture) = ctx.browser.lock().await.capture(session).await {
+                        let png = crate::capture::build_trace_path(
+                            ctx.capture_config,
+                            step_count,
+                            &suffix,
+                            "png",
+                        );
+                        let page = crate::capture::build_trace_path(
+                            ctx.capture_config,
+                            step_count,
+                            &suffix,
+                            "page.json",
+                        );
+                        if let Err(e) = crate::capture::write_browser_capture(
+                            &png,
+                            &page,
+                            &capture,
+                            &step.action,
+                        ) {
+                            warnings
+                                .push(format!("trace boundary {step_count} capture failed: {e}"));
+                        } else if let Some(ref mut bt) = block_trace {
                             bt.boundaries.push(crate::capture::TraceBoundary {
                                 boundary: step_count,
                                 after_step: Some(step_count),
@@ -915,8 +924,38 @@ pub async fn execute_flow<'a>(
                             });
                         }
                     }
-                    Err(e) => {
-                        warnings.push(format!("trace boundary {step_count} capture failed: {e}"))
+                } else {
+                    match crate::capture::capture_trace_boundary(
+                        driver,
+                        ctx.capture_config,
+                        step_count,
+                        &suffix,
+                        crate::capture::TraceMeta {
+                            after_step: Some(step_count),
+                            action: Some(&step.action),
+                            wall_clock: &iso8601_now(),
+                        },
+                        defer_frames,
+                    )
+                    .await
+                    {
+                        Ok(cap) => {
+                            // When deferred, remember this boundary's PNG target +
+                            // capture time so the frame is pulled from the recording
+                            // post-block (end-anchored on the recording's stop).
+                            if defer_frames {
+                                deferred_frames.push((cap.png_path, std::time::Instant::now()));
+                            }
+                            if let Some(ref mut bt) = block_trace {
+                                bt.boundaries.push(crate::capture::TraceBoundary {
+                                    boundary: step_count,
+                                    after_step: Some(step_count),
+                                    offset_ms: bt.recording_started_at.elapsed().as_millis() as u64,
+                                });
+                            }
+                        }
+                        Err(e) => warnings
+                            .push(format!("trace boundary {step_count} capture failed: {e}")),
                     }
                 }
             }
