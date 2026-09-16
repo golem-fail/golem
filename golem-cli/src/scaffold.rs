@@ -12,6 +12,10 @@ const GOLEM_TOML_TEMPLATE: &str = r#"# GOLEM project configuration
 #   [vars]                 — project-level variables (referenced in flows as ${name})
 #   [[apps]]               — app registry (bundle, install_script, install_timeout_ms, devices)
 #   [device_settings]      — per-platform OS-level tweaks applied before flows run
+#   [[teardown]]           — steps appended to every flow's teardown
+#
+# A flow always wins over the project for anything it states itself.
+# See docs/test-structure.md §Project config.
 #
 # Run `golem install-script` to add an app and install script interactively.
 

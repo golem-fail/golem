@@ -154,8 +154,22 @@ pub async fn plan(
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
     let mut parse_failures: Vec<ParseFailure> = Vec::new();
     let mut lint_warnings: Vec<String> = Vec::new();
+    // `golem.toml`'s `[vars]` / `[options]` / `[[teardown]]` are read here
+    // rather than threaded in from the CLI: plan is the one place every flow
+    // is parsed, so both the direct and the orchestrator-daemon paths inherit
+    // the merge. A malformed golem.toml is not fatal — the CLI has already
+    // parsed the same file for `[[apps]]` and reported it.
+    let project_defaults = golem_parser::config::load_project_config(project_root)
+        .ok()
+        .flatten();
     for path in flow_paths {
-        match parse_one(path, project_apps, project_root, active_profile) {
+        match parse_one(
+            path,
+            project_apps,
+            project_defaults.as_ref(),
+            project_root,
+            active_profile,
+        ) {
             Ok((flow, profile_notes)) => {
                 lint_warnings.extend(profile_notes);
                 lint_warnings.extend(lint_warnings_for(path, &flow));
@@ -239,6 +253,7 @@ pub async fn plan(
 fn parse_one(
     path: &Path,
     project_apps: &[ProjectAppConfig],
+    project_defaults: Option<&golem_parser::config::ProjectConfig>,
     project_root: &Path,
     active_profile: Option<&str>,
 ) -> Result<(FlowFile, Vec<String>)> {
@@ -246,6 +261,12 @@ fn parse_one(
         .with_context(|| format!("reading flow file {}", path.display()))?;
     let mut flow =
         parse_flow(&text).with_context(|| format!("parsing flow file {}", path.display()))?;
+    // Project defaults lose to anything the flow states itself, so the merge
+    // happens before profile resolution and mixin expansion — both of which
+    // read the flow's own values.
+    if let Some(defaults) = project_defaults {
+        flow = golem_parser::config::merge_config(defaults, &flow);
+    }
     let profile_notes = resolve_app_profiles(&mut flow, project_apps, active_profile)
         .with_context(|| format!("resolving app profiles in {}", path.display()))?;
 
@@ -716,6 +737,116 @@ mod tests {
             install_env: None,
             profile: None,
         }
+    }
+
+    // golem.toml's [vars] / [options] / [[teardown]] reach every parsed flow.
+    // Wired here, at the one place flows are parsed, so the direct and daemon
+    // paths can't diverge (#115 — the merge existed but nothing called it).
+    #[tokio::test]
+    async fn plan_merges_project_config_into_every_flow() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        write_flow(
+            tmp.path(),
+            "golem.toml",
+            r#"
+            [vars]
+            base_url = "https://project.example"
+            shared = "from-project"
+
+            [options]
+            step_timeout = 1234
+
+            [[teardown]]
+            steps = [ { action = "bash", run = "cleanup.sh" } ]
+        "#,
+        );
+        let flow = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
+            [flow]
+            name = "f"
+            [flow.vars]
+            shared = "from-flow"
+            [[flow.apps]]
+            name = "app"
+            [[flow.apps.devices]]
+            os = "ios"
+        "#,
+        );
+
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1, None, false)
+            .await
+            .expect("plan() SHALL succeed");
+        let parsed = &suite.flows[0].flow;
+
+        assert_eq!(
+            parsed.flow.vars.get("base_url").map(String::as_str),
+            Some("https://project.example"),
+            "a project var SHALL reach the flow"
+        );
+        assert_eq!(
+            parsed.flow.vars.get("shared").map(String::as_str),
+            Some("from-flow"),
+            "a flow var SHALL win over the project's"
+        );
+        assert_eq!(
+            parsed.flow.options.as_ref().and_then(|o| o.step_timeout),
+            Some(1234),
+            "a project option SHALL reach the flow"
+        );
+        assert_eq!(
+            parsed.teardown.len(),
+            1,
+            "the project teardown SHALL be appended to the flow"
+        );
+    }
+
+    // A flow states its own value for an option the project also sets: the
+    // flow wins, and the project's other options still apply.
+    #[tokio::test]
+    async fn plan_lets_a_flow_override_one_project_option_without_losing_the_rest() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        write_flow(
+            tmp.path(),
+            "golem.toml",
+            r#"
+            [options]
+            step_timeout = 1234
+            record = true
+        "#,
+        );
+        let flow = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
+            [flow]
+            name = "f"
+            [flow.options]
+            step_timeout = 99
+            [[flow.apps]]
+            name = "app"
+            [[flow.apps.devices]]
+            os = "ios"
+        "#,
+        );
+
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1, None, false)
+            .await
+            .expect("plan() SHALL succeed");
+        let opts = suite.flows[0]
+            .flow
+            .flow
+            .options
+            .as_ref()
+            .expect("merged options SHALL be present");
+
+        assert_eq!(opts.step_timeout, Some(99), "the flow's option SHALL win");
+        assert_eq!(
+            opts.record,
+            Some(true),
+            "an option the flow doesn't state SHALL still come from the project"
+        );
     }
 
     // --repeat fan-out: every FlowRun replicated N times, each tagged
