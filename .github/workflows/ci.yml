@@ -62,10 +62,16 @@ jobs:
               - 'golem-driver/src/dom_traversal.js'
               - 'golem-cli/templates/install-scripts/**/*.sh'
               - 'docs/actions-reference.md'
+            # The workflow file itself counts: a change to a companion lane
+            # should run that lane, or its config is only ever tested by the
+            # next PR that happens to touch a companion — which is how the
+            # Android lane sat broken while fourteen runs skipped it.
             ios:
               - 'companions/ios/**'
+              - '.github/workflows/ci.yml'
             android:
               - 'companions/android/**'
+              - '.github/workflows/ci.yml'
 
   fmt:
     needs: classify
@@ -168,7 +174,14 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      # v4 for the node24 runtime (v3 is node20, which GitHub is retiring), and
+      # `packages` overridden because both versions default to installing
+      # `tools` — a package Google has removed from the SDK repository, so
+      # sdkmanager exits 1 and the job dies before gradle runs. Gradle fetches
+      # the platform and build-tools it needs itself.
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
       - name: Compile the companion + androidTest sources
         working-directory: companions/android
         run: ./gradlew assembleDebugAndroidTest
