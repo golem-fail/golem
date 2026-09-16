@@ -525,6 +525,10 @@ pub struct FlowOptions {
     pub record: Option<bool>,
     pub max_steps: Option<u64>,
     pub max_runtime: Option<String>,
+    /// Hard cap on how long a FlowRun waits in the device queue before
+    /// failing. Duration spelling matches `--max-device-wait` (`30m`, `1h`,
+    /// `90s`, `1h30m`). Unset = unbounded.
+    pub max_device_wait: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
     /// Coverage strategy — how to expand multi-valued device constraints

@@ -197,20 +197,22 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 max_concurrency: args.max_concurrency,
                 repeat: args.repeat,
                 max_device_wait: args
-                    .max_wait
+                    .max_device_wait
                     .as_deref()
                     .and_then(golem_runner::executor::parse_duration),
                 stub_fail_on_runs,
                 profile: args.profile.clone(),
             };
 
-            // Parse `--max-wait` into milliseconds for the wire. An
+            // Parse `--max-device-wait` into milliseconds for the wire. An
             // unparseable value is dropped (None) with a loud warning so
             // the user knows their flag was ignored.
-            let max_device_wait_ms = args.max_wait.as_deref().and_then(|s| {
+            let max_device_wait_ms = args.max_device_wait.as_deref().and_then(|s| {
                 let d = golem_runner::executor::parse_duration(s);
                 if d.is_none() {
-                    eprintln!("warning: ignoring --max-wait '{s}' (expected e.g. 30m, 1h, 90s)");
+                    eprintln!(
+                        "warning: ignoring --max-device-wait '{s}' (expected e.g. 30m, 1h, 90s)"
+                    );
                 }
                 d.map(|d| d.as_millis() as u64)
             });

@@ -20,6 +20,7 @@ pub struct ProjectOptions {
     pub record: Option<bool>,
     pub max_steps: Option<u64>,
     pub max_runtime: Option<String>,
+    pub max_device_wait: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
     pub coverage: Option<crate::CoverageStrategy>,
@@ -155,6 +156,10 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .max_runtime
             .clone()
             .or_else(|| proj_opts.max_runtime.clone()),
+        max_device_wait: flow_opts
+            .max_device_wait
+            .clone()
+            .or_else(|| proj_opts.max_device_wait.clone()),
         suite_concurrency: flow_opts.suite_concurrency.or(proj_opts.suite_concurrency),
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
         coverage: flow_opts.coverage.or(proj_opts.coverage),
@@ -201,6 +206,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         || merged_opts.record.is_some()
         || merged_opts.max_steps.is_some()
         || merged_opts.max_runtime.is_some()
+        || merged_opts.max_device_wait.is_some()
         || merged_opts.suite_concurrency.is_some()
         || merged_opts.keep_devices.is_some()
         || merged_opts.coverage.is_some()
@@ -547,6 +553,60 @@ extra_var = "only_in_flow"
             Some("only_in_flow")
         );
         assert_eq!(merged.flow.vars.len(), 3);
+    }
+
+    // ---------------------------------------------------------------
+    // 12b. max_device_wait: project-wide by default, flow overrides
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_max_device_wait_prefers_the_flow() {
+        let project = parse_project_config(
+            r#"
+[options]
+max_device_wait = "30m"
+"#,
+        )
+        .expect("project config should parse");
+
+        let inherited = merge_config(
+            &project,
+            &minimal_flow(
+                r#"
+[flow]
+name = "inherits"
+"#,
+            ),
+        );
+        assert_eq!(
+            inherited
+                .flow
+                .options
+                .and_then(|o| o.max_device_wait)
+                .as_deref(),
+            Some("30m"),
+            "a flow with no wait cap SHALL inherit the project's"
+        );
+
+        let overridden = merge_config(
+            &project,
+            &minimal_flow(
+                r#"
+[flow]
+name = "overrides"
+[flow.options]
+max_device_wait = "90s"
+"#,
+            ),
+        );
+        assert_eq!(
+            overridden
+                .flow
+                .options
+                .and_then(|o| o.max_device_wait)
+                .as_deref(),
+            Some("90s"),
+            "a flow's own wait cap SHALL win over the project's"
+        );
     }
 
     // ---------------------------------------------------------------

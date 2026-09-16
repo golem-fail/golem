@@ -42,12 +42,13 @@ golem run [FILES...] [OPTIONS]
 | `--seed <N>` | Deterministic seed for fake data generation. Seed shown in all output formats for reproducibility. |
 | `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
 | `--max-concurrency <N>` | Cap on FlowRuns running at once. Caps only — the host-headroom guard (RAM, device availability) still applies, so effective parallelism is the lower of the two |
+| `--max-device-wait <DUR>` | Hard cap on how long a flow waits in the device queue before failing with "no device available" (`30m`, `1h`, `90s`, `1h30m`). Default: unbounded. Beats `[options].max_device_wait` in `golem.toml` and a flow's own `[flow.options]`. |
 | `--record` | Enable auto screen recording for every block. Loses to `--no-record`. |
 | `--no-record` | Force-disable recording everywhere — beats `--record`, flow options, and per-block opts. |
 | `--trace` | Forensic capture: forces recording on (beats `--no-record`) + writes screenshot + accessibility-tree at every step boundary to `results/.../trace/`. ~200ms/step overhead — investigation only. |
 | `--repeat <N>` | Repeat the whole suite N times (1..=100). Each run writes to `{output-dir}/run_{i}/`. The orchestrator fans every FlowRun out N times, so identical-device pools parallelise for free. A flake summary is printed at the end. |
 | `--no-clean` | Skip app data clear between flows (not yet implemented) |
-| `--no-teardown` | Skip teardown blocks (not yet wired) |
+| `--no-teardown` | Skip teardown blocks |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
 | `--no-perf` | Disable performance capture |
 | `--a11y <off\|critical\|relaxed\|strict>` | Override every flow's accessibility audit level (default `relaxed`). `off` disables; `critical` runs tree checks only; `relaxed` adds opportunistic contrast; `strict` forces a per-block screenshot + AAA bands |
