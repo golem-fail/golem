@@ -2034,6 +2034,102 @@ mod tests {
         p.close().await.expect("close SHALL succeed");
     }
 
+    // 17b. Two contexts on the same origin keep separate cookie jars, while
+    //      two tabs in one context share theirs. That split is the whole point
+    //      of contexts: the same site logged in as two different users at once
+    //      cannot be done with tabs.
+    #[tokio::test]
+    async fn live_contexts_isolate_cookies_while_tabs_share_them() {
+        if !chrome_available() {
+            return;
+        }
+        let server = TestServer::start("<h1>Portal</h1>");
+        let mut p = pool();
+        let mut v = vars();
+
+        let visit = |session: &str| {
+            format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"\nsession = \"{session}\"",
+                server.url
+            )
+        };
+
+        // Tenant A signs in.
+        run(&mut p, &step(&visit("tenantA:main")), &mut v)
+            .await
+            .expect("tenant A SHALL load the page");
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_set_cookie\"\nname = \"who\"\nvalue = \"userX\"\nsession = \"tenantA:main\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("tenant A SHALL get a cookie");
+
+        // A second tab in the SAME context sees it — tabs share a jar.
+        run(&mut p, &step(&visit("tenantA:second")), &mut v)
+            .await
+            .expect("a second tab SHALL load");
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_get_cookie\"\nname = \"who\"\nsession = \"tenantA:second\"\nsave_to = \"shared\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("a sibling tab SHALL see the cookie");
+        assert_eq!(saved(&v, "shared"), "userX");
+
+        // A tab in a DIFFERENT context does not.
+        run(&mut p, &step(&visit("tenantB:main")), &mut v)
+            .await
+            .expect("tenant B SHALL load the page");
+        let e = run(
+            &mut p,
+            &step(
+                "action = \"browse_get_cookie\"\nname = \"who\"\nsession = \"tenantB:main\"\nsave_to = \"leaked\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect_err("a separate context SHALL NOT see tenant A's cookie");
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(FailureCode::FlowElementNotFound)
+        );
+        assert!(v.get("leaked").is_none(), "nothing SHALL leak between jars");
+
+        // Tenant B signs in as someone else, and tenant A is unaffected.
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_set_cookie\"\nname = \"who\"\nvalue = \"userY\"\nsession = \"tenantB:main\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("tenant B SHALL get its own cookie");
+        run(
+            &mut p,
+            &step(
+                "action = \"browse_get_cookie\"\nname = \"who\"\nsession = \"tenantA:main\"\nsave_to = \"a_after\"",
+            ),
+            &mut v,
+        )
+        .await
+        .expect("tenant A's cookie SHALL still be there");
+        assert_eq!(
+            saved(&v, "a_after"),
+            "userX",
+            "one tenant's login SHALL NOT overwrite another's"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
     // 18. WebMCP: a page registers a tool, golem lists it and calls it, the
     //     `{content:[...]}` envelope is unwrapped, a JSON answer nests, and a
     //     tool the page never registered fails as not found.
