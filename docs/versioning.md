@@ -30,6 +30,7 @@ A release is cut by **pushing a `vX.Y.Z` tag** — the `Release` workflow (`.git
 Notes:
 
 - **npm publish is non-idempotent** — a version can't be re-published. If a release is botched, bump to the next patch rather than retrying the same tag.
+- **Prereleases don't touch `latest`.** The npm dist-tag follows the git tag: `vX.Y.Z` publishes to `latest`, and anything with a `-` in it (`v0.11.0-rc.1`, or a throwaway `v0.0.0-rc-ci` used to smoke-test the pipeline) publishes to `next`. So an rc is installable with `npm i @golem-fail/golem@next` without changing what a plain `npm i` gives everyone else.
 - Release notes are generated automatically (diffed against the previous tag), aggregating the `## Release notes` blocks from the merged PRs.
 - Check the workflow is enabled with `gh variable get RELEASE_ENABLED`; `gh variable set RELEASE_ENABLED --body true` enables it, any other value disables it (see the `release.yml` header comment).
 
