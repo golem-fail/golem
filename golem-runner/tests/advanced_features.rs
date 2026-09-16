@@ -1,12 +1,11 @@
-//! Integration tests for advanced flow features: sub-flow variable passing,
-//! data-driven row expansion, and fixture loading.
+//! Integration tests for advanced flow features: sub-flow variable passing
+//! and fixture loading.
 //!
 //! These test the `golem-runner` modules working together through their public APIs.
 
 use std::collections::HashMap;
 
 use golem_parser::Block;
-use golem_runner::data_driven::{apply_data_vars, expand_data_rows, get_runs};
 use golem_runner::fixture_loader::load_fixture_into_store;
 use golem_runner::subflow::{extract_subflow_config, prepare_child_vars, propagate_results};
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
@@ -164,99 +163,6 @@ fn subflow_config_returns_none_for_regular_block() {
 }
 
 // ===========================================================================
-// Data-driven tests
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// 4. expand_data_rows creates one run per data row
-// ---------------------------------------------------------------------------
-#[test]
-fn data_driven_expand_rows_creates_one_run_per_row() {
-    let data = vec![
-        HashMap::from([("payment".to_string(), "visa".to_string())]),
-        HashMap::from([("payment".to_string(), "paypal".to_string())]),
-        HashMap::from([("payment".to_string(), "crypto".to_string())]),
-    ];
-
-    let runs = expand_data_rows(&data);
-
-    assert_eq!(runs.len(), 3);
-    assert_eq!(
-        runs[0].vars.get("payment").map(|s| s.as_str()),
-        Some("visa")
-    );
-    assert_eq!(
-        runs[1].vars.get("payment").map(|s| s.as_str()),
-        Some("paypal")
-    );
-    assert_eq!(
-        runs[2].vars.get("payment").map(|s| s.as_str()),
-        Some("crypto")
-    );
-    // Indices match positions
-    for (i, run) in runs.iter().enumerate() {
-        assert_eq!(run.index, i);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// 5. apply_data_vars merges row variables into store
-// ---------------------------------------------------------------------------
-#[test]
-fn data_driven_apply_vars_merges_into_store() {
-    let mut store = VariableStore::new();
-    let data_vars = HashMap::from([
-        ("payment".to_string(), "credit_card".to_string()),
-        ("expected_total".to_string(), "$29.99".to_string()),
-    ]);
-
-    apply_data_vars(&mut store, &data_vars);
-
-    let payment = store.resolve("payment").expect("payment should resolve");
-    assert_eq!(payment, &VarValue::String("credit_card".to_string()));
-
-    let total = store
-        .resolve("expected_total")
-        .expect("expected_total should resolve");
-    assert_eq!(total, &VarValue::String("$29.99".to_string()));
-}
-
-// ---------------------------------------------------------------------------
-// 6. get_runs returns single default run when no data rows
-// ---------------------------------------------------------------------------
-#[test]
-fn data_driven_get_runs_returns_default_when_empty() {
-    let runs = get_runs(&[]);
-
-    assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].label, "default");
-    assert!(runs[0].vars.is_empty());
-    assert_eq!(runs[0].index, 0);
-}
-
-// ---------------------------------------------------------------------------
-// 7. Data vars override flow vars in store
-// ---------------------------------------------------------------------------
-#[test]
-fn data_driven_vars_override_flow_vars() {
-    let mut store = VariableStore::new();
-
-    // Pre-populate a Flow-level variable
-    store.set_in_scope(
-        ScopeLevel::Flow,
-        "payment",
-        VarValue::String("cash".to_string()),
-    );
-
-    // Override it via data row (also at Flow level)
-    let data_vars = HashMap::from([("payment".to_string(), "paypal".to_string())]);
-    apply_data_vars(&mut store, &data_vars);
-
-    let val = store.resolve("payment").expect("should resolve");
-    assert_eq!(val, &VarValue::String("paypal".to_string()));
-}
-
-// ===========================================================================
 // Fixture loading tests
 // ===========================================================================
 
@@ -398,11 +304,11 @@ fn fixture_vars_available_to_child_subflow() {
 }
 
 // ---------------------------------------------------------------------------
-// 12. End-to-end: data-driven rows feed into sub-flow variable overrides
+// 12. Per-row overrides feed into sub-flow variable overrides
 // ---------------------------------------------------------------------------
 #[test]
-fn data_rows_feed_into_subflow_overrides() {
-    let data = vec![
+fn row_vars_feed_into_subflow_overrides() {
+    let rows = vec![
         HashMap::from([
             ("user".to_string(), "alice".to_string()),
             ("role".to_string(), "admin".to_string()),
@@ -413,20 +319,17 @@ fn data_rows_feed_into_subflow_overrides() {
         ]),
     ];
 
-    let runs = expand_data_rows(&data);
-    assert_eq!(runs.len(), 2);
-
     let parent = make_parent_store();
 
-    // For each data run, prepare a child store using the run's vars as overrides
-    for run in &runs {
-        let child = prepare_child_vars(&parent, &run.vars);
+    // Each row's fields become the child's overrides, as a `for_each` block
+    // passes them down.
+    for row in &rows {
+        let child = prepare_child_vars(&parent, row);
 
-        // Child has the data-driven override
         let user_val = child.get("user").expect("user should be in child");
         assert_eq!(
             user_val.as_str(),
-            Some(run.vars.get("user").expect("user in vars").as_str()),
+            Some(row.get("user").expect("user in row").as_str()),
         );
 
         // Child inherits parent variables
@@ -438,10 +341,10 @@ fn data_rows_feed_into_subflow_overrides() {
 }
 
 // ---------------------------------------------------------------------------
-// 13. Data vars at Flow level do not override CLI-level vars
+// 13. Flow-level vars do not override CLI-level vars
 // ---------------------------------------------------------------------------
 #[test]
-fn data_vars_do_not_override_cli_vars() {
+fn flow_vars_do_not_override_cli_vars() {
     let mut store = VariableStore::new();
 
     // CLI-level variable has highest priority
@@ -449,9 +352,12 @@ fn data_vars_do_not_override_cli_vars() {
     cli_scope.set("env", VarValue::String("staging".to_string()));
     store.push_scope(cli_scope);
 
-    // Data row tries to set the same variable at Flow level
-    let data_vars = HashMap::from([("env".to_string(), "production".to_string())]);
-    apply_data_vars(&mut store, &data_vars);
+    // A flow-scoped write of the same name (what --var is meant to beat).
+    store.set_in_scope(
+        ScopeLevel::Flow,
+        "env",
+        VarValue::String("production".to_string()),
+    );
 
     // CLI should still win (priority: Cli > Flow)
     let val = store.resolve("env").expect("should resolve");

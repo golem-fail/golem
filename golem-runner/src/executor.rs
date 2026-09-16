@@ -2003,64 +2003,6 @@ pub async fn execute_flow_with_teardown<'a>(
     result
 }
 
-/// Execute a flow once per data-driven row (or once if there are no data rows).
-///
-/// Returns the first failing [`FlowResult`] if any row fails, otherwise returns the
-/// result of the last run (which is successful).
-pub async fn execute_flow_with_data<'a>(
-    flow: &'a FlowFile,
-    driver: &dyn PlatformDriver,
-    vars: &mut VariableStore,
-    start_block: Option<&str>,
-    default_timeout_ms: u64,
-    ctx: &mut ExecutionContext<'a>,
-    barrier: Option<&FailureBarrier>,
-) -> Result<FlowResult> {
-    // When a block claims the `[[data]]` table via `for_each = "data"`, rows are
-    // iterated at the block level (each row = one block iteration binding
-    // `${_each.*}`). Suppress the whole-flow-per-row expansion in that case —
-    // otherwise the flow would run once per row AND the block would re-iterate
-    // every row within each, yielding N×N executions.
-    let runs = if flow.block.iter().any(|b| b.for_each.is_some()) {
-        crate::data_driven::get_runs(&[])
-    } else {
-        crate::data_driven::get_runs(&flow.data)
-    };
-    let mut last_result = None;
-    for run in &runs {
-        if !run.vars.is_empty() {
-            crate::data_driven::apply_data_vars(vars, &run.vars);
-        }
-        let result = execute_flow(
-            flow,
-            driver,
-            vars,
-            start_block,
-            default_timeout_ms,
-            ctx,
-            barrier,
-        )
-        .await?;
-        if !result.success {
-            return Ok(result);
-        }
-        last_result = Some(result);
-    }
-    Ok(last_result.unwrap_or(FlowResult {
-        success: true,
-        warnings: Vec::new(),
-        failed_step: None,
-        failed_block: None,
-        failed_action: None,
-        failed_reason: None,
-        failed_code: None,
-        barrier_aborted: false,
-        perf_snapshots: vec![],
-        recordings: Vec::new(),
-        a11y_audits: Vec::new(),
-    }))
-}
-
 /// Seed a `[*.vars]` map into `target` at `scope`, evaluating `fake:`
 /// generators with the flow RNG (`${var}` cross-references resolve against
 /// already-evaluated vars). Plain values pass through as strings.
@@ -3947,156 +3889,6 @@ action = "screenshot"
     }
 
     // ---------------------------------------------------------------
-    // Agent N: data-driven row execution
-    // ---------------------------------------------------------------
-
-    // ---------------------------------------------------------------
-    // 33. execute_flow_with_data runs once when no data rows
-    // ---------------------------------------------------------------
-    #[tokio::test]
-    async fn execute_flow_with_data_no_rows_runs_once() {
-        let driver = MockPlatformDriver::new(empty_hierarchy());
-        let mut vars = VariableStore::new();
-        let mut ctx = test_ctx(Path::new("."));
-
-        let flow = make_flow(vec![make_block(Some("only"), vec![make_success_step()])]);
-
-        let result = execute_flow_with_data(
-            &flow,
-            &driver,
-            &mut vars,
-            None,
-            DEFAULT_TIMEOUT,
-            &mut ctx,
-            None,
-        )
-        .await
-        .expect("execute_flow_with_data SHALL succeed");
-        assert!(result.success);
-
-        let calls = driver.get_calls();
-        let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
-        assert_eq!(
-            screenshot_calls.len(),
-            1,
-            "SHALL execute flow exactly once when there are no data rows"
-        );
-    }
-
-    // ---------------------------------------------------------------
-    // 34. execute_flow_with_data runs once per data row
-    // ---------------------------------------------------------------
-    #[tokio::test]
-    async fn execute_flow_with_data_runs_per_row() {
-        let driver = MockPlatformDriver::new(empty_hierarchy());
-        let mut vars = VariableStore::new();
-        let mut ctx = test_ctx(Path::new("."));
-
-        let mut flow = make_flow(vec![make_block(
-            Some("step_block"),
-            vec![make_success_step()],
-        )]);
-        flow.data = vec![
-            HashMap::from([("user".to_string(), "alice".to_string())]),
-            HashMap::from([("user".to_string(), "bob".to_string())]),
-            HashMap::from([("user".to_string(), "charlie".to_string())]),
-        ];
-
-        let result = execute_flow_with_data(
-            &flow,
-            &driver,
-            &mut vars,
-            None,
-            DEFAULT_TIMEOUT,
-            &mut ctx,
-            None,
-        )
-        .await
-        .expect("execute_flow_with_data SHALL succeed");
-        assert!(result.success);
-
-        let calls = driver.get_calls();
-        let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
-        assert_eq!(
-            screenshot_calls.len(),
-            3,
-            "SHALL execute flow once per data row (3 rows = 3 executions)"
-        );
-    }
-
-    // ---------------------------------------------------------------
-    // 35. execute_flow_with_data stops on first failing row
-    // ---------------------------------------------------------------
-    #[tokio::test]
-    async fn execute_flow_with_data_stops_on_failure() {
-        let driver = MockPlatformDriver::new(empty_hierarchy());
-        let mut vars = VariableStore::new();
-        let mut ctx = test_ctx(Path::new("."));
-
-        let mut flow = make_flow(vec![make_block(
-            Some("fail_block"),
-            vec![make_failing_step()],
-        )]);
-        flow.data = vec![
-            HashMap::from([("user".to_string(), "alice".to_string())]),
-            HashMap::from([("user".to_string(), "bob".to_string())]),
-        ];
-
-        let result = execute_flow_with_data(
-            &flow,
-            &driver,
-            &mut vars,
-            None,
-            DEFAULT_TIMEOUT,
-            &mut ctx,
-            None,
-        )
-        .await
-        .expect("execute_flow_with_data SHALL return FlowResult");
-        assert!(!result.success, "SHALL fail when any data row fails");
-    }
-
-    // ---------------------------------------------------------------
-    // 36. execute_flow_with_data applies row variables
-    // ---------------------------------------------------------------
-    #[tokio::test]
-    async fn execute_flow_with_data_applies_row_variables() {
-        use golem_vars::VarValue;
-
-        let driver = MockPlatformDriver::new(empty_hierarchy());
-        let mut vars = VariableStore::new();
-        let mut ctx = test_ctx(Path::new("."));
-
-        let mut flow = make_flow(vec![make_block(
-            Some("step_block"),
-            vec![make_success_step()],
-        )]);
-        flow.data = vec![HashMap::from([(
-            "payment".to_string(),
-            "credit_card".to_string(),
-        )])];
-
-        let result = execute_flow_with_data(
-            &flow,
-            &driver,
-            &mut vars,
-            None,
-            DEFAULT_TIMEOUT,
-            &mut ctx,
-            None,
-        )
-        .await
-        .expect("execute_flow_with_data SHALL succeed");
-        assert!(result.success);
-
-        assert_eq!(
-            vars.resolve("payment").ok(),
-            Some(&VarValue::String("credit_card".to_string())),
-            "row variables SHALL be applied to the variable store"
-        );
-    }
-
-    // ---------------------------------------------------------------
     // for_each = "data": block-level data-driven iteration (#93)
     // ---------------------------------------------------------------
 
@@ -4115,9 +3907,8 @@ action = "screenshot"
         }
     }
 
-    // A `for_each = "data"` block runs its steps once per row, and the
-    // whole-flow-per-row expansion is suppressed — so N rows give exactly N
-    // block executions, not N×N. Two rows × one screenshot = two screenshots.
+    // A `for_each = "data"` block runs its steps once per row: two rows ×
+    // one screenshot = two screenshots.
     #[tokio::test]
     async fn for_each_data_iterates_block_once_per_row() {
         let driver = MockPlatformDriver::new(empty_hierarchy());
@@ -4134,7 +3925,7 @@ action = "screenshot"
             HashMap::from([("user".to_string(), "bob".to_string())]),
         ];
 
-        let result = execute_flow_with_data(
+        let result = execute_flow(
             &flow,
             &driver,
             &mut vars,
@@ -4144,15 +3935,12 @@ action = "screenshot"
             None,
         )
         .await
-        .expect("execute_flow_with_data SHALL succeed");
+        .expect("execute_flow SHALL succeed");
         assert!(result.success);
 
         let calls = driver.get_calls();
         let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
-        assert_eq!(
-            screenshots, 2,
-            "2 rows SHALL run the block exactly twice (not 1×, not 4× from N×N)"
-        );
+        assert_eq!(screenshots, 2, "2 rows SHALL run the block exactly twice");
     }
 
     // Each row's fields resolve under the `${_each.*}` prefix in that row's
