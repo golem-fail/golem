@@ -134,6 +134,37 @@ steps = [
     )
 }
 
+/// A flow whose one step sleeps, so two FlowRuns overlap measurably when
+/// they run concurrently and are provably disjoint when they don't. The
+/// pass/fail fixture completes inside a millisecond, which can't tell the
+/// two apart.
+pub fn slow_flow() -> String {
+    format!(
+        r#"[flow]
+name = "Stub slow"
+
+[flow.options]
+step_timeout = 5000
+a11y = "off"
+perf = false
+
+[[flow.apps]]
+name = "app"
+bundle = "{bundle}"
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "dawdle"
+steps = [
+  {{ action = "bash", run = "sleep 0.5" }},
+]
+"#,
+        bundle = golem_driver::stub::STUB_BUNDLE_ID,
+    )
+}
+
 /// Build a temp project (golem.toml + the fixture flow + a stub script),
 /// then run `golem run <flow> --stub <script> --platform android <extra>`
 /// in-process against the stub driver, capturing fd-level stdout/stderr.
@@ -148,6 +179,7 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
     std::fs::write(root.join("golem.toml"), golem_toml()).expect("write golem.toml");
     std::fs::write(root.join("fixture.test.toml"), fixture_flow()).expect("write flow");
     std::fs::write(root.join("browser.test.toml"), browser_flow()).expect("write browser flow");
+    std::fs::write(root.join("slow.test.toml"), slow_flow()).expect("write slow flow");
     std::fs::write(root.join("stub.toml"), stub_script_toml).expect("write stub script");
 
     // Point cwd + $HOME at the temp project. Saved and restored around the

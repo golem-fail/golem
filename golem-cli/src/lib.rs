@@ -194,6 +194,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 no_record: args.no_record,
                 project_record: project_config.options.record,
                 trace: args.trace,
+                max_concurrency: args.max_concurrency,
                 repeat: args.repeat,
                 max_device_wait: args
                     .max_wait
@@ -543,6 +544,7 @@ fn build_config_json(
         "no_record": config.no_record,
         "trace": config.trace,
         "repeat": config.repeat,
+        "max_concurrency": config.max_concurrency,
         "max_device_wait_ms": max_device_wait_ms,
         "profile": config.profile,
         "include_junit": include_junit,

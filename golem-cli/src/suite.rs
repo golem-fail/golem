@@ -267,6 +267,11 @@ pub struct SuiteConfig {
     /// shipped binary. A plain `Vec<u32>` (not the driver's `StubScript`)
     /// so this always-compiled struct stays free of the debug-only type.
     pub stub_fail_on_runs: Option<Vec<u32>>,
+    /// `--max-concurrency N`: cap on FlowRuns executing at once. Caps —
+    /// never raises: the shared `ResourceManager` still applies the host
+    /// headroom guard (RAM, its own ceiling), so the effective parallelism
+    /// is the lower of the two. `None` = whatever the host allows.
+    pub max_concurrency: Option<usize>,
     /// `--profile <name>`: selects profile-scoped app definitions. Per app,
     /// the plan picks the `(name, profile)` entry, falling back to the
     /// profile-less catch-all. `None` = catch-all only.
@@ -305,6 +310,7 @@ impl Default for SuiteConfig {
             repeat: 1,
             max_device_wait: None,
             stub_fail_on_runs: None,
+            max_concurrency: None,
             profile: None,
         }
     }
@@ -649,6 +655,14 @@ impl SuiteRunner {
         // Spawn one worker per FlowRun. The ResourceManager gates how many
         // run concurrently: `try_allocate` fails when RAM/concurrency caps
         // would be exceeded, and workers retry on a 2s backoff.
+        //
+        // `--max-concurrency` narrows that further, per suite rather than in
+        // the ResourceManager: the manager is shared by every client of an
+        // orchestrator daemon, so reconfiguring it would let one submit
+        // rewrite another's parallelism. A permit is taken before the worker
+        // competes for a device and held for the whole FlowRun.
+        let max_concurrency = self.config.max_concurrency.filter(|n| *n > 0);
+        let run_gate = max_concurrency.map(|n| Arc::new(tokio::sync::Semaphore::new(n)));
         let mut handles = Vec::new();
         for run in parsed.flow_runs.iter() {
             let Some(pf) = parsed.flows.get(run.flow_idx) else {
@@ -713,8 +727,20 @@ impl SuiteRunner {
             let dispatch_lock = run
                 .coverage_group
                 .and_then(|gi| dispatch_locks.get(&gi).cloned());
+            // A multi-slot FlowRun occupies one device per slot, so it takes
+            // that many permits — clamped to the cap itself, which lets a run
+            // wider than the cap still execute (alone) instead of deadlocking
+            // on permits that can never all exist.
+            let gate = run_gate.clone();
+            let gate_permits = max_concurrency
+                .map(|cap| (run.slots.len() as u32).clamp(1, cap as u32))
+                .unwrap_or(0);
 
             handles.push(tokio::spawn(async move {
+                let _permit = match gate {
+                    Some(sem) => sem.acquire_many_owned(gate_permits).await.ok(),
+                    None => None,
+                };
                 let reports = execute_flow_run(
                     FlowRunTarget { path, flow, slots },
                     FlowRunProvisioning {

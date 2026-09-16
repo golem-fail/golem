@@ -317,6 +317,7 @@ struct SubmitConfigFields {
     no_record: bool,
     trace: bool,
     repeat: u32,
+    max_concurrency: Option<usize>,
     max_device_wait: Option<std::time::Duration>,
     stub_fail_on_runs: Option<Vec<u32>>,
     profile: Option<String>,
@@ -397,6 +398,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
             .filter_map(|v| v.as_u64().map(|n| n as u32))
             .collect()
     });
+    let max_concurrency = cfg["max_concurrency"].as_u64().map(|n| n as usize);
     let profile = cfg["profile"].as_str().map(str::to_string);
 
     SubmitConfigFields {
@@ -423,6 +425,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         no_record,
         trace,
         repeat,
+        max_concurrency,
         max_device_wait,
         stub_fail_on_runs,
         profile,
@@ -477,6 +480,7 @@ async fn handle_submit(
         no_record,
         trace,
         repeat,
+        max_concurrency,
         max_device_wait,
         stub_fail_on_runs,
         profile,
@@ -547,6 +551,7 @@ async fn handle_submit(
         project_record: project_config.options.record,
         trace,
         repeat,
+        max_concurrency,
         max_device_wait,
         stub_fail_on_runs,
         profile,
