@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
-use chromiumoxide::cdp::browser_protocol::network::CookieParam;
+use chromiumoxide::cdp::browser_protocol::network::{CookieParam, SetUserAgentOverrideParams};
 use chromiumoxide::element::Element;
 use chromiumoxide::page::{Page, ScreenshotParams};
 use golem_element::glob::glob_match;
@@ -757,12 +757,52 @@ async fn close(pool: &mut BrowserPool, step: &Step) -> Result<()> {
 async fn navigate(pool: &mut BrowserPool, step: &Step) -> Result<()> {
     let url = required_param(step, "url")?;
     let wait = WaitUntil::from_step(step)?;
-    let (page, ua) = page_for(pool, step).await?;
+    let (page, mut ua) = page_for(pool, step).await?;
+
+    // Identity is applied before the navigation, so the very first request
+    // carries it — a portal that serves a different page to a phone decides
+    // that on the request, not afterwards.
+    if let Some(applied) = apply_identity(pool, &page, step, &ua).await? {
+        ua = applied;
+    }
 
     page.goto(url)
         .await
         .map_err(|e| external_failure(format!("navigating to {url}: {e}"), &ua))?;
     wait.settle(&page, &ua).await
+}
+
+/// Give the tab a user agent and/or an accept-language, if the step asks.
+///
+/// The override belongs to the tab, not the request: CDP keeps it until
+/// something changes it, which is what a flow wants — a session that is a phone
+/// stays a phone. Returns the agent now in effect so a failure quotes what the
+/// site saw rather than the browser's own identity.
+async fn apply_identity(
+    pool: &mut BrowserPool,
+    page: &Page,
+    step: &Step,
+    current_ua: &str,
+) -> Result<Option<String>> {
+    let wanted_ua = optional_param(step, "user_agent");
+    let language = optional_param(step, "accept_language");
+    if wanted_ua.is_none() && language.is_none() {
+        return Ok(None);
+    }
+
+    // CDP has no "language only" call — the user agent is a required field —
+    // so a step setting just the language keeps the agent the tab already has.
+    let effective = wanted_ua.unwrap_or(current_ua);
+    let mut params = SetUserAgentOverrideParams::new(effective);
+    params.accept_language = language.map(str::to_string);
+
+    page.set_user_agent(params)
+        .await
+        .map_err(|e| external_failure(format!("setting the user agent: {e}"), current_ua))?;
+
+    let session = crate::session::parse_session(optional_param(step, "session"))?;
+    pool.note_user_agent(&session, effective);
+    Ok(Some(effective.to_string()))
 }
 
 async fn tap(pool: &mut BrowserPool, step: &Step) -> Result<()> {
@@ -910,7 +950,9 @@ impl WaitUntil {
 
 /// The tab this step acts on, plus the user agent to quote if it fails.
 async fn page_for(pool: &mut BrowserPool, step: &Step) -> Result<(Page, String)> {
-    let ua = pool.user_agent().await?.to_string();
+    let ua = pool
+        .session_user_agent(optional_param(step, "session"))
+        .await?;
     let page = pool
         .get_or_create_session(optional_param(step, "session"))
         .await?;
@@ -1041,7 +1083,20 @@ mod tests {
     }
 
     impl TestServer {
+        /// A page that shows the request headers the browser sent.
+        ///
+        /// `navigator.userAgent` only proves what the page can read; a portal
+        /// decides what to serve from the request, so the request is what a
+        /// test about identity has to look at.
+        fn echoing() -> Self {
+            Self::start_with(None)
+        }
+
         fn start(html: &'static str) -> Self {
+            Self::start_with(Some(html))
+        }
+
+        fn start_with(html: Option<&'static str>) -> Self {
             use std::io::{Read, Write};
             let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("SHALL bind a port");
             let port = listener.local_addr().expect("SHALL have an address").port();
@@ -1054,11 +1109,30 @@ mod tests {
                         return;
                     }
                     let Ok(mut stream) = stream else { continue };
-                    let mut buf = [0u8; 1024];
-                    let _ = stream.read(&mut buf);
+                    let mut buf = [0u8; 4096];
+                    let read = stream.read(&mut buf).unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buf[..read]).to_string();
+                    let body = match html {
+                        Some(html) => html.to_string(),
+                        None => {
+                            let header = |name: &str| {
+                                request
+                                    .lines()
+                                    .find(|l| l.to_lowercase().starts_with(name))
+                                    .and_then(|l| l.split_once(':'))
+                                    .map(|(_, v)| v.trim().to_string())
+                                    .unwrap_or_default()
+                            };
+                            format!(
+                                "<span id='ua'>{}</span><span id='lang'>{}</span>",
+                                header("user-agent"),
+                                header("accept-language"),
+                            )
+                        }
+                    };
                     let response = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{html}",
-                        html.len()
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{body}",
+                        body.len()
                     );
                     let _ = stream.write_all(response.as_bytes());
                 }
@@ -2125,6 +2199,104 @@ mod tests {
             saved(&v, "a_after"),
             "userX",
             "one tenant's login SHALL NOT overwrite another's"
+        );
+
+        p.close().await.expect("close SHALL succeed");
+    }
+
+    // 17c. A session can present itself as a different device, and the portal
+    //      sees it in the request rather than only in `navigator.userAgent` —
+    //      which is what decides whether a site serves its mobile variant.
+    //      Two sessions carry different identities at the same time.
+    #[tokio::test]
+    async fn live_sessions_carry_their_own_user_agent() {
+        if !chrome_available() {
+            return;
+        }
+        let server = TestServer::echoing();
+        let mut p = pool();
+        let mut v = vars();
+        const IPHONE: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
+                              AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"\nsession = \"phone\"\nuser_agent = \"{IPHONE}\"\naccept_language = \"fr-FR\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the phone session SHALL load");
+        run(
+            &mut p,
+            &step("action = \"browse_read\"\nselector = \"#ua\"\nsession = \"phone\"\nsave_to = \"phone_ua\""),
+            &mut v,
+        )
+        .await
+        .expect("read SHALL succeed");
+        run(
+            &mut p,
+            &step("action = \"browse_read\"\nselector = \"#lang\"\nsession = \"phone\"\nsave_to = \"phone_lang\""),
+            &mut v,
+        )
+        .await
+        .expect("read SHALL succeed");
+        assert!(
+            saved(&v, "phone_ua").contains("iPhone"),
+            "the request SHALL carry the override, got {}",
+            saved(&v, "phone_ua")
+        );
+        assert_eq!(saved(&v, "phone_lang"), "fr-FR");
+
+        // A second session, untouched, is still the real browser.
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"\nsession = \"desktop\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the desktop session SHALL load");
+        run(
+            &mut p,
+            &step("action = \"browse_read\"\nselector = \"#ua\"\nsession = \"desktop\"\nsave_to = \"desktop_ua\""),
+            &mut v,
+        )
+        .await
+        .expect("read SHALL succeed");
+        assert!(
+            !saved(&v, "desktop_ua").contains("iPhone"),
+            "one session's identity SHALL NOT leak into another: {}",
+            saved(&v, "desktop_ua")
+        );
+
+        // The override sticks to the tab: a later navigation keeps it without
+        // repeating the param, which is how a session stays one device.
+        run(
+            &mut p,
+            &step(&format!(
+                "action = \"browse_navigate\"\nurl = \"{}\"\nsession = \"phone\"",
+                server.url
+            )),
+            &mut v,
+        )
+        .await
+        .expect("the phone session SHALL reload");
+        run(
+            &mut p,
+            &step("action = \"browse_read\"\nselector = \"#ua\"\nsession = \"phone\"\nsave_to = \"phone_again\""),
+            &mut v,
+        )
+        .await
+        .expect("read SHALL succeed");
+        assert!(
+            saved(&v, "phone_again").contains("iPhone"),
+            "the identity SHALL persist across navigations: {}",
+            saved(&v, "phone_again")
         );
 
         p.close().await.expect("close SHALL succeed");

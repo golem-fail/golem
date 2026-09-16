@@ -12,7 +12,7 @@ use futures::StreamExt;
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 
-use crate::session::{parse_session, DEFAULT_CONTEXT};
+use crate::session::{parse_session, SessionRef, DEFAULT_CONTEXT};
 
 /// How a flow's browser is launched.
 #[derive(Debug, Clone)]
@@ -47,11 +47,19 @@ impl Default for PoolConfig {
 /// Tabs in a context share cookies and storage deliberately — a login carries
 /// between them. Two contexts share nothing, which is the point: the same site
 /// logged in as two different users at once needs separate jars, not tabs.
+struct Tab {
+    page: Page,
+    /// The user agent this tab reports, when a step overrode it. Held so a
+    /// failure message quotes what the site actually saw rather than the
+    /// browser's own identity.
+    user_agent: Option<String>,
+}
+
 struct Jar {
     /// `None` for the flow's default context, which is the browser-level
     /// incognito session opened at launch. Named contexts each get their own.
     id: Option<BrowserContextId>,
-    tabs: HashMap<String, Page>,
+    tabs: HashMap<String, Tab>,
 }
 
 /// What a tab looked like at a moment worth recording.
@@ -117,7 +125,7 @@ impl BrowserPool {
             .get(&session.context)
             .and_then(|context| context.tabs.get(&session.session))
         {
-            return Ok(page.clone());
+            return Ok(page.page.clone());
         }
 
         // A named context gets its own cookie jar, created on first use. The
@@ -154,7 +162,13 @@ impl BrowserPool {
                 tabs: HashMap::new(),
             })
             .tabs
-            .insert(session.session, page.clone());
+            .insert(
+                session.session,
+                Tab {
+                    page: page.clone(),
+                    user_agent: None,
+                },
+            );
         Ok(page)
     }
 
@@ -170,7 +184,7 @@ impl BrowserPool {
                 .contexts
                 .get(&session.context)
                 .and_then(|context| context.tabs.get(&session.session))
-                .cloned()
+                .map(|tab| tab.page.clone())
         }) else {
             return Ok(None);
         };
@@ -210,12 +224,44 @@ impl BrowserPool {
             .contexts
             .get_mut(&session.context)
             .and_then(|context| context.tabs.remove(&session.session))
+            .map(|tab| tab.page)
         else {
             return Ok(());
         };
         page.close()
             .await
             .map_err(|e| anyhow!("closing browser tab `{}`: {e}", session.session))
+    }
+
+    /// Record the user agent a step gave this session, so later failures quote
+    /// what the site saw instead of the browser's own identity.
+    pub fn note_user_agent(&mut self, session: &SessionRef, user_agent: &str) {
+        if let Some(running) = self.running.as_mut() {
+            if let Some(tab) = running
+                .contexts
+                .get_mut(&session.context)
+                .and_then(|jar| jar.tabs.get_mut(&session.session))
+            {
+                tab.user_agent = Some(user_agent.to_string());
+            }
+        }
+    }
+
+    /// What this session reports itself as: the tab's override when a step set
+    /// one, otherwise the browser's own user agent.
+    pub async fn session_user_agent(&mut self, session: Option<&str>) -> Result<String> {
+        let parsed = parse_session(session)?;
+        let overridden = self.running.as_ref().and_then(|running| {
+            running
+                .contexts
+                .get(&parsed.context)
+                .and_then(|jar| jar.tabs.get(&parsed.session))
+                .and_then(|tab| tab.user_agent.clone())
+        });
+        match overridden {
+            Some(ua) => Ok(ua),
+            None => Ok(self.user_agent().await?.to_string()),
+        }
     }
 
     /// The launched browser's user-agent string.
@@ -246,8 +292,8 @@ impl BrowserPool {
         };
 
         for (label, context) in running.contexts.drain() {
-            for (name, page) in context.tabs {
-                if let Err(e) = page.close().await {
+            for (name, tab) in context.tabs {
+                if let Err(e) = tab.page.close().await {
                     record(anyhow!("closing browser tab `{name}`: {e}"));
                 }
             }
