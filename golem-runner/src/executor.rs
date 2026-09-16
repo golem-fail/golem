@@ -280,6 +280,18 @@ pub async fn execute_flow<'a>(
     // higher-priority Cli scope, so they still win.
     seed_vars_with_generators(&flow.flow.vars, vars, ScopeLevel::Flow, &ctx.rng)?;
 
+    // `_hardware` also lives in the store, not just the step builtins map:
+    // its documented use is a branch condition (`[[block.branch]] if_var =
+    // "_hardware"`, see docs/actions-reference.md) and branches read the
+    // store. Generator scope mirrors `_loop` — reserved, below user vars.
+    if let Some(d) = ctx.device {
+        vars.set_in_scope(
+            ScopeLevel::Generator,
+            "_hardware",
+            VarValue::String(crate::interp::hardware_label(d.physical).to_string()),
+        );
+    }
+
     // Refine the inherited record-default for this flow level. The
     // current flow's `[flow.options].record` wins over what the caller
     // (parent flow, or top-level resolver) handed in. Project-level
@@ -3047,6 +3059,76 @@ mod tests {
             vars.get("_loop").and_then(|v| v.as_str()),
             Some("0"),
             "`_loop` SHALL be exposed in the variable store"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 12d. `_hardware` is branchable — the documented device-class split
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn hardware_builtin_is_branchable() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let device = golem_devices::DeviceInfo {
+            name: "Pixel 9".to_string(),
+            udid: "UDID-1".to_string(),
+            platform: golem_devices::Platform::Android,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 34,
+            os_version: "34.0".to_string(),
+            state: golem_devices::DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        };
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.device = Some(&device);
+
+        // An emulator takes the `virtual` arm; the `real` arm is unreachable.
+        let flow = make_flow(vec![
+            make_block_with_branch(
+                Some("split"),
+                vec![make_success_step()],
+                vec![
+                    cond_if_var_equals("_hardware", "real", "on_real"),
+                    cond_if_var_equals("_hardware", "virtual", "on_virtual"),
+                ],
+            ),
+            make_block(Some("on_real"), vec![make_success_step()]),
+            make_block(Some("on_virtual"), vec![make_success_step()]),
+        ]);
+
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
+
+        assert!(result.success);
+        assert_eq!(
+            vars.get("_hardware").and_then(|v| v.as_str()),
+            Some("virtual"),
+            "`_hardware` SHALL be exposed in the variable store, where branches read"
+        );
+        let screenshots = driver
+            .get_calls()
+            .iter()
+            .filter(|c| c.0 == "screenshot")
+            .count();
+        assert_eq!(
+            screenshots, 2,
+            "a virtual device SHALL take the virtual arm only (split + on_virtual)"
         );
     }
 
