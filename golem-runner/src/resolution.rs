@@ -57,7 +57,10 @@ pub async fn resolve_element(
     // Auto-recovery: when resolution fails because the soft keyboard is
     // up and has occluded the target field, dismiss the keyboard once
     // and retry. Tracked outside the loop so we only attempt it once
-    // per resolve call.
+    // per resolve call. `keep_keyboard` opts out — a step deliberately
+    // exercising keyboard-up state wants the occlusion left alone, even
+    // at the cost of not resolving the target.
+    let may_hide_keyboard = !step.keep_keyboard.unwrap_or(false);
     let mut tried_hide_keyboard = false;
 
     // Handle coordinate-only selector: { x = 150, y = 300 } or { x = "50%", y = "25%" }
@@ -183,7 +186,7 @@ pub async fn resolve_element(
         // keyboard — focus stays on the previous field and the typed
         // text appends there. Block on `keyboard_height = 0` (with a
         // timeout) before continuing.
-        if !tried_hide_keyboard && meta.keyboard_height > 0 {
+        if may_hide_keyboard && !tried_hide_keyboard && meta.keyboard_height > 0 {
             let unfiltered_count = find_elements(&root, &selector).len();
             if golem_common::is_debug() {
                 eprintln!(
@@ -677,6 +680,38 @@ mod tests {
         assert!(
             !calls.iter().any(|c| c.0 == "hide_keyboard"),
             "hide_keyboard should NOT be called when target is already visible"
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_element_keeps_keyboard_up_when_opted_out() {
+        // Same occlusion as the recovery test above — target at y=600 behind a
+        // 350px keyboard — but the step asked for the keyboard to stay up. The
+        // resolve is then expected to FAIL: not resolving is the point, since
+        // the alternative is perturbing the state the test is exercising.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Input",
+            "Search",
+            Bounds::new(10, 600, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_keyboard_height(350);
+
+        let mut step = make_step("type");
+        step.on_text = Some("Search".to_string());
+        step.timeout = Some(500);
+        step.keep_keyboard = Some(true);
+
+        let result = resolve_element(&step, &driver, None).await;
+        assert!(
+            result.is_err(),
+            "an occluded target SHALL stay unresolved when the keyboard is kept up"
+        );
+        let calls = driver.get_calls();
+        assert!(
+            !calls.iter().any(|c| c.0 == "hide_keyboard"),
+            "keep_keyboard SHALL suppress the resolver's keyboard recovery"
         );
     }
 

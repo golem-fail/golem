@@ -37,3 +37,18 @@ steps = [
   { action = "tap", on_text = "Reset fields" },
   { action = "assert_not_visible", on_text = "kbtap-two" },
 ]
+
+[[block]]
+name = "tap_with_keep_keyboard"
+steps = [
+  # `keep_keyboard` skips both dismissals golem does on its own — the pre-tap
+  # one and the resolver's occlusion recovery — for steps that act on the
+  # focused field (a keyboard accessory / toolbar control). "Reset fields" sits
+  # above the keyboard, so the tap must still land with the panel up; a
+  # regression that made keep_keyboard swallow the tap shows as the field
+  # keeping its value.
+  { action = "type", on_text = "Search", input = "kbkeep-one" },
+  { action = "assert_visible", on_text = "kbkeep-one" },
+  { action = "tap", on_text = "Reset fields", keep_keyboard = true },
+  { action = "assert_not_visible", on_text = "kbkeep-one" },
+]
