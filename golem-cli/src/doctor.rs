@@ -112,6 +112,36 @@ struct Facts {
     jdk: Option<String>,
     /// The Android SDK path (`ANDROID_HOME`/`ANDROID_SDK_ROOT`) if it exists.
     android_sdk: Option<String>,
+    /// Where `browse_*` steps stand on this host: whether this build carries
+    /// browser support at all, and the Chrome it would drive if so.
+    browser: BrowserFacts,
+}
+
+/// What `doctor` can say about browser automation.
+#[derive(Debug, Clone, Default)]
+struct BrowserFacts {
+    /// False for a `--no-default-features` build, which reports H501 rather
+    /// than running a `browse_*` step.
+    supported: bool,
+    /// The browser golem would launch, or `None` when none was found.
+    executable: Option<String>,
+}
+
+/// Ask the browser crate itself, so `doctor` and a real run can never disagree
+/// about which browser would be used — the same resolution decides both.
+#[cfg(feature = "browser")]
+fn browser_facts() -> BrowserFacts {
+    BrowserFacts {
+        supported: true,
+        executable: golem_browser::locate()
+            .ok()
+            .map(|p| p.display().to_string()),
+    }
+}
+
+#[cfg(not(feature = "browser"))]
+fn browser_facts() -> BrowserFacts {
+    BrowserFacts::default()
 }
 
 /// "found 1.2.3" when a version was detected, else "found".
@@ -176,6 +206,25 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
             "~/.golem writable",
             reason,
             "fix permissions on ~/.golem (golem extracts embedded companions there)",
+        )),
+    }
+
+    // Browser automation. A warning, never a failure: most flows are
+    // mobile-only and need no browser at all, so a missing Chrome is only a
+    // problem for the suites that ask for one — which fail at plan time with a
+    // message of their own (H424).
+    match (&f.browser.supported, &f.browser.executable) {
+        (true, Some(path)) => checks.push(Check::ok("browser (browse_*)", path)),
+        (true, None) => checks.push(Check::warn(
+            "browser (browse_*)",
+            "no Chrome or Chromium found",
+            "install Google Chrome or Chromium, or point $CHROME at an existing binary \
+             (mobile-only flows need none)",
+        )),
+        (false, _) => checks.push(Check::warn(
+            "browser (browse_*)",
+            "this build has no browser support",
+            "rebuild without `--no-default-features`, or with `--features browser`",
         )),
     }
 
@@ -565,6 +614,7 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
     };
 
     if run_runtime {
+        f.browser = browser_facts();
         f.adb = tool("adb", &["--version"]).await;
         f.ffmpeg = tool("ffmpeg", &["-version"]).await;
         // iOS tooling is macOS-only; skip the probes entirely elsewhere.
@@ -674,6 +724,11 @@ mod tests {
 
     fn base_facts() -> Facts {
         Facts {
+            // A healthy host can run every kind of flow, browser ones included.
+            browser: BrowserFacts {
+                supported: true,
+                executable: Some("/Applications/Chrome".to_string()),
+            },
             is_macos: true,
             adb: Some("1.0.41".to_string()),
             xcrun: Some(String::new()),
@@ -695,6 +750,41 @@ mod tests {
 
     // 1. A fully-provisioned macOS host: every runtime line Ok, both platforms
     //    drivable, exit 0.
+    // Browser automation has three states worth telling apart, and the remedy
+    // differs for each: install a browser, or rebuild golem. Neither is a
+    // failure — a mobile-only suite needs no browser at all.
+    #[test]
+    fn browser_check_reports_its_three_states() {
+        let line = |f: &Facts| {
+            evaluate_runtime(f)
+                .into_iter()
+                .find(|c| c.label == "browser (browse_*)")
+                .expect("the browser line SHALL be present")
+        };
+
+        assert_eq!(line(&base_facts()).status, Status::Ok);
+
+        let mut missing = base_facts();
+        missing.browser.executable = None;
+        let missing = line(&missing);
+        assert_eq!(missing.status, Status::Warn);
+        let remedy = missing.remedy.unwrap_or_default();
+        assert!(
+            remedy.contains("$CHROME"),
+            "a missing browser SHALL say how to point golem at one: {remedy}"
+        );
+
+        let mut unsupported = base_facts();
+        unsupported.browser = BrowserFacts::default();
+        let unsupported = line(&unsupported);
+        assert_eq!(unsupported.status, Status::Warn);
+        let remedy = unsupported.remedy.unwrap_or_default();
+        assert!(
+            remedy.contains("--features browser"),
+            "a browser-less build SHALL say to rebuild, not install Chrome: {remedy}"
+        );
+    }
+
     #[test]
     fn healthy_macos_is_all_ok() {
         let checks = evaluate_runtime(&base_facts());
