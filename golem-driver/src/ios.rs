@@ -101,9 +101,9 @@ pub struct IosDriver {
     bundle_id: String,
     /// True for real hardware, false for a simulator. Set from the
     /// resolved `DeviceInfo.physical` at driver-construction time so
-    /// actions that have a sim-only OS backdoor (currently
-    /// `push_notification`) can refuse loudly on real devices instead
-    /// of getting an opaque error from `simctl push`.
+    /// actions with a sim-only OS backdoor — `push_notification`,
+    /// `clear_app_data`, `start_recording` — refuse loudly on real
+    /// devices instead of surfacing an opaque `simctl` error.
     physical: bool,
     /// WebKit Inspector lifecycle for WKWebView DOM access.
     webkit: std::sync::Mutex<WebKitLifecycle>,
@@ -734,7 +734,13 @@ impl PlatformDriver for IosDriver {
         // `get_app_container` on a physical device returns an on-device path
         // this can't reach, so physical iOS data-clear is unsupported.
         if self.physical {
-            bail!("clear_data is not supported on physical iOS devices");
+            bail!(
+                "clear_data is simulator-only on iOS — `{}` is a physical \
+                 device, whose data container the host can't reach. Reset \
+                 state via the app's own UI or a reinstall; see \
+                 docs/actions-reference.md §clear_data.",
+                self.device_id,
+            );
         }
         // Terminate first so WebKit flushes and no live process rewrites the
         // container after the wipe. Ignore errors — the app may not be running.
@@ -1000,6 +1006,36 @@ impl PlatformDriver for IosDriver {
 mod tests {
     use super::*;
     use golem_element::Bounds;
+
+    // -----------------------------------------------------------------------
+    // 0. Physical-device refusals name the action and point somewhere useful
+    // -----------------------------------------------------------------------
+    #[tokio::test]
+    async fn clear_app_data_refuses_on_a_physical_device() {
+        // Port 0 is never dialled: the guard fires before any companion or
+        // simctl call, which is the point — the user gets golem's wording.
+        let driver = IosDriver::new(
+            "PHYS-UDID".to_string(),
+            "com.example.app".to_string(),
+            0,
+            true,
+        );
+
+        let err = driver
+            .clear_app_data("com.example.app")
+            .await
+            .expect_err("clear_data SHALL refuse on physical iOS");
+        let msg = err.to_string();
+
+        assert!(
+            msg.contains("PHYS-UDID"),
+            "error SHALL name the device: {msg}"
+        );
+        assert!(
+            msg.contains("docs/actions-reference.md"),
+            "error SHALL point at the documented limitation: {msg}"
+        );
+    }
 
     // -----------------------------------------------------------------------
     // 1. Parse hierarchy JSON into Element tree

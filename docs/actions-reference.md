@@ -420,6 +420,21 @@ Clear the app's storage and cache.
 { action = "clear_data", app = "app" }
 ```
 
+**Simulator-only on iOS; Android works everywhere.** The iOS path clears the app's data container through a host filesystem path that `simctl` hands back, which only exists for a simulator — on a physical device the container lives on the device and `get_app_container` returns a path the host can't reach. Android uses `adb shell pm clear`, which is device-agnostic. On a physical iPhone the driver bails pointing at this paragraph.
+
+To reset state on a physical iOS device, either drive the app's own "sign out" / "reset" affordance, or reinstall it (the install script runs before every flow; `GOLEM_REBUILD` forces a fresh build). Gate the step on device class if one flow must cover both:
+
+```toml
+[[block.branch]]
+if_var = "_hardware"
+equals = "virtual"
+goto = "wipe_via_clear_data"
+[[block.branch]]
+if_var = "_hardware"
+equals = "real"
+goto = "wipe_via_app_ui"
+```
+
 ## Device Controls
 
 ### `set_dark_mode` — Set dark mode
@@ -434,6 +449,8 @@ Clear the app's storage and cache.
 ```toml
 { action = "set_location", latitude = 37.7749, longitude = -122.4194 }
 ```
+
+> **The iOS device controls are simulator-backed.** `set_dark_mode`, `set_location` and `add_media` all drive `simctl`, which only addresses simulators — on a physical iPhone they fail with the underlying `simctl` error rather than a golem-worded one. The Android equivalents go through `adb` and work on emulators and physical devices alike.
 
 ### `press` — Press hardware button
 
@@ -481,6 +498,8 @@ name = "login"
 record = true     # record this block only
 steps = [ ... ]
 ```
+
+**Simulator-only on iOS** — `simctl io recordVideo` has no physical-device equivalent, so a recording request on a real iPhone fails. It degrades rather than breaking the run: the block records a warning and its steps execute normally, just without a video. Android records on physical devices and emulators alike. Tracked in [#60](https://github.com/golem-fail/golem/issues/60).
 
 ### `add_media` — Push media to device
 
