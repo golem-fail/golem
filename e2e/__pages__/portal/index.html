@@ -17,7 +17,30 @@
 
   <p id="status" data-order="">Pending</p>
 
+  <label for="region">Region</label>
+  <select id="region">
+    <option value="uk">United Kingdom</option>
+    <option value="eu">Europe</option>
+  </select>
+
+  <div id="log"></div>
+
   <script>
+    // A WebMCP tool, so the flow can drive the page the way an agent would.
+    // golem enables the browser feature for flows containing a browse_mcp_*
+    // step, so this is also what proves that plumbing end to end.
+    if (document.modelContext) {
+      document.modelContext.registerTool({
+        name: 'note_region',
+        description: 'Record the region an order ships to',
+        inputSchema: { type: 'object', properties: { region: { type: 'string' } } },
+        execute: async ({ region }) => {
+          document.getElementById('log').textContent = 'region:' + region;
+          return { content: [{ type: 'text', text: JSON.stringify({ noted: region }) }] };
+        },
+      });
+    }
+
     document.getElementById('fulfil').addEventListener('click', () => {
       const order = document.getElementById('order').value.trim();
       const status = document.getElementById('status');

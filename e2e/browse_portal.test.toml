@@ -49,6 +49,46 @@ steps = [
   { action = "assert_visible", on_text = "o-42" },
 ]
 
+[[block]]
+name = "portal_state"
+# The rest of the browser surface, against the same real origin. Cookies and
+# web storage need one — they are absent on an opaque origin — and so does
+# WebMCP, which golem enables automatically because this block uses it.
+steps = [
+  # A script sees flow variables; a file would not. `${order_id}` came from the
+  # page itself two steps ago, so this also proves the round trip.
+  { action = "browse_execute_js", script = "return 'order-' + '${order_id}'", save_to = "js_result" },
+
+  { action = "browse_set_local_storage", key = "cart", value = "{\"items\": 2}" },
+  { action = "browse_get_local_storage", key = "cart", save_to = "cart" },
+  # Session storage is a separate area: writing one must not answer for the other.
+  { action = "browse_set_session_storage", key = "step", value = "checkout" },
+  { action = "browse_get_session_storage", key = "step", save_to = "step" },
+  { action = "browse_set_cookie", name = "session", value = "s-${order_id}" },
+  { action = "browse_get_cookie", name = "session", save_to = "session" },
+
+  { action = "browse_select", selector = "#region", value = "eu" },
+  { action = "browse_scroll_by", amount = 200 },
+  { action = "browse_scroll_to", selector = "#status" },
+  { action = "browse_wait_exists", selector = "#region" },
+
+  # WebMCP: the page declares a tool, golem lists it and calls it. Reaching
+  # here at all proves the auto-enable path — the feature ships switched off.
+  { action = "browse_mcp_list_tools", save_to = "tools" },
+  { action = "browse_mcp_call", tool = "note_region", arguments = { region = "${cart.items}" }, save_to = "noted" },
+  { action = "browse_assert_text", selector = "#log", text = "region:2" },
+  { action = "browse_wait_not_exists", selector = "#never-appears", timeout = 300 },
+
+  { action = "browse_screenshot" },
+
+  # The browser→app crossing is proven in the first block; repeating it here
+  # would target the same field by its placeholder, which is gone once that
+  # block typed into it. Prove the variable round-trip in the browser instead:
+  # a value golem captured earlier goes back into the page and is asserted.
+  { action = "browse_execute_js", script = "document.getElementById('log').textContent = '${js_result}'" },
+  { action = "browse_assert_text", selector = "#log", text = "order-o-42" },
+]
+
 [[teardown]]
 steps = [
   { action = "browse_close" },
