@@ -3,12 +3,16 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use chromiumoxide::browser::BrowserConfigBuilder;
+use chromiumoxide::cdp::browser_protocol::browser::BrowserContextId;
+use chromiumoxide::cdp::browser_protocol::target::{
+    CreateBrowserContextParams, CreateTargetParams,
+};
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures::StreamExt;
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 
-use crate::session::parse_session;
+use crate::session::{parse_session, DEFAULT_CONTEXT};
 
 /// How a flow's browser is launched.
 #[derive(Debug, Clone)]
@@ -32,6 +36,22 @@ impl Default for PoolConfig {
             webmcp: false,
         }
     }
+}
+
+/// One isolated cookie jar and the tabs that share it.
+///
+/// Named `Jar` rather than `Context` because `anyhow::Context` is already in
+/// scope here, and two meanings of the word in one file is a trap for whoever
+/// reads it next.
+///
+/// Tabs in a context share cookies and storage deliberately — a login carries
+/// between them. Two contexts share nothing, which is the point: the same site
+/// logged in as two different users at once needs separate jars, not tabs.
+struct Jar {
+    /// `None` for the flow's default context, which is the browser-level
+    /// incognito session opened at launch. Named contexts each get their own.
+    id: Option<BrowserContextId>,
+    tabs: HashMap<String, Page>,
 }
 
 /// What a tab looked like at a moment worth recording.
@@ -72,10 +92,8 @@ struct Running {
     /// browser's whole life and aborts it only in `close`.
     handler: JoinHandle<()>,
     user_agent: String,
-    /// context name → session name → tab. Only the default context exists in
-    /// v1 (see [`crate::session::parse_session`]), but the map is the shape
-    /// #109 needs, so adding contexts won't move the tabs around.
-    contexts: HashMap<String, HashMap<String, Page>>,
+    /// context name → the cookie jar and the tabs inside it.
+    contexts: HashMap<String, Jar>,
     /// This browser's own Chrome profile, removed when the pool drops. Held
     /// only to keep the directory alive for the process's lifetime.
     _profile: TempDir,
@@ -97,20 +115,45 @@ impl BrowserPool {
         if let Some(page) = running
             .contexts
             .get(&session.context)
-            .and_then(|tabs| tabs.get(&session.session))
+            .and_then(|context| context.tabs.get(&session.session))
         {
             return Ok(page.clone());
         }
 
+        // A named context gets its own cookie jar, created on first use. The
+        // default one is the incognito session opened at launch, so it has no
+        // id of its own to pass around.
+        let context_id = match running.contexts.get(&session.context) {
+            Some(context) => context.id.clone(),
+            None if session.context == DEFAULT_CONTEXT => None,
+            None => Some(
+                running
+                    .browser
+                    .create_browser_context(CreateBrowserContextParams::default())
+                    .await
+                    .map_err(|e| anyhow!("creating browser context `{}`: {e}", session.context))?,
+            ),
+        };
+
+        // Built by hand rather than via `new_page("about:blank")` so the
+        // context id survives: that convenience fills in the browser-level
+        // context, which would quietly put every tab in the same jar.
+        let mut params = CreateTargetParams::new("about:blank");
+        params.browser_context_id = context_id.clone();
         let page = running
             .browser
-            .new_page("about:blank")
+            .new_page(params)
             .await
             .with_context(|| format!("opening browser tab `{}`", session.session))?;
+
         running
             .contexts
             .entry(session.context)
-            .or_default()
+            .or_insert_with(|| Jar {
+                id: context_id,
+                tabs: HashMap::new(),
+            })
+            .tabs
             .insert(session.session, page.clone());
         Ok(page)
     }
@@ -126,7 +169,7 @@ impl BrowserPool {
             running
                 .contexts
                 .get(&session.context)
-                .and_then(|tabs| tabs.get(&session.session))
+                .and_then(|context| context.tabs.get(&session.session))
                 .cloned()
         }) else {
             return Ok(None);
@@ -166,7 +209,7 @@ impl BrowserPool {
         let Some(page) = running
             .contexts
             .get_mut(&session.context)
-            .and_then(|tabs| tabs.remove(&session.session))
+            .and_then(|context| context.tabs.remove(&session.session))
         else {
             return Ok(());
         };
@@ -202,15 +245,22 @@ impl BrowserPool {
             }
         };
 
-        for (_, tabs) in running.contexts.drain() {
-            for (name, page) in tabs {
+        for (label, context) in running.contexts.drain() {
+            for (name, page) in context.tabs {
                 if let Err(e) = page.close().await {
                     record(anyhow!("closing browser tab `{name}`: {e}"));
                 }
             }
+            // Every context the flow created is disposed, not just the default
+            // one — an orphaned context keeps its share of the browser alive.
+            if let Some(id) = context.id {
+                if let Err(e) = running.browser.dispose_browser_context(id).await {
+                    record(anyhow!("disposing browser context `{label}`: {e}"));
+                }
+            }
         }
         if let Err(e) = running.browser.quit_incognito_context().await {
-            record(anyhow!("disposing browser context: {e}"));
+            record(anyhow!("disposing the default browser context: {e}"));
         }
         if let Err(e) = running.browser.close().await {
             record(anyhow!("closing browser: {e}"));
@@ -351,16 +401,17 @@ mod tests {
         assert!(!pool.is_running());
     }
 
-    // 3. A context-prefixed session is rejected before anything launches, so
-    //    an unsupported request never costs a browser start.
+    // 3. A malformed session is rejected before anything launches, so a typo
+    //    never costs a browser start. (A *valid* context prefix does launch —
+    //    it names a real cookie jar now.)
     #[tokio::test]
-    async fn context_prefix_is_rejected_without_launching() {
+    async fn malformed_session_is_rejected_without_launching() {
         let mut pool = BrowserPool::new(PoolConfig::default());
         let e = pool
-            .get_or_create_session(Some("tenantX:admin"))
+            .get_or_create_session(Some(":admin"))
             .await
-            .expect_err("context prefix SHALL be rejected");
-        assert!(format!("{e:#}").contains("not yet supported"));
+            .expect_err("an empty context label SHALL be rejected");
+        assert!(format!("{e:#}").contains("invalid session"));
         assert!(!pool.is_running(), "a rejected session SHALL NOT launch");
     }
 

@@ -28,10 +28,9 @@ impl Default for SessionRef {
 
 /// Parse a `session` param: `[context:]session`, split on the FIRST `:`.
 ///
-/// `:` is reserved from day one even though only the default context exists.
-/// Accepting `"tenantX:admin"` as a tab literally named `tenantX:admin` would
-/// silently do the wrong thing today and change meaning the moment #109 lands,
-/// so a context prefix parses and then errors out instead.
+/// A context is an isolated cookie jar; tabs within one share it. `:` is the
+/// separator, so a label may not contain one — that was reserved from the
+/// start so this grammar could grow without changing what existing flows mean.
 pub fn parse_session(raw: Option<&str>) -> Result<SessionRef> {
     let raw = raw.map(str::trim).unwrap_or_default();
     if raw.is_empty() {
@@ -56,13 +55,10 @@ pub fn parse_session(raw: Option<&str>) -> Result<SessionRef> {
         ));
     }
 
-    Err(golem_events::coded(
-        FailureCode::ParseMissingParam,
-        anyhow!(
-            "multiple browser contexts not yet supported (session `{raw}` asks for \
-             context `{context}`) — see https://github.com/golem-fail/golem/issues/109"
-        ),
-    ))
+    Ok(SessionRef {
+        context: context.to_string(),
+        session: session.to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -102,23 +98,20 @@ mod tests {
         assert_eq!(s.session, "admin");
     }
 
-    // 5. A context prefix is recognised and rejected, pointing at #109 —
-    //    never silently accepted as a tab whose name contains a colon.
+    // 5. A context prefix selects a separate cookie jar, and is never read as
+    //    a tab whose name happens to contain a colon.
     #[test]
-    fn context_prefix_errors_with_the_followup_issue() {
-        let e = parse_session(Some("tenantX:admin")).expect_err("context prefix SHALL error");
-        let msg = format!("{e:#}");
-        assert!(
-            msg.contains("not yet supported"),
-            "message SHALL say contexts are unsupported, got: {msg}"
-        );
-        assert!(
-            msg.contains("109"),
-            "message SHALL point at #109, got: {msg}"
-        );
-        assert_eq!(
-            golem_events::extract_code(&e),
-            Some(FailureCode::ParseMissingParam)
+    fn context_prefix_selects_a_context() {
+        let s = parse_session(Some("tenantX:admin")).expect("a context prefix SHALL parse");
+        assert_eq!(s.context, "tenantX");
+        assert_eq!(s.session, "admin");
+        assert_ne!(
+            s,
+            SessionRef {
+                context: DEFAULT_CONTEXT.to_string(),
+                session: "tenantX:admin".to_string(),
+            },
+            "a prefix SHALL NOT become part of the tab name"
         );
     }
 
