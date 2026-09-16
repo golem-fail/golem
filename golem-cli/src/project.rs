@@ -23,9 +23,10 @@ pub struct ProjectConfig {
     /// across wipes.
     #[serde(default)]
     pub device_settings: DeviceSettings,
-    /// Project-wide defaults from `[options]`. CLI defines the full
-    /// option surface in golem-parser; here we only pull the fields
-    /// the CLI itself consumes (today: recording cascade).
+    /// Project-wide defaults from `[options]`. This struct pulls only the
+    /// fields the CLI consumes directly (today: the recording cascade) —
+    /// the full `[options]` surface, plus `[vars]` and `[[teardown]]`, is
+    /// read from the same file by `plan()` and merged into each flow.
     #[serde(default)]
     pub options: ProjectOptions,
 }
