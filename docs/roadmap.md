@@ -38,12 +38,6 @@ insufficient.
 **Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
 glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
 
-## Step interpolation: cross-device & `for_each` prefixes
-
-The single-device builtins (`${_device}`/`${_os}`/`${_platform}`/`${_type}`/`${_udid}`/`${_app}`) are migrated to #40. `${_each.x}` is wired to block-level data iteration (#93): a `for_each = "data"` block binds each `[[data]]` row's fields under the `_each.` prefix. Remaining: the prefixed **cross-device** forms `${self:var}` / `${global:var}` / `${<device>:var}` still error at step time (the step `InterpolationContext` leaves `device_stores`/`global_store` as `None`). These are gated on a feature that must exist first:
-- `${self:}` / `${global:}` / `${<device>:}` → **multi-device flow coordination** (planned; see "Multi-Device Flow Coordination").
-
-Wire them into the step `InterpolationContext` when those land. **Files:** `golem-runner/src/interp.rs`.
 ## Confirm host-queue benefit on a load-saturated host
 
 The selective host-wide queue is built and wired
@@ -102,18 +96,13 @@ hard cap. Remaining items from the original scheduling rework:
    available, no polling, no mutex thrash. Out-of-order execution
    is preserved (a queued iOS FlowRun isn't blocked by older
    Android waiters).
-3. **`[options].max_device_wait` in `golem.toml`** to complement
-   the CLI `--max-wait` flag.
 
-Bonus: lays groundwork for "boot N identical devices on demand for
-`--repeat` parallelism" (already roadmapped as "Boot-on-demand for
-`--repeat` identical device pools") — the semaphore expands when
-new devices come online.
+Bonus: lays groundwork for #188 (boot devices on demand) — the
+semaphore expands when new devices come online.
 
 **Files:** `golem-devices/src/resource_manager.rs` (device-pool
 semaphore + ordering rework), `golem-cli/src/suite.rs` (plug into
-semaphore), `golem-parser/src/{config,lib}.rs`
-(`[options].max_device_wait` + parsing).
+semaphore).
 
 ## Companion: driver-side restart of a wedged UiAutomation handle
 
@@ -217,71 +206,6 @@ first mid-suite shutdown path and could race the allocator.
 
 **Files:** `golem-devices/src/resource_manager.rs`.
 
-## Boot-on-demand for `--repeat` identical device pools
-
-`--repeat N` parallelises across devices for free when N matching
-sims/emulators are pre-booted, but today golem boots a single device
-per platform/shape and serialises repeats on it. To deliver the "5
-identical devices = 5 parallel runs" USP without manual pre-booting,
-`ResourceManager` would boot N matching sims/emulators on demand when
-free RAM permits, capped by `--max-concurrency`. Covered by the
-broader "True Parallel Flow × Device Concurrency" entry below.
-
-## `golem trace-extract` subcommand
-
-Subcommand `golem trace-extract <flow> <step>` (or `<flow>
-<boundary_ms>`) that pulls a single video frame from a per-block
-recording at the matching sidecar-offset. Two impls considered:
-
-- **Shell ffmpeg**: simplest, zero build deps. Fails if ffmpeg
-  isn't installed (~not preinstalled on macOS or minimal Linux).
-- **Pure-Rust stack** (`mp4` + `openh264` + `image`): ~2.5-4 MB
-  added to the release binary; works in any env (relevant if golem
-  ever exposes an MCP server). Defer until that use case
-  materialises — `--trace` PNGs already give snapshot-time frames
-  for the common case.
-
-**Files:** `golem-cli/src/trace_extract.rs` (new subcommand).
-
-**Impl decision:** ffmpeg is currently used only for non-critical work (a11y), so a shell-ffmpeg `trace-extract` is acceptable if built for that. We will **not** adopt the pure-Rust stack *just* for `trace-extract` — pure-Rust is justified only if/when frame extraction becomes **test-critical** (extracting frames to actually drive/judge running tests, or an ffmpeg-less MCP server). Deferred until such a consumer exists.
-
-## Stale-bundle defense (Tauri iOS build pipeline)
-
-`scripts/install-app.sh` and the corresponding template now (a) clear the per-arch build dir so the `tauri-cli` rename step succeeds, (b) prefer the per-arch path over the xcarchive copy when picking the produced `.app`, and (c) hard-fail when the picked `.app`'s mtime predates the build start. That closes the specific failure mode where weeks-old bundles were silently installed (see post-mortem: "menu missing" was actually "running an Apr 20 build for 3 weeks").
-
-Further hardening that would catch the next variant of this class:
-
-- **Content sanity hash.** Hash `test-app/dist/` after `npm run build` and verify the same hash appears as an embedded resource inside the `.app` (Tauri compresses the web bundle into the Rust binary, so we'd compute the hash on the source dist and embed it as a build-stamp the runner can `grep -F` for). Catches the case where Tauri produces a `.app` with empty/wrong web assets.
-- **Reject `set +e` failures with a known signature.** The tolerated `tauri-cli` rename error is "failed to rename app ... Directory not empty". Instead of blanket-tolerating any nonzero exit, parse stderr and only tolerate that exact line. Anything else fails fast.
-- **Build cache key includes lockfiles.** `install_cache.rs`'s fingerprint is git porcelain — works when lockfiles are tracked. When they're not (e.g. some downstream consumers), include lockfile hashes explicitly so `cargo update` / `npm install` invalidate the install cache.
-
-## True Parallel Flow × Device Concurrency
-
-Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but only 2 execute in parallel (one per booted device per platform). Other 2 wait for devices to free. Machines with spare RAM could run all 4 at once.
-
-**Desired:** Boot additional simulators/emulators on demand when:
-- `total_device_runs > currently_booted_matching_devices` AND
-- Free RAM above threshold (per-device ~2-4GB)
-
-**Limits:** `--max-concurrency <N>` always caps — if N is lower than the heuristic allows, N wins. Default stays 4.
-
-**Cleanup:** Track which sims/emulators golem booted (vs user's) so they can be shut down afterwards. Respects `--keep-devices`.
-
-**Note:** Works with the existing install script support — fresh sims booted on-demand will have their install_script invoked automatically via the existing pipeline.
-
-**Files:** `golem-devices/src/resource_manager.rs` (boot-on-demand logic), `golem-devices/src/concurrency.rs` (headroom checks), `golem-devices/src/{ios,android}.rs` (boot helpers + tracking).
-
-## Multi-Device Flow Coordination (Chat Tests)
-
-Some flows use two apps on two different devices that must run together (chat client + chat server). Today's suite model spawns a separate flow task per platform; two devices never coordinate inside one flow execution. The new `FlowRun { slots: Vec<DeviceSlot> }` structure supports 2+ slots, but the initial Plan implementation only emits single-slot FlowRuns.
-
-**Implementation:**
-- Plan generator detects apps with incompatible `[[flow.apps.devices]]` constraints (e.g. different platforms) and emits one `FlowRun` with a `DeviceSlot` per incompatible group.
-- Execute phase acquires ALL slots' devices before starting the flow; runs the flow with multi-device context (flow steps can `{ action = "launch", app = "b" }` to switch focus between devices).
-- Device release happens after the whole FlowRun completes, not per-slot.
-
-**Depends on:** clarification of flow-step semantics across devices — which device is "current" at each step, how `{ action = "launch", app = "b" }` switches focus, how assertions scope. The slot infrastructure already exists; the missing piece is step-level semantics.
-
 ## Transient Install Errors: Retry Classifier Polish
 
 `golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
@@ -325,7 +249,6 @@ Android multi-emu contention is the same *character* (host saturation → stocha
 The prebuilt-binary pipeline ships for macOS arm64 and Linux x86_64 + arm64
 (static musl) — see [distribution.md](distribution.md). What's left:
 
-- **Real Linux device/emulator e2e** — can't run on the macOS dev host.
 - **Fuller Linux resolver** — per-flow iOS-leg skip + a `strict_coverage` error
   mode (reusing the existing skip machinery), if the current `--platform android`
   default's iOS-only-flow handling proves too blunt.
