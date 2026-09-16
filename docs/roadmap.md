@@ -38,12 +38,6 @@ insufficient.
 **Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
 glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
 
-## Step interpolation: cross-device & `for_each` prefixes
-
-The single-device builtins (`${_device}`/`${_os}`/`${_platform}`/`${_type}`/`${_udid}`/`${_app}`) are migrated to #40. `${_each.x}` is wired to block-level data iteration (#93): a `for_each = "data"` block binds each `[[data]]` row's fields under the `_each.` prefix. Remaining: the prefixed **cross-device** forms `${self:var}` / `${global:var}` / `${<device>:var}` still error at step time (the step `InterpolationContext` leaves `device_stores`/`global_store` as `None`). These are gated on a feature that must exist first:
-- `${self:}` / `${global:}` / `${<device>:}` → **multi-device flow coordination** (planned; see "Multi-Device Flow Coordination").
-
-Wire them into the step `InterpolationContext` when those land. **Files:** `golem-runner/src/interp.rs`.
 ## Confirm host-queue benefit on a load-saturated host
 
 The selective host-wide queue is built and wired
@@ -211,17 +205,6 @@ shutdown at suite end (per `--keep-devices`); a reaper would be the
 first mid-suite shutdown path and could race the allocator.
 
 **Files:** `golem-devices/src/resource_manager.rs`.
-
-## Multi-Device Flow Coordination (Chat Tests)
-
-Some flows use two apps on two different devices that must run together (chat client + chat server). Today's suite model spawns a separate flow task per platform; two devices never coordinate inside one flow execution. The new `FlowRun { slots: Vec<DeviceSlot> }` structure supports 2+ slots, but the initial Plan implementation only emits single-slot FlowRuns.
-
-**Implementation:**
-- Plan generator detects apps with incompatible `[[flow.apps.devices]]` constraints (e.g. different platforms) and emits one `FlowRun` with a `DeviceSlot` per incompatible group.
-- Execute phase acquires ALL slots' devices before starting the flow; runs the flow with multi-device context (flow steps can `{ action = "launch", app = "b" }` to switch focus between devices).
-- Device release happens after the whole FlowRun completes, not per-slot.
-
-**Depends on:** clarification of flow-step semantics across devices — which device is "current" at each step, how `{ action = "launch", app = "b" }` switches focus, how assertions scope. The slot infrastructure already exists; the missing piece is step-level semantics.
 
 ## Transient Install Errors: Retry Classifier Polish
 
