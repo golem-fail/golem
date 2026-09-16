@@ -278,6 +278,16 @@ Dismiss the on-screen keyboard. No-op if no keyboard is visible.
 > for the reported keyboard height to return to 0 (with a timeout) before
 > retrying, so the retap lands on the now-revealed field rather than the
 > still-sliding panel.
+>
+> Set `keep_keyboard = true` on a step to opt out — of this recovery and of
+> the pre-tap dismissal both. Use it when the step targets a keyboard
+> accessory/toolbar control that acts on the focused field, or when the test
+> is *about* keyboard-up state. An occluded target then stays unresolved
+> rather than being reached by dismissing the keyboard:
+>
+> ```toml
+> { action = "tap", on_text = "Done", keep_keyboard = true }
+> ```
 
 ## Assertions
 

@@ -442,10 +442,13 @@ pub struct Step {
     pub restart: Option<bool>,
     pub auto_scroll: Option<bool>,
     pub scroll_timeout: Option<u64>,
-    /// Opt out of the pre-tap keyboard dismissal (`tap`/`long_press`). Default
-    /// (unset) auto-dismisses an open keyboard on iOS so the focused input
-    /// can't absorb the tap (#83); set true when the tap targets an
-    /// input-accessory/toolbar control meant to act on the focused field.
+    /// Keep the soft keyboard up for this step, opting out of both
+    /// dismissals golem performs on its own: the pre-tap dismissal
+    /// (`tap`/`long_press`), which stops a focused input absorbing the
+    /// touch on iOS (#83), and the resolver's occlusion recovery, which
+    /// dismisses the keyboard when it hides the target. Set it when the
+    /// step targets an input-accessory/toolbar control meant to act on the
+    /// focused field, or when the test is about keyboard-up state itself.
     pub keep_keyboard: Option<bool>,
     /// How much of the target must be visible for auto-scroll to stop, 0–100.
     /// Unset = the engine default (maximise visibility, best-effort). Lower it
