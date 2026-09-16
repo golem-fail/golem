@@ -41,7 +41,7 @@ golem run [FILES...] [OPTIONS]
 | `--no-results` | Disable all file output (screenshots, recordings, reports) |
 | `--seed <N>` | Deterministic seed for fake data generation. Seed shown in all output formats for reproducibility. |
 | `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
-| `--max-concurrency <N>` | Max parallel devices (not yet implemented) |
+| `--max-concurrency <N>` | Cap on FlowRuns running at once. Caps only — the host-headroom guard (RAM, device availability) still applies, so effective parallelism is the lower of the two |
 | `--record` | Enable auto screen recording for every block. Loses to `--no-record`. |
 | `--no-record` | Force-disable recording everywhere — beats `--record`, flow options, and per-block opts. |
 | `--trace` | Forensic capture: forces recording on (beats `--no-record`) + writes screenshot + accessibility-tree at every step boundary to `results/.../trace/`. ~200ms/step overhead — investigation only. |
