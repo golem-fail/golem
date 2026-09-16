@@ -140,6 +140,21 @@ jobs:
       # npm/package.json version tracks the tag via bump-version.sh. npm publish
       # is NOT idempotent — republishing an existing version hard-fails, which is
       # the desired guard against accidental double-publish.
+      #
+      # The dist-tag is derived from the git tag, never left to default. Without
+      # this, a prerelease (`v0.10.0-rc.1`, or the throwaway tag used to smoke-
+      # test this pipeline) publishes to `latest` and every `npm i` gets it
+      # until the next real release overwrites the tag. A SemVer prerelease
+      # carries a `-`; anything else is a real release.
       - name: Publish @golem-fail/golem to npm (Trusted Publishing / OIDC)
         working-directory: npm
-        run: npm publish --access public
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            *-*) DIST_TAG=next ;;
+            *)   DIST_TAG=latest ;;
+          esac
+          echo "publishing $TAG to dist-tag '$DIST_TAG'"
+          npm publish --access public --tag "$DIST_TAG"
