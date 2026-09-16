@@ -24,7 +24,7 @@ type = "phone"
 name = "portal"
 steps = [
   # Prints the URL; `save_to` captures stdout, so the port is never guessed.
-  { action = "run", script = "scripts/serve-browse-page.sh", save_to = "portal" },
+  { action = "run", script = "scripts/serve-loopback.sh", save_to = "portal" },
 
   { action = "browse_navigate", url = "${portal.stdout}" },
   { action = "browse_assert_text", selector = "h1", text = "Golem Portal" },
@@ -92,5 +92,5 @@ steps = [
 [[teardown]]
 steps = [
   { action = "browse_close" },
-  { action = "run", script = "scripts/stop-browse-page.sh" },
+  { action = "run", script = "scripts/stop-loopback.sh" },
 ]

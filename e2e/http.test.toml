@@ -1,0 +1,80 @@
+[flow]
+name = "HTTP actions"
+tags = ["cross-platform", "external", "http"]
+
+# The five `*_http` actions against the shared e2e loopback server, which echoes
+# each request back as JSON (`/__echo`). Echoing is what makes the assertions
+# real: the flow asserts on the method, query, header and body the server
+# actually received, so a step that silently sent the wrong verb or dropped a
+# header fails here rather than passing on a 200.
+#
+# The response then crosses into the app under test — captured, reduced to a
+# token by `bash`, typed into a field and asserted — which is the shape these
+# actions exist for: seed or read backend state, carry it into the UI.
+
+[flow.options]
+# One device is enough: the HTTP half is host-side and identical everywhere, and
+# the mobile half only proves the captured value crosses back into the app.
+coverage = "one"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "verbs"
+steps = [
+  # Prints the base URL; `save_to` captures stdout, so the port is never guessed.
+  { action = "run", script = "scripts/serve-loopback.sh", save_to = "server" },
+
+  # GET carries a query string and a custom header. The greps avoid double
+  # quotes (TOML would need them escaped inside the shell string): `method.: .GET`
+  # matches `"method": "GET"` with the quotes as wildcards.
+  { action = "get_http", url = "${server.stdout}__echo?probe=golem-get", headers = { "X-Golem-Test" = "token-42" }, save_to = "got" },
+  { action = "bash", run = "echo '${got}' | grep -q 'method.: .GET'" },
+  { action = "bash", run = "echo '${got}' | grep -q golem-get" },
+  { action = "bash", run = "echo '${got}' | grep -q token-42" },
+
+  # POST/PUT/PATCH carry a body; each asserts its own verb and payload so a
+  # mis-routed alias can't pass on another verb's assertion.
+  { action = "post_http", url = "${server.stdout}__echo", body = "payload-post", save_to = "posted" },
+  { action = "bash", run = "echo '${posted}' | grep -q 'method.: .POST'" },
+  { action = "bash", run = "echo '${posted}' | grep -q payload-post" },
+
+  { action = "put_http", url = "${server.stdout}__echo", body = "payload-put", save_to = "putted" },
+  { action = "bash", run = "echo '${putted}' | grep -q 'method.: .PUT'" },
+  { action = "bash", run = "echo '${putted}' | grep -q payload-put" },
+
+  { action = "patch_http", url = "${server.stdout}__echo", body = "payload-patch", save_to = "patched" },
+  { action = "bash", run = "echo '${patched}' | grep -q 'method.: .PATCH'" },
+  { action = "bash", run = "echo '${patched}' | grep -q payload-patch" },
+
+  { action = "delete_http", url = "${server.stdout}__echo?probe=golem-delete", save_to = "deleted" },
+  { action = "bash", run = "echo '${deleted}' | grep -q 'method.: .DELETE'" },
+  { action = "bash", run = "echo '${deleted}' | grep -q golem-delete" },
+
+  # Non-2xx fails the step — that's the documented contract. `if_fail = "warn"`
+  # keeps the flow going so the rest still runs; the warning in the report is
+  # the observable that the status path fired.
+  { action = "get_http", url = "${server.stdout}__status/404", if_fail = "warn" },
+]
+
+[[block]]
+name = "response_reaches_the_app"
+steps = [
+  # A fixed JSON document stands in for a real API read.
+  { action = "get_http", url = "${server.stdout}__json", save_to = "api" },
+  { action = "bash", run = "echo '${api}' | sed -E 's/.*token.: .([a-z0-9]+).*/\\1/'", save_to = "api_token" },
+
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+  { action = "type", on_text = "Search", input = "${api_token}", auto_scroll = true },
+  { action = "assert_visible", on_text = "abc123" },
+]
+
+[[teardown]]
+steps = [
+  { action = "run", script = "scripts/stop-loopback.sh" },
+]
