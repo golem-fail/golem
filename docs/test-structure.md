@@ -458,30 +458,9 @@ Skip teardown with `--no-teardown`.
 
 ## Data-Driven Tests
 
-Run the entire flow once per data row:
-
-```toml
-[[data]]
-username = "alice"
-password = "pass1"
-
-[[data]]
-username = "bob"
-password = "pass2"
-
-[[block]]
-steps = [
-  { action = "type", on_text = "Email", input = "${username}" },
-  { action = "type", on_text = "Password", input = "${password}" },
-  { action = "tap", on_text = "Login" },
-]
-```
-
-### Block-level iteration (`for_each`)
-
-Instead of re-running the whole flow, a single block can iterate the `[[data]]`
-rows itself with `for_each = "data"`. The block runs once per row, and each
-row's fields are read under the `${_each.<field>}` prefix:
+A `[[data]]` table holds the rows, and a block iterates them with
+`for_each = "data"`. The block runs once per row, and each row's fields are
+read under the `${_each.<field>}` prefix:
 
 ```toml
 [[data]]
@@ -498,10 +477,16 @@ steps = [
 ]
 ```
 
-Only surrounding blocks run once; the `for_each` block re-enters per row
-(`block:0`, `block:1`, … in step labels and recordings). When a block claims
-`[[data]]` this way, the whole-flow-per-row expansion above is suppressed so
-rows aren't applied twice. An empty `[[data]]` table runs the block zero times.
+Only the `for_each` block repeats — surrounding blocks run once, and the
+repeating block re-enters per row (`block:0`, `block:1`, … in step labels and
+recordings). An empty `[[data]]` table runs the block zero times.
+
+Iteration is **block-level only**: rows parameterise steps inside a flow, not
+whole flows. The block re-enters without relaunching the app, so a row that
+leaves the app somewhere new is the next row's starting state — put anything
+that must be reset into the block's own steps. To run a whole scenario per
+case — each with a fresh app launch and its own pass/fail line — write it as
+its own flow, or as a subflow invoked with different `[block.vars]`.
 
 ## Variables
 

@@ -24,7 +24,7 @@ Real-time colored output streamed to stderr. Shows step-by-step progress with ti
   ✓ PASSED  tap.test  [2.1s]
 ```
 
-Step labels read as `[global_step][block_name][step_within_block]`. With data-driven tests or `for_each` iterations, the block name includes the iteration: `[3][login:0][1]`, `[6][login:1][1]`.
+Step labels read as `[global_step][block_name][step_within_block]`. With `for_each` iterations, the block name includes the iteration: `[3][login:0][1]`, `[6][login:1][1]`.
 
 With `--verbose`, shows substeps and tree stats. The `{3 trees, 186~190 nodes}` suffix shows how many UI hierarchy fetches the step needed and the node count range across those fetches. Higher tree counts indicate retries or scroll iterations; changing node counts suggest the UI was updating.
 
