@@ -91,6 +91,111 @@ spm_dep_map() {
          | ((.identity // .package) + "\t" + (.state.version // .state.revision // empty))' 2>/dev/null || true
 }
 
+# name<TAB>version for a Gradle version catalog (gradle/libs.versions.toml) on
+# stdin. Keys are emitted as `group:artifact` so a dep declared both here and as
+# a literal coordinate in build.gradle dedupes to ONE line rather than two names
+# for one bump. Plugins have no coordinate, so they key on their plugin id.
+# Entries are assumed one-per-line (the conventional catalog layout); a
+# multi-line inline table is skipped rather than half-parsed.
+gradle_catalog_map() {
+  awk '
+    # Pull the quoted value of `key = "…"` out of a line ("" when absent).
+    function attr(line, key,   re, m) {
+      re = key "[ \t]*=[ \t]*\"[^\"]*\""
+      if (!match(line, re)) return ""
+      m = substr(line, RSTART, RLENGTH)
+      sub(/^[^"]*"/, "", m); sub(/"$/, "", m)
+      return m
+    }
+    /^[ \t]*\[/ { sec=$0; gsub(/[][ \t]/,"",sec); next }
+    # [versions] entries are the resolution targets for a later version.ref.
+    sec=="versions" && /=/ {
+      key=$0; sub(/[ \t]*=.*$/,"",key); gsub(/[ \t]/,"",key)
+      if (match($0, /"[^"]*"/)) ver[key]=substr($0,RSTART+1,RLENGTH-2)
+      next
+    }
+    sec!="libraries" && sec!="plugins" { next }
+    {
+      coord=attr($0,"module")
+      if (coord=="") coord=attr($0,"id")
+      if (coord=="") {
+        g=attr($0,"group"); a=attr($0,"name")
+        if (g!="" && a!="") coord=g":"a
+      }
+      if (coord=="") {
+        # shorthand: alias = "group:artifact:version"
+        rhs=$0; sub(/^[^=]*=[ \t]*/,"",rhs); sub(/^"/,"",rhs); sub(/".*$/,"",rhs)
+        if (split(rhs, parts, ":")==3 && parts[3] ~ /^[0-9]/)
+          print parts[1]":"parts[2] "\t" parts[3]
+        next
+      }
+      v=attr($0,"version.ref"); if (v!="") v=ver[v]
+      if (v=="") v=attr($0,"version")
+      if (v!="") print coord "\t" v
+    }
+  '
+}
+
+# name<TAB>version for every pod in a Podfile.lock (YAML) on stdin. The PODS
+# section lists direct AND transitive pods; the 2-space-indented entries are the
+# installed set, deeper ones are each pod'"'"'s own requirements (already listed at
+# top level, so skipping them avoids double counting).
+pods_lock_map() {
+  awk '
+    /^[A-Z][A-Z ]*:/ { sec=$0; sub(/:.*$/,"",sec); next }
+    sec=="PODS" && /^  - / {
+      line=$0; sub(/^  - /,"",line)
+      if (match(line, /\([^)]*\)/)) {
+        v=substr(line,RSTART+1,RLENGTH-2)
+        name=substr(line,1,RSTART-1); gsub(/[ \t]+$/,"",name)
+        print name "\t" v
+      }
+    }
+  '
+}
+
+# Pod names listed under DEPENDENCIES — the direct deps, i.e. what the Podfile
+# actually asks for. Everything else in PODS is transitive.
+pods_direct_keys() {
+  awk '
+    /^[A-Z][A-Z ]*:/ { sec=$0; sub(/:.*$/,"",sec); next }
+    sec=="DEPENDENCIES" && /^  - / {
+      line=$0; sub(/^  - /,"",line)
+      sub(/[ \t]*\(.*$/,"",line)          # drop the version constraint
+      gsub(/^"|"$/,"",line)
+      if (line != "") print line
+    }
+  '
+}
+
+# name<TAB>version for every package in a pubspec.lock (YAML) on stdin.
+pub_lock_map() {
+  awk '
+    /^packages:/ { inpkgs=1; next }
+    /^[a-z]/ && !/^packages:/ { inpkgs=0 }
+    inpkgs && /^  [A-Za-z0-9_]+:/ { name=$0; gsub(/[ \t:]/,"",name); next }
+    inpkgs && name != "" && /^    version:/ {
+      v=$0; sub(/^ *version:[ \t]*/,"",v); gsub(/"/,"",v)
+      print name "\t" v
+    }
+  '
+}
+
+# "<dependency-class> <name>" for each package in a pubspec.lock on stdin, where
+# the class is pub'"'"'s own `direct main` / `direct dev` / `transitive`.
+pub_dep_classes() {
+  awk '
+    /^packages:/ { inpkgs=1; next }
+    /^[a-z]/ && !/^packages:/ { inpkgs=0 }
+    inpkgs && /^  [A-Za-z0-9_]+:/ { name=$0; gsub(/[ \t:]/,"",name); next }
+    inpkgs && name != "" && /^    dependency:/ {
+      d=$0; sub(/^ *dependency:[ \t]*/,"",d); gsub(/"/,"",d)
+      if (d ~ /^direct main/) print "rt " name
+      else if (d ~ /^direct dev/) print "dev " name
+    }
+  '
+}
+
 # Emit "rt <key>" / "dev <key>" for each dependency key declared in the Cargo.toml
 # manifests passed as args (read from the $NEW tag). Section decides the class:
 #   [dependencies] / [workspace.dependencies] / [*.dependencies]            → rt
@@ -305,6 +410,34 @@ if [[ -n "$PREV" ]]; then
              | grep -E '(^|/)build\.gradle(\.kts)?$' | grep -v '/node_modules/' || true)
   mapfile -t SPM_FILES < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
              | grep -E '(^|/)Package\.resolved$' | grep -v '/node_modules/' || true)
+  mapfile -t CATALOG_FILES < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
+             | grep -E '(^|/)libs\.versions\.toml$' | grep -v '/node_modules/' || true)
+  mapfile -t PODS_LOCKS < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
+             | grep -E '(^|/)Podfile\.lock$' | grep -v '/node_modules/' || true)
+  mapfile -t PUB_LOCKS < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
+             | grep -E '(^|/)pubspec\.lock$' | grep -v '/node_modules/' || true)
+
+  # CocoaPods: the lockfile is its own manifest — DEPENDENCIES lists what the
+  # Podfile asked for, everything else in PODS is pulled in transitively.
+  for f in "${PODS_LOCKS[@]:-}"; do
+    [[ -z "$f" ]] && continue
+    cls="$(loc_class "$f")"
+    while IFS= read -r key; do [[ -n "$key" ]] && set_class pods "$key" "$cls"; done \
+      < <(git show "${NEW}:${f}" 2>/dev/null | pods_direct_keys || true)
+  done
+
+  # pub: the lockfile records each package's own class (`direct main` /
+  # `direct dev` / `transitive`). Honour it — except under a test-app, where
+  # the whole tree is a fixture and nothing in it is runtime.
+  for f in "${PUB_LOCKS[@]:-}"; do
+    [[ -z "$f" ]] && continue
+    forced="$(loc_class "$f")"
+    while read -r c key; do
+      [[ -z "$key" ]] && continue
+      [[ "$forced" == "dev" ]] && c="dev"
+      set_class pub "$key" "$c"
+    done < <(git show "${NEW}:${f}" 2>/dev/null | pub_dep_classes || true)
+  done
 fi
 
 # Deduped change sets keyed by dep name (same bump across apps → one line).
@@ -326,6 +459,12 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
             newmap="$(git show "${NEW}:${path}"  2>/dev/null | gradle_dep_map  || true)" ;;
     spm)    oldmap="$(git show "${PREV}:${path}" 2>/dev/null | spm_dep_map     || true)"
             newmap="$(git show "${NEW}:${path}"  2>/dev/null | spm_dep_map     || true)" ;;
+    catalog) oldmap="$(git show "${PREV}:${path}" 2>/dev/null | gradle_catalog_map || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | gradle_catalog_map || true)" ;;
+    pods)   oldmap="$(git show "${PREV}:${path}" 2>/dev/null | pods_lock_map   || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | pods_lock_map   || true)" ;;
+    pub)    oldmap="$(git show "${PREV}:${path}" 2>/dev/null | pub_lock_map    || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | pub_lock_map    || true)" ;;
   esac
   [[ -z "$oldmap$newmap" ]] && return 0
 
@@ -354,13 +493,15 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
   done <<< "$names"
 }
 
-# Ecosystems: Cargo + npm (incl. capacitor) diffed against their lockfiles with
-# manifest-based direct-only filtering; Gradle (build.gradle version strings, all
-# direct) and SPM (Package.resolved, ready — no manifest in test-app-b/ios yet)
-# forced direct-dev. NOT yet parsed → such bumps stay invisible:
-#   • Gradle version catalogs (libs.versions.toml) — string-literal coords only.
-#   • CocoaPods (Podfile.lock) — none in the repo.
-#   • Flutter/Dart (pubspec.lock) — for the coming flutter app.
+# Ecosystems, by how direct-vs-transitive is decided:
+#   • Cargo + npm (incl. capacitor) — lockfile diffed, intersected with the
+#     manifest's dependency tables.
+#   • Gradle build.gradle coords, Gradle version catalogs, SPM — the file lists
+#     only direct deps, so every entry is direct; class comes from location.
+#   • CocoaPods, pub — the lockfile carries its own direct/transitive marking
+#     (DEPENDENCIES / `dependency:`), already folded into DEPCLASS above.
+# Catalogs key on `group:artifact`, the same shape gradle_dep_map emits, so a dep
+# declared both ways reports one bump rather than two names for it.
 for f in "${CARGO_LOCKS[@]:-}";  do [[ -n "$f" ]] && diff_lockfile cargo  "$f"; done
 for f in "${NPM_LOCKS[@]:-}";    do [[ -n "$f" ]] && diff_lockfile npm    "$f"; done
 # gradle/spm files list DIRECT deps only (or have no manifest to intersect), so
@@ -368,6 +509,9 @@ for f in "${NPM_LOCKS[@]:-}";    do [[ -n "$f" ]] && diff_lockfile npm    "$f"; 
 # the binary (→ runtime), test-app* is a fixture (→ dev).
 for f in "${GRADLE_FILES[@]:-}"; do [[ -n "$f" ]] && diff_lockfile gradle "$f" "$(loc_class "$f")"; done
 for f in "${SPM_FILES[@]:-}";    do [[ -n "$f" ]] && diff_lockfile spm    "$f" "$(loc_class "$f")"; done
+for f in "${CATALOG_FILES[@]:-}"; do [[ -n "$f" ]] && diff_lockfile catalog "$f" "$(loc_class "$f")"; done
+for f in "${PODS_LOCKS[@]:-}";   do [[ -n "$f" ]] && diff_lockfile pods   "$f"; done
+for f in "${PUB_LOCKS[@]:-}";    do [[ -n "$f" ]] && diff_lockfile pub    "$f"; done
 
 # ── render ──────────────────────────────────────────────────────────────────
 
