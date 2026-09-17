@@ -235,6 +235,26 @@ pub struct RunArgs {
     #[arg(long = "no-build")]
     pub no_build: bool,
 
+    /// Iterate against a dev server you run yourself (Expo/Metro) instead
+    /// of rebuilding per change. Implies `--no-build`: the dev build
+    /// already on the device is trusted and the install cache is neither
+    /// read nor written. golem waits for the dev server before running and
+    /// fails with H503 if it never answers; the per-flow relaunch then
+    /// re-fetches the current bundle, so a JS edit needs no reinstall.
+    /// golem does not start the bundler — run `npx expo start` yourself.
+    #[arg(long)]
+    pub dev: bool,
+
+    /// Port the `--dev` dev server listens on. Metro's default is 8081.
+    #[arg(long = "dev-port", default_value_t = 8081)]
+    pub dev_port: u16,
+
+    /// How long `--dev` waits for the dev server to answer before failing
+    /// with H503. Format: `30s`, `2m`. Default: 30s — raise it when the
+    /// bundler's own startup (config load, file crawl) is slower than that.
+    #[arg(long = "dev-wait")]
+    pub dev_wait: Option<String>,
+
     /// Hard cap on how long a FlowRun blocks in the device queue before
     /// failing with "no device available". Format: `30m`, `1h`, `90s`,
     /// `1h30m`. Default: unbounded — the per-flow `max_runtime` breaker
@@ -583,6 +603,42 @@ mod tests {
         assert!(run.no_build, "no_build SHALL be set");
         assert_eq!(run.max_concurrency, Some(4));
         assert_eq!(run.max_device_wait.as_deref(), Some("1h30m"));
+    }
+
+    // 26. `--dev` and its port. The port defaults to Metro's 8081 so the
+    //     common case is a bare `--dev`.
+    #[test]
+    fn run_dev_mode_flags() {
+        let bare = parse(&["run", "--dev"]);
+        let Commands::Run(run) = bare.command else {
+            panic!("expected Run");
+        };
+        assert!(run.dev, "dev SHALL be set");
+        assert_eq!(run.dev_port, 8081, "dev_port SHALL default to 8081");
+        assert!(
+            !run.no_build,
+            "--dev SHALL NOT set no_build on the parsed args — \
+             the implication is resolved when the config is built"
+        );
+
+        assert!(run.dev_wait.is_none(), "dev_wait SHALL default to unset");
+
+        let ported = parse(&["run", "--dev", "--dev-port", "19000", "--dev-wait", "2m"]);
+        let Commands::Run(run) = ported.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run.dev_port, 19000, "--dev-port SHALL override the default");
+        assert_eq!(run.dev_wait.as_deref(), Some("2m"));
+    }
+
+    // 27. A run with no --dev leaves dev mode off.
+    #[test]
+    fn run_without_dev_is_not_dev_mode() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(!run.dev, "dev SHALL default off");
     }
 
     // 26. --platform and --coverage overrides

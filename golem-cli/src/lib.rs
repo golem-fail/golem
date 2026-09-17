@@ -3,6 +3,7 @@ pub mod cache;
 pub mod cli;
 pub mod companion_paths;
 pub mod companions;
+pub mod dev_server;
 pub mod devices;
 pub mod discovery;
 pub mod doctor;
@@ -149,12 +150,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 .iter()
                 .any(|f| matches!(f, golem_report::output::OutputFormat::Junit));
 
-            // Conflicting flags: --no-build wins over --rebuild because
+            // Conflicting flags: a build-skip wins over --rebuild because
             // skipping work entirely is the more concrete intent. Warn
             // loudly so the user knows their --rebuild was ignored.
             let rebuild = args.rebuild;
-            let no_build = args.no_build;
-            if let Some(msg) = rebuild_no_build_conflict_warning(rebuild, no_build) {
+            // `--dev` is a build-skip that also waits for a dev server, so
+            // it subsumes --no-build rather than sitting beside it.
+            let no_build = args.no_build || args.dev;
+            if let Some(msg) = rebuild_skip_conflict_warning(rebuild, args.no_build, args.dev) {
                 eprintln!("{msg}");
             }
 
@@ -189,6 +192,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 a11y_min_confidence_override,
                 rebuild,
                 no_build,
+                dev: args.dev,
+                dev_port: args.dev_port,
                 device_settings: project_config.device_settings,
                 record: args.record,
                 no_record: args.no_record,
@@ -231,6 +236,33 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 max_device_wait_ms,
                 include_junit,
             );
+
+            // `--dev` preflight. Probed here rather than server-side so the
+            // H503 tag survives: a suite error crossing the daemon socket is
+            // flattened to a message string, and this is the one failure
+            // whose whole value is being told precisely what to start. The
+            // bundler is always on the CLI's own host, so a client-side
+            // probe asks the same question the devices will.
+            if args.dev {
+                let wait = args
+                    .dev_wait
+                    .as_deref()
+                    .map(|s| {
+                        golem_runner::executor::parse_duration(s).ok_or_else(|| {
+                            anyhow::anyhow!("invalid --dev-wait '{s}' (expected e.g. 30s, 2m)")
+                        })
+                    })
+                    .transpose()?
+                    .unwrap_or(dev_server::DEFAULT_WAIT);
+                let waited = dev_server_preflight(args.dev_port, wait, has_human_output).await?;
+                if has_human_output {
+                    eprintln!(
+                        "  [dev] dev server ready on port {} ({:.1}s)",
+                        args.dev_port,
+                        waited.as_secs_f64()
+                    );
+                }
+            }
 
             // Unified submit path: connect to an existing daemon if
             // there is one, otherwise spin up an in-process server and
@@ -484,10 +516,42 @@ fn detect_human_output(outputs: &[String]) -> bool {
             .any(|s| s == "human" || s.starts_with("human:"))
 }
 
-/// The conflict warning shown when both `--rebuild` and `--no-build`
-/// are passed. `--no-build` wins; `None` when there is no conflict.
-fn rebuild_no_build_conflict_warning(rebuild: bool, no_build: bool) -> Option<&'static str> {
-    if rebuild && no_build {
+/// Block until the `--dev` dev server answers, announcing the wait only
+/// when there is one — a bundler that is already up should cost the run no
+/// output at all.
+async fn dev_server_preflight(
+    port: u16,
+    wait: std::time::Duration,
+    stream_human: bool,
+) -> anyhow::Result<std::time::Duration> {
+    // One fast probe first: `expo start` is normally already running, and
+    // printing "waiting" before knowing that is noise on the common path.
+    if let Ok(d) = dev_server::wait_until_ready(port, std::time::Duration::ZERO).await {
+        return Ok(d);
+    }
+    if stream_human {
+        eprintln!(
+            "  [dev] waiting for a dev server on {} …",
+            dev_server::status_url(port)
+        );
+    }
+    dev_server::wait_until_ready(port, wait).await
+}
+
+/// The conflict warning shown when `--rebuild` is passed alongside a
+/// build-skip flag. The skip wins; `None` when there is no conflict.
+/// `--dev` is named ahead of `--no-build` because a user who passed both
+/// asked for the dev-server mode, and that is the surprising half.
+fn rebuild_skip_conflict_warning(rebuild: bool, no_build: bool, dev: bool) -> Option<&'static str> {
+    if !rebuild {
+        return None;
+    }
+    if dev {
+        Some(
+            "  [install] both --rebuild and --dev passed — \
+             --dev wins (skipping build+install)",
+        )
+    } else if no_build {
         Some(
             "  [install] both --rebuild and --no-build passed — \
              --no-build wins (skipping build+install)",
@@ -542,6 +606,8 @@ fn build_config_json(
         "a11y_min_confidence": config.a11y_min_confidence_override,
         "rebuild": config.rebuild,
         "no_build": config.no_build,
+        "dev": config.dev,
+        "dev_port": config.dev_port,
         "record": config.record,
         "no_record": config.no_record,
         "trace": config.trace,
@@ -1196,15 +1262,25 @@ mod tests {
     #[test]
     fn conflict_warnings_only_when_both_flags_set() {
         // 1. rebuild + no_build SHALL warn that --no-build wins.
-        let w = rebuild_no_build_conflict_warning(true, true).expect("both build flags SHALL warn");
+        let w =
+            rebuild_skip_conflict_warning(true, true, false).expect("both build flags SHALL warn");
         assert!(
             w.contains("--no-build wins") && w.contains("[install]"),
             "rebuild/no-build warning SHALL state --no-build wins, got: {w}",
         );
-        // 2. No conflict for any single/neither flag.
-        assert!(rebuild_no_build_conflict_warning(true, false).is_none());
-        assert!(rebuild_no_build_conflict_warning(false, true).is_none());
-        assert!(rebuild_no_build_conflict_warning(false, false).is_none());
+        // 2. rebuild + dev SHALL name --dev, not the --no-build it implies:
+        //    a user pointed at a flag they never typed can't act on it.
+        let d = rebuild_skip_conflict_warning(true, true, true).expect("rebuild + dev SHALL warn");
+        assert!(
+            d.contains("--dev wins") && !d.contains("--no-build wins"),
+            "rebuild/dev warning SHALL state --dev wins, got: {d}",
+        );
+        // 3. No conflict for any single/neither flag.
+        assert!(rebuild_skip_conflict_warning(true, false, false).is_none());
+        assert!(rebuild_skip_conflict_warning(false, true, false).is_none());
+        assert!(rebuild_skip_conflict_warning(false, false, false).is_none());
+        // A build-skip without --rebuild is the normal case, not a conflict.
+        assert!(rebuild_skip_conflict_warning(false, true, true).is_none());
         // 3. record + no_record SHALL warn that --no-record wins.
         let r =
             record_no_record_conflict_warning(true, true).expect("both record flags SHALL warn");
@@ -1216,6 +1292,30 @@ mod tests {
         assert!(record_no_record_conflict_warning(true, false).is_none());
         assert!(record_no_record_conflict_warning(false, true).is_none());
         assert!(record_no_record_conflict_warning(false, false).is_none());
+    }
+
+    // A `--dev` run reaches the orchestrator only as config JSON, so the two
+    // halves of the wire are pinned here and in `parse_submit_config`'s
+    // matching test. Without both, `--dev` works in-process and is silently
+    // dropped against a daemon.
+    #[test]
+    fn build_config_json_carries_dev_mode() {
+        let config = SuiteConfig {
+            dev: true,
+            dev_port: 19000,
+            // `--dev` implies a build skip; the resolution happens before the
+            // config is built, so the wire carries both.
+            no_build: true,
+            ..SuiteConfig::default()
+        };
+        let json = build_config_json(&config, None, None, None, None, false);
+        assert_eq!(json["dev"], serde_json::json!(true));
+        assert_eq!(json["dev_port"], serde_json::json!(19000));
+        assert_eq!(json["no_build"], serde_json::json!(true));
+
+        let off = build_config_json(&SuiteConfig::default(), None, None, None, None, false);
+        assert_eq!(off["dev"], serde_json::json!(false));
+        assert_eq!(off["dev_port"], serde_json::json!(8081));
     }
 
     // 11. build_config_json: every wire key carries the resolved value;

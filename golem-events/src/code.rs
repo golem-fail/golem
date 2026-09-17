@@ -198,6 +198,11 @@ pub enum FailureCode {
     /// `--no-default-features` build). A build-configuration problem, not a
     /// test one — the flow is valid, this binary just can't serve it.
     HostBrowserUnsupported,
+    /// H503: `--dev` needs a developer-run dev server (Expo/Metro) and none
+    /// answered. Its own code rather than H404 because nothing is missing
+    /// from the toolchain — a process the developer owns simply isn't up
+    /// yet, and the fix is to start it, not to install anything.
+    HostDevServerUnavailable,
 }
 
 impl FailureCode {
@@ -244,7 +249,8 @@ impl FailureCode {
             | HostOrchestratorIpc
             | HostBrowserMissing
             | HostBrowserUnsupported
-            | HostBrowserFeatureMissing => Domain::Host,
+            | HostBrowserFeatureMissing
+            | HostDevServerUnavailable => Domain::Host,
         }
     }
 
@@ -307,6 +313,7 @@ impl FailureCode {
             HostBrowserMissing => 424,
             HostBrowserUnsupported => 501,
             HostBrowserFeatureMissing => 505,
+            HostDevServerUnavailable => 503,
         }
     }
 

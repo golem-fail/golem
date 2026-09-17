@@ -54,6 +54,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         browser: Default::default(),
+        dev: false,
         recovery: None,
     }
 }

@@ -227,4 +227,16 @@ So if your project has no install scripts anywhere, `--no-build` is redundant �
 
   Expo (managed) only — it relies on `expo prebuild` to generate the native projects. **Bare React Native** (a `@react-native-community/cli` project with no `expo` dependency) commits its own `ios/` + `android/` and has no `prebuild`; use **native-ios** + **native-android** for those.
 
+  **Iterating on JS: `golem run --dev`.** A Release build embeds the bundle, so
+  every JS change costs a full native rebuild. Build a Debug build once
+  (`npx expo run:ios` / `npx expo run:android` — these also install and launch
+  it), leave `npx expo start` running, and then `golem run --dev` skips
+  build+install entirely: the per-flow relaunch re-fetches the current bundle
+  from the dev server, so a JS edit is picked up with no rebuild and no
+  reinstall. golem waits for the dev server and fails with `H503` if it never
+  answers, rather than letting the resulting red error screen read as a
+  missing selector. Local iteration only — a CI run should test the artifact
+  it ships. Simulators and emulators only; a physical device also needs
+  `adb reverse tcp:8081 tcp:8081` or a reachable LAN host.
+
 Scripts are plain bash — customise freely after scaffolding. Extend to other frameworks (Flutter, Capacitor, etc.) by hand.

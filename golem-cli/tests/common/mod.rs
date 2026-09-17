@@ -302,9 +302,16 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
         } else {
             None
         };
-        let code = golem_cli::run_cli(cli)
-            .await
-            .expect("run_cli SHALL not error");
+        // Mirror `main.rs`: a bubbled-up error is printed and exits 1. The
+        // harness must model that rather than panic, or a test whose subject
+        // *is* a preflight failure can't assert on what the user sees.
+        let code = match golem_cli::run_cli(cli).await {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("Error: {e:#}");
+                1
+            }
+        };
         drop(server);
         code
     });

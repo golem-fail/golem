@@ -230,6 +230,15 @@ pub struct SuiteConfig {
     /// have the bundle installed run flows; devices that don't fail
     /// loudly. The cache is untouched.
     pub no_build: bool,
+    /// `--dev`: iterate against a developer-run JS dev server (Expo/Metro).
+    /// Sets `no_build` at the CLI layer rather than being checked alongside
+    /// it everywhere, so the install pipeline needs no dev-specific branch
+    /// beyond the message it prints. What this flag itself governs is the
+    /// dev-server preflight, the dev-flavoured skip reason, and the longer
+    /// launch budget a first-bundle download needs.
+    pub dev: bool,
+    /// `--dev-port`: port the `--dev` dev server listens on (Metro: 8081).
+    pub dev_port: u16,
     /// Per-platform OS-level tweaks from `golem.toml`'s
     /// `[device_settings]`. Applied once per device session before
     /// any flow runs.
@@ -301,6 +310,8 @@ impl Default for SuiteConfig {
             a11y_min_confidence_override: None,
             rebuild: false,
             no_build: false,
+            dev: false,
+            dev_port: 8081,
             device_settings: crate::project::DeviceSettings::default(),
             record: false,
             no_record: false,
@@ -727,6 +738,8 @@ impl SuiteRunner {
             let fingerprint = fingerprint.clone();
             let rebuild = self.config.rebuild;
             let no_build = self.config.no_build;
+            let dev = self.config.dev;
+            let dev_port = self.config.dev_port;
             let device_settings = device_settings.clone();
             let record = self.config.record;
             let no_record = self.config.no_record;
@@ -791,6 +804,8 @@ impl SuiteRunner {
                         fingerprint,
                         rebuild,
                         no_build,
+                        dev,
+                        dev_port,
                         device_settings,
                         record,
                         no_record,
@@ -1039,6 +1054,10 @@ struct FlowRunConfig {
     rebuild: bool,
     /// CLI `--no-build`: skip build+install if device already has the bundle.
     no_build: bool,
+    /// CLI `--dev`: iterating against a developer-run JS dev server.
+    dev: bool,
+    /// CLI `--dev-port`: the port that dev server listens on.
+    dev_port: u16,
     /// Device settings to apply once per device session.
     device_settings: Arc<crate::project::DeviceSettings>,
     /// CLI `--record` — default every block to record.
@@ -1317,6 +1336,8 @@ async fn execute_flow_run(
                 fingerprint: &cfg.fingerprint,
                 rebuild: cfg.rebuild,
                 no_build: cfg.no_build,
+                dev: cfg.dev,
+                dev_port: cfg.dev_port,
                 device_settings: &cfg.device_settings,
                 max_device_wait: cfg.max_device_wait,
                 cli_vars: &cfg.cli_vars,
@@ -1466,6 +1487,7 @@ async fn execute_flow_run(
                     stub_fail_on_runs: stub_fail_on_runs_c,
                     no_teardown: cfg.no_teardown,
                     browser_headed: cfg.browser_headed,
+                    dev: cfg.dev,
                 },
             )
             .await
@@ -1723,6 +1745,8 @@ struct SlotBuildConfig<'a> {
     fingerprint: &'a golem_runner::fingerprint::Fingerprint,
     rebuild: bool,
     no_build: bool,
+    dev: bool,
+    dev_port: u16,
     device_settings: &'a crate::project::DeviceSettings,
     max_device_wait: Option<std::time::Duration>,
     /// CLI `--var` overrides, for interpolating apps' `install_env` at the
@@ -1763,6 +1787,8 @@ async fn setup_slot(
         fingerprint,
         rebuild,
         no_build,
+        dev,
+        dev_port,
         device_settings,
         max_device_wait,
         cli_vars,
@@ -1831,6 +1857,21 @@ async fn setup_slot(
         eprintln!("  Platform: {platform}");
     }
 
+    // `--dev` on Android: point the device's loopback at the host's bundler.
+    // Not load-bearing on a stock emulator — React Native resolves the dev
+    // server to `10.0.2.2` there and reaches the host without a tunnel
+    // (`AndroidInfoHelpers`). It matters when the app was told to use
+    // `localhost` instead (the dev menu's "Debug server host & port", or a
+    // physical device), and costs one adb call, so it is done unconditionally
+    // and best-effort: a failure here is not yet a reason to fail the slot.
+    if dev && platform == Platform::Android {
+        if let Err(e) = golem_devices::lifecycle::setup_adb_reverse(&device, dev_port).await {
+            if debug {
+                eprintln!("  [dev] adb reverse tcp:{dev_port} failed: {e:#}");
+            }
+        }
+    }
+
     preinstall_for_device_scoped(
         &device,
         platform,
@@ -1842,6 +1883,7 @@ async fn setup_slot(
             fingerprint,
             rebuild,
             no_build,
+            dev,
             cli_vars,
         },
     )
@@ -2022,6 +2064,18 @@ async fn setup_slot(
     }
 }
 
+/// What to tell someone whose `--dev` run found no app on the device.
+///
+/// The suggested command is per-platform: golem's `ios`/`android` are also
+/// Expo's subcommand names, so the message can name the one that would
+/// actually help instead of a generic "build a dev build".
+fn missing_dev_build_message(bundle_id: &str, device_name: &str, platform: &str) -> String {
+    format!(
+        "--dev: {bundle_id} not installed on {device_name}; build and install a \
+         dev build first (e.g. `npx expo run:{platform}`)"
+    )
+}
+
 /// Shared config for installing matrix entries onto one device.
 #[derive(Clone, Copy)]
 struct PreinstallCtx<'a> {
@@ -2031,6 +2085,11 @@ struct PreinstallCtx<'a> {
     fingerprint: &'a golem_runner::fingerprint::Fingerprint,
     rebuild: bool,
     no_build: bool,
+    /// CLI `--dev`. Rides alongside `no_build` (which `--dev` implies) purely
+    /// so the skip and failure messages name the flag the user actually
+    /// typed — pointing someone at `--no-build` they never passed is worse
+    /// than no message at all.
+    dev: bool,
     /// CLI `--var` overrides, for interpolating `install_env`.
     cli_vars: &'a [(String, String)],
 }
@@ -2062,6 +2121,7 @@ async fn preinstall_for_device_scoped(
         fingerprint,
         rebuild,
         no_build,
+        dev,
         cli_vars,
     } = *ctx;
     let platform_str = platform.to_string();
@@ -2095,16 +2155,24 @@ async fn preinstall_for_device_scoped(
                     app_name: entry.app_name.clone(),
                     bundle_id: entry.bundle_id.clone(),
                     target: target.clone(),
-                    reason: "no-build: bundle present on device".to_string(),
+                    reason: if dev {
+                        "dev: bundle present on device".to_string()
+                    } else {
+                        "no-build: bundle present on device".to_string()
+                    },
                 });
                 install_cache
                     .set(key, golem_runner::installer::InstallOutcome::Succeeded)
                     .await;
             } else {
-                let msg = format!(
-                    "--no-build: {} not installed on {}; drop --no-build or install manually",
-                    entry.bundle_id, device.name
-                );
+                let msg = if dev {
+                    missing_dev_build_message(&entry.bundle_id, &device.name, &platform_str)
+                } else {
+                    format!(
+                        "--no-build: {} not installed on {}; drop --no-build or install manually",
+                        entry.bundle_id, device.name
+                    )
+                };
                 install_cache
                     .set(
                         key,
@@ -3356,6 +3424,7 @@ struct FlowRunPolicy {
     stub_fail_on_runs: Option<Vec<u32>>,
     no_teardown: bool,
     browser_headed: bool,
+    dev: bool,
 }
 
 /// Whether this flow's browser runs headless.
@@ -3420,6 +3489,7 @@ async fn run_flow_on_device(
         stub_fail_on_runs,
         no_teardown,
         browser_headed,
+        dev,
     } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -3604,6 +3674,7 @@ async fn run_flow_on_device(
         browser: std::sync::Arc::new(tokio::sync::Mutex::new(
             golem_runner::browser::BrowserSlot::new(browser_options),
         )),
+        dev,
         recovery: recovery_impl
             .as_ref()
             .map(|r| r as &dyn golem_runner::recovery::CompanionRecovery),
@@ -4345,6 +4416,38 @@ mod tests {
                 effective_device_wait(None, &flow_with_wait(Some("soon"))),
                 None,
                 "a bad project/flow value SHALL NOT fail the run"
+            );
+        }
+    }
+
+    // --- `--dev` messaging -----------------------------------------------
+    mod dev_messages {
+        use super::super::missing_dev_build_message;
+
+        #[test]
+        fn the_suggested_command_matches_the_device_platform() {
+            let ios = missing_dev_build_message("fail.golem.teste", "iPhone 17", "ios");
+            assert!(
+                ios.contains("npx expo run:ios") && !ios.contains("run:android"),
+                "an iOS device SHALL be told the iOS command, got: {ios}"
+            );
+            let android = missing_dev_build_message("fail.golem.teste", "Pixel 8 Pro", "android");
+            assert!(
+                android.contains("npx expo run:android") && !android.contains("run:ios"),
+                "an Android device SHALL be told the Android command, got: {android}"
+            );
+        }
+
+        #[test]
+        fn the_message_names_the_flag_the_user_typed() {
+            let m = missing_dev_build_message("fail.golem.teste", "iPhone 17", "ios");
+            assert!(m.contains("--dev"), "got: {m}");
+            // `--dev` implies --no-build internally; pointing someone at a
+            // flag they never passed is a dead end.
+            assert!(!m.contains("--no-build"), "got: {m}");
+            assert!(
+                m.contains("fail.golem.teste") && m.contains("iPhone 17"),
+                "got: {m}"
             );
         }
     }
