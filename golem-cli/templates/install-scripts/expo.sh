@@ -130,7 +130,10 @@ ensure_deps() {
   if [[ ! -d node_modules ]] || golem_stale deps "$want"; then
     echo "installing JS dependencies (dependency inputs changed)..." >&2
     $PM_INSTALL 1>&2 || return 1
-    golem_stamp deps "$want"
+    # Re-hash AFTER the install: package managers rewrite the lockfile as
+    # part of installing, so stamping the pre-install hash would leave the
+    # stamp stale the moment it was written and reinstall on every run.
+    golem_stamp deps "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")"
   fi
 }
 
@@ -146,7 +149,9 @@ ensure_prebuild() {
   if [[ ! -d "$platform" ]] || golem_stale "prebuild-$platform" "$want"; then
     echo "expo prebuild ($platform)..." >&2
     $PM_RUNNER prebuild --platform "$platform" 1>&2 || return 1
-    golem_stamp "prebuild-$platform" "$want"
+    # Re-hash after, for the same reason: prebuild may touch the config it
+    # was generated from.
+    golem_stamp "prebuild-$platform" "$(golem_hash "${GOLEM_PREBUILD_INPUTS[@]}")"
   fi
 }
 

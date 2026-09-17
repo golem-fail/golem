@@ -73,9 +73,11 @@ ensure_deps() {
   echo "installing JS dependencies (dependency inputs changed)..." >&2
   $PM_INSTALL 1>&2 || return 1
   # Written only after a successful install, so a failure is retried next
-  # run rather than remembered as done.
+  # run rather than remembered as done — and re-hashed, because package
+  # managers rewrite the lockfile as part of installing, which would leave a
+  # pre-install hash stale the moment it was written.
   mkdir -p "$GOLEM_STAMP_DIR"
-  printf '%s' "$want" > "$stamp"
+  printf '%s' "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")" > "$stamp"
 }
 
 # `install-only` reuses the previous artifact and runs no build, so there is

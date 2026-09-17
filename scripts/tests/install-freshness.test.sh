@@ -101,6 +101,33 @@ printf '%s' "$lock_contents" > "$d2/yarn.lock"
 check_eq "swapping lockfile flavour with identical contents reinstalls" \
   "install" "$(run_expo "$d2" 'ensure_deps')"
 
+# Package managers rewrite the lockfile while installing. Stamping the
+# pre-install hash would leave the stamp stale the instant it was written,
+# reinstalling on every single run.
+d_rw=$(new_project)
+run_expo_rewriting() {
+  local dir="$1"
+  (
+    cd "$dir" || exit 1
+    # shellcheck disable=SC1090
+    source <(extract_helpers "$EXPO_TEMPLATE" ensure_prebuild)
+    PM_INSTALL="record_install"
+    record_install() {
+      echo "install" >> "$dir/actions"
+      mkdir -p node_modules
+      # What npm does: normalise the lockfile as part of installing.
+      printf '{"lockfileVersion":3,"normalised":true}' > package-lock.json
+    }
+    ensure_deps
+  )
+  cat "$dir/actions" 2>/dev/null | tr '\n' ' ' | sed 's/ $//'
+  : > "$dir/actions"
+}
+check_eq "an install that rewrites the lockfile installs once" \
+  "install" "$(run_expo_rewriting "$d_rw")"
+check_eq "…and does NOT reinstall on the next run" \
+  "" "$(run_expo_rewriting "$d_rw")"
+
 # A failed install must not be remembered as done.
 d3=$(new_project)
 (
