@@ -732,6 +732,72 @@ mod tests {
         );
     }
 
+    // 16b. The allocator skips a port that is already bound — a companion
+    //      left running by a previous golem session owns its port, and
+    //      handing it out again would route this run at that stale process.
+    #[test]
+    fn allocate_port_skips_a_bound_port() {
+        let (state, _rx) = RegistrationState::new();
+
+        // Hold a port inside the companion range for the length of the test,
+        // then park the cursor on it so the allocator meets it first.
+        let mut squatted = None;
+        for candidate in COMPANION_PORT_START..COMPANION_PORT_END {
+            if let Ok(listener) = TcpListener::bind(format!("127.0.0.1:{candidate}")) {
+                squatted = Some((listener, candidate));
+                break;
+            }
+        }
+        let (_held, busy) = squatted.expect("a free port SHALL exist in the companion range");
+        state.seed_next_port(busy);
+
+        let port = state.allocate_port("dev-1", "android", "Pixel", "1");
+
+        assert_ne!(
+            port, busy,
+            "an already-bound port SHALL NOT be handed to a companion"
+        );
+        assert!(
+            (COMPANION_PORT_START..=COMPANION_PORT_END).contains(&port),
+            "the skipped-to port SHALL stay within the companion range"
+        );
+    }
+
+    // 16c. Registration is keyed strictly by device id. `bring_up_companion`
+    //      waits for *its* device and skips any other simulator's companion
+    //      registering at the same moment (`comp.device_id != device.udid`);
+    //      this is the state-level behaviour that filter relies on.
+    #[tokio::test]
+    async fn a_foreign_registration_does_not_resolve_our_device() {
+        let (state, mut rx) = RegistrationState::new();
+
+        // Another simulator's companion registers first.
+        let other_port = state.allocate_port("udid-other", "ios", "iPhone 16", "1");
+
+        let announced = rx.recv().await.expect("registration SHALL be announced");
+        assert_eq!(
+            announced, "udid-other",
+            "the broadcast SHALL carry the device id that registered"
+        );
+        assert!(
+            state.get("udid-ours").is_none(),
+            "our device SHALL still be unregistered after a foreign registration"
+        );
+
+        // Ours registers next and resolves to its own, distinct port.
+        let our_port = state.allocate_port("udid-ours", "ios", "iPhone 17", "1");
+        let ours = state.get("udid-ours").expect("our device SHALL resolve");
+        assert_eq!(ours.port, our_port);
+        assert_ne!(
+            ours.port, other_port,
+            "two devices SHALL NOT share a companion port"
+        );
+        assert_eq!(
+            ours.device_id, "udid-ours",
+            "the resolved entry SHALL be keyed by our udid, not the other one"
+        );
+    }
+
     // 17. find_free_port_in_range returns the first bindable port in range.
     #[test]
     fn find_free_port_returns_port_in_range() {
