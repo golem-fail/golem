@@ -313,6 +313,8 @@ struct SubmitConfigFields {
     a11y_min_confidence_override: Option<f32>,
     rebuild: bool,
     no_build: bool,
+    dev: bool,
+    dev_port: u16,
     record: bool,
     no_record: bool,
     trace: bool,
@@ -381,6 +383,8 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     let a11y_min_confidence_override = cfg["a11y_min_confidence"].as_f64().map(|v| v as f32);
     let rebuild = cfg["rebuild"].as_bool().unwrap_or(false);
     let no_build = cfg["no_build"].as_bool().unwrap_or(false);
+    let dev = cfg["dev"].as_bool().unwrap_or(false);
+    let dev_port = cfg["dev_port"].as_u64().unwrap_or(8081) as u16;
     let record = cfg["record"].as_bool().unwrap_or(false);
     let no_record = cfg["no_record"].as_bool().unwrap_or(false);
     let trace = cfg["trace"].as_bool().unwrap_or(false);
@@ -421,6 +425,8 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         a11y_min_confidence_override,
         rebuild,
         no_build,
+        dev,
+        dev_port,
         record,
         no_record,
         trace,
@@ -476,6 +482,8 @@ async fn handle_submit(
         a11y_min_confidence_override,
         rebuild,
         no_build,
+        dev,
+        dev_port,
         record,
         no_record,
         trace,
@@ -545,6 +553,8 @@ async fn handle_submit(
         a11y_min_confidence_override,
         rebuild,
         no_build,
+        dev,
+        dev_port,
         device_settings: project_config.device_settings,
         record,
         no_record,
@@ -906,11 +916,26 @@ mod tests {
             "absent a11y_min_confidence SHALL be None"
         );
         assert!(!f.rebuild && !f.no_build && !f.record && !f.no_record && !f.trace);
+        assert!(!f.dev, "absent dev SHALL default false");
+        assert_eq!(
+            f.dev_port, 8081,
+            "absent dev_port SHALL default to Metro's 8081"
+        );
         assert_eq!(f.repeat, 1, "absent repeat SHALL default to 1");
         assert!(
             f.max_device_wait.is_none(),
             "absent max_device_wait SHALL be None"
         );
+    }
+
+    // A `--dev` run crosses the daemon socket as config JSON. The flag is
+    // useless to the server unless both halves agree on the key names, and a
+    // field added only to the client silently vanishes here.
+    #[test]
+    fn parse_submit_config_carries_dev_mode() {
+        let f = parse_submit_config(&serde_json::json!({"dev": true, "dev_port": 19000}));
+        assert!(f.dev, "dev SHALL survive the wire");
+        assert_eq!(f.dev_port, 19000, "dev_port SHALL survive the wire");
     }
 
     // 8. Platform strings map to the matching enum; unknown strings map to None.

@@ -946,6 +946,7 @@ dependencies = [
  "golem-runner",
  "golem-vars",
  "libc",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tempfile",

@@ -72,5 +72,6 @@ Codes appear in every output format:
 | `H429` | Port allocation exhausted |
 | `H501` | Flow uses `browse_*` but this golem was built `--no-default-features` (no `browser`) |
 | `H502` | Orchestrator socket / IPC failure |
+| `H503` | `--dev`: no dev server (Expo/Metro) answering — start it (`npx expo start`), or point `--dev-port` at the right port |
 | `H505` | The browser lacks a feature the flow needs (WebMCP) — upgrade it, or check `golem doctor` |
 | `X000` | Uncoded failure — unclassified, reached output without a domain tag |

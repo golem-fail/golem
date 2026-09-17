@@ -77,6 +77,11 @@ pub struct ExecutionContext<'a> {
     /// is the only correct teardown, so this is never dropped silently by a
     /// path that matters — `execute_flow_with_teardown` closes it explicitly.
     pub browser: std::sync::Arc<tokio::sync::Mutex<crate::browser::BrowserSlot>>,
+    /// `--dev`: this run iterates against a developer-run JS dev server, so a
+    /// launch waits on the bundler rather than on the device alone. Only the
+    /// app-lifecycle budget reads it — everything else about a dev run is
+    /// settled before the executor sees it.
+    pub dev: bool,
     /// Companion restart-and-reconnect hook. `Some` enables step-level,
     /// commit-aware recovery: on a companion death mid-flow the step loop
     /// restarts the companion and retries safely (see [`crate::recovery`]).
@@ -217,6 +222,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         inherited_record_default: false,
         extend_next_settle: AtomicBool::new(false),
         browser: Default::default(),
+        dev: false,
         recovery: None,
     }
 }
@@ -290,6 +296,7 @@ impl TestHarness {
             inherited_record_default: false,
             extend_next_settle: AtomicBool::new(false),
             browser: Default::default(),
+            dev: false,
             recovery: None,
         }
     }

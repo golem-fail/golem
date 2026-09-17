@@ -55,6 +55,9 @@ golem run [FILES...] [OPTIONS]
 | `--a11y-min-confidence <0.0–1.0>` | Override every flow's `a11y_min_confidence`: drop a11y findings below this confidence. `0` surfaces every heuristic finding, higher keeps only confident ones. Wins over `[flow.options]` and the level default. |
 | `--rebuild` | Bypass the persistent install cache for this run (rebuild + reinstall every app on every device). Cache is still written after a successful build, so the next run benefits. |
 | `--no-build` | Skip build+install entirely. If the device already has the bundle, golem trusts it and runs flows; if not, the flow fails loudly. The cache is left untouched. Use when iterating on flow files against a known-good binary. |
+| `--dev` | Iterate against a dev server you run yourself (Expo/Metro) instead of rebuilding per change. Implies `--no-build`. golem waits for the dev server, then each flow's relaunch re-fetches the current bundle — so a JS edit needs no rebuild or reinstall. golem never starts the bundler. |
+| `--dev-port <n>` | Port the `--dev` dev server listens on (default `8081`, Metro's) |
+| `--dev-wait <dur>` | How long `--dev` waits for the dev server before failing with `H503` (default `30s`; e.g. `2m`) |
 | `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) + cache hits/misses |
 | `--debug` | Show driver diagnostics (WebKit/CDP) and per-line install-script stderr |
 

@@ -19,6 +19,22 @@ use crate::policy::{execute_step_with_policy, StepOutcome};
 /// watchdog dispatch, and first-launch slowdowns without uncapping forever.
 const LIFECYCLE_TIMEOUT_MULTIPLIER: u64 = 5;
 
+/// The same budget under `--dev`. A launch against a JS dev server blocks on
+/// the bundler serving a bundle, and that cost scales with the app's module
+/// graph, not with the device — the ×5 budget is sized for a native launch and
+/// a cold Metro on a large app can outrun it. Raised rather than uncapped so a
+/// dev server that never answers still fails inside a run instead of hanging.
+const DEV_LIFECYCLE_TIMEOUT_MULTIPLIER: u64 = 18;
+
+/// How much of the per-step timeout an app-lifecycle stop/launch may take.
+pub(crate) fn lifecycle_timeout_multiplier(dev: bool) -> u64 {
+    if dev {
+        DEV_LIFECYCLE_TIMEOUT_MULTIPLIER
+    } else {
+        LIFECYCLE_TIMEOUT_MULTIPLIER
+    }
+}
+
 /// Fallback step-count ceiling for a flow when `[flow.options].max_steps` is unset.
 const DEFAULT_MAX_STEPS: u64 = 10_000;
 
@@ -324,8 +340,9 @@ pub async fn execute_flow<'a>(
     // still finishing its third probe. `× 5` gives headroom for
     // request-routing latency, the off-main watchdog dispatch, and
     // small first-launch slowdowns without uncapping forever.
-    let lifecycle_timeout =
-        std::time::Duration::from_millis(default_timeout_ms * LIFECYCLE_TIMEOUT_MULTIPLIER);
+    let lifecycle_timeout = std::time::Duration::from_millis(
+        default_timeout_ms * lifecycle_timeout_multiplier(ctx.dev),
+    );
     match lifecycle {
         golem_parser::AppLifecycle::Reset => {
             for app in apps {
@@ -572,6 +589,7 @@ pub async fn execute_flow<'a>(
                 // the child's own `[flow.options].record` if set.
                 inherited_record_default: ctx.inherited_record_default,
                 extend_next_settle: std::sync::atomic::AtomicBool::new(false),
+                dev: ctx.dev,
                 // Sub-flows share the parent's recovery hook so a companion
                 // death inside a run_flow child recovers the same way.
                 recovery: ctx.recovery,
@@ -2053,6 +2071,35 @@ mod tests {
     use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
+
+    // ── app-lifecycle budget ────────────────────────────────────────
+
+    #[test]
+    fn a_dev_run_gets_a_longer_launch_budget_than_a_native_one() {
+        assert!(
+            lifecycle_timeout_multiplier(true) > lifecycle_timeout_multiplier(false),
+            "a launch that waits on a bundler SHALL get more budget than one that does not"
+        );
+    }
+
+    #[test]
+    fn a_non_dev_run_keeps_the_native_launch_budget() {
+        // Pinned so the dev path can be widened without quietly stretching
+        // every other run's launch timeout with it.
+        assert_eq!(lifecycle_timeout_multiplier(false), 5);
+    }
+
+    #[test]
+    fn the_dev_launch_budget_stays_bounded() {
+        // A dev server that accepts the connection and then never serves a
+        // bundle must still fail the flow rather than hang it: at the default
+        // 10s step timeout this caps a launch at three minutes.
+        assert_eq!(
+            10_000 * lifecycle_timeout_multiplier(true),
+            180_000,
+            "the dev launch budget SHALL stay a bounded multiple of the step timeout"
+        );
+    }
 
     // ── startup ANR clear ───────────────────────────────────────────
     fn anr_button(text: &str, x: i32, clickable: bool) -> Element {
@@ -4413,6 +4460,7 @@ action = "screenshot"
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
             browser: Default::default(),
+            dev: false,
             recovery: None,
         };
 
@@ -4486,6 +4534,7 @@ action = "screenshot"
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
             browser: Default::default(),
+            dev: false,
             recovery: None,
         };
 
@@ -4568,6 +4617,7 @@ action = "screenshot"
             inherited_record_default: false,
             extend_next_settle: std::sync::atomic::AtomicBool::new(false),
             browser: Default::default(),
+            dev: false,
             recovery: None,
         };
 
