@@ -297,11 +297,24 @@ pub fn format_suite(report: &SuiteReport) -> String {
                         .all(|s| matches!(s.outcome, StepOutcome::Skipped)))
         })
         .count();
+    // Failures whose app never installed. Reported separately so a broken
+    // install reads as one root cause rather than N independent defects.
+    let install_blocked = report
+        .flows
+        .iter()
+        .filter(|f| f.is_failed() && f.first_failure_code.is_some_and(|c| c.is_install_blocked()))
+        .count();
+    let blocked_suffix = if install_blocked > 0 {
+        format!(" ({install_blocked} blocked by a failed install)")
+    } else {
+        String::new()
+    };
+
     let timing = format_duration(report.total_duration_ms);
 
     let _ = writeln!(
         out,
-        "Suite: {total_flows_passed} passed, {total_flows_failed} failed, {total_flows_skipped} skipped  [{timing}]"
+        "Suite: {total_flows_passed} passed, {total_flows_failed} failed{blocked_suffix}, {total_flows_skipped} skipped  [{timing}]"
     );
 
     out
@@ -1150,6 +1163,71 @@ mod tests {
         assert!(
             out.contains("0 passed, 0 failed, 1 skipped"),
             "SHALL classify as skipped"
+        );
+    }
+
+    // 20b. A flow whose app never installed is counted, and called out, as
+    //      blocked — several of them share one root cause.
+
+    fn failed_flow(name: &str, code: Option<golem_events::FailureCode>) -> FlowReport {
+        FlowReport {
+            first_failure_code: code,
+            a11y_audits: vec![],
+            flow_name: name.to_string(),
+            success: false,
+            step_results: vec![],
+            warnings: vec![],
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
+    #[test]
+    fn suite_calls_out_failures_blocked_by_an_install() {
+        let suite = SuiteReport {
+            flows: vec![
+                failed_flow("a", Some(golem_events::FailureCode::AppInstallFailed)),
+                failed_flow("b", Some(golem_events::FailureCode::AppInstallFailed)),
+                failed_flow("c", Some(golem_events::FailureCode::FlowAssertionMismatch)),
+            ],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+        let out = format_suite(&suite);
+        assert!(
+            out.contains("0 passed, 3 failed (2 blocked by a failed install), 0 skipped"),
+            "install-blocked failures SHALL be called out alongside the total: {out}"
+        );
+    }
+
+    #[test]
+    fn suite_omits_the_blocked_note_when_every_failure_ran() {
+        let suite = SuiteReport {
+            flows: vec![failed_flow(
+                "a",
+                Some(golem_events::FailureCode::FlowAssertionMismatch),
+            )],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+        let out = format_suite(&suite);
+        assert!(
+            out.contains("0 passed, 1 failed, 0 skipped"),
+            "a genuine failure SHALL NOT gain a blocked note: {out}"
         );
     }
 

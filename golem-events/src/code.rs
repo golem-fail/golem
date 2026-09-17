@@ -248,6 +248,21 @@ impl FailureCode {
         }
     }
 
+    /// True for the codes that mean the app never reached the device, as
+    /// distinct from a flow that ran and failed.
+    ///
+    /// Narrower than `Domain::App`, which also covers a running app's
+    /// lifecycle and state queries. One broken install blocks every flow
+    /// that references the app, so a suite summary that counts those
+    /// separately reports one root cause instead of N defects.
+    pub fn is_install_blocked(self) -> bool {
+        use FailureCode::*;
+        matches!(
+            self,
+            AppInstallPathBlocked | AppInstallScriptNotFound | AppInstallTimeout | AppInstallFailed
+        )
+    }
+
     pub fn number(self) -> u16 {
         use FailureCode::*;
         match self {
@@ -365,6 +380,35 @@ pub fn clean_msg(e: &anyhow::Error) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    // is_install_blocked is narrower than Domain::App: it marks "the app never
+    // reached the device", not "the app misbehaved once running".
+    #[test]
+    fn install_blocked_covers_only_the_pre_run_install_codes() {
+        use FailureCode::*;
+        for code in [
+            AppInstallPathBlocked,
+            AppInstallScriptNotFound,
+            AppInstallTimeout,
+            AppInstallFailed,
+        ] {
+            assert!(
+                code.is_install_blocked(),
+                "{code:?} SHALL count as install-blocked"
+            );
+        }
+        for code in [
+            AppStateQueryFailed,
+            AppLifecycleFailed,
+            FlowAssertionMismatch,
+            DeviceNotFound,
+        ] {
+            assert!(
+                !code.is_install_blocked(),
+                "{code:?} SHALL NOT count as install-blocked — the app was on the device"
+            );
+        }
+    }
     use super::*;
     use anyhow::anyhow;
 

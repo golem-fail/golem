@@ -257,6 +257,12 @@ pub async fn stream_human(
     // grand total appended to the final Summary line.
     let mut a11y_by_device: HashMap<String, (usize, usize)> = HashMap::new();
     let mut a11y_suite_total: (usize, usize) = (0, 0);
+    // Flows blocked by a failed install. Counted as the flows resolve, since
+    // `SuiteFinished` carries only totals. Both paths can produce one: a flow
+    // that never started (`FlowCouldNotRun`, the usual case — the install
+    // failed for an earlier flow and this one is keyed to the same
+    // `(device, bundle)`) and a flow that finished carrying an install code.
+    let mut install_blocked: usize = 0;
 
     while let Ok(event) = rx.recv().await {
         let ts = format_timestamp(event.wall_time, use_color);
@@ -668,6 +674,9 @@ pub async fn stream_human(
                 // flow-level abort code (e.g. EF504 max_runtime / EF508 max_steps),
                 // which has no owning step to carry it.
                 let failed_code = first_fail_code.remove(&event.device_id.0).or(*code);
+                if !*success && failed_code.is_some_and(|c| c.is_install_blocked()) {
+                    install_blocked += 1;
+                }
                 let code_str = match failed_code {
                     Some(c) if !*success => {
                         let r = c.render(golem_events::Severity::Error);
@@ -708,10 +717,19 @@ pub async fn stream_human(
                 } else {
                     String::new()
                 };
+                // One broken install can fail a dozen flows; saying how many
+                // stops that reading as a dozen separate defects.
+                let blocked_suffix = if install_blocked > 0 {
+                    format!(" ({install_blocked} blocked by a failed install)")
+                } else {
+                    String::new()
+                };
                 let kw = keyword("Summary", BOLD_GREEN, use_color);
                 let dur = fmt_dur(*duration_ms, use_color);
                 let a11y = a11y_rollup(a11y_suite_total.0, a11y_suite_total.1, use_color);
-                eprintln!("{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}{a11y}");
+                eprintln!(
+                    "{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}{blocked_suffix}{a11y}"
+                );
             }
             EventKind::InstallStarted {
                 app_name,
@@ -815,6 +833,9 @@ pub async fn stream_human(
             } => {
                 // The flow never ran — render FAIL with its code, matching the
                 // report files and exit code.
+                if code.is_install_blocked() {
+                    install_blocked += 1;
+                }
                 let kw = keyword("FAIL", BOLD_RED, use_color);
                 let name = fmt_flow_name(flow_name, use_color);
                 let rendered = code.render(golem_events::Severity::Error);
