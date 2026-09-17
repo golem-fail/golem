@@ -39,13 +39,14 @@ pub fn dev_bundle_error(root: &Element) -> Option<String> {
     Some(first_line(title))
 }
 
-/// The innermost node containing both footer buttons — the overlay itself
-/// rather than whatever window it was mounted in.
+/// The innermost node holding the whole overlay — both footer buttons *and*
+/// the message — rather than whatever window it was mounted in.
+///
+/// RN puts the buttons in their own row beside the message, so "innermost node
+/// containing both buttons" is that row and has no message in it. Requiring a
+/// message too stops the descent one level higher, at the overlay itself.
 fn overlay_root(node: &Element) -> Option<&Element> {
-    let (mut dismiss, mut reload) = (false, false);
-    let mut texts = Vec::new();
-    collect(node, &mut dismiss, &mut reload, &mut texts);
-    if !(dismiss && reload) {
+    if !is_overlay(node) {
         return None;
     }
     for child in &node.children {
@@ -54,6 +55,18 @@ fn overlay_root(node: &Element) -> Option<&Element> {
         }
     }
     Some(node)
+}
+
+/// Whether this subtree holds a complete overlay: both buttons and a message.
+fn is_overlay(node: &Element) -> bool {
+    let (mut dismiss, mut reload) = (false, false);
+    let mut texts = Vec::new();
+    collect(node, &mut dismiss, &mut reload, &mut texts);
+    dismiss
+        && reload
+        && texts
+            .iter()
+            .any(|t| !is_dismiss(t) && !is_reload(t) && !t.trim().is_empty())
 }
 
 /// First non-button text in document order. RN renders the title above the
@@ -126,18 +139,34 @@ mod tests {
         }
     }
 
-    /// The three overlays observed on device, verbatim (Expo 57 / RN 0.86,
-    /// Android emulator) — the stack frames are trimmed for brevity.
+    /// An overlay in the shape a device actually produces (Expo 57 / RN 0.86,
+    /// Android emulator): the message in a ListView, the buttons in their own
+    /// row beside it, both under the overlay container. The nesting is
+    /// load-bearing — a flat fixture cannot tell `overlay_root` from the
+    /// button row.
     fn redbox(title: &str) -> Element {
         node(
-            "FrameLayout",
+            "LinearLayout",
             None,
             vec![
-                node("TextView", Some(title), vec![]),
-                node("TextView", Some("loadJSBundleFromAssets"), vec![]),
-                node("TextView", Some("ReactInstance.kt:86"), vec![]),
-                node("Button", Some("DISMISS\n(ESC)"), vec![]),
-                node("Button", Some("RELOAD\n(R,\u{a0}R)"), vec![]),
+                node(
+                    "ListView",
+                    None,
+                    vec![
+                        node("TextView", Some(title), vec![]),
+                        node("TextView", Some("loadJSBundleFromAssets"), vec![]),
+                        node("TextView", Some("ReactInstance.kt:86"), vec![]),
+                    ],
+                ),
+                node("LinearLayout", None, vec![]),
+                node(
+                    "LinearLayout",
+                    None,
+                    vec![
+                        node("Button", Some("DISMISS\n(ESC)"), vec![]),
+                        node("Button", Some("RELOAD\n(R,\u{a0}R)"), vec![]),
+                    ],
+                ),
             ],
         )
     }
@@ -266,10 +295,19 @@ mod tests {
 
     #[test]
     fn the_overlay_is_found_however_deeply_it_is_nested() {
+        // The real tree wraps it in four containers before the overlay itself.
         let deep = node(
-            "A",
+            "FrameLayout",
             None,
-            vec![node("B", None, vec![redbox("SyntaxError: x")])],
+            vec![node(
+                "LinearLayout",
+                None,
+                vec![node(
+                    "FrameLayout",
+                    None,
+                    vec![node("LinearLayout", None, vec![redbox("SyntaxError: x")])],
+                )],
+            )],
         );
         assert_eq!(dev_bundle_error(&deep).as_deref(), Some("SyntaxError: x"));
     }

@@ -628,15 +628,27 @@ mod tests {
         root
     }
 
+    fn container(children: Vec<golem_element::Element>) -> golem_element::Element {
+        let mut n = text_node("LinearLayout", "");
+        n.text = None;
+        n.children = children;
+        n
+    }
+
+    /// The overlay in the nesting a device actually produces — message and
+    /// buttons in separate rows. A flat stand-in would not exercise the part
+    /// of the detector that has to find the container holding both.
     fn redbox_tree() -> golem_element::Element {
-        tree(vec![
-            text_node(
+        tree(vec![container(vec![
+            container(vec![text_node(
                 "TextView",
                 "SyntaxError: /p/App.tsx: Unexpected token (9:15)",
-            ),
-            text_node("Button", "DISMISS\n(ESC)"),
-            text_node("Button", "RELOAD\n(R,\u{a0}R)"),
-        ])
+            )]),
+            container(vec![
+                text_node("Button", "DISMISS\n(ESC)"),
+                text_node("Button", "RELOAD\n(R,\u{a0}R)"),
+            ]),
+        ])])
     }
 
     #[test]
