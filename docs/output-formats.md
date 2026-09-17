@@ -45,6 +45,8 @@ Scroll substeps show the strategy number (1-5 per direction), swipe coordinates,
 
 Structured JSON with suite summary, per-flow results, step details, substeps, and performance snapshots. Printed to stdout (also written to `{output-dir}/results.json`).
 
+The suite summary carries `install_blocked` alongside `total` / `passed` / `failed` / `skipped`: the subset of `failed` whose app never installed. One broken install fails every flow that references it, so CI can tell a batch of blocked flows from a batch of real regressions.
+
 ## `junit`
 
 JUnit XML for CI systems (Jenkins, GitHub Actions, GitLab CI). Each flow maps to a `<testsuite>`, each step to a `<testcase>`. Printed to stdout (also written to `{output-dir}/results.xml`).
@@ -59,3 +61,5 @@ S:tap_test d:450 seed:847291036
  +assert_visible:1 120
 R:PASS 2/0/0
 ```
+
+The closing `total:` line reads `total:N×pass,N×fail,N×skip d:duration`, gaining a `,N×blocked` token — a subset of `fail` — when flows failed because their app never installed.

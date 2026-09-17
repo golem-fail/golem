@@ -299,11 +299,7 @@ pub fn format_suite(report: &SuiteReport) -> String {
         .count();
     // Failures whose app never installed. Reported separately so a broken
     // install reads as one root cause rather than N independent defects.
-    let install_blocked = report
-        .flows
-        .iter()
-        .filter(|f| f.is_failed() && f.first_failure_code.is_some_and(|c| c.is_install_blocked()))
-        .count();
+    let install_blocked = crate::install_blocked_count(&report.flows);
     let blocked_suffix = if install_blocked > 0 {
         format!(" ({install_blocked} blocked by a failed install)")
     } else {
