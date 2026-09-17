@@ -1054,6 +1054,29 @@ mod tests {
         assert_eq!(dy, -10);
     }
 
+    #[test]
+    fn webview_offset_subtracts_css_inset_and_viewport_horizontally() {
+        // The horizontal axis has no native/CSS split to reconcile: a landscape
+        // notch inset is reported by CSS only, so `css_safe_area_left` is what
+        // gets subtracted, along with any horizontal visual-viewport shift.
+        let (dx, _) = webview_screen_offset(100, 0, 44, 0, 0, 6, 0);
+        assert_eq!(
+            dx, 50,
+            "dx SHALL be webview_left - css_safe_area_left - vv_offset_left"
+        );
+    }
+
+    #[test]
+    fn webview_offset_is_identity_without_insets_or_viewport_shift() {
+        // The common case — no safe area, no keyboard — must not move anything.
+        let (dx, dy) = webview_screen_offset(12, 34, 0, 0, 0, 0, 0);
+        assert_eq!(
+            (dx, dy),
+            (12, 34),
+            "a plain webview SHALL offset by its own origin only"
+        );
+    }
+
     // 1. build_rpc nests the selector and argument dictionary under the
     //    expected `__selector` / `__argument` keys.
     #[test]
