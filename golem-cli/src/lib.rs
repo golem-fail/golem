@@ -262,6 +262,18 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                         waited.as_secs_f64()
                     );
                 }
+                // A bundle that doesn't build is the other way a dev run is
+                // doomed before it starts, and the only one visible on iOS —
+                // there the error overlay renders nothing golem can see, so
+                // asking the bundler is the only way to know. Checked here
+                // rather than per failing step so the run stops at the first
+                // sign instead of failing every flow against a blank app, and
+                // so a healthy run pays for it once.
+                dev_server::check_bundle(
+                    args.dev_port,
+                    effective_platform.as_deref().unwrap_or("android"),
+                )
+                .await?;
             }
 
             // Unified submit path: connect to an existing daemon if

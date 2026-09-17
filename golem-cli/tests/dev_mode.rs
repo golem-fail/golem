@@ -27,8 +27,22 @@ struct FakeBundler {
     shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
+/// Metro's 500 body for a file that doesn't parse, as captured from
+/// `test-app-e`. Kept here in the shape the CLI will actually receive.
+const TRANSFORM_ERROR_BODY: &str = "{\"type\":\"TransformError\",\"lineNumber\":9,\"column\":15,\"filename\":\"App.tsx\",\"name\":\"SyntaxError\",\"message\":\"SyntaxError: /p/App.tsx: Unexpected token (9:15)\"}";
+
 impl FakeBundler {
+    /// A bundler whose app builds cleanly.
     fn start() -> Self {
+        Self::with_bundle_health(true)
+    }
+
+    /// A bundler that is up and healthy but cannot build the app's bundle.
+    fn start_with_broken_bundle() -> Self {
+        Self::with_bundle_health(false)
+    }
+
+    fn with_bundle_health(bundle_ok: bool) -> Self {
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loopback");
         let port = listener.local_addr().expect("addr").port();
@@ -43,13 +57,26 @@ impl FakeBundler {
             while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut sock, _)) => {
-                        let mut buf = [0u8; 1024];
+                        let mut buf = [0u8; 2048];
                         let _ = sock.set_nonblocking(false);
-                        let _ = sock.read(&mut buf);
-                        let _ = sock.write_all(
-                            b"HTTP/1.1 200 OK\r\nContent-Length: 23\r\nConnection: close\r\n\r\n\
-                              packager-status:running",
-                        );
+                        let n = sock.read(&mut buf).unwrap_or(0);
+                        let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let resp = if req.contains("/status") {
+                            "HTTP/1.1 200 OK\r\nContent-Length: 23\r\nConnection: close\r\n\r\n\
+                             packager-status:running"
+                                .to_string()
+                        } else if bundle_ok {
+                            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                                .to_string()
+                        } else {
+                            format!(
+                                "HTTP/1.1 500 Internal Server Error\r\n\
+                                 Content-Type: application/json\r\nContent-Length: {}\r\n\
+                                 Connection: close\r\n\r\n{TRANSFORM_ERROR_BODY}",
+                                TRANSFORM_ERROR_BODY.len()
+                            )
+                        };
+                        let _ = sock.write_all(resp.as_bytes());
                         let _ = sock.flush();
                     }
                     Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
@@ -126,6 +153,34 @@ fn dev_fails_with_an_actionable_message_when_no_dev_server_answers() {
     assert!(
         !r.stderr.contains("EF408"),
         "a missing dev server SHALL NOT read as a step timeout; stderr={}",
+        r.stderr
+    );
+}
+
+#[test]
+fn a_bundle_that_does_not_build_fails_before_any_flow_runs() {
+    // The iOS case has no other signal: there the error overlay renders
+    // nothing golem's tree or a screenshot can see, so the bundler's own
+    // answer is the only evidence that exists.
+    let bundler = FakeBundler::start_with_broken_bundle();
+    let r = run_stub("", &["--dev", "--dev-port", &bundler.port_arg()]);
+
+    assert_eq!(r.code, 1, "a broken bundle SHALL fail the run");
+    assert!(
+        r.stderr.contains("Unexpected token (9:15)"),
+        "the developer's own error SHALL be quoted; stderr={}",
+        r.stderr
+    );
+    assert!(
+        r.stderr.contains("cannot build"),
+        "the message SHALL say what went wrong; stderr={}",
+        r.stderr
+    );
+    // Failing up front is the point: running every flow against a blank app
+    // would bury the one line that explains it.
+    assert!(
+        !r.stderr.contains("PASS") && !r.stderr.contains("NG "),
+        "no flow SHALL have run; stderr={}",
         r.stderr
     );
 }

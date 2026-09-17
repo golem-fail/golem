@@ -128,6 +128,12 @@ pub enum FailureCode {
     AppInstallTimeout,
     /// A500: install failed (non-zero exit).
     AppInstallFailed,
+    /// A501: the app under test is showing a dev-server error overlay (an RN
+    /// redbox) instead of its UI — a broken JS bundle, not a broken test. Its
+    /// own code because the alternative is F404/F408 blaming the flow for an
+    /// app that never rendered. App rather than Host: under `--dev` the
+    /// bundler answered, and the code it served is what's wrong.
+    AppDevBundleError,
     /// A502: app state query failed (post-install verify).
     AppStateQueryFailed,
     /// A503: app launch or stop failed.
@@ -231,6 +237,7 @@ impl FailureCode {
             | AppInstallScriptNotFound
             | AppInstallTimeout
             | AppInstallFailed
+            | AppDevBundleError
             | AppStateQueryFailed
             | AppLifecycleFailed => Domain::App,
             DeviceNotFound
@@ -294,6 +301,7 @@ impl FailureCode {
             AppInstallScriptNotFound => 404,
             AppInstallTimeout => 408,
             AppInstallFailed => 500,
+            AppDevBundleError => 501,
             AppStateQueryFailed => 502,
             AppLifecycleFailed => 503,
             DeviceNotFound => 404,
@@ -407,6 +415,10 @@ mod tests {
         for code in [
             AppStateQueryFailed,
             AppLifecycleFailed,
+            // A broken bundle is not a blocked install: the app is on the
+            // device, it just can't render. Counting it would inflate the
+            // "N blocked by a failed install" summary with dev-loop typos.
+            AppDevBundleError,
             FlowAssertionMismatch,
             DeviceNotFound,
         ] {
