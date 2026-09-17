@@ -182,16 +182,11 @@ fn daemon_and_in_process_agree_on_a_failing_run() {
 // coverage-strategy fan-out
 // ---------------------------------------------------------------------------
 
-/// Run the two-axis coverage fixture under one strategy. No `--platform`
-/// override: the point is what the flow's own axes expand into.
+/// Run the two-axis coverage fixture under one strategy.
 fn run_coverage(strategy: &str) -> (RunResult, serde_json::Value) {
-    let r = run_stub_opts(
+    let r = run_stub(
         "",
         &["--flow", "coverage.test.toml", "--coverage", strategy],
-        StubOpts {
-            no_platform_override: true,
-            ..Default::default()
-        },
     );
     assert_eq!(
         r.code, 0,
@@ -205,7 +200,10 @@ fn run_coverage(strategy: &str) -> (RunResult, serde_json::Value) {
 #[test]
 fn coverage_full_runs_every_axis() {
     let (_r, v) = run_coverage("full");
-    assert_eq!(v["suite"]["total"], 2, "two os axes SHALL plan two runs");
+    assert_eq!(
+        v["suite"]["total"], 2,
+        "two device axes SHALL plan two runs"
+    );
     assert_eq!(v["suite"]["passed"], 2, "full SHALL run both; json={v}");
     assert_eq!(
         v["suite"]["skipped"], 0,
@@ -256,14 +254,14 @@ fn coverage_one_stops_after_the_first_success() {
 }
 
 #[test]
-fn coverage_smart_still_ticks_both_platforms() {
-    // `smart` stops early only once every coverage box is ticked, and android
-    // and ios are different boxes — so unlike `one` it runs both. Pinning this
-    // keeps the two strategies from quietly collapsing into each other.
+fn coverage_smart_still_ticks_both_device_types() {
+    // `smart` stops early only once every coverage box is ticked, and phone
+    // and tablet are different boxes — so unlike `one` it runs both. Pinning
+    // this keeps the two strategies from quietly collapsing into each other.
     let (_r, v) = run_coverage("smart");
     assert_eq!(
         v["suite"]["passed"], 2,
-        "smart SHALL cover both platforms; json={v}"
+        "smart SHALL cover both device types; json={v}"
     );
     assert_eq!(
         v["suite"]["skipped"], 0,

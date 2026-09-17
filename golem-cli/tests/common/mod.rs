@@ -135,9 +135,12 @@ steps = [
 }
 
 /// A flow with two device axes, so the plan fans it out into one FlowRun per
-/// axis. Coverage strategy then decides how many of those actually run —
-/// which is the thing under test, so this flow must NOT be run with a
-/// `--platform` override (see [`StubOpts::no_platform_override`]).
+/// axis. Coverage strategy then decides how many of those actually run.
+///
+/// The axes are two device *types* on one platform, not two platforms: on a
+/// non-macOS host a bare run is defaulted to `--platform android` (iOS can't
+/// be driven there), which would collapse a platform-axis fixture to a single
+/// run and make these tests pass or fail by host OS.
 pub fn coverage_flow() -> String {
     format!(
         r#"[flow]
@@ -152,8 +155,8 @@ perf = false
 name = "app"
 bundle = "{bundle}"
 [[flow.apps.devices]]
-os = ["android:latest", "ios:latest"]
-type = "phone"
+os = "android:latest"
+type = ["phone", "tablet"]
 
 [[block]]
 name = "check"
@@ -216,9 +219,6 @@ pub struct StubOpts {
     /// than letting the CLI spin up its own server and self-connect. Both are
     /// production paths; this is what tells them apart.
     pub daemon: bool,
-    /// Drop the `--platform android` override, so a flow's own device axes
-    /// survive into the plan (what coverage fan-out is about).
-    pub no_platform_override: bool,
 }
 
 /// `run_stub` with the knobs exposed. See [`StubOpts`].
@@ -272,10 +272,8 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
         "--stub".into(),
         "stub.toml".into(),
     ];
-    if !opts.no_platform_override {
-        argv.push("--platform".into());
-        argv.push("android".into());
-    }
+    argv.push("--platform".into());
+    argv.push("android".into());
     argv.extend(extra_args.iter().map(|s| s.to_string()));
     let cli = golem_cli::cli::Cli::parse_from(&argv);
 
