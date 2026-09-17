@@ -2,7 +2,7 @@ use crate::seed::FakeRng;
 use crate::sentence_loader::sentence_database;
 use crate::{GeneratorDef, VarError, VarValue};
 use chrono::{DateTime, Duration, Months, Utc};
-use rand::Rng;
+use rand::RngExt;
 use uuid::Uuid;
 
 /// Generate a simple (non-structured) fake value from a generator definition.
@@ -25,16 +25,16 @@ pub fn generate_simple(def: &GeneratorDef, rng: &mut FakeRng) -> Result<VarValue
 /// Params:
 /// - `prefix`: prepended to the random part (e.g. "test+" produces "test+abc123@example.com")
 /// - `domain`: replaces "example.com"
-fn generate_email(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+fn generate_email(def: &GeneratorDef, rng: &mut impl RngExt) -> Result<VarValue, VarError> {
     let charset: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
     // 10–14 chars from a 36-char set ≈ 52–72 bits of entropy — comfortably
     // collision-free for golem's scale (well under a few thousand addresses a
     // day, often with test-data cleanup), without producing absurdly long
     // locals. Use `prefix=user+` for real-inbox plus-addressing.
-    let len = rng.gen_range(10..=14);
+    let len = rng.random_range(10..=14);
     let random_part: String = (0..len)
         .map(|_| {
-            let idx = rng.gen_range(0..charset.len());
+            let idx = rng.random_range(0..charset.len());
             charset[idx] as char
         })
         .collect();
@@ -55,7 +55,7 @@ fn generate_email(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, Va
 /// Params:
 /// - `length`: desired length (default 12)
 /// - `symbols`: "true" or "false" (default "true") — whether to include symbols
-fn generate_password(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+fn generate_password(def: &GeneratorDef, rng: &mut impl RngExt) -> Result<VarValue, VarError> {
     let length: usize = def
         .params
         .get("length")
@@ -85,7 +85,7 @@ fn generate_password(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue,
 
     let password: String = (0..length)
         .map(|_| {
-            let idx = rng.gen_range(0..charset.len());
+            let idx = rng.random_range(0..charset.len());
             charset[idx] as char
         })
         .collect();
@@ -96,8 +96,8 @@ fn generate_password(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue,
 /// Generate a v4 UUID string from the seeded RNG, so `${fake:uuid}` reproduces
 /// under `--seed N` like every other generator — `Uuid::new_v4` would instead
 /// draw OS entropy and break determinism.
-fn generate_uuid(rng: &mut impl Rng) -> Result<VarValue, VarError> {
-    let bytes: [u8; 16] = rng.gen();
+fn generate_uuid(rng: &mut impl RngExt) -> Result<VarValue, VarError> {
+    let bytes: [u8; 16] = rng.random();
     // `from_random_bytes` sets the v4 version and RFC 4122 variant bits.
     let id: Uuid = uuid::Builder::from_random_bytes(bytes).into_uuid();
     Ok(VarValue::String(id.to_string()))
@@ -108,7 +108,7 @@ fn generate_uuid(rng: &mut impl Rng) -> Result<VarValue, VarError> {
 /// Params:
 /// - `min`: minimum value (default 0)
 /// - `max`: maximum value (default 100)
-fn generate_number(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+fn generate_number(def: &GeneratorDef, rng: &mut impl RngExt) -> Result<VarValue, VarError> {
     let min: i64 = def
         .params
         .get("min")
@@ -135,7 +135,7 @@ fn generate_number(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, V
         )));
     }
 
-    let n = rng.gen_range(min..=max);
+    let n = rng.random_range(min..=max);
     Ok(VarValue::String(n.to_string()))
 }
 
@@ -143,7 +143,7 @@ fn generate_number(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, V
 /// `${fake:one_of(free|pro|enterprise)}`. Choices are the generator's
 /// positional args, each further split on `|`, so both `one_of(a|b|c)` and
 /// `one_of(a, b, c)` work. The pick is seeded like every other generator.
-fn generate_one_of(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+fn generate_one_of(def: &GeneratorDef, rng: &mut impl RngExt) -> Result<VarValue, VarError> {
     let choices: Vec<&str> = def
         .positional
         .iter()
@@ -158,7 +158,7 @@ fn generate_one_of(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, V
         ));
     }
 
-    let pick = choices[rng.gen_range(0..choices.len())];
+    let pick = choices[rng.random_range(0..choices.len())];
     Ok(VarValue::String(pick.to_string()))
 }
 
@@ -170,7 +170,7 @@ fn generate_one_of(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, V
 /// chosen and its `{slot}` placeholders filled with seeded random words — all
 /// joining / punctuation / script behaviour lives in the data
 /// (`data/sentences/*.json`), so this engine is language-agnostic.
-fn generate_sentence(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+fn generate_sentence(def: &GeneratorDef, rng: &mut impl RngExt) -> Result<VarValue, VarError> {
     let lang = def
         .params
         .get("language")
@@ -184,7 +184,7 @@ fn generate_sentence(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue,
     if data.patterns.is_empty() {
         return Err(VarError::Other(format!("no sentence patterns for {lang}")));
     }
-    let pattern = &data.patterns[rng.gen_range(0..data.patterns.len())];
+    let pattern = &data.patterns[rng.random_range(0..data.patterns.len())];
 
     // Fill each `{slot}` with a random word from that slot's list.
     let mut result = String::with_capacity(pattern.len());
@@ -202,7 +202,7 @@ fn generate_sentence(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue,
             .ok_or_else(|| {
                 VarError::Other(format!("sentence slot {{{slot}}} has no words ({lang})"))
             })?;
-        result.push_str(&words[rng.gen_range(0..words.len())]);
+        result.push_str(&words[rng.random_range(0..words.len())]);
         rest = &rest[open + close + 1..];
     }
     result.push_str(rest);
@@ -279,7 +279,7 @@ fn generate_timestamp(def: &GeneratorDef, rng: &mut FakeRng) -> Result<VarValue,
     let end = sub_years(anchor, min_years);
 
     let span_secs = (end - start).num_seconds().max(1);
-    let offset_secs = rng.gen_range(0..span_secs);
+    let offset_secs = rng.random_range(0..span_secs);
     let ts = start + Duration::seconds(offset_secs);
 
     Ok(VarValue::object(vec![

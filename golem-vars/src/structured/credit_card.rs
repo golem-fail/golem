@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use chrono::Datelike;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::card_loader::{card_database, find_cards, CardConfig, ProviderFile};
 use crate::seed::FakeRng;
@@ -95,7 +95,7 @@ fn generate_random_card(params: &HashMap<String, String>, rng: &mut FakeRng) -> 
     let brand = if let Some(b) = brand_param {
         brand_by_name(b).ok_or_else(|| anyhow::anyhow!("unknown brand: {b}"))?
     } else {
-        let idx = rng.gen_range(0..CARD_BRANDS.len());
+        let idx = rng.random_range(0..CARD_BRANDS.len());
         &CARD_BRANDS[idx]
     };
 
@@ -171,7 +171,7 @@ fn generate_provider_card(
         bail!("no {provider} test card matches status: {status}");
     }
 
-    let card = matching[rng.gen_range(0..matching.len())];
+    let card = matching[rng.random_range(0..matching.len())];
 
     let resolved = resolve_card(card, pf, rng);
 
@@ -266,7 +266,7 @@ fn resolve_string(value: &str, brand_name: &str, rng: &mut FakeRng) -> String {
         // silently biasing every unknown card to Visa (`CARD_BRANDS[0]`).
         let brand = match brand_by_name(brand_name) {
             Some(b) => b,
-            None => &CARD_BRANDS[rng.gen_range(0..CARD_BRANDS.len())],
+            None => &CARD_BRANDS[rng.random_range(0..CARD_BRANDS.len())],
         };
         generate_luhn_number(brand.prefix, brand.length, rng)
     } else if value == "random_future" {
@@ -332,26 +332,26 @@ fn build_output(card: &ResolvedCard, provider: &str, status: &str) -> Result<Var
 /// seed-reproducible while a no-`--seed` run tracks the real current year.
 fn random_future_expiry(rng: &mut FakeRng) -> String {
     let anchor_year = rng.anchor().year();
-    let month: u32 = rng.gen_range(1..=12);
-    let year = (anchor_year + rng.gen_range(1..=5)) % 100;
+    let month: u32 = rng.random_range(1..=12);
+    let year = (anchor_year + rng.random_range(1..=5)) % 100;
     format!("{month:02}/{year:02}")
 }
 
-fn random_digits(len: usize, rng: &mut impl Rng) -> String {
+fn random_digits(len: usize, rng: &mut impl RngExt) -> String {
     (0..len)
-        .map(|_| char::from(b'0' + rng.gen_range(0..10u8)))
+        .map(|_| char::from(b'0' + rng.random_range(0..10u8)))
         .collect()
 }
 
 /// Generate a Luhn-valid credit card number with the given prefix and total length.
-pub(crate) fn generate_luhn_number(prefix: &str, length: usize, rng: &mut impl Rng) -> String {
+pub(crate) fn generate_luhn_number(prefix: &str, length: usize, rng: &mut impl RngExt) -> String {
     let mut digits: Vec<u8> = prefix
         .chars()
         .filter_map(|c| c.to_digit(10).map(|d| d as u8))
         .collect();
 
     while digits.len() < length - 1 {
-        digits.push(rng.gen_range(0..10));
+        digits.push(rng.random_range(0..10));
     }
 
     let check = luhn_check_digit(&digits);
@@ -1100,17 +1100,19 @@ mod tests {
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate paystack verve card");
         assert!(has_field(&result, "pin"), "SHALL surface pin field");
-        // Seed 42 deterministically selects the verve card numbered 507850785078507804,
-        // whose per-card pin literal is 0000; assert that concrete value flows through
+        // Seed 42 deterministically selects the verve card numbered 507850785078507812,
+        // whose per-card pin literal is 1111; assert that concrete value flows through
         // build_output (mirroring the otp test) rather than merely that a pin key exists.
+        // The pin asserted is the one belonging to THAT card — paystack's other verve
+        // card carries 0000 — so the pair also pins pin-to-card correlation.
         assert_eq!(
             field(&result, "number"),
-            "507850785078507804",
+            "507850785078507812",
             "seed 42 SHALL pick this verve card"
         );
         assert_eq!(
             field(&result, "pin"),
-            "0000",
+            "1111",
             "SHALL carry the card's pin literal"
         );
     }

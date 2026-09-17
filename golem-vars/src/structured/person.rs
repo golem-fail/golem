@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use anyhow::Result;
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 
 use crate::geo_loader::geo_database;
@@ -260,14 +260,14 @@ fn parse_repertoires(value: &str) -> Result<Vec<Repertoire>> {
 
 pub(crate) fn generate_person(
     params: &HashMap<String, String>,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> Result<VarValue> {
     let data = names_data();
     let country = params.get("country").map(|s| s.as_str());
 
     // Pick a given and a family name from the global pools.
-    let gi = rng.gen_range(0..data.given_names.len());
-    let fi = rng.gen_range(0..data.family_names.len());
+    let gi = rng.random_range(0..data.given_names.len());
+    let fi = rng.random_range(0..data.family_names.len());
     let given = &data.given_names[gi];
     let family = &data.family_names[fi];
 

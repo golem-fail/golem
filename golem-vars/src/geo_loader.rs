@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 
 use crate::script::ascii_fold;
@@ -326,10 +326,10 @@ impl GeoDatabase {
 
     /// Pick a random `GeoData` entry. Entries are sorted by ISO code for
     /// deterministic results with seeded RNGs.
-    pub(crate) fn random(&self, rng: &mut impl Rng) -> &GeoData {
+    pub(crate) fn random(&self, rng: &mut impl RngExt) -> &GeoData {
         let mut entries: Vec<&GeoData> = self.map.values().collect();
         entries.sort_by(|a, b| a.country.iso_code.cmp(&b.country.iso_code));
-        entries[rng.gen_range(0..entries.len())]
+        entries[rng.random_range(0..entries.len())]
     }
 }
 
@@ -350,8 +350,8 @@ pub(crate) fn geo_database() -> &'static GeoDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::ChaCha8Rng;
     use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
     fn seeded_rng() -> ChaCha8Rng {
         ChaCha8Rng::seed_from_u64(42)

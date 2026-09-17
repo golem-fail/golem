@@ -37,7 +37,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
-rand = "0.8"
+rand = { version = "0.10", features = ["chacha"] }
 reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "rustls-tls"] }
 chrono = "0.4"
 async-trait = "0.1"

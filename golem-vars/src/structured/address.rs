@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::geo::{
     expand_native_tokens, fill_ascii_tokens, fold_fullwidth_digits, tidy_ascii_spacing,
@@ -16,7 +16,7 @@ use crate::VarValue;
 
 pub(crate) fn generate_address(
     params: &HashMap<String, String>,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> Result<VarValue> {
     let state_filter = params.get("state").map(|s| s.as_str());
     let region_filter = params.get("region").map(|s| s.as_str());
@@ -49,7 +49,7 @@ fn generate_address_filtered(
     geo: &GeoData,
     state_filter: Option<&str>,
     region_filter: Option<&str>,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> Result<VarValue> {
     let matching: Vec<&GeoState> = geo
         .states
@@ -86,18 +86,18 @@ fn generate_address_filtered(
         );
     }
 
-    let state = matching[rng.gen_range(0..matching.len())];
+    let state = matching[rng.random_range(0..matching.len())];
     generate_address_from_state(geo, state, rng)
 }
 
-pub(crate) fn generate_address_from_geo(geo: &GeoData, rng: &mut impl Rng) -> Result<VarValue> {
+pub(crate) fn generate_address_from_geo(geo: &GeoData, rng: &mut impl RngExt) -> Result<VarValue> {
     // Pick a random state. Guard the empty pool rather than panicking in
     // `gen_range` — current data is non-empty (enforced by a geo-data
     // validation test), but a future country file shouldn't crash the run.
     if geo.states.is_empty() {
         anyhow::bail!("no states for country {}", geo.country.iso_code);
     }
-    let state_idx = rng.gen_range(0..geo.states.len());
+    let state_idx = rng.random_range(0..geo.states.len());
     let state = &geo.states[state_idx];
     generate_address_from_state(geo, state, rng)
 }
@@ -130,12 +130,12 @@ fn fill_placeholders(
 fn street_pair(
     pc: &GeoPostcode,
     markers: &HashMap<String, Marker>,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> (String, String) {
     // Resolve the chosen skeleton (one, or a random pick from the set).
     let skeleton = match &pc.pattern {
         Some(Pattern::One(s)) => Some(s.as_str()),
-        Some(Pattern::Many(v)) if !v.is_empty() => Some(v[rng.gen_range(0..v.len())].as_str()),
+        Some(Pattern::Many(v)) if !v.is_empty() => Some(v[rng.random_range(0..v.len())].as_str()),
         _ => None,
     };
 
@@ -150,7 +150,7 @@ fn street_pair(
             (native, ascii)
         }
         None => {
-            let num: u32 = rng.gen_range(1..200);
+            let num: u32 = rng.random_range(1..200);
             (
                 format!("{num} {}", pc.street),
                 format!("{num} {}", pc.ascii_street()),
@@ -165,7 +165,7 @@ fn street_pair(
 fn generate_address_from_state(
     geo: &GeoData,
     state: &GeoState,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> Result<VarValue> {
     // Pick a random city within the state (guard empty pools, don't panic).
     if state.cities.is_empty() {
@@ -175,7 +175,7 @@ fn generate_address_from_state(
             geo.country.iso_code
         );
     }
-    let city_idx = rng.gen_range(0..state.cities.len());
+    let city_idx = rng.random_range(0..state.cities.len());
     let city = &state.cities[city_idx];
 
     // Pick a random postcode entry.
@@ -186,7 +186,7 @@ fn generate_address_from_state(
             geo.country.iso_code
         );
     }
-    let pc_idx = rng.gen_range(0..city.postcodes.len());
+    let pc_idx = rng.random_range(0..city.postcodes.len());
     let postcode_entry = &city.postcodes[pc_idx];
 
     let (street_native, street_ascii) = street_pair(postcode_entry, &geo.country.markers, rng);
@@ -221,7 +221,7 @@ fn generate_address_from_state(
 }
 
 /// Generate an address by picking a random country from the geo database.
-pub(crate) fn generate_default_address(rng: &mut impl Rng) -> Result<VarValue> {
+pub(crate) fn generate_default_address(rng: &mut impl RngExt) -> Result<VarValue> {
     let geo = geo_database().random(rng);
     generate_address_from_geo(geo, rng)
 }

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::geo_loader::geo_database;
 use crate::{VarError, VarValue};
@@ -22,7 +22,7 @@ use crate::{VarError, VarValue};
 /// - `format`: custom format where `#` is replaced by a random digit
 pub fn generate_phone(
     params: &HashMap<String, String>,
-    rng: &mut impl Rng,
+    rng: &mut impl RngExt,
 ) -> Result<VarValue, VarError> {
     // Custom format takes precedence.
     if let Some(fmt) = params.get("format") {
@@ -45,7 +45,7 @@ pub fn generate_phone(
         )));
     }
 
-    let idx = rng.gen_range(0..geo.country.phone_formats.len());
+    let idx = rng.random_range(0..geo.country.phone_formats.len());
     let fmt = &geo.country.phone_formats[idx];
     Ok(VarValue::String(expand_format(fmt, rng)))
 }
@@ -60,7 +60,7 @@ pub fn generate_phone(
 /// `0-9` default, full-width `０-９`, Arabic-Indic `٠-٩`). A malformed token
 /// (no `}`, no comma, non-numeric bound) stops expansion, leaving the rest of
 /// the pattern verbatim — current data is well-formed, this only avoids panics.
-pub(crate) fn expand_native_tokens(pattern: &str, rng: &mut impl Rng) -> (String, Vec<u32>) {
+pub(crate) fn expand_native_tokens(pattern: &str, rng: &mut impl RngExt) -> (String, Vec<u32>) {
     let mut result = pattern.to_string();
     let mut nums = Vec::new();
     let mut from = 0usize;
@@ -85,7 +85,7 @@ pub(crate) fn expand_native_tokens(pattern: &str, rng: &mut impl Rng) -> (String
         // panicking in `gen_range(min..=max)`.
         let (min, max) = if min > max { (max, min) } else { (min, max) };
 
-        let num = rng.gen_range(min..=max);
+        let num = rng.random_range(min..=max);
         nums.push(num);
         let num_str = format_numerals(num, style);
 
@@ -242,11 +242,11 @@ fn format_numerals(n: u32, style: NumeralStyle) -> String {
 // ---------------------------------------------------------------------------
 
 /// Replace every `#` in a format string with a random digit 0-9.
-fn expand_format(fmt: &str, rng: &mut impl Rng) -> String {
+fn expand_format(fmt: &str, rng: &mut impl RngExt) -> String {
     fmt.chars()
         .map(|c| {
             if c == '#' {
-                char::from(b'0' + rng.gen_range(0..10u8))
+                char::from(b'0' + rng.random_range(0..10u8))
             } else {
                 c
             }
@@ -261,8 +261,8 @@ fn expand_format(fmt: &str, rng: &mut impl Rng) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::ChaCha8Rng;
     use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
     fn seeded_rng() -> ChaCha8Rng {
         ChaCha8Rng::seed_from_u64(42)

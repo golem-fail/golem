@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
-use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaCha8Rng;
+use rand::rngs::ChaCha8Rng;
+use rand::{Rng, SeedableRng, TryRng};
+use std::convert::Infallible;
 
 /// Bits of the 64-bit seed reserved for the time bucket (high bits); the
 /// remaining bits carry randomness.
@@ -49,8 +50,8 @@ fn pack_current_seed() -> u64 {
 /// Anchoring time-based generators (`timestamp`, card expiry, DOB) on this
 /// instead of `Utc::now()` keeps them seed-reproducible while a no-`--seed`
 /// run still tracks real "now" — the anchor rides inside the seed, so it can't
-/// drift between runs of the same seed. `FakeRng` implements [`RngCore`], so
-/// it is accepted anywhere an `impl Rng` is, leaving leaf generators generic.
+/// drift between runs of the same seed. `FakeRng` is an [`Rng`], so it is
+/// accepted anywhere an `impl RngExt` is, leaving leaf generators generic.
 pub struct FakeRng {
     seed: u64,
     anchor: DateTime<Utc>,
@@ -98,18 +99,20 @@ impl FakeRng {
     }
 }
 
-impl RngCore for FakeRng {
-    fn next_u32(&mut self) -> u32 {
-        self.inner.next_u32()
+// `Rng` is blanket-implemented for every infallible `TryRng`, so this is the
+// only impl to write — implementing `Rng` directly collides with that blanket.
+impl TryRng for FakeRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Infallible> {
+        Ok(self.inner.next_u32())
     }
-    fn next_u64(&mut self) -> u64 {
-        self.inner.next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Infallible> {
+        Ok(self.inner.next_u64())
     }
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.inner.fill_bytes(dest)
-    }
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        self.inner.try_fill_bytes(dest)
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Infallible> {
+        self.inner.fill_bytes(dest);
+        Ok(())
     }
 }
 
@@ -119,7 +122,7 @@ mod tests {
     use crate::generators::generate_simple;
     use crate::GeneratorDef;
     use chrono::{Datelike, Timelike};
-    use rand::Rng;
+    use rand::RngExt;
     use std::collections::HashMap;
 
     // 1. Same seed produces same RNG sequence
@@ -128,8 +131,8 @@ mod tests {
         let mut sm1 = FakeRng::from_seed(42);
         let mut sm2 = FakeRng::from_seed(42);
 
-        let vals1: Vec<u64> = (0..10).map(|_| sm1.gen()).collect();
-        let vals2: Vec<u64> = (0..10).map(|_| sm2.gen()).collect();
+        let vals1: Vec<u64> = (0..10).map(|_| sm1.random()).collect();
+        let vals2: Vec<u64> = (0..10).map(|_| sm2.random()).collect();
 
         assert_eq!(vals1, vals2, "same seed SHALL produce identical sequences");
     }
@@ -140,8 +143,8 @@ mod tests {
         let mut sm1 = FakeRng::from_seed(42);
         let mut sm2 = FakeRng::from_seed(99);
 
-        let vals1: Vec<u64> = (0..10).map(|_| sm1.gen()).collect();
-        let vals2: Vec<u64> = (0..10).map(|_| sm2.gen()).collect();
+        let vals1: Vec<u64> = (0..10).map(|_| sm1.random()).collect();
+        let vals2: Vec<u64> = (0..10).map(|_| sm2.random()).collect();
 
         assert_ne!(
             vals1, vals2,
@@ -155,8 +158,8 @@ mod tests {
         let mut parent = FakeRng::from_seed(42);
         let mut child = parent.child();
 
-        let parent_val: u64 = parent.gen();
-        let child_val: u64 = child.gen();
+        let parent_val: u64 = parent.random();
+        let child_val: u64 = child.random();
         assert_ne!(
             parent_val, child_val,
             "parent and child should produce different values"
@@ -164,8 +167,8 @@ mod tests {
 
         let mut parent2 = FakeRng::from_seed(42);
         let mut child2 = parent2.child();
-        let parent2_val: u64 = parent2.gen();
-        let child2_val: u64 = child2.gen();
+        let parent2_val: u64 = parent2.random();
+        let child2_val: u64 = child2.random();
 
         assert_eq!(
             parent_val, parent2_val,
@@ -190,10 +193,10 @@ mod tests {
     fn auto_seed_is_reproducible() {
         let mut sm = FakeRng::from_optional_seed(None);
         let seed = sm.seed();
-        let from_auto: Vec<u64> = (0..5).map(|_| sm.gen()).collect();
+        let from_auto: Vec<u64> = (0..5).map(|_| sm.random()).collect();
 
         let mut replay = FakeRng::from_seed(seed);
-        let from_replay: Vec<u64> = (0..5).map(|_| replay.gen()).collect();
+        let from_replay: Vec<u64> = (0..5).map(|_| replay.random()).collect();
 
         assert_eq!(
             from_auto, from_replay,
@@ -244,8 +247,8 @@ mod tests {
         let mut child_a = parent.child();
         let mut child_b = parent.child();
 
-        let a_val: u64 = child_a.gen();
-        let b_val: u64 = child_b.gen();
+        let a_val: u64 = child_a.random();
+        let b_val: u64 = child_b.random();
 
         assert_ne!(
             a_val, b_val,
