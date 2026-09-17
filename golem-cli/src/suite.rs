@@ -1776,7 +1776,11 @@ async fn setup_slot(
         // A slot with no platform constraint defaults to Android; the stub
         // driver is platform-agnostic, so the choice only affects labelling.
         return Ok((
-            stub_device(slot.platform.unwrap_or(Platform::Android), stub_suffix),
+            stub_device(
+                slot.platform.unwrap_or(Platform::Android),
+                slot.device_type.unwrap_or(golem_devices::DeviceType::Phone),
+                stub_suffix,
+            ),
             0,
         ));
     }
@@ -3188,7 +3192,11 @@ fn map_a11y_level(level: golem_parser::A11yLevel) -> golem_runner::accessibility
 /// Synthetic device for stub runs. No real UDID/boot — the StubDriver
 /// ignores the udid/port. A generic phone shape so slot matching and
 /// report labelling behave normally.
-fn stub_device(platform: Platform, suffix: u32) -> DeviceInfo {
+fn stub_device(
+    platform: Platform,
+    device_type: golem_devices::DeviceType,
+    suffix: u32,
+) -> DeviceInfo {
     DeviceInfo {
         // Unique name + udid per FlowRun. The report accumulator tracks at
         // most one active flow per device id at a time — an invariant real
@@ -3200,7 +3208,10 @@ fn stub_device(platform: Platform, suffix: u32) -> DeviceInfo {
         name: format!("Stub Device {suffix}"),
         udid: format!("stub-device-{suffix}"),
         platform,
-        device_type: golem_devices::DeviceType::Phone,
+        // Honour the slot's shape like `platform` above: coverage boxes are
+        // keyed on device type, so a stub that reported every slot as a phone
+        // would let a phone run tick a tablet's box.
+        device_type,
         os_major: 0,
         os_version: "stub".to_string(),
         state: golem_devices::DeviceState::Booted,

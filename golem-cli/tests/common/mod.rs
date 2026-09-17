@@ -134,6 +134,41 @@ steps = [
     )
 }
 
+/// A flow with two device axes, so the plan fans it out into one FlowRun per
+/// axis. Coverage strategy then decides how many of those actually run.
+///
+/// The axes are two device *types* on one platform, not two platforms: on a
+/// non-macOS host a bare run is defaulted to `--platform android` (iOS can't
+/// be driven there), which would collapse a platform-axis fixture to a single
+/// run and make these tests pass or fail by host OS.
+pub fn coverage_flow() -> String {
+    format!(
+        r#"[flow]
+name = "Stub coverage"
+
+[flow.options]
+step_timeout = 400
+a11y = "off"
+perf = false
+
+[[flow.apps]]
+name = "app"
+bundle = "{bundle}"
+[[flow.apps.devices]]
+os = "android:latest"
+type = ["phone", "tablet"]
+
+[[block]]
+name = "check"
+steps = [
+  {{ action = "assert_visible", on_text = "{target}", timeout = 400 }},
+]
+"#,
+        bundle = golem_driver::stub::STUB_BUNDLE_ID,
+        target = golem_driver::stub::STUB_TARGET_TEXT,
+    )
+}
+
 /// A flow whose one step sleeps, so two FlowRuns overlap measurably when
 /// they run concurrently and are provably disjoint when they don't. The
 /// pass/fail fixture completes inside a millisecond, which can't tell the
@@ -172,6 +207,22 @@ steps = [
 /// `stub_script_toml` is the `--stub` file body (e.g. `"fail_on_runs = [2]"`;
 /// `""` = every run passes).
 pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
+    run_stub_opts(stub_script_toml, extra_args, StubOpts::default())
+}
+
+/// Knobs the default `run_stub` fixes. Kept out of `run_stub`'s signature so
+/// the existing call sites stay readable — only the composition tests need
+/// to vary these.
+#[derive(Default, Clone, Copy)]
+pub struct StubOpts {
+    /// Connect to a real orchestrator daemon started in-process first, rather
+    /// than letting the CLI spin up its own server and self-connect. Both are
+    /// production paths; this is what tells them apart.
+    pub daemon: bool,
+}
+
+/// `run_stub` with the knobs exposed. See [`StubOpts`].
+pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts) -> RunResult {
     let _guard = ENV_LOCK.lock().expect("env lock");
 
     let tmp = tempfile::TempDir::new().expect("temp dir");
@@ -180,6 +231,7 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
     std::fs::write(root.join("fixture.test.toml"), fixture_flow()).expect("write flow");
     std::fs::write(root.join("browser.test.toml"), browser_flow()).expect("write browser flow");
     std::fs::write(root.join("slow.test.toml"), slow_flow()).expect("write slow flow");
+    std::fs::write(root.join("coverage.test.toml"), coverage_flow()).expect("write coverage flow");
     std::fs::write(root.join("stub.toml"), stub_script_toml).expect("write stub script");
 
     // Point cwd + $HOME at the temp project. Saved and restored around the
@@ -219,9 +271,9 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
         flow.into(),
         "--stub".into(),
         "stub.toml".into(),
-        "--platform".into(),
-        "android".into(),
     ];
+    argv.push("--platform".into());
+    argv.push("android".into());
     argv.extend(extra_args.iter().map(|s| s.to_string()));
     let cli = golem_cli::cli::Cli::parse_from(&argv);
 
@@ -236,9 +288,26 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
         .enable_all()
         .build()
         .expect("tokio runtime");
-    let code = rt
-        .block_on(golem_cli::run_cli(cli))
-        .expect("run_cli SHALL not error");
+    // With `daemon`, a server is listening before the CLI runs, so the client
+    // connects to it instead of spinning up its own — the same split a user
+    // gets from `golem serve` in another terminal. The server owns the socket
+    // for the run and is dropped (socket cleaned up) before HOME is restored.
+    let code = rt.block_on(async {
+        let server = if opts.daemon {
+            Some(
+                golem_cli::orchestrator::start_server()
+                    .await
+                    .expect("daemon SHALL start"),
+            )
+        } else {
+            None
+        };
+        let code = golem_cli::run_cli(cli)
+            .await
+            .expect("run_cli SHALL not error");
+        drop(server);
+        code
+    });
 
     let stdout = out_cap.finish();
     let stderr = err_cap.finish();
