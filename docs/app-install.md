@@ -239,4 +239,18 @@ So if your project has no install scripts anywhere, `--no-build` is redundant â€
   it ships. Simulators and emulators only; a physical device also needs
   `adb reverse tcp:8081 tcp:8081` or a reachable LAN host.
 
+  **Broken JS is reported as `A501`, not as a failing test.** With a bundle
+  that can't build, every selector times out and the run would otherwise
+  blame the flow. Two things prevent that:
+
+  - Before any flow runs, `--dev` asks the dev server for the app's bundle. A
+    build failure stops the run and quotes the error (`SyntaxError: App.tsx:
+    Unexpected token (9:15)`). This is the only signal available on iOS,
+    where React Native's error overlay renders nothing golem can see.
+  - During a run, a step that fails against a visible error overlay is
+    reported as `A501` with the overlay's own message instead of as a missing
+    selector. Verified on Android for an unreachable bundler, a transform
+    error and a runtime throw. A non-fatal LogBox notice over a working app
+    is left alone.
+
 Scripts are plain bash â€” customise freely after scaffolding. Extend to other frameworks (Flutter, Capacitor, etc.) by hand.

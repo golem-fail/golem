@@ -81,6 +81,7 @@ pub mod parallel;
 pub mod perf;
 pub mod policy;
 pub mod recovery;
+pub mod redbox;
 pub mod resolution;
 pub mod scroll;
 pub mod subflow;

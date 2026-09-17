@@ -56,6 +56,7 @@ Codes appear in every output format:
 | `A404` | Install script / bundle not found |
 | `A408` | Install timed out |
 | `A500` | Install failed (non-zero exit) |
+| `A501` | The app is showing a dev-server error overlay (RN redbox) instead of its UI — a broken JS bundle. Fix the error the message names; `--dev` reports it instead of letting it read as a missing selector |
 | `A502` | App state query failed (post-install verify) |
 | `A503` | App launch / stop failed |
 | `D404` | Device not found / discovery failed |

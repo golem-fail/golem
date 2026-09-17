@@ -388,6 +388,17 @@ pub async fn execute_step_with_policy(
         )
         .await
         .ok();
+        // The failing screen may be a dev-server error overlay rather than the
+        // app. Read the tree the capture already took — re-querying the device
+        // to ask would cost a round trip on every failure.
+        if let Some((_, root)) = tree.as_ref() {
+            last_error = Some(recode_dev_bundle_error(
+                last_error
+                    .take()
+                    .unwrap_or_else(|| anyhow::anyhow!("step failed with no error details")),
+                root,
+            ));
+        }
         // Stash the coherent (tree, shot) pair the failure capture just took so
         // the executor's failure handler can run the a11y audit on the failing
         // screen without re-capturing. Keyed to this step, like the trace pair.
@@ -397,6 +408,30 @@ pub async fn execute_step_with_policy(
     }
 
     finish_failed_step(last_error, if_fail)
+}
+
+/// Re-tag a step failure as A501 when the screen it failed against is a
+/// React Native dev-server error overlay.
+///
+/// The original error is replaced rather than wrapped: "Step timed out after
+/// 10000ms" describes the symptom of an app that never rendered, and keeping
+/// it alongside the cause only invites the reader to debug the selector. The
+/// step's own description is already in the report line above it.
+///
+/// A companion death is left alone — commit-aware recovery reads those codes
+/// to decide whether to restart and retry, and a redbox can't be the reason
+/// the companion died.
+fn recode_dev_bundle_error(error: anyhow::Error, root: &golem_element::Element) -> anyhow::Error {
+    if crate::recovery::is_companion_death(extract_code(&error)) {
+        return error;
+    }
+    match crate::redbox::dev_bundle_error(root) {
+        Some(message) => coded(
+            FailureCode::AppDevBundleError,
+            anyhow::anyhow!("app is showing a dev-server error, not its UI: {message}"),
+        ),
+        None => error,
+    }
 }
 
 /// Photograph the failing tab, best-effort.
@@ -559,6 +594,109 @@ mod tests {
             on_text: Some("OK".to_string()),
             ..Default::default()
         }
+    }
+
+    // --- dev-server error overlay re-coding ---------------------------
+
+    fn text_node(kind: &str, text: &str) -> golem_element::Element {
+        golem_element::Element {
+            element_type: kind.into(),
+            text: Some(text.into()),
+            accessibility_label: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable: false,
+            focused: false,
+            bounds: golem_element::Bounds {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            visible_bounds: None,
+            hit_points: Vec::new(),
+            drawing_order: None,
+            children: Vec::new(),
+        }
+    }
+
+    fn tree(children: Vec<golem_element::Element>) -> golem_element::Element {
+        let mut root = text_node("Root", "");
+        root.text = None;
+        root.children = children;
+        root
+    }
+
+    fn redbox_tree() -> golem_element::Element {
+        tree(vec![
+            text_node(
+                "TextView",
+                "SyntaxError: /p/App.tsx: Unexpected token (9:15)",
+            ),
+            text_node("Button", "DISMISS\n(ESC)"),
+            text_node("Button", "RELOAD\n(R,\u{a0}R)"),
+        ])
+    }
+
+    #[test]
+    fn a_timeout_against_a_redbox_is_recoded_as_a_dev_bundle_error() {
+        // The exact misdiagnosis this exists to remove: with a broken bundle
+        // every selector times out, and F408 blames the flow.
+        let timeout = coded(
+            FailureCode::FlowStepTimeout,
+            anyhow::anyhow!("Step timed out after 10000ms"),
+        );
+        let out = recode_dev_bundle_error(timeout, &redbox_tree());
+        assert_eq!(
+            extract_code(&out),
+            Some(FailureCode::AppDevBundleError),
+            "a step that failed against a redbox SHALL report A501: {out:#}"
+        );
+        let msg = format!("{out:#}");
+        assert!(
+            msg.contains("SyntaxError: /p/App.tsx: Unexpected token (9:15)"),
+            "the overlay's own message SHALL be carried through: {msg}"
+        );
+        assert!(
+            !msg.contains("timed out"),
+            "the symptom SHALL NOT be reported alongside the cause: {msg}"
+        );
+    }
+
+    #[test]
+    fn a_failure_against_the_real_app_keeps_its_own_code() {
+        let original = coded(
+            FailureCode::FlowElementNotFound,
+            anyhow::anyhow!("no element matching on_text=\"Submit\""),
+        );
+        let app = tree(vec![
+            text_node("TextView", "Counter"),
+            text_node("Button", "+"),
+        ]);
+        let out = recode_dev_bundle_error(original, &app);
+        assert_eq!(
+            extract_code(&out),
+            Some(FailureCode::FlowElementNotFound),
+            "an ordinary failure SHALL be left exactly as it was"
+        );
+        assert!(format!("{out:#}").contains("Submit"));
+    }
+
+    #[test]
+    fn a_companion_death_is_never_recoded() {
+        // Recovery reads these codes to decide whether to restart and retry;
+        // masking one as A501 would strand a dead companion.
+        let death = coded(
+            FailureCode::DeviceCompanionDropped,
+            anyhow::anyhow!("companion died mid-step"),
+        );
+        let out = recode_dev_bundle_error(death, &redbox_tree());
+        assert_eq!(
+            extract_code(&out),
+            Some(FailureCode::DeviceCompanionDropped),
+            "a companion death SHALL survive a redbox on screen"
+        );
     }
 
     // -----------------------------------------------------------------

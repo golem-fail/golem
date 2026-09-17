@@ -58,6 +58,7 @@ golem run [FILES...] [OPTIONS]
 | `--dev` | Iterate against a dev server you run yourself (Expo/Metro) instead of rebuilding per change. Implies `--no-build`. golem waits for the dev server, then each flow's relaunch re-fetches the current bundle — so a JS edit needs no rebuild or reinstall. golem never starts the bundler. |
 | `--dev-port <n>` | Port the `--dev` dev server listens on (default `8081`, Metro's) |
 | `--dev-wait <dur>` | How long `--dev` waits for the dev server before failing with `H503` (default `30s`; e.g. `2m`) |
+| | `--dev` also checks the app's bundle builds before running, and reports a step that fails against a React Native error overlay as `A501` rather than a missing selector |
 | `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) + cache hits/misses |
 | `--debug` | Show driver diagnostics (WebKit/CDP) and per-line install-script stderr |
 
