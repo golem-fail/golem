@@ -1,0 +1,53 @@
+# Dependabot scope.
+#
+# Only golem itself is worth automatic dependency PRs. `test-app`,
+# `test-app-e` and `test-app/src-tauri` are FIXTURES: apps that exist to be
+# driven by golem's own e2e on a simulator. Nothing in them ships — the npm
+# package contains `bin/` and `install.js`, and the release tarballs contain
+# the `golem` binary — so an advisory against a fixture's dependency has no
+# user-facing surface. It is a counter in the security tab, not a risk.
+#
+# Left unscoped, those bumps arrive as PRs nobody can verify: `classify`
+# routes a lockfile-only diff as non-Rust, so every build check skips and
+# `gate` reports SUCCESS without anything having built the app (#204). The
+# choice is between paying CI to build fixtures on every transitive bump, or
+# not taking the bumps automatically. This is the second.
+#
+# Fixture dependencies still move — deliberately, when we have a reason, and
+# the person doing it runs e2e, which since #205 genuinely reinstalls and
+# re-prebuilds against the new lockfile instead of reusing what is on disk.
+#
+# NOTE: these entries exist to SUPPRESS, not to schedule. `open-pull-requests-limit: 0`
+# stops version updates; the `ignore` on every dependency is what also stops
+# security-update PRs, which are enabled at the repository level and would
+# otherwise ignore this file entirely.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/test-app-e"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+
+  - package-ecosystem: "npm"
+    directory: "/test-app"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+
+  - package-ecosystem: "cargo"
+    directory: "/test-app/src-tauri"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+
+# Deliberately NOT listed, so they keep their automatic security updates:
+#   /                 — the golem workspace itself (e.g. #172, rand)
+#   /npm              — the published wrapper package
+#   /companions/**    — shipped inside the release artifacts
