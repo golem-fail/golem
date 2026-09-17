@@ -151,6 +151,10 @@ struct JsonSuiteSummary {
     passed: usize,
     failed: usize,
     skipped: usize,
+    /// Subset of `failed` whose app never installed — one broken install
+    /// blocks every flow referencing it, so CI can tell a batch of blocked
+    /// flows from a batch of real regressions.
+    install_blocked: usize,
     duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     started_at: Option<String>,
@@ -336,6 +340,7 @@ pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Err
             passed,
             failed,
             skipped,
+            install_blocked: crate::install_blocked_count(&report.flows),
             duration_ms: report.total_duration_ms,
             started_at: report.started_at.clone(),
             finished_at: report.finished_at.clone(),
@@ -1457,6 +1462,37 @@ mod tests {
         assert_eq!(e["passed"], 1);
         assert_eq!(e["failed"], 1);
         assert_eq!(e["total"], 2);
+    }
+
+    // install_blocked is the subset of `failed` whose app never installed, so
+    // CI can tell a batch of blocked flows from a batch of real regressions.
+    #[test]
+    fn suite_json_reports_install_blocked_failures() {
+        let mut suite = sample_suite();
+        let mut blocked = sample_flow();
+        blocked.first_failure_code = Some(golem_events::FailureCode::AppInstallFailed);
+        let ran_and_failed = sample_flow();
+        suite.flows = vec![blocked, ran_and_failed];
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["suite"]["failed"], 2, "both flows SHALL count as failed");
+        assert_eq!(
+            v["suite"]["install_blocked"], 1,
+            "only the never-installed flow SHALL count as blocked"
+        );
+    }
+
+    #[test]
+    fn suite_json_reports_zero_install_blocked_on_a_clean_run() {
+        let suite = sample_suite();
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+        assert_eq!(
+            v["suite"]["install_blocked"], 0,
+            "the field SHALL always be present so consumers needn't branch on absence"
+        );
     }
 
     #[test]

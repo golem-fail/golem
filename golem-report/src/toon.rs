@@ -14,7 +14,7 @@
 //!  -action:target
 //! R:PASS|FAIL|SKIP passed/warned/failed [skip_reason]
 //!
-//! total:N×pass,N×fail,N×skip d:duration
+//! total:N×pass,N×fail,N×skip[,N×blocked] d:duration
 //! ```
 
 use crate::{FlowReport, StepOutcome, StepReport, SuiteReport};
@@ -437,9 +437,17 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
         }
     }
 
+    // `blocked` is a subset of `fail`, appended only when non-zero: TOON is
+    // read token-by-token, and a `0×blocked` on every clean run is noise.
+    let blocked = crate::install_blocked_count(&report.flows);
+    let blocked_token = if blocked > 0 {
+        format!(",{blocked}×blocked")
+    } else {
+        String::new()
+    };
     let _ = writeln!(
         out,
-        "total:{total_passed}×pass,{total_failed}×fail,{total_skipped}×skip d:{}",
+        "total:{total_passed}×pass,{total_failed}×fail,{total_skipped}×skip{blocked_token} d:{}",
         report.total_duration_ms
     );
 
@@ -759,6 +767,46 @@ mod tests {
         let out = format_suite_toon(&suite);
         let last_line = out.lines().last().expect("should have lines");
         assert_eq!(last_line, "total:1×pass,1×fail,0×skip d:45300");
+    }
+
+    // 8b. The total line gains a `blocked` token when a failure never ran,
+    //     and stays clean when every failure actually executed.
+    #[test]
+    fn suite_total_marks_install_blocked_failures() {
+        let mut blocked = sample_flow(false, None);
+        blocked.first_failure_code = Some(golem_events::FailureCode::AppInstallFailed);
+        let suite = SuiteReport {
+            flows: vec![blocked, sample_flow(false, None)],
+            installs: Vec::new(),
+            total_duration_ms: 1000,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let out = format_suite_toon(&suite);
+        let last_line = out.lines().last().expect("should have lines");
+        assert_eq!(
+            last_line, "total:0×pass,2×fail,0×skip,1×blocked d:1000",
+            "blocked SHALL appear as a subset token of fail"
+        );
+    }
+
+    #[test]
+    fn suite_total_omits_blocked_when_every_failure_ran() {
+        let suite = SuiteReport {
+            flows: vec![sample_flow(false, None)],
+            installs: Vec::new(),
+            total_duration_ms: 1000,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let out = format_suite_toon(&suite);
+        let last_line = out.lines().last().expect("should have lines");
+        assert_eq!(
+            last_line, "total:0×pass,1×fail,0×skip d:1000",
+            "a clean run SHALL NOT carry a zero blocked token"
+        );
     }
 
     // 9. Multiple flows in suite ----------------------------------------

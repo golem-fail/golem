@@ -520,6 +520,24 @@ impl FlowReport {
     pub fn is_failed(&self) -> bool {
         !self.success
     }
+
+    /// The flow failed without running, because the app never installed.
+    /// Still a failure — nothing was verified — but one broken install
+    /// produces a batch of these from a single root cause.
+    pub fn is_install_blocked(&self) -> bool {
+        self.is_failed()
+            && self
+                .first_failure_code
+                .is_some_and(|c| c.is_install_blocked())
+    }
+}
+
+/// How many of a suite's flows failed because their app never installed.
+///
+/// Shared by every renderer so the human, JSON and TOON summaries can't
+/// drift apart on what "blocked" counts as.
+pub fn install_blocked_count(flows: &[FlowReport]) -> usize {
+    flows.iter().filter(|f| f.is_install_blocked()).count()
 }
 
 /// Install script result (per `(device, bundle)` across the whole suite).
