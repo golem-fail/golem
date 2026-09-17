@@ -249,8 +249,14 @@ So if your project has no install scripts anywhere, `--no-build` is redundant �
     where React Native's error overlay renders nothing golem can see.
   - During a run, a step that fails against a visible error overlay is
     reported as `A501` with the overlay's own message instead of as a missing
-    selector. Verified on Android for an unreachable bundler, a transform
-    error and a runtime throw. A non-fatal LogBox notice over a working app
-    is left alone.
+    selector. This covers both of React Native's overlays: the native redbox,
+    shown when the bundle never ran (Android — the same failures leave an iOS
+    simulator blank), and the JS LogBox, shown when the app mounted and then
+    threw, which renders on both platforms and also reports the source
+    position (`boom at App.tsx (35:43)`).
+
+    A LogBox minimised to its badge, or open on a console warning or console
+    error, leaves a working app underneath and is deliberately left alone —
+    a flow failing there is failing on its own merits.
 
 Scripts are plain bash — customise freely after scaffolding. Extend to other frameworks (Flutter, Capacitor, etc.) by hand.

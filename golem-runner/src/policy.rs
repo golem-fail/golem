@@ -425,7 +425,7 @@ fn recode_dev_bundle_error(error: anyhow::Error, root: &golem_element::Element) 
     if crate::recovery::is_companion_death(extract_code(&error)) {
         return error;
     }
-    match crate::redbox::dev_bundle_error(root) {
+    match crate::dev_overlay::dev_bundle_error(root) {
         Some(message) => coded(
             FailureCode::AppDevBundleError,
             anyhow::anyhow!("app is showing a dev-server error, not its UI: {message}"),
