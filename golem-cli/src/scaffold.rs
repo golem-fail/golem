@@ -732,6 +732,7 @@ install_script = { ios = "scripts/ios.sh" }
                 ("TAURI_DIR", "./app"),
                 ("IOS_SCHEME", "MyApp_iOS"),
                 ("TAURI_CMD", "pnpm tauri"),
+                ("PM_INSTALL", "pnpm install"),
             ],
         )
         .expect("write");
@@ -749,6 +750,13 @@ install_script = { ios = "scripts/ios.sh" }
         assert!(
             content.contains(r#"TAURI_CMD="pnpm tauri""#),
             "TAURI_CMD SHALL be substituted, got:\n{content}"
+        );
+        // The Tauri template installs dependencies too, so it carries the
+        // package manager as well as the CLI runner — the two are chosen
+        // independently.
+        assert!(
+            content.contains(r#"PM_INSTALL="pnpm install""#),
+            "PM_INSTALL SHALL be substituted, got:\n{content}"
         );
         // 17b. No placeholder tokens SHALL remain in the rendered Tauri script.
         assert!(

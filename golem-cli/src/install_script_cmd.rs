@@ -208,9 +208,31 @@ pub fn run() -> Result<()> {
                 .with_prompt("iOS scheme name")
                 .default(format!("{}_iOS", app_name))
                 .interact_text()?;
+            // Frontend dependency install, detected from lockfiles
+            // INDEPENDENTLY of the Tauri CLI runner: `cargo tauri` is a normal
+            // choice in a project whose frontend is still npm, so deriving one
+            // from the other would get it wrong. Empty when the project has no
+            // package.json — a Tauri app with no JS frontend has nothing to
+            // install, and the script skips the step rather than guessing.
+            let project_dir = cwd.join(&tauri_dir);
+            let pm_install = if project_dir.join("package.json").exists() {
+                let install_items = [
+                    ("npm install", "npm"),
+                    ("yarn", "yarn"),
+                    ("pnpm install", "pnpm"),
+                    ("bun install", "bun"),
+                ];
+                install_items[detect_tauri_command(&project_dir, &install_items)]
+                    .0
+                    .to_string()
+            } else {
+                String::new()
+            };
+
             placeholders.push(("TAURI_DIR", tauri_dir));
             placeholders.push(("IOS_SCHEME", ios_scheme));
             placeholders.push(("TAURI_CMD", tauri_cmd));
+            placeholders.push(("PM_INSTALL", pm_install));
         }
         InstallFramework::Expo => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

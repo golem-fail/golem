@@ -10,7 +10,10 @@
 #   $2 = device UDID (iOS) or serial (Android)
 #   $3 = bundle id (from [[flow.apps]] bundle)
 #   $4 = "install-only" to skip the build and reuse the previous artifact,
-#        or empty for full build+install (default)
+#        or empty for full build+install (default).
+#        Golem currently always passes empty; the flag is supported for manual
+#        dev-iteration and for a future golem-side build-once optimisation
+#        (see roadmap: "Install Cache: Build-Once, Install-to-Many").
 #
 # Exit 0 on success; nonzero on failure (stderr surfaces to golem).
 
@@ -25,8 +28,63 @@ MODE="${4:-}"   # empty | install-only
 TAURI_DIR="test-app"               # path to Tauri project (contains src-tauri/)
 IOS_SCHEME="app_iOS"             # iOS scheme name
 TAURI_CMD="cargo tauri"               # tauri CLI runner (npx/yarn/pnpm/bun/cargo tauri)
+PM_INSTALL="npm install"             # dependency install: npm install | yarn | pnpm install | bun install
 
 cd "$TAURI_DIR"
+
+# ── freshness stamps ────────────────────────────────────────────────
+# Tauri builds the frontend through `beforeBuildCommand` in tauri.conf.json,
+# which runs the project's own build script — it never installs dependencies.
+# So without this the whole build rests on whatever happens to be in
+# node_modules, and a lockfile change is never picked up: the native build
+# succeeds against the previous dependency tree and the run reports green.
+#
+# The stamp records what the installed tree was built FROM, so the gate can
+# ask "is it current?" rather than "does it exist?". It lives under
+# node_modules, which is already ignored by every project's VCS.
+GOLEM_STAMP_DIR="node_modules/.golem"
+
+# Every lockfile flavour, not just this project's, so the stamp stays correct
+# if the package manager is switched.
+GOLEM_DEP_INPUTS=(package.json package-lock.json yarn.lock pnpm-lock.yaml bun.lockb bun.lock)
+
+# Hash of the named files, in order. A file's NAME is hashed alongside its
+# contents so swapping one lockfile flavour for an identical-looking other
+# still counts as a change. Missing files contribute nothing.
+golem_hash() {
+  local f
+  for f in "$@"; do
+    if [[ -f "$f" ]]; then printf '%s\n' "$f"; cat "$f"; fi
+  done | shasum | cut -d' ' -f1
+}
+
+# Install JS dependencies when the inputs have moved since the last install.
+# Skipped entirely when PM_INSTALL is empty — a Tauri app with no JS frontend
+# has nothing to install, and guessing would be worse than doing nothing.
+ensure_deps() {
+  [[ -n "$PM_INSTALL" ]] || return 0
+  [[ -f package.json ]] || return 0
+  local want stamp
+  want=$(golem_hash "${GOLEM_DEP_INPUTS[@]}")
+  stamp="$GOLEM_STAMP_DIR/deps"
+  if [[ -d node_modules && -f "$stamp" && "$(cat "$stamp" 2>/dev/null)" == "$want" ]]; then
+    return 0
+  fi
+  echo "installing JS dependencies (dependency inputs changed)..." >&2
+  $PM_INSTALL 1>&2 || return 1
+  # Written only after a successful install, so a failure is retried next
+  # run rather than remembered as done — and re-hashed, because package
+  # managers rewrite the lockfile as part of installing, which would leave a
+  # pre-install hash stale the moment it was written.
+  mkdir -p "$GOLEM_STAMP_DIR"
+  printf '%s' "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")" > "$stamp"
+}
+
+# `install-only` reuses the previous artifact and runs no build, so there is
+# nothing for fresh dependencies to feed into.
+if [[ "$MODE" != "install-only" ]]; then
+  ensure_deps
+fi
 
 case "$PLATFORM" in
   ios)
@@ -44,13 +102,12 @@ case "$PLATFORM" in
       # target-arch dir already exists from a prior run — and the failure
       # is silent under `set +e`. When that happens the .app we pick up
       # below is whatever stale tree was left behind, leading to weeks-
-      # old bundles being installed without warning. Clearing both the
-      # xcarchive and the per-arch output dirs makes the rename succeed
-      # every time.
+      # old bundles being installed without warning.
       rm -rf src-tauri/gen/apple/build/*.xcarchive
       rm -rf src-tauri/gen/apple/build/arm64-sim
       rm -rf src-tauri/gen/apple/build/x86_64
       rm -rf src-tauri/gen/apple/build/aarch64
+      # Tauri 2.x iOS targets: aarch64-sim / x86_64 / aarch64.
       # Known bug: tauri-cli 2.10 + Xcode 26 exits nonzero on a post-archive
       # rename step even after producing a valid signed .app. We tolerate
       # nonzero exit here; the presence+validity check below is the gate.
@@ -88,7 +145,6 @@ case "$PLATFORM" in
     fi
     APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null)
     if [[ -z "$APP_PATH" ]]; then
-      # Fall back to a wider search if the per-arch dir is missing.
       APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
     fi
     if [[ -z "$APP_PATH" || ! -f "$APP_PATH/Info.plist" ]]; then
@@ -130,7 +186,7 @@ case "$PLATFORM" in
       echo "install-only: reusing prior APK for $DEVICE_ID" >&2
     fi
 
-    # Find produced APK
+    # Find produced APK (-print -quit avoids SIGPIPE under pipefail)
     APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -print -quit)
     if [[ -z "$APK" ]]; then
       echo "error: no APK found (build may have been skipped — re-run without install-only)" >&2
