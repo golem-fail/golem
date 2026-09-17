@@ -46,6 +46,56 @@ DERIVED_DATA="${DERIVED_DATA:-./build/DerivedData}"
 
 cd "$EXPO_DIR"
 
+# ── freshness stamps ────────────────────────────────────────────────
+# A gate that asks "does this directory exist?" answers yes forever: after a
+# lockfile change the native build is redone against the PREVIOUS dependency
+# tree, and the run reports green. golem's install cache can't catch this —
+# it correctly reports a rebuild, and the thing being rebuilt is stale.
+#
+# So each generated tree records what it was generated FROM, and the gate
+# compares that instead of merely checking for existence.
+#
+# Stamps live under node_modules: it is already ignored by every project's
+# VCS, so nothing appears in `git status`, and a wipe (`npm ci`, `rm -rf
+# node_modules`) takes the prebuild stamps with it — which conservatively
+# re-runs prebuild after a dependency wipe rather than trusting a native
+# project generated from a tree that is now gone.
+GOLEM_STAMP_DIR="node_modules/.golem"
+
+# Inputs that decide whether the installed dependency tree is current. Every
+# lockfile flavour is listed rather than just this project's, so the stamp
+# stays correct if the package manager is switched.
+GOLEM_DEP_INPUTS=(package.json package-lock.json yarn.lock pnpm-lock.yaml bun.lockb bun.lock)
+# Prebuild additionally depends on the Expo config, which is what decides the
+# shape of the generated native project.
+GOLEM_PREBUILD_INPUTS=("${GOLEM_DEP_INPUTS[@]}" app.json app.config.js app.config.ts)
+
+# Hash of the named files, in order. A file's NAME is hashed alongside its
+# contents so that swapping one lockfile flavour for an identical-looking
+# other still counts as a change. Missing files contribute nothing.
+golem_hash() {
+  local f
+  for f in "$@"; do
+    if [[ -f "$f" ]]; then printf '%s\n' "$f"; cat "$f"; fi
+  done | shasum | cut -d' ' -f1
+}
+
+# True when stamp $1 is absent or records something other than $2.
+golem_stale() {
+  local stamp="$GOLEM_STAMP_DIR/$1"
+  [[ -f "$stamp" ]] || return 0
+  [[ "$(cat "$stamp" 2>/dev/null)" != "$2" ]]
+}
+
+# Record $2 as stamp $1. Every caller guards the preceding command with
+# `|| return 1` rather than leaning on `set -e`: a stamp written after a
+# failed install would remember the failure as done and skip the retry, and
+# this template is meant to be edited after scaffolding.
+golem_stamp() {
+  mkdir -p "$GOLEM_STAMP_DIR"
+  printf '%s' "$2" > "$GOLEM_STAMP_DIR/$1"
+}
+
 # ── shared install helpers ──────────────────────────────────────────
 install_ios_artifact() {
   local app="$1"
@@ -75,7 +125,29 @@ install_android_artifact() {
 }
 
 ensure_deps() {
-  [[ -d node_modules ]] || { echo "installing JS dependencies..." >&2; $PM_INSTALL 1>&2; }
+  local want
+  want=$(golem_hash "${GOLEM_DEP_INPUTS[@]}")
+  if [[ ! -d node_modules ]] || golem_stale deps "$want"; then
+    echo "installing JS dependencies (dependency inputs changed)..." >&2
+    $PM_INSTALL 1>&2 || return 1
+    golem_stamp deps "$want"
+  fi
+}
+
+# Generate the native project for $1 (ios|android) when it is missing or was
+# generated from different inputs. Plain `prebuild`, never `--clean`: a
+# downstream project may have hand-edited its native directory, and silently
+# discarding that would be worse than the staleness this is fixing. If the
+# regenerated project needs a clean slate, delete the directory.
+ensure_prebuild() {
+  local platform="$1"
+  local want
+  want=$(golem_hash "${GOLEM_PREBUILD_INPUTS[@]}")
+  if [[ ! -d "$platform" ]] || golem_stale "prebuild-$platform" "$want"; then
+    echo "expo prebuild ($platform)..." >&2
+    $PM_RUNNER prebuild --platform "$platform" 1>&2 || return 1
+    golem_stamp "prebuild-$platform" "$want"
+  fi
 }
 
 # ── local build ─────────────────────────────────────────────────────
@@ -90,7 +162,7 @@ build_local() {
       fi
       if [[ "$MODE" != "install-only" ]]; then
         ensure_deps
-        [[ -d ios ]] || { echo "expo prebuild (ios)..." >&2; $PM_RUNNER prebuild --platform ios 1>&2; }
+        ensure_prebuild ios
         local proj
         local ws
         ws=$(find ios -maxdepth 1 -name "*.xcworkspace" -print -quit 2>/dev/null || true)
@@ -135,7 +207,7 @@ build_local() {
     android)
       if [[ "$MODE" != "install-only" ]]; then
         ensure_deps
-        [[ -d android ]] || { echo "expo prebuild (android)..." >&2; $PM_RUNNER prebuild --platform android 1>&2; }
+        ensure_prebuild android
         echo "building Android (release)..." >&2
         ( cd android && ./gradlew :app:assembleRelease ) 1>&2
       else
