@@ -43,11 +43,18 @@ npm/vendor/
 npm/LICENSE
 
 # Tauri generated platform projects (machine-specific) — ignore
-# everything inside, then carve out the test app's Android manifest
-# below so its `uses-permission` declarations (CAMERA / RECORD_AUDIO /
-# location, needed by `permissions_*.test`) survive a fresh clone.
-# `tauri android init` doesn't overwrite existing files, so committing
-# this one file is enough.
+# everything inside, then carve out the two test-app files that carry
+# declarations Tauri gives us no other place to put:
+#
+#   AndroidManifest.xml — the `uses-permission` lines `permissions_*.test`
+#     grants via `pm grant`, and the `golem-test://` intent-filter the
+#     deep_link flows drive.
+#   Info.plist          — the iOS `CFBundleURLTypes` registration of that
+#     same scheme, without which `simctl openurl` cannot reach the app.
+#
+# Neither `init` nor `build` overwrites a file that already exists, so
+# committing them is enough to survive a fresh clone. Both files carry
+# comments explaining what must not be moved and why.
 **/src-tauri/gen/**
 !test-app/src-tauri/gen/
 !test-app/src-tauri/gen/android/
@@ -55,6 +62,9 @@ npm/LICENSE
 !test-app/src-tauri/gen/android/app/src/
 !test-app/src-tauri/gen/android/app/src/main/
 !test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml
+!test-app/src-tauri/gen/apple/
+!test-app/src-tauri/gen/apple/golem-test-app_iOS/
+!test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist
 
 # Xcode build output
 companions/ios/build/

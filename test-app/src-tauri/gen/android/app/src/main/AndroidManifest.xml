@@ -6,6 +6,11 @@
     Android refuses the runtime grant. Tauri 2.x has no first-class
     config for Android `<uses-permission>`, so we commit the
     auto-generated manifest directly.
+
+    Neither `tauri android init` nor `tauri android build` overwrites a
+    file that already exists, so tracking it is enough to keep it. The
+    one exception is the deep-link intent-filter — see the comment on it
+    below before adding anything near those markers.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
@@ -44,6 +49,29 @@
                 <!-- AndroidTV support -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom scheme for the deep_link e2e flows, kept OUTSIDE the
+                 block above on purpose. `tauri-plugin-deep-link`'s build
+                 script rewrites everything between those two markers from
+                 `tauri.conf.json` every time the plugin crate is rebuilt
+                 (fresh clone, `cargo clean`, dependency bump), so anything
+                 added in there is deleted without warning. The config can't
+                 carry this either: a `plugins.deep-link.mobile` entry is an
+                 App Link associated domain (`host`/`pathPrefix`), and the
+                 `schemes` key the plugin reads lives under `desktop` — a
+                 custom scheme on Android has nowhere to go but here.
+
+                 Self-contained by necessity: Android matches each
+                 intent-filter as a whole, so the action and categories are
+                 repeated rather than inherited. No `autoVerify` — that is
+                 for App Links, and a non-http scheme inside a verified
+                 filter risks Android rejecting the filter outright. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="golem-test" android:host="*" />
+            </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->
             <intent-filter android:autoVerify="true" >
                 <action android:name="android.intent.action.VIEW" />
@@ -53,13 +81,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:scheme="http" />
-                <!-- Custom scheme for the deep_link e2e flows.
-                     `tauri.conf.json` declares it under `plugins.deep-link.mobile`,
-                     but the `tauri android build` step doesn't always re-expand
-                     this intent-filter — declaring the scheme here directly
-                     means `am start -a VIEW -d golem-test://...` reaches the
-                     app regardless of the regen state. -->
-                <data android:scheme="golem-test" />
                 <data android:host="*" />
                 
                 
