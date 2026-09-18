@@ -48,3 +48,9 @@ indexmap = { version = "2", features = ["serde"] }
 # websocket — no chromedriver — and `fetcher` stays off so the build never
 # downloads a browser.
 chromiumoxide = { version = "0.9.1", default-features = false, features = ["bytes"] }
+
+# Dependencies are never stepped into in a debugger, so they don't need
+# debug symbols. With `debuginfo=2` on every dep, `target/debug/deps` grew
+# to 73G; our own crates keep full debug info via the default dev profile.
+[profile.dev.package."*"]
+debug = false

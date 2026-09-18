@@ -57,6 +57,14 @@ bold_delta() {
   else printf '%s → %s.**%s**' "$old" "$head" "$tail"; fi
 }
 
+# Collapse the versions on stdin to one sorted, comma-separated line. A single
+# version passes through unchanged, so `bold_delta` still highlights the bumped
+# SemVer segment in the ordinary case; a joined list isn't SemVer, so it falls
+# back to bolding the whole thing — which is the readable answer for a set.
+join_versions() {
+  sort -uV | awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }'
+}
+
 # name<TAB>version for every [[package]] in a Cargo.lock passed on stdin.
 cargo_lock_map() {
   awk '
@@ -477,8 +485,12 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
     # writing → EPIPE → `set -o pipefail` fails the whole script. Keys are
     # unique (names come from `sort -u`), so awk prints the one match and reads
     # to EOF regardless.
-    ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2}')"
-    nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2}')"
+    # A crate can resolve to SEVERAL versions at once (rand 0.8 + 0.9 + 0.10
+    # coexisting via different dependents). Joining them keeps the entry on one
+    # line — interpolating the raw multi-line capture printed a bare newline
+    # mid-sentence and broke the rendered list.
+    ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2}' | join_versions)"
+    nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2}' | join_versions)"
     [[ "$ov" == "$nv" ]] && continue                     # unchanged
     cls="${direct_force:-${DEPCLASS[${eco}:${name}]:-}}"
     if [[ -z "$cls" ]]; then                             # transitive → count once

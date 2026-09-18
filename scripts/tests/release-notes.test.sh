@@ -92,6 +92,27 @@ packages:
 sdks:
   dart: ">=3.4.0 <4.0.0"
 EOF
+# A Cargo workspace where one direct dep resolves to SEVERAL versions at once
+# (as rand did: 0.8 + 0.9 + 0.10 coexisting via different dependents), beside a
+# single-version one so both rendering paths are covered.
+cat > Cargo.toml <<'EOF'
+[workspace.dependencies]
+multi = "0.1"
+solo = "1"
+EOF
+cat > Cargo.lock <<'EOF'
+[[package]]
+name = "multi"
+version = "0.1.0"
+
+[[package]]
+name = "multi"
+version = "0.2.0"
+
+[[package]]
+name = "solo"
+version = "1.0.0"
+EOF
 git add -A && git commit -qm "fixtures" && git tag v0.0.1
 
 # ── bumps at v0.0.2 ─────────────────────────────────────────────────────────
@@ -103,6 +124,20 @@ perl -pi -e 's/okhttp", version = "4\.12\.0"/okhttp", version = "4.12.1"/' compa
 perl -pi -e 's/okhttp:4\.12\.0/okhttp:4.12.1/' companions/android/build.gradle
 perl -pi -e 's/SwiftyJSON \(5\.0\.2\)/SwiftyJSON (5.0.3)/; s/FirebaseCore \(10\.24\.0\)/FirebaseCore (10.25.0)/' app/ios/Podfile.lock
 perl -pi -e 's/"1\.2\.2"/"1.3.0"/; s/"1\.15\.0"/"1.16.0"/; s/"1\.25\.8"/"1.25.9"/' app/pubspec.lock
+# multi drops its oldest and gains a newer; solo takes an ordinary patch bump.
+cat > Cargo.lock <<'EOF'
+[[package]]
+name = "multi"
+version = "0.2.0"
+
+[[package]]
+name = "multi"
+version = "0.3.0"
+
+[[package]]
+name = "solo"
+version = "1.1.0"
+EOF
 git add -A && git commit -qm "bump deps" && git tag v0.0.2
 
 OUT="$("$SCRIPT" v0.0.2 v0.0.1)"
@@ -139,6 +174,21 @@ else fail "pub direct dev groups under dev — dev block was: $DEV"; fi
 
 # Transitive collapse: FirebaseCore + meta changed but are transitive.
 assert_has "transitive bumps collapse to a count" '+2 transitive'
+
+# A crate resolving to several versions must stay on ONE line. Interpolating the
+# raw multi-line capture printed a bare newline mid-entry, splitting the bullet
+# across three lines in the published notes.
+assert_has "a multi-version crate joins its versions inline" \
+  'multi` 0.1.0, 0.2.0 → **0.2.0, 0.3.0**'
+assert_has "a single-version crate still bolds only the changed segment" \
+  'solo` 1.0.0 → 1.**1.0**'
+
+multi_line="$(grep -n 'multi`' "$TMP/out.md" | head -1 | cut -d: -f1)"
+if [[ -n "$multi_line" ]] && grep -q 'multi`.*0\.3\.0' <<< "$(sed -n "${multi_line}p" "$TMP/out.md")"; then
+  ok "the whole multi-version entry sits on a single line"
+else
+  fail "the whole multi-version entry sits on a single line — it wrapped"
+fi
 
 if [[ "$FAILED" -ne 0 ]]; then
   echo
