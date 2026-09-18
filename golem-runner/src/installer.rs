@@ -10,7 +10,6 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -19,8 +18,6 @@ use chrono::{DateTime, Utc};
 use golem_events::emitter::DeviceEmitter;
 use golem_events::EventKind;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::Mutex;
 
 use crate::fingerprint::Fingerprint;
@@ -410,31 +407,43 @@ pub async fn run_install_script(
         });
     }
 
-    let mut cmd = Command::new(script_path);
-    cmd.arg(platform).arg(device_udid).arg(bundle_id);
-    // App-declared `install_env` (already `${var}`-interpolated). Layered on
-    // top of the inherited parent env — scripts that ignore unknown vars are
-    // unaffected.
-    if !env.is_empty() {
-        cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-    }
-    // golem-provided builtin: lets a script that owns a remote/build cache
-    // (e.g. Expo/EAS) force a fresh build under `--rebuild`.
-    cmd.env("GOLEM_REBUILD", if rebuild { "1" } else { "0" });
+    let mut args = vec![
+        platform.to_string(),
+        device_udid.to_string(),
+        bundle_id.to_string(),
+    ];
     if install_only {
         // Scripts that know the protocol SHALL skip their build step when
         // `$4 == "install-only"` and install the already-built artifact.
         // Scripts that don't check the arg fall back to a full rebuild —
         // correct, just miss the optimisation.
-        cmd.arg("install-only");
+        args.push("install-only".to_string());
     }
-    let spawn_result = cmd
-        .current_dir(working_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn();
+    // App-declared `install_env` (already `${var}`-interpolated). Layered on
+    // top of the inherited parent env — scripts that ignore unknown vars are
+    // unaffected.
+    let mut script_env: Vec<(String, String)> =
+        env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    // golem-provided builtin: lets a script that owns a remote/build cache
+    // (e.g. Expo/EAS) force a fresh build under `--rebuild`.
+    script_env.push((
+        "GOLEM_REBUILD".to_string(),
+        if rebuild { "1" } else { "0" }.to_string(),
+    ));
+    let opts = golem_common::command::CommandOpts {
+        env: script_env,
+        current_dir: Some(working_dir.display().to_string()),
+        ..Default::default()
+    };
 
-    let mut child = match spawn_result {
+    let spawn_result = golem_common::command::runner()
+        .spawn_streaming(&script_path.display().to_string(), &args, &opts)
+        .await;
+
+    let golem_common::command::StreamingProcess {
+        stderr: mut stderr_lines,
+        mut child,
+    } = match spawn_result {
         Ok(c) => c,
         Err(e) => {
             let err = format!(
@@ -462,16 +471,13 @@ pub async fn run_install_script(
     };
 
     // Stream stderr line-by-line via events; also keep a tail for error context.
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("no stderr pipe"))?;
+    // Runs as its own task so build progress reaches the user WHILE the script
+    // is still running, rather than after it exits.
     let emitter_for_task: Option<DeviceEmitter> = emitter.cloned();
     let app_name_for_task = app_name.to_string();
     let stderr_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
         let mut tail: Vec<String> = Vec::new();
-        while let Ok(Some(line)) = reader.next_line().await {
+        while let Some(line) = stderr_lines.recv().await {
             if let Some(ref em) = emitter_for_task {
                 em.emit(EventKind::InstallOutput {
                     app_name: app_name_for_task.clone(),
@@ -491,16 +497,16 @@ pub async fn run_install_script(
     let (success, exit_code, error_msg, fail_code) = match wait_result {
         Ok(Ok(status)) => {
             let tail = stderr_task.await.unwrap_or_default();
-            if status.success() {
+            if status.success {
                 (
                     true,
-                    status.code(),
+                    status.code,
                     None,
                     golem_events::FailureCode::AppInstallFailed,
                 )
             } else {
                 let tail_str = tail.join("\n");
-                let code = status.code();
+                let code = status.code;
                 let msg = format!(
                     "install script exited {} for {app_name} on {device_udid}:\n{tail_str}",
                     code.map(|c| c.to_string())
@@ -836,58 +842,19 @@ mod tests {
 
     #[tokio::test]
     async fn script_exit_0_succeeds() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let script = write_script(tmp.path(), "#!/bin/sh\necho running >&2\nexit 0\n");
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
-        assert!(result.is_ok(), "exit 0 SHALL be ok: {:?}", result);
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let (fake, _guard) = faked(script, &["running"], Some(0));
+        let _ = &fake;
+        let result = run_install_script(&spec(script, &[]), &target(), 5_000, None).await;
+        assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
     }
 
     #[tokio::test]
     async fn script_exit_nonzero_fails_with_stderr() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let script = write_script(
-            tmp.path(),
-            "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n",
-        );
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let (fake, _guard) = faked(script, &["build failed: missing signing"], Some(1));
+        let _ = &fake;
+        let result = run_install_script(&spec(script, &[]), &target(), 5_000, None).await;
         assert!(result.is_err());
         let err = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
@@ -902,261 +869,242 @@ mod tests {
 
     #[tokio::test]
     async fn script_timeout_kills_process() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            200,
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let key = stream_key(script);
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        // `None` = a child that never exits, so the caller's own timeout is
+        // what ends the wait. A fake returning a canned exit status would let
+        // this test pass without the timeout path ever running.
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[],
             None,
-        )
-        .await;
-        assert!(result.is_err());
-        assert!(format!("{}", result.expect_err("operation SHALL fail")).contains("timed out"));
+        );
+        let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+
+        let result = run_install_script(&spec(script, &[]), &target(), 200, None).await;
+
+        let err = result.expect_err("a child that never exits SHALL time out");
+        assert!(
+            format!("{err}").contains("timed out"),
+            "SHALL report a timeout: {err}"
+        );
+        assert!(
+            fake.stream_was_killed(),
+            "the timed-out child SHALL be killed, not left running"
+        );
+    }
+
+    fn spec<'a>(script: &'a std::path::Path, env: &'a [(String, String)]) -> InstallScriptSpec<'a> {
+        InstallScriptSpec {
+            script_path: script,
+            working_dir: std::path::Path::new("/tmp/golem-test-wd"),
+            install_only: false,
+            env,
+            rebuild: false,
+        }
+    }
+
+    fn target() -> InstallDeviceTarget<'static> {
+        InstallDeviceTarget {
+            platform: "android",
+            device_udid: "emulator-5554",
+            bundle_id: "com.example.app",
+            app_name: "app",
+            target: "test target",
+            os_major: 0,
+        }
+    }
+
+    /// Install a fake scripted with `lines` then `exit`, keyed on this script.
+    /// Returns the fake plus the restoring guard — bind the guard, or the
+    /// override is dropped before the code under test runs.
+    fn faked(
+        script: &std::path::Path,
+        lines: &[&str],
+        exit: Option<i32>,
+    ) -> (
+        Arc<golem_common::command::FakeCommandRunner>,
+        golem_common::command::TestRunnerGuard,
+    ) {
+        let key = stream_key(script);
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            lines,
+            exit,
+        );
+        let guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+        (fake, guard)
+    }
+
+    /// Script path + the three positional args, as the fake keys on them.
+    fn stream_key(script: &std::path::Path) -> Vec<String> {
+        vec![
+            script.display().to_string(),
+            "android".to_string(),
+            "emulator-5554".to_string(),
+            "com.example.app".to_string(),
+        ]
     }
 
     #[tokio::test]
-    async fn script_receives_args_in_correct_order() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let out_file = tmp.path().join("args.txt");
-        let script_body = format!(
-            "#!/bin/sh\necho \"$1 $2 $3 $4\" > {}\nexit 0\n",
-            out_file.display()
+    async fn install_env_and_rebuild_flag_are_composed_into_the_child_env() {
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let key = stream_key(script);
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[],
+            Some(0),
         );
-        let script = write_script(tmp.path(), &script_body);
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "android",
-                device_udid: "emulator-5554",
-                bundle_id: "com.example.app",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
-        assert!(result.is_ok());
-        let args = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
-        // $4 unset (install_only=false) SHALL produce empty trailing slot.
-        assert_eq!(args.trim(), "android emulator-5554 com.example.app");
-    }
+        let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
 
-    #[tokio::test]
-    async fn script_receives_install_env() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let out_file = tmp.path().join("env.txt");
-        let script_body = format!(
-            "#!/bin/sh\necho \"$APP_ENV|$SANDBOX_ID\" > {}\nexit 0\n",
-            out_file.display()
-        );
-        let script = write_script(tmp.path(), &script_body);
         let env = vec![
             ("APP_ENV".to_string(), "staging".to_string()),
             ("SANDBOX_ID".to_string(), "12345".to_string()),
         ];
+        let result = run_install_script(&spec(script, &env), &target(), 5_000, None).await;
+        assert!(result.is_ok(), "SHALL succeed: {result:?}");
+
+        let opts = fake.recorded_stream_opts();
+        let env_got = &opts[0].env;
+        assert!(
+            env_got.contains(&("APP_ENV".to_string(), "staging".to_string())),
+            "install_env SHALL reach the child env: {env_got:?}"
+        );
+        assert!(
+            env_got.contains(&("SANDBOX_ID".to_string(), "12345".to_string())),
+            "install_env SHALL reach the child env: {env_got:?}"
+        );
+        assert!(
+            env_got.contains(&("GOLEM_REBUILD".to_string(), "0".to_string())),
+            "GOLEM_REBUILD SHALL default to 0: {env_got:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rebuild_sets_the_golem_rebuild_flag() {
+        for (rebuild, want) in [(true, "1"), (false, "0")] {
+            let script = std::path::Path::new("/does/not/need/to/exist.sh");
+            let key = stream_key(script);
+            let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+            fake.expect_stream(
+                &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+                &[],
+                Some(0),
+            );
+            let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+
+            let mut spec = spec(script, &[]);
+            spec.rebuild = rebuild;
+            let result = run_install_script(&spec, &target(), 5_000, None).await;
+            assert!(result.is_ok(), "SHALL succeed: {result:?}");
+
+            let opts = fake.recorded_stream_opts();
+            assert!(
+                opts[0]
+                    .env
+                    .contains(&("GOLEM_REBUILD".to_string(), want.to_string())),
+                "rebuild={rebuild} SHALL set GOLEM_REBUILD={want}: {:?}",
+                opts[0].env
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_script_is_run_in_the_configured_working_dir() {
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let key = stream_key(script);
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[],
+            Some(0),
+        );
+        let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+
+        let result = run_install_script(&spec(script, &[]), &target(), 5_000, None).await;
+        assert!(result.is_ok(), "SHALL succeed: {result:?}");
+        assert_eq!(
+            fake.recorded_stream_opts()[0].current_dir.as_deref(),
+            Some("/tmp/golem-test-wd"),
+            "SHALL run in the configured working_dir"
+        );
+    }
+
+    /// The fake proves golem composes args/env/cwd; only a real process proves
+    /// the seam's real implementation DELIVERS them. One end-to-end spawn
+    /// covers all three at once, so the rest of the suite need not spawn.
+    #[tokio::test]
+    async fn a_real_script_receives_the_args_env_and_working_dir() {
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
+        let out_file = tmp.path().join("seen.txt");
+        std::fs::write(tmp.path().join("marker.txt"), "hello").expect("write() SHALL succeed");
+        let script = write_script(
+            tmp.path(),
+            &format!(
+                "#!/bin/sh\ntest -f ./marker.txt || exit 9\necho \"$1|$2|$3|$APP_ENV|$GOLEM_REBUILD\" > {}\nexit 0\n",
+                out_file.display()
+            ),
+        );
+        let env = vec![("APP_ENV".to_string(), "staging".to_string())];
         let result = run_install_script(
             &InstallScriptSpec {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
                 env: &env,
-                rebuild: false,
+                rebuild: true,
             },
-            &InstallDeviceTarget {
-                platform: "android",
-                device_udid: "emulator-5554",
-                bundle_id: "com.example.app",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
+            &target(),
             5_000,
             None,
         )
         .await;
-        assert!(result.is_ok());
-        let got = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
+        assert!(result.is_ok(), "SHALL succeed: {result:?}");
+        let seen = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
         assert_eq!(
-            got.trim(),
-            "staging|12345",
-            "install_env SHALL reach the spawned script's environment"
-        );
-    }
-
-    #[tokio::test]
-    async fn script_receives_golem_rebuild_flag() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let out_file = tmp.path().join("rebuild.txt");
-        let script = write_script(
-            tmp.path(),
-            &format!(
-                "#!/bin/sh\necho \"$GOLEM_REBUILD\" > {}\nexit 0\n",
-                out_file.display()
-            ),
-        );
-        for (rebuild, want) in [(true, "1"), (false, "0")] {
-            let result = run_install_script(
-                &InstallScriptSpec {
-                    script_path: &script,
-                    working_dir: tmp.path(),
-                    install_only: false,
-                    env: &[],
-                    rebuild,
-                },
-                &InstallDeviceTarget {
-                    platform: "ios",
-                    device_udid: "udid-1",
-                    bundle_id: "com.x",
-                    app_name: "app",
-                    target: "t",
-                    os_major: 0,
-                },
-                5_000,
-                None,
-            )
-            .await;
-            assert!(result.is_ok());
-            let got = std::fs::read_to_string(&out_file).expect("read");
-            assert_eq!(
-                got.trim(),
-                want,
-                "GOLEM_REBUILD SHALL be {want} when rebuild={rebuild}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn script_runs_in_working_dir() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let marker = tmp.path().join("marker.txt");
-        std::fs::write(&marker, "hello").expect("write() SHALL succeed");
-        let script = write_script(
-            tmp.path(),
-            "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n",
-        );
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
-        assert!(
-            result.is_ok(),
-            "SHALL run in provided working_dir: {:?}",
-            result
+            seen.trim(),
+            "android|emulator-5554|com.example.app|staging|1",
+            "the real seam SHALL deliver args, install_env, GOLEM_REBUILD and cwd"
         );
     }
 
     #[tokio::test]
     async fn script_install_only_passes_fourth_arg() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let out_file = tmp.path().join("args.txt");
-        let script_body = format!(
-            "#!/bin/sh\necho \"$1|$2|$3|$4\" > {}\nexit 0\n",
-            out_file.display()
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let mut key = stream_key(script);
+        key.push("install-only".to_string());
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[],
+            Some(0),
         );
-        let script = write_script(tmp.path(), &script_body);
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: true,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
-        assert!(result.is_ok());
-        let args = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
-        assert_eq!(
-            args.trim(),
-            "ios|udid-1|com.x|install-only",
-            "install_only=true SHALL pass \"install-only\" as $4"
-        );
+        let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+
+        let mut spec = spec(script, &[]);
+        spec.install_only = true;
+        // The fake is keyed on the exact argv, so an un-scripted invocation
+        // errors — reaching Ok IS the assertion that `install-only` was $4.
+        let result = run_install_script(&spec, &target(), 5_000, None).await;
+        assert!(result.is_ok(), "SHALL pass install-only as $4: {result:?}");
+        assert_eq!(fake.recorded()[0], key, "argv SHALL match exactly");
     }
 
     #[tokio::test]
     async fn script_full_build_omits_fourth_arg() {
-        let tmp = tempdir().expect("tempdir() SHALL succeed");
-        let out_file = tmp.path().join("args.txt");
-        // Use -z to check $4 is empty/unset.
-        let script_body = format!(
-            "#!/bin/sh\nif [ -z \"$4\" ]; then echo NO4 > {}; else echo \"got:$4\" > {}; fi\nexit 0\n",
-            out_file.display(), out_file.display()
-        );
-        let script = write_script(tmp.path(), &script_body);
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            None,
-        )
-        .await;
-        assert!(result.is_ok());
-        let marker = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let key = stream_key(script);
+        let (fake, _guard) = faked(script, &[], Some(0));
+
+        let result = run_install_script(&spec(script, &[]), &target(), 5_000, None).await;
+        assert!(result.is_ok(), "SHALL succeed: {result:?}");
         assert_eq!(
-            marker.trim(),
-            "NO4",
-            "install_only=false SHALL omit the 4th arg entirely"
+            fake.recorded()[0],
+            key,
+            "a full build SHALL pass exactly three args, no install-only"
         );
     }
 
@@ -1363,28 +1311,13 @@ mod tests {
         let mut rx = subs.subscribe();
         let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
 
-        let tmp = tempdir().expect("tempdir");
-        let script = write_script(tmp.path(), "#!/bin/sh\nexit 0\n");
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "app",
-                target: "iPhone 16e (ios/v18/phone)",
-                os_major: 18,
-            },
-            5_000,
-            Some(&emitter),
-        )
-        .await;
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let (fake, _guard) = faked(script, &[], Some(0));
+        let _ = &fake;
+        let mut tgt = target();
+        tgt.target = "iPhone 16e (ios/v18/phone)";
+        tgt.os_major = 18;
+        let result = run_install_script(&spec(script, &[]), &tgt, 5_000, Some(&emitter)).await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
 
         let first = rx.recv().await.expect("SHALL receive InstallStarted");
@@ -1397,7 +1330,10 @@ mod tests {
                 ..
             } => {
                 assert_eq!(app_name, "app", "InstallStarted SHALL carry app_name");
-                assert_eq!(bundle_id, "com.x", "InstallStarted SHALL carry bundle_id");
+                assert_eq!(
+                    bundle_id, "com.example.app",
+                    "InstallStarted SHALL carry bundle_id"
+                );
                 assert_eq!(
                     target, "iPhone 16e (ios/v18/phone)",
                     "InstallStarted SHALL carry the target string verbatim"
@@ -1439,31 +1375,12 @@ mod tests {
         let mut rx = subs.subscribe();
         let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
 
-        let tmp = tempdir().expect("tempdir");
-        let script = write_script(
-            tmp.path(),
-            "#!/bin/sh\necho line-one >&2\necho line-two >&2\nexit 0\n",
-        );
-        let result = run_install_script(
-            &InstallScriptSpec {
-                script_path: &script,
-                working_dir: tmp.path(),
-                install_only: false,
-                env: &[],
-                rebuild: false,
-            },
-            &InstallDeviceTarget {
-                platform: "ios",
-                device_udid: "udid-1",
-                bundle_id: "com.x",
-                app_name: "myapp",
-                target: "test target",
-                os_major: 0,
-            },
-            5_000,
-            Some(&emitter),
-        )
-        .await;
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let (fake, _guard) = faked(script, &["line-one", "line-two"], Some(0));
+        let _ = &fake;
+        let mut tgt = target();
+        tgt.app_name = "myapp";
+        let result = run_install_script(&spec(script, &[]), &tgt, 5_000, Some(&emitter)).await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
 
         let mut output_lines = Vec::new();
