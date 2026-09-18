@@ -800,6 +800,15 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn set_dark_mode(&self, enabled: bool) -> Result<()> {
+        if self.physical {
+            bail!(
+                "set_dark_mode is simulator-only on iOS — `{}` is a physical \
+                 device, and `simctl ui appearance` can't address one. Set \
+                 the appearance in Settings on the device, or gate the step \
+                 on `_hardware`; see docs/actions-reference.md §Device Controls.",
+                self.device_id,
+            );
+        }
         let style = if enabled { "dark" } else { "light" };
         self.simctl(&["ui", &self.device_id, "appearance", style])
             .await?;
@@ -807,6 +816,16 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn set_location(&self, lat: f64, lon: f64) -> Result<()> {
+        if self.physical {
+            bail!(
+                "set_location is simulator-only on iOS — `{}` is a physical \
+                 device, and `simctl location` can't address one. Mocking GPS \
+                 on real hardware needs a signed location provider, which is \
+                 outside this action's scope; gate the step on `_hardware`. \
+                 See docs/actions-reference.md §Device Controls.",
+                self.device_id,
+            );
+        }
         self.simctl(&["location", &self.device_id, "set", &format!("{lat},{lon}")])
             .await?;
         // The test app's `DeviceState.svelte` exposes a manual hook
@@ -886,6 +905,16 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn add_media(&self, path: &str) -> Result<()> {
+        if self.physical {
+            bail!(
+                "add_media is simulator-only on iOS — `{}` is a physical \
+                 device, and `simctl addmedia` can't address one. Put the \
+                 fixture in the device's library ahead of the run, or gate \
+                 the step on `_hardware`; see docs/actions-reference.md \
+                 §add_media.",
+                self.device_id,
+            );
+        }
         self.simctl(&["addmedia", &self.device_id, path]).await?;
         Ok(())
     }
@@ -1035,6 +1064,52 @@ mod tests {
             msg.contains("docs/actions-reference.md"),
             "error SHALL point at the documented limitation: {msg}"
         );
+    }
+
+    // The device controls are simctl-backed like clear_data, so they refuse
+    // the same way. Driven as a table: the interesting part is that each
+    // message names its own action, not that three near-identical tests exist.
+    //
+    // Port 0 again: the guards fire before any companion or simctl call.
+    // auto_cleanup drives set_dark_mode and set_location after every flow, so
+    // on physical iOS these run once per flow and must not reach for I/O.
+    #[tokio::test]
+    async fn sim_only_device_controls_refuse_on_a_physical_device() {
+        let driver = IosDriver::new(
+            "PHYS-UDID".to_string(),
+            "com.example.app".to_string(),
+            0,
+            true,
+        );
+
+        let results = [
+            ("set_dark_mode", driver.set_dark_mode(true).await),
+            (
+                "set_location",
+                driver.set_location(37.7749, -122.4194).await,
+            ),
+            ("add_media", driver.add_media("/tmp/photo.jpg").await),
+        ];
+
+        for (action, result) in results {
+            let Err(err) = result else {
+                panic!("`{action}` SHALL refuse on physical iOS");
+            };
+            let msg = err.to_string();
+
+            assert!(
+                msg.contains(action),
+                "error SHALL name the action `{action}`: {msg}"
+            );
+            assert!(
+                msg.contains("PHYS-UDID"),
+                "`{action}` error SHALL name the device: {msg}"
+            );
+            assert!(
+                msg.contains("docs/actions-reference.md"),
+                "`{action}` error SHALL point at the documented limitation: {msg}"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
