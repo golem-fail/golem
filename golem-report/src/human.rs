@@ -83,7 +83,13 @@ pub fn format_step(step: &StepReport) -> String {
                 code.render(golem_events::Severity::Error)
             ),
         ),
-        StepOutcome::Skipped => (SYM_SKIPPED, "  (skipped)".to_string()),
+        StepOutcome::Skipped => (
+            SYM_SKIPPED,
+            match &step.skip_reason {
+                Some(reason) => format!("  (skipped: {reason})"),
+                None => "  (skipped)".to_string(),
+            },
+        ),
     };
 
     let label = if step.target.is_empty() {
@@ -326,6 +332,7 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -345,6 +352,7 @@ mod tests {
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -367,6 +375,7 @@ mod tests {
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -387,8 +396,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_skipped_step_with_a_reason_says_why() {
+        let mut step = skipped_step("tap", "Cancel");
+        step.skip_reason = Some("F404: element never appeared".to_string());
+        let out = format_step(&step);
+        assert!(
+            out.contains("(skipped: F404: element never appeared)"),
+            "SHALL render the reason: {out}"
+        );
+    }
+
+    #[test]
+    fn a_skipped_step_without_a_reason_is_unchanged() {
+        let out = format_step(&skipped_step("tap", "Cancel"));
+        assert!(
+            out.contains("(skipped)") && !out.contains("skipped:"),
+            "a reasonless skip SHALL keep its bare form: {out}"
+        );
+    }
+
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,

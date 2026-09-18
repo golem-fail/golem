@@ -19,8 +19,10 @@ pub enum StepOutcome {
     Success,
     /// if_fail = "warn": step failed but execution continues
     Warning { message: String, code: FailureCode },
-    /// if_fail = "ignore": step failed, silently continue
-    Ignored,
+    /// if_fail = "ignore": step failed, execution continues and the flow's
+    /// verdict is unaffected. Carries the swallowed failure anyway — `ignore`
+    /// means it does not COUNT, not that the reader must guess what happened.
+    Ignored { message: String, code: FailureCode },
 }
 
 /// Default retry delay in milliseconds
@@ -485,7 +487,10 @@ fn finish_failed_step(last_error: Option<anyhow::Error>, if_fail: &str) -> Resul
             code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
             message: clean_msg(&error),
         }),
-        "ignore" => Ok(StepOutcome::Ignored),
+        "ignore" => Ok(StepOutcome::Ignored {
+            code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
+            message: clean_msg(&error),
+        }),
         _ => Err(error), // "error" (default) — propagate
     }
 }
@@ -525,7 +530,13 @@ pub(crate) fn apply_if_fail_for_death(
                 message: clean_msg(&error),
             })
         }
-        "ignore" => Ok(StepOutcome::Ignored),
+        "ignore" => {
+            let error = result.expect_err("checked Err above");
+            Ok(StepOutcome::Ignored {
+                code: code.unwrap_or(FailureCode::Uncoded),
+                message: clean_msg(&error),
+            })
+        }
         _ => result,
     }
 }
@@ -574,7 +585,10 @@ where
             code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
             message: clean_msg(&error),
         }),
-        "ignore" => Ok(StepOutcome::Ignored),
+        "ignore" => Ok(StepOutcome::Ignored {
+            code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
+            message: clean_msg(&error),
+        }),
         _ => Err(error),
     }
 }
@@ -788,7 +802,10 @@ mod tests {
         .await;
 
         assert!(result.is_ok());
-        assert_eq!(result.expect("should be ok"), StepOutcome::Ignored);
+        assert!(
+            matches!(result.expect("should be ok"), StepOutcome::Ignored { .. }),
+            "if_fail=ignore SHALL yield Ignored"
+        );
     }
 
     // -----------------------------------------------------------------

@@ -41,15 +41,37 @@ Scroll substeps show the strategy number (1-5 per direction), swipe coordinates,
       ✓  [8234ms] {3 trees, 187~188 nodes}
 ```
 
+### Skipped steps say why
+
+A step shows as skipped when `if_fail = "ignore"` swallowed its failure. Every
+format carries the reason — the code plus the message of the failure that was
+ignored — so a skip is readable rather than merely countable:
+
+```text
+SKIP [12.001s]  accept_alert timeout=12000  (F408: Step timed out after 12000ms)
+```
+
+A step the run never finished (a barrier abort, when another device failed)
+also reports as skipped, but carries no reason: the cause is a property of the
+flow, not of the step, and is already on the flow's own line.
+
+Steps in a block that never ran at all — excluded by a `where` clause, jumped
+over by `--start`, or in an unreached branch target — do not appear in the
+report as skipped steps. They emit no events, so there is nothing to annotate.
+
 ## `json`
 
 Structured JSON with suite summary, per-flow results, step details, substeps, and performance snapshots. Printed to stdout (also written to `{output-dir}/results.json`).
+
+A skipped step carries `skip_reason` beside its unchanged `"outcome": "skipped"`; the key is omitted when there is no reason to give.
 
 The suite summary carries `install_blocked` alongside `total` / `passed` / `failed` / `skipped`: the subset of `failed` whose app never installed. One broken install fails every flow that references it, so CI can tell a batch of blocked flows from a batch of real regressions.
 
 ## `junit`
 
 JUnit XML for CI systems (Jenkins, GitHub Actions, GitLab CI). Each flow maps to a `<testsuite>`, each step to a `<testcase>`. Printed to stdout (also written to `{output-dir}/results.xml`).
+
+A skipped step renders `<skipped message="…"/>` when its reason is known, and a bare `<skipped/>` otherwise.
 
 ## `toon`
 
@@ -61,5 +83,7 @@ S:tap_test d:450 seed:847291036
  +assert_visible:1 120
 R:PASS 2/0/0
 ```
+
+A skipped step is `-action:target`, gaining the failure code of whatever was ignored when there is one — ` -accept_alert F408`. The code only: TOON is a scan format, and the prose is in the other outputs.
 
 The closing `total:` line reads `total:N×pass,N×fail,N×skip d:duration`, gaining a `,N×blocked` token — a subset of `fail` — when flows failed because their app never installed.

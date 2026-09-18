@@ -364,6 +364,7 @@ impl ReportAccumulator {
                     .steps
                     .into_iter()
                     .map(|s| {
+                        let mut skip_reason = None;
                         let outcome = match s.outcome {
                             Some(golem_events::StepOutcome::Success) => StepOutcome::Success,
                             Some(golem_events::StepOutcome::Warning { message, code }) => {
@@ -374,7 +375,13 @@ impl ReportAccumulator {
                                 StepOutcome::Failed { message, code }
                             }
                             Some(golem_events::StepOutcome::Skipped) => StepOutcome::Skipped,
-                            Some(golem_events::StepOutcome::Ignored) => StepOutcome::Skipped,
+                            Some(golem_events::StepOutcome::Ignored { message, code }) => {
+                                // Deliberately NOT folded into first_failure_code:
+                                // `ignore` means the failure does not decide the
+                                // flow's verdict, only that the reader gets told.
+                                skip_reason = Some(format!("{}: {message}", code.fragment()));
+                                StepOutcome::Skipped
+                            }
                             None => StepOutcome::Skipped,
                         };
                         StepReport {
@@ -385,6 +392,7 @@ impl ReportAccumulator {
                             action: s.action,
                             target: s.selector_label,
                             outcome,
+                            skip_reason,
                             duration_ms: s.duration_ms,
                             retry_count: s.retry_count,
                             screenshot_path: s.screenshot_path,
@@ -564,6 +572,84 @@ mod tests {
             flow.first_failure_code,
             Some(golem_events::FailureCode::AppInstallFailed),
             "FlowCouldNotRun SHALL carry its code onto the flow"
+        );
+    }
+
+    // -- An ignored step carries the failure it swallowed --
+
+    fn ignored_step_report() -> crate::SuiteReport {
+        let mut acc = ReportAccumulator::new();
+        let dev = "pixel";
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f1".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "main".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "Gone".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Ignored {
+                    message: "element never appeared".into(),
+                    code: golem_events::FailureCode::FlowElementNotFound,
+                },
+                duration_ms: 12,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
+        acc.into_suite_report()
+    }
+
+    #[test]
+    fn an_ignored_step_reports_why_it_was_skipped() {
+        let report = ignored_step_report();
+        let step = &report.flows[0].step_results[0];
+
+        assert!(
+            matches!(step.outcome, StepOutcome::Skipped),
+            "an ignored step SHALL still report as skipped"
+        );
+        let reason = step
+            .skip_reason
+            .as_deref()
+            .expect("an ignored step SHALL carry a skip reason");
+        assert!(
+            reason.contains("element never appeared"),
+            "the reason SHALL be the swallowed failure: {reason}"
+        );
+        assert!(
+            reason.contains("F404"),
+            "the reason SHALL carry the code: {reason}"
+        );
+    }
+
+    // `ignore` means the failure does not decide the flow's verdict. Surfacing
+    // its message must not smuggle it into the failure code either — that is
+    // the whole difference between `ignore` and `warn`.
+    #[test]
+    fn an_ignored_step_does_not_set_the_flows_failure_code() {
+        let report = ignored_step_report();
+        assert!(
+            report.flows[0].first_failure_code.is_none(),
+            "an ignored step SHALL NOT become the flow's failure code"
         );
     }
 
@@ -1106,7 +1192,10 @@ mod tests {
             dev,
             EventKind::StepFinished {
                 global_step_index: 1,
-                outcome: golem_events::StepOutcome::Ignored,
+                outcome: golem_events::StepOutcome::Ignored {
+                    message: "element not found".to_string(),
+                    code: golem_events::FailureCode::FlowElementNotFound,
+                },
                 duration_ms: 0,
                 retry_count: 0,
                 screenshot_path: None,

@@ -54,7 +54,7 @@ pub async fn execute_teardown(
             {
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning { message, .. }) => result.warnings.push(message),
-                Ok(StepOutcome::Ignored) => {}
+                Ok(StepOutcome::Ignored { .. }) => {}
                 Err(e) => {
                     // Collect error but DON'T propagate — teardown never fails the test
                     result.errors.push(e.to_string());

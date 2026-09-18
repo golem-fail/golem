@@ -203,7 +203,14 @@ fn outcome_steps() -> Vec<(DeviceId, EventKind)> {
             },
         ),
         ("tap", "text=Skipped", StepOutcome::Skipped),
-        ("tap", "text=Ignored", StepOutcome::Ignored),
+        (
+            "tap",
+            "text=Ignored",
+            StepOutcome::Ignored {
+                message: "element never appeared".into(),
+                code: FailureCode::FlowElementNotFound,
+            },
+        ),
     ];
     let mut out = Vec::new();
     for (i, (action, selector, outcome)) in outcomes.into_iter().enumerate() {

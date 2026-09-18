@@ -23,6 +23,8 @@ struct JsonStep {
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skip_reason: Option<String>,
     duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     started_at: Option<String>,
@@ -210,6 +212,7 @@ fn step_to_json(step: &StepReport) -> JsonStep {
         code,
         error,
         warning,
+        skip_reason: step.skip_reason.clone(),
         duration_ms: step.duration_ms,
         started_at: step.started_at.clone(),
         finished_at: step.finished_at.clone(),
@@ -373,6 +376,7 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -392,6 +396,7 @@ mod tests {
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -414,6 +419,7 @@ mod tests {
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -436,6 +442,7 @@ mod tests {
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -841,6 +848,32 @@ mod tests {
         assert_eq!(axes[0], "ios");
         assert_eq!(axes[1], "v26");
         assert_eq!(axes[2], "tablet");
+    }
+
+    #[test]
+    fn a_skipped_step_carries_its_reason_beside_an_unchanged_outcome() {
+        let mut step = skipped_step("tap", "Cancel");
+        step.skip_reason = Some("F404: element never appeared".to_string());
+        let js = step_to_json(&step);
+        assert_eq!(
+            js.outcome, "skipped",
+            "the outcome string SHALL NOT change — consumers parse it"
+        );
+        assert_eq!(
+            js.skip_reason.as_deref(),
+            Some("F404: element never appeared"),
+            "the reason SHALL ride alongside as its own key"
+        );
+    }
+
+    #[test]
+    fn a_reasonless_skip_omits_the_key_entirely() {
+        let js = step_to_json(&skipped_step("tap", "Cancel"));
+        let v = serde_json::to_value(&js).expect("serialises");
+        assert!(
+            v.get("skip_reason").is_none(),
+            "an absent reason SHALL NOT emit a null key: {v}"
+        );
     }
 
     // 11. Skipped step has correct outcome ----------------------------
