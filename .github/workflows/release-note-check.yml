@@ -4,7 +4,11 @@ name: Release note
 # This is a REQUIRED status check, so the job must ALWAYS run and always report a
 # conclusion — a job skipped via a job-level `if:` leaves the required check
 # "expected" forever and blocks the PR. So the bot / `no-release-note` exemption
-# lives inside the step (exit 0), not in a job condition.
+# lives inside scripts/check-release-note.sh (exit 0), not in a job condition.
+#
+# The validation itself lives in that script rather than inline here so it can be
+# tested (scripts/tests/release-note-check.test.sh, run by `cargo t`) — untested
+# logic in a required gate blocks the whole repo when it is wrong.
 
 on:
   pull_request:
@@ -17,51 +21,10 @@ jobs:
   check:
     runs-on: ubuntu-slim
     steps:
+      - uses: actions/checkout@v5
       - name: Require a release-notes block
         env:
           BODY: ${{ github.event.pull_request.body }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: |
-          set -euo pipefail
-
-          # Exemptions (still report success so the required check is satisfied):
-          case "$AUTHOR" in
-            *'[bot]') echo "Bot PR ($AUTHOR) — deps come from the lockfile diff; exempt."; exit 0 ;;
-          esac
-          case ",$LABELS," in
-            *,no-release-note,*) echo "'no-release-note' label — exempt."; exit 0 ;;
-          esac
-
-          # Both markers, in order. An unclosed block captures to end-of-body, so
-          # any later line that happens to read like a category (a "Testing"
-          # section saying `fixed: the flaky test`) would ship as a phantom note.
-          open_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *release-notes *-->' | head -1 | cut -d: -f1)"
-          close_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *\/release-notes *-->' | head -1 | cut -d: -f1)"
-          if [ -n "$open_at" ] && { [ -z "$close_at" ] || [ "$close_at" -lt "$open_at" ]; }; then
-            echo "::error::The release-notes block opens with <!-- release-notes --> but never closes."
-            echo "Close it with <!-- /release-notes --> (note the slash) — see the PR template."
-            exit 1
-          fi
-
-          # Extract the block interior, then strip HTML comments (single/multi-line)
-          # so leftover template guidance never counts as a real note.
-          block="$(printf '%s\n' "$BODY" \
-            | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
-            | awk '{ l=$0
-                     if (inc) { if (l ~ /-->/) { sub(/.*-->/,"",l); inc=0 } else next }
-                     gsub(/<!--.*-->/,"",l)
-                     if (l ~ /<!--/) { sub(/<!--.*/,"",l); inc=1 }
-                     print l }')"
-          # The leading `- ` is required: `scripts/sync-pr-notes.sh` only recognises
-          # bulleted lines, so a bare entry is invisible to the trailer sync and
-          # would be duplicated rather than deduped against. Release-time
-          # extraction still accepts both, so merged PRs keep working.
-          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]+(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'; then
-            echo "✓ release-notes block present."
-          else
-            echo "::error::No release-notes block with a bulleted category line (breaking/added/improved/fixed/security/deprecated/internal) was found in the PR description."
-            echo "Each entry needs a leading '- ', e.g. '- fixed: tap lands correctly under the keyboard'."
-            echo "Add one (see the PR template), or apply the 'no-release-note' label if this PR ships nothing user-facing."
-            exit 1
-          fi
+        run: printf '%s\n' "$BODY" | bash scripts/check-release-note.sh
