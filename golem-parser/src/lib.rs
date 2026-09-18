@@ -22,6 +22,7 @@ pub mod mixin;
 pub mod permissions;
 pub mod validation;
 
+use serde::de::value::MapAccessDeserializer;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -278,6 +279,7 @@ pub struct DeviceFilter {
 /// A branch with no condition fields set is an unconditional `goto` —
 /// typically the last entry, acting as a default/else case.
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct BranchCondition {
     pub if_visible: Option<String>,
     pub if_not_visible: Option<String>,
@@ -295,11 +297,45 @@ pub struct BranchCondition {
 /// right_of = "Theme:"                          # text pattern
 /// right_of = { text = "Theme:", enabled = true } # nested selector
 /// ```
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum Anchor {
     Text(String),
     Selector(Box<SelectorGroup>),
+}
+
+// Not `#[serde(untagged)]`: an untagged enum reports a rejected group as
+// "data did not match any variant of untagged enum Anchor", swallowing the
+// `unknown field \`tex\`, expected one of ...` that makes a typo fixable.
+// Dispatching on the TOML value's own shape keeps the inner error.
+impl<'de> Deserialize<'de> for Anchor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(AnchorVisitor)
+    }
+}
+
+struct AnchorVisitor;
+
+impl<'de> serde::de::Visitor<'de> for AnchorVisitor {
+    type Value = Anchor;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("a text pattern or a selector table")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Anchor, E> {
+        Ok(Anchor::Text(v.to_string()))
+    }
+
+    fn visit_map<M>(self, map: M) -> Result<Anchor, M::Error>
+    where
+        M: serde::de::MapAccess<'de>,
+    {
+        SelectorGroup::deserialize(MapAccessDeserializer::new(map))
+            .map(|g| Anchor::Selector(Box::new(g)))
+    }
 }
 
 /// Anchor for the `contains` predicate. Like [`Anchor`] but the group form
@@ -309,22 +345,109 @@ pub enum Anchor {
 /// `<li>` wrapper). `min_matches` lives only here — it is meaningless on the
 /// main selector or the positional anchors, so it is structurally
 /// impossible to write there.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum ContainsAnchor {
     Text(String),
     Spec(Box<ContainsSpec>),
+}
+
+// Untagged for the same reason as [`Anchor`]: it would hide the field-level
+// error the spec form produces.
+impl<'de> Deserialize<'de> for ContainsAnchor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(ContainsAnchorVisitor)
+    }
+}
+
+struct ContainsAnchorVisitor;
+
+impl<'de> serde::de::Visitor<'de> for ContainsAnchorVisitor {
+    type Value = ContainsAnchor;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("a text pattern or a selector table")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<ContainsAnchor, E> {
+        Ok(ContainsAnchor::Text(v.to_string()))
+    }
+
+    fn visit_map<M>(self, map: M) -> Result<ContainsAnchor, M::Error>
+    where
+        M: serde::de::MapAccess<'de>,
+    {
+        ContainsSpec::deserialize(MapAccessDeserializer::new(map))
+            .map(|s| ContainsAnchor::Spec(Box::new(s)))
+    }
 }
 
 /// The group form of a `contains` anchor: every [`SelectorGroup`] field plus
 /// `min_matches` (default 1 = the smallest single enclosing box, today's
 /// behaviour).
 #[derive(Deserialize, Debug, Clone)]
+#[serde(from = "ContainsSpecRaw")]
 pub struct ContainsSpec {
-    #[serde(flatten)]
     pub group: SelectorGroup,
-    #[serde(default, deserialize_with = "deserialize_min_matches")]
     pub min_matches: Option<usize>,
+}
+
+/// Wire form of [`ContainsSpec`]. `group` cannot be `#[serde(flatten)]`: the
+/// flattened struct is fed through serde's `FlatMapDeserializer`, which does
+/// no unknown-field checking, so `deny_unknown_fields` on [`SelectorGroup`]
+/// is silently inert there and `contains = { text = "Row", min_matchs = 2 }`
+/// parses clean. Spelling the fields out keeps the derive in charge of key
+/// matching, which is also what produces the error's source span. The
+/// exhaustive `SelectorGroup` literal in `From` is the drift guard: a field
+/// added to [`SelectorGroup`] fails to compile until it is listed here too.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+struct ContainsSpecRaw {
+    text: Option<String>,
+    accessibility_label: Option<String>,
+    index: Option<usize>,
+    enabled: Option<bool>,
+    checked: Option<bool>,
+    clickable: Option<bool>,
+    below: Option<Anchor>,
+    above: Option<Anchor>,
+    right_of: Option<Anchor>,
+    left_of: Option<Anchor>,
+    contains: Option<ContainsAnchor>,
+    inside: Option<Anchor>,
+    #[serde(default)]
+    traits: Vec<String>,
+    x: Option<CoordValue>,
+    y: Option<CoordValue>,
+    #[serde(default, deserialize_with = "deserialize_min_matches")]
+    min_matches: Option<usize>,
+}
+
+impl From<ContainsSpecRaw> for ContainsSpec {
+    fn from(raw: ContainsSpecRaw) -> Self {
+        ContainsSpec {
+            group: SelectorGroup {
+                text: raw.text,
+                accessibility_label: raw.accessibility_label,
+                index: raw.index,
+                enabled: raw.enabled,
+                checked: raw.checked,
+                clickable: raw.clickable,
+                below: raw.below,
+                above: raw.above,
+                right_of: raw.right_of,
+                left_of: raw.left_of,
+                contains: raw.contains,
+                inside: raw.inside,
+                traits: raw.traits,
+                x: raw.x,
+                y: raw.y,
+            },
+            min_matches: raw.min_matches,
+        }
+    }
 }
 
 /// Sanity cap on `min_matches`. Disambiguating a container from a per-item
@@ -378,6 +501,7 @@ pub enum CoordValue {
 /// prefix. Relational fields (`below`, `above`, `right_of`, `left_of`)
 /// accept either a text pattern or a nested selector group.
 #[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SelectorGroup {
     pub text: Option<String>,
     pub accessibility_label: Option<String>,
@@ -502,6 +626,7 @@ impl Step {
 
 /// A single finger path in a multi-touch gesture.
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Finger {
     /// Points the finger travels through (each is a full selector).
     pub points: Vec<SelectorGroup>,
@@ -2296,5 +2421,143 @@ token = "abc123"
             flow.flow.vars.get("token").map(|s| s.as_str()),
             Some("abc123")
         );
+    }
+
+    // ---------------------------------------------------------------
+    // 49. Unknown selector keys are rejected, naming the offending key
+    // ---------------------------------------------------------------
+
+    /// A step body wrapped in the smallest flow that parses, so each case
+    /// below is only the selector under test.
+    fn parse_step(step: &str) -> anyhow::Result<FlowFile> {
+        parse_flow(&format!(
+            "[flow]\nname = \"t\"\n\n[[block]]\nname = \"b\"\n\n[[block.steps]]\n{step}\n"
+        ))
+    }
+
+    /// Asserts the parse failed *and* that the message points at `key` —
+    /// a bare `is_err()` would also pass on "data did not match any variant
+    /// of untagged enum Anchor", which is the message this change exists to
+    /// replace.
+    fn assert_rejects_key(step: &str, key: &str) {
+        let err = parse_step(step)
+            .err()
+            .unwrap_or_else(|| panic!("{step} SHALL be rejected"));
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&format!("unknown field `{key}`")),
+            "error SHALL name the offending key `{key}`, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn unknown_key_in_grouped_selector_is_rejected() {
+        assert_rejects_key("action = \"tap\"\non = { contais = \"X\" }", "contais");
+    }
+
+    #[test]
+    fn unknown_key_in_within_start_end_and_points_is_rejected() {
+        assert_rejects_key("action = \"scroll\"\nwithin = { tex = \"Y\" }", "tex");
+        assert_rejects_key("action = \"swipe\"\nstart = { tex = \"Y\" }", "tex");
+        assert_rejects_key("action = \"swipe\"\nend = { tex = \"Y\" }", "tex");
+        assert_rejects_key("action = \"swipe\"\npoints = [ { tex = \"Y\" } ]", "tex");
+        assert_rejects_key(
+            "action = \"pinch\"\nfingers = [ { pionts = [] } ]",
+            "pionts",
+        );
+    }
+
+    #[test]
+    fn unknown_key_in_nested_anchor_is_rejected() {
+        assert_rejects_key(
+            "action = \"tap\"\non = { text = \"X\", below = { tex = \"Y\" } }",
+            "tex",
+        );
+        // Two levels down: the anchor's own anchor.
+        assert_rejects_key(
+            "action = \"tap\"\non = { below = { text = \"Y\", right_of = { tex = \"Z\" } } }",
+            "tex",
+        );
+    }
+
+    #[test]
+    fn unknown_key_in_contains_spec_is_rejected() {
+        assert_rejects_key(
+            "action = \"tap\"\non = { contains = { text = \"Row\", min_matchs = 2 } }",
+            "min_matchs",
+        );
+    }
+
+    #[test]
+    fn unknown_key_in_branch_condition_is_rejected() {
+        let err = parse_flow(
+            "[flow]\nname = \"t\"\n\n[[block]]\nname = \"b\"\n\n[[block.branch]]\nif_visble = \"X\"\ngoto = \"c\"\n",
+        )
+        .expect_err("a misspelled branch condition SHALL be rejected");
+        assert!(
+            err.to_string().contains("unknown field `if_visble`"),
+            "error SHALL name the offending key, got: {err}"
+        );
+    }
+
+    #[test]
+    fn every_selector_form_still_parses() {
+        // The other half of the guard: strictness that rejects valid syntax
+        // is worse than the leniency it replaces.
+        for step in [
+            "action = \"tap\"\non = { text = \"X\", index = 1, enabled = true, traits = [\"button\"] }",
+            "action = \"tap\"\non = { x = \"50%\", y = 10 }",
+            "action = \"tap\"\non = { text = \"X\", below = \"Y\" }",
+            "action = \"tap\"\non = { text = \"X\", below = { text = \"Y\", enabled = true } }",
+            "action = \"tap\"\non = { contains = \"Row\" }",
+            "action = \"tap\"\non = { contains = { text = \"Row\", min_matches = 2 } }",
+            "action = \"tap\"\non = { contains = { text = \"Row\", below = { text = \"H\" } } }",
+            "action = \"tap\"\non = { inside = { text = \"Panel\" } }",
+        ] {
+            parse_step(step).unwrap_or_else(|e| panic!("{step} SHALL parse, got: {e}"));
+        }
+    }
+
+    #[test]
+    fn contains_spec_still_carries_the_group_and_min_matches() {
+        // ContainsSpecRaw -> ContainsSpec is hand-written; assert it maps
+        // fields rather than dropping them.
+        let flow = parse_step(
+            "action = \"tap\"\non = { contains = { text = \"Row *\", enabled = true, min_matches = 3 } }",
+        )
+        .expect("contains spec SHALL parse");
+        let on = flow.block[0].steps[0]
+            .on
+            .as_ref()
+            .expect("grouped selector present");
+        let contains = on.contains.as_ref().expect("contains present");
+        assert_eq!(contains.min_matches(), 3);
+        match contains {
+            ContainsAnchor::Spec(spec) => {
+                assert_eq!(spec.group.text.as_deref(), Some("Row *"));
+                assert_eq!(spec.group.enabled, Some(true));
+            }
+            ContainsAnchor::Text(_) => panic!("table form SHALL deserialize as Spec"),
+        }
+    }
+
+    #[test]
+    fn min_matches_bounds_still_apply_inside_the_spec() {
+        for (step, needle) in [
+            (
+                "action = \"tap\"\non = { contains = { text = \"R\", min_matches = 0 } }",
+                "at least 1",
+            ),
+            (
+                "action = \"tap\"\non = { contains = { text = \"R\", min_matches = 500 } }",
+                "unreasonably large",
+            ),
+        ] {
+            let err = parse_step(step).expect_err("out-of-range SHALL be rejected");
+            assert!(
+                err.to_string().contains(needle),
+                "expected {needle:?} in: {err}"
+            );
+        }
     }
 }
