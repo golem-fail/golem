@@ -165,6 +165,47 @@ rejects "guidance comments with no real note are still rejected" "## Release not
 <!-- /release-notes -->" "No release-notes block with a bulleted category line"
 
 echo
+echo "markers are recognised only when alone on their line (#213)"
+
+accepts "a note may quote the opening marker without dropping itself" "## Release notes
+<!-- release-notes -->
+- internal: the gate now wants a heading above the \`<!-- release-notes -->\` block
+<!-- /release-notes -->"
+
+rejects "prose quoting the opening marker does not open a block" "## What
+
+This PR is about the \`<!-- release-notes -->\` marker and nothing else.
+
+- fixed: a sentence in prose that must NOT ship as a phantom note" \
+  "No release-notes block with a bulleted category line"
+
+accepts "an indented block is still recognised" "## Release notes
+  <!-- release-notes -->
+  $NOTE
+  <!-- /release-notes -->"
+
+rejects "a marker with trailing text is not a marker" "## Release notes
+<!-- release-notes --> (keep this)
+$NOTE
+<!-- /release-notes -->" "No release-notes block with a bulleted category line"
+
+echo
+echo "the three scripts share one marker pattern (#213)"
+
+# The gate, the release-time extractor and the trailer sync each carry their own
+# copy. Fixing one and not the others is worse than the bug: the gate would
+# accept a body the extractor then reads differently.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+for f in check-release-note.sh release-notes.sh sync-pr-notes.sh; do
+  stray="$(grep -n '<!-- \*' "$root/scripts/$f" | grep -cv '\^\[\[:space:\]\]' || true)"
+  if [[ "$stray" == "0" ]]; then
+    ok "$f anchors every marker match"
+  else
+    no "$f anchors every marker match" "$stray unanchored occurrence(s)"
+  fi
+done
+
+echo
 echo "exemptions short-circuit before any parsing"
 
 AUTHOR='dependabot[bot]' accepts "a bot PR with no block at all is exempt" "Bumps rand from 0.8.5 to 0.10.2."
