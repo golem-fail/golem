@@ -460,7 +460,7 @@ goto = "wipe_via_app_ui"
 { action = "set_location", latitude = 37.7749, longitude = -122.4194 }
 ```
 
-> **The iOS device controls are simulator-backed.** `set_dark_mode`, `set_location` and `add_media` all drive `simctl`, which only addresses simulators — on a physical iPhone they fail with the underlying `simctl` error rather than a golem-worded one. The Android equivalents go through `adb` and work on emulators and physical devices alike.
+> **The iOS device controls are simulator-backed.** `set_dark_mode`, `set_location` and `add_media` all drive `simctl`, which only addresses simulators — on a physical iPhone the driver refuses, naming the action and the device, rather than surfacing a raw `simctl` error. Gate the step on `_hardware` if a flow has to run on both shapes. The Android equivalents go through `adb` and work on emulators and physical devices alike.
 
 ### `press` — Press hardware button
 
@@ -516,6 +516,8 @@ steps = [ ... ]
 ```toml
 { action = "add_media", path = "fixtures/photo.jpg" }
 ```
+
+**Simulator-only on iOS** — `simctl addmedia` can't address a physical device, so the driver refuses there; put the fixture in the device's library ahead of the run, or gate the step on `_hardware`. Android uses `adb push` plus a media-scanner broadcast and works on physical devices and emulators alike. See [Device Controls](#device-controls) for the other two simulator-backed actions.
 
 ## Alerts
 
