@@ -7,28 +7,8 @@
 //! selector forms in the shapes people write, which the unit tests only
 //! approximate. Reading files is cheap; no device, no build.
 
-use std::path::{Path, PathBuf};
-
-fn collect_flows(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        if path.is_dir() {
-            // Build output and vendored deps hold no flows of ours.
-            if !matches!(
-                name.to_string_lossy().as_ref(),
-                "target" | "node_modules" | ".git"
-            ) {
-                collect_flows(&path, out);
-            }
-        } else if path.to_string_lossy().ends_with(".test.toml") {
-            out.push(path);
-        }
-    }
-}
+use std::path::PathBuf;
+use std::process::Command;
 
 #[test]
 fn every_checked_in_flow_still_parses() {
@@ -37,19 +17,36 @@ fn every_checked_in_flow_still_parses() {
         .expect("golem-parser has a parent directory")
         .to_path_buf();
 
-    let mut flows = Vec::new();
-    collect_flows(&repo_root, &mut flows);
-    flows.sort();
+    // Tracked files only, not a filesystem walk: a contributor's scratch or
+    // deliberately-malformed flow sitting untracked in their tree is not part
+    // of the corpus and SHALL NOT redden this suite.
+    let listed = Command::new("git")
+        .args(["ls-files", "-z", "--", "*.test.toml"])
+        .current_dir(&repo_root)
+        .output()
+        .expect("git ls-files SHALL run inside the repo");
+    assert!(
+        listed.status.success(),
+        "git ls-files failed: {}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+
+    let flows: Vec<PathBuf> = String::from_utf8_lossy(&listed.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(|p| repo_root.join(p))
+        .collect();
     assert!(
         flows.len() >= 20,
-        "expected the repo's e2e corpus, found {} flows — did the walk break?",
+        "expected the repo's e2e corpus, found {} flows — did the listing break?",
         flows.len()
     );
 
     let failures: Vec<String> = flows
         .iter()
         .filter_map(|path| {
-            let body = std::fs::read_to_string(path).ok()?;
+            let body = std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("{} SHALL be readable: {e}", path.display()));
             let err = golem_parser::parse_flow(&body).err()?;
             Some(format!("{}: {err}", path.display()))
         })
