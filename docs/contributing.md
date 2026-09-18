@@ -72,7 +72,7 @@ See [Architecture](architecture.md) for the crate map and the end-to-end executi
 
 ## Release notes
 
-Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one `- ` bullet per change, each prefixed with a category. The bullet is required (the [sync action](../.github/workflows/release-note-sync.yml) only recognises bulleted lines, so a bare entry would be duplicated rather than deduped against). Keep the `## Release notes` header above the markers (it's in the [PR template](../.github/pull_request_template.md)): the generator keys off the `<!-- release-notes -->` markers, but the header is what orients a human reviewer scanning the description.
+Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one `- ` bullet per change, each prefixed with a category. The bullet is required (the [sync action](../.github/workflows/release-note-sync.yml) only recognises bulleted lines, so a bare entry would be duplicated rather than deduped against). A heading above the markers is **required** (it's in the [PR template](../.github/pull_request_template.md)), and [the gate](../.github/workflows/release-note-check.yml) enforces it. The generator keys off the `<!-- release-notes -->` markers, which are HTML comments — so without a heading the notes render to a reviewer as bullets appearing from nowhere mid-description. Any heading text passes: the check confirms a separator exists, not that it is well written.
 
 ```text
 ## Release notes
