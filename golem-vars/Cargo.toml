@@ -10,7 +10,6 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3"
 uuid = { workspace = true }
 chrono = { workspace = true }
 # Used only to derive the JIS X 0208 kanji repertoire exactly from the EUC-JP
