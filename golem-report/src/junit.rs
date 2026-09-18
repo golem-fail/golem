@@ -330,7 +330,15 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                 );
-                let _ = writeln!(out, "      <skipped/>");
+                match &step.skip_reason {
+                    Some(reason) => {
+                        let _ =
+                            writeln!(out, "      <skipped message=\"{}\"/>", xml_escape(reason));
+                    }
+                    None => {
+                        let _ = writeln!(out, "      <skipped/>");
+                    }
+                }
                 let _ = writeln!(out, "    </testcase>");
             }
         }
@@ -596,6 +604,7 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -615,6 +624,7 @@ mod tests {
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -637,6 +647,7 @@ mod tests {
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -659,6 +670,7 @@ mod tests {
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -958,6 +970,37 @@ mod tests {
         assert!(
             xml.contains("<system-out>[WX000] element not found</system-out>"),
             "warning step should have <system-out> with message"
+        );
+    }
+
+    #[test]
+    fn a_skipped_step_with_a_reason_carries_it_as_a_message() {
+        let mut step = skipped_step("tap", "Cancel");
+        step.skip_reason = Some("F404: element \"never\" appeared".to_string());
+        let flow = FlowReport {
+            first_failure_code: None,
+            a11y_audits: vec![],
+            flow_name: "skip_flow".to_string(),
+            success: true,
+            step_results: vec![step],
+            warnings: vec![],
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            ..Default::default()
+        };
+        let out = format_flow_junit(&flow);
+        assert!(
+            out.contains("<skipped message="),
+            "SHALL carry the reason as a message attribute: {out}"
+        );
+        assert!(
+            out.contains("&quot;never&quot;"),
+            "SHALL XML-escape the reason: {out}"
         );
     }
 

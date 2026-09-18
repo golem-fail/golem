@@ -368,6 +368,11 @@ pub struct StepReport {
     pub target: String,
     /// The outcome of this step.
     pub outcome: StepOutcome,
+    /// Why this step was skipped, when that is knowable. A step skipped by
+    /// `if_fail = "ignore"` carries the failure it swallowed; a step the run
+    /// never finished (barrier abort) carries nothing, since the reason is a
+    /// property of the flow rather than the step.
+    pub skip_reason: Option<String>,
     /// How long this step took, in milliseconds.
     pub duration_ms: u64,
     /// Number of retry attempts.

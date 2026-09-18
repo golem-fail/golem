@@ -635,9 +635,15 @@ pub async fn stream_human(
                         let rendered = code.render(golem_events::Severity::Warning);
                         print_failure_block(&rendered, message, YELLOW, &dp, &pending, use_color);
                     }
-                    golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
+                    golem_events::StepOutcome::Skipped => {
                         let kw = keyword("SKIP", DIM, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{block_suffix}");
+                        pending_substeps.remove(&event.device_id.0);
+                    }
+                    golem_events::StepOutcome::Ignored { message, code } => {
+                        let kw = keyword("SKIP", DIM, use_color);
+                        let reason = format!("  ({}: {message})", code.fragment());
+                        eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{reason}{block_suffix}");
                         pending_substeps.remove(&event.device_id.0);
                     }
                 }

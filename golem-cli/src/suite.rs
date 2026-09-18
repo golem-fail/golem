@@ -983,6 +983,7 @@ impl SuiteRunner {
                         .step_results
                         .iter()
                         .map(|s| golem_report::StepReport {
+                            skip_reason: s.skip_reason.clone(),
                             global_step_index: s.global_step_index,
                             block_name: s.block_name.clone(),
                             block_iteration: s.block_iteration,

@@ -1015,10 +1015,10 @@ pub async fn execute_flow<'a>(
                     });
                     warnings.push(message);
                 }
-                Ok(StepOutcome::Ignored) => {
+                Ok(StepOutcome::Ignored { message, code }) => {
                     ctx.emit(golem_events::EventKind::StepFinished {
                         global_step_index: step_count,
-                        outcome: golem_events::StepOutcome::Ignored,
+                        outcome: golem_events::StepOutcome::Ignored { message, code },
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,

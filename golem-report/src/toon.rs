@@ -85,9 +85,14 @@ pub fn format_step_toon(step: &StepReport) -> String {
                 step.duration_ms
             )
         }
-        StepOutcome::Skipped => {
-            format!(" -{label}{substep_suffix}")
-        }
+        StepOutcome::Skipped => match &step.skip_reason {
+            // TOON is a scan format: keep the code, drop the prose.
+            Some(reason) => {
+                let token = reason.split(':').next().unwrap_or(reason);
+                format!(" -{label} {token}{substep_suffix}")
+            }
+            None => format!(" -{label}{substep_suffix}"),
+        },
     }
 }
 
@@ -465,6 +470,7 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -484,6 +490,7 @@ mod tests {
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -506,6 +513,7 @@ mod tests {
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -528,6 +536,7 @@ mod tests {
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -620,6 +629,17 @@ mod tests {
         let step = skipped_step("tap", "Cancel");
         let out = format_step_toon(&step);
         assert_eq!(out, " -tap:Cancel");
+    }
+
+    #[test]
+    fn step_skipped_with_reason_carries_the_code_token_only() {
+        let mut step = skipped_step("tap", "Cancel");
+        step.skip_reason = Some("F404: element never appeared".to_string());
+        let out = format_step_toon(&step);
+        assert_eq!(
+            out, " -tap:Cancel F404",
+            "TOON SHALL carry the code, not the prose"
+        );
     }
 
     // 5. Flow header includes name and duration ------------------------

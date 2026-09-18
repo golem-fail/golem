@@ -257,10 +257,22 @@ fn unix_nanos_to_system_time(nanos: u128) -> SystemTime {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StepOutcome {
     Success,
-    Warning { message: String, code: FailureCode },
-    Failed { message: String, code: FailureCode },
+    Warning {
+        message: String,
+        code: FailureCode,
+    },
+    Failed {
+        message: String,
+        code: FailureCode,
+    },
     Skipped,
-    Ignored,
+    /// A step that failed under `if_fail = "ignore"`. Carries the failure it
+    /// swallowed so the reports can say WHY a step shows as skipped; `warn`
+    /// and `ignore` differ in verdict, not in how much the reader gets told.
+    Ignored {
+        message: String,
+        code: FailureCode,
+    },
 }
 
 // ── Performance snapshot data ──

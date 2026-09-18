@@ -106,6 +106,7 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
@@ -125,6 +126,7 @@ mod tests {
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            skip_reason: None,
             global_step_index: 0,
             block_name: String::new(),
             block_iteration: 0,
