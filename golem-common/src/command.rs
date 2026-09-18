@@ -92,6 +92,54 @@ pub trait CommandRunner: Send + Sync {
         args: &[String],
         opts: &CommandOpts,
     ) -> std::io::Result<()>;
+
+    /// Spawn `program` and hand back a *live* child: stderr arrives line by
+    /// line while it runs, and the caller owns the timeout and the kill.
+    ///
+    /// [`CommandRunner::output`] can't model this — it waits for exit before
+    /// returning anything, so an install script's build progress would only
+    /// appear once the build had finished.
+    async fn spawn_streaming(
+        &self,
+        program: &str,
+        args: &[String],
+        opts: &CommandOpts,
+    ) -> std::io::Result<StreamingProcess>;
+}
+
+/// A spawned child whose stderr streams while it runs.
+///
+/// `stderr` is closed at EOF; `child` is waited on (and, on timeout, killed)
+/// by the caller. Split this way because the real implementation reads stderr
+/// in its own task *concurrently* with the wait — a single `&mut` handle
+/// offering both could not express that.
+pub struct StreamingProcess {
+    /// Stderr lines in order, ending when the stream closes.
+    pub stderr: tokio::sync::mpsc::UnboundedReceiver<String>,
+    /// The running child.
+    pub child: Box<dyn StreamingChild>,
+}
+
+/// The wait/kill half of a [`StreamingProcess`].
+#[async_trait]
+pub trait StreamingChild: Send {
+    /// Wait for exit, yielding the exit code (`None` when signalled).
+    ///
+    /// An implementation MAY never resolve — that is what lets a fake exercise
+    /// a caller's timeout-and-kill path without a real process to hang.
+    async fn wait(&mut self) -> std::io::Result<ExitOutcome>;
+
+    /// Kill the child. Best-effort: it may already be gone.
+    async fn kill(&mut self);
+}
+
+/// How a streamed child finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExitOutcome {
+    /// Whether it exited zero.
+    pub success: bool,
+    /// Exit code, or `None` when it was signalled.
+    pub code: Option<i32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +216,63 @@ impl CommandRunner for SystemCommandRunner {
         apply_opts(&mut cmd, opts);
         cmd.spawn()?;
         Ok(())
+    }
+
+    async fn spawn_streaming(
+        &self,
+        program: &str,
+        args: &[String],
+        opts: &CommandOpts,
+    ) -> std::io::Result<StreamingProcess> {
+        use std::process::Stdio;
+        use tokio::io::{AsyncBufReadExt, BufReader};
+
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(args);
+        apply_opts(&mut cmd, opts);
+        // stdout discarded, stderr piped: install scripts report progress on
+        // stderr, and a script that chats on stdout must not fill a pipe
+        // nobody drains.
+        let mut child = cmd.stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
+
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| std::io::Error::other("no stderr pipe on a piped spawn"))?;
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                // Receiver gone = caller stopped caring; stop reading.
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(StreamingProcess {
+            stderr: rx,
+            child: Box::new(SystemStreamingChild { child }),
+        })
+    }
+}
+
+struct SystemStreamingChild {
+    child: tokio::process::Child,
+}
+
+#[async_trait]
+impl StreamingChild for SystemStreamingChild {
+    async fn wait(&mut self) -> std::io::Result<ExitOutcome> {
+        let status = self.child.wait().await?;
+        Ok(ExitOutcome {
+            success: status.success(),
+            code: status.code(),
+        })
+    }
+
+    async fn kill(&mut self) {
+        let _ = self.child.kill().await;
     }
 }
 
@@ -321,6 +426,17 @@ impl Canned {
 pub struct FakeCommandRunner {
     responses: Mutex<HashMap<Vec<String>, VecDeque<Canned>>>,
     calls: Mutex<Vec<Vec<String>>>,
+    streams: Mutex<HashMap<Vec<String>, VecDeque<CannedStream>>>,
+    killed: Arc<Mutex<bool>>,
+    stream_opts: Mutex<Vec<CommandOpts>>,
+}
+
+/// A scripted streamed child: what it prints, and how (or whether) it ends.
+#[derive(Clone)]
+struct CannedStream {
+    lines: Vec<String>,
+    /// `None` = never exits, so the caller's timeout fires.
+    exit: Option<i32>,
 }
 
 impl Default for FakeCommandRunner {
@@ -335,6 +451,9 @@ impl FakeCommandRunner {
         Self {
             responses: Mutex::new(HashMap::new()),
             calls: Mutex::new(Vec::new()),
+            streams: Mutex::new(HashMap::new()),
+            killed: Arc::new(Mutex::new(false)),
+            stream_opts: Mutex::new(Vec::new()),
         }
     }
 
@@ -359,6 +478,37 @@ impl FakeCommandRunner {
     /// How many commands have been invoked.
     pub fn call_count(&self) -> usize {
         self.calls.lock().expect("calls lock poisoned").len()
+    }
+
+    /// Queue a streamed response: the stderr lines the child emits, then how
+    /// it finishes. `exit` of `None` models a child that NEVER exits, so a
+    /// caller's timeout-and-kill path runs for real against the fake.
+    pub fn expect_stream(&self, cmd: &[&str], lines: &[&str], exit: Option<i32>) -> &Self {
+        let key: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
+        self.streams
+            .lock()
+            .expect("streams lock poisoned")
+            .entry(key)
+            .or_default()
+            .push_back(CannedStream {
+                lines: lines.iter().map(|s| s.to_string()).collect(),
+                exit,
+            });
+        self
+    }
+
+    /// Whether the caller killed the streamed child (after its own timeout).
+    pub fn stream_was_killed(&self) -> bool {
+        *self.killed.lock().expect("killed lock poisoned")
+    }
+
+    /// The [`CommandOpts`] each streamed spawn was given, in order — so a test
+    /// can assert on the env and working directory a caller composed.
+    pub fn recorded_stream_opts(&self) -> Vec<CommandOpts> {
+        self.stream_opts
+            .lock()
+            .expect("stream_opts lock poisoned")
+            .clone()
     }
 
     fn record_and_lookup(&self, program: &str, args: &[String]) -> std::io::Result<Output> {
@@ -424,6 +574,53 @@ impl CommandRunner for FakeCommandRunner {
             },
             None => Ok(()),
         }
+    }
+    async fn spawn_streaming(
+        &self,
+        program: &str,
+        args: &[String],
+        opts: &CommandOpts,
+    ) -> std::io::Result<StreamingProcess> {
+        self.stream_opts
+            .lock()
+            .expect("stream_opts lock poisoned")
+            .push(opts.clone());
+        let mut key = Vec::with_capacity(args.len() + 1);
+        key.push(program.to_string());
+        key.extend_from_slice(args);
+        self.calls
+            .lock()
+            .expect("calls lock poisoned")
+            .push(key.clone());
+
+        let mut map = self.streams.lock().expect("streams lock poisoned");
+        let canned = match map.get_mut(&key) {
+            Some(queue) if queue.len() > 1 => queue.pop_front().expect("non-empty by guard"),
+            Some(queue) => queue.front().expect("non-empty by presence").clone(),
+            None => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("FakeCommandRunner: no canned stream for {key:?}"),
+                ))
+            }
+        };
+
+        // Lines are delivered up front: the channel is buffered, so a caller
+        // draining it after the wait sees exactly what a real child printed
+        // before exiting.
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        for line in canned.lines {
+            let _ = tx.send(line);
+        }
+        drop(tx);
+
+        Ok(StreamingProcess {
+            stderr: rx,
+            child: Box::new(FakeStreamingChild {
+                exit: canned.exit,
+                killed: Arc::clone(&self.killed),
+            }),
+        })
     }
 }
 
@@ -553,5 +750,30 @@ mod tests {
             "outer"
         );
         drop(outer_guard);
+    }
+}
+
+struct FakeStreamingChild {
+    /// `None` = never exits.
+    exit: Option<i32>,
+    killed: Arc<Mutex<bool>>,
+}
+
+#[async_trait]
+impl StreamingChild for FakeStreamingChild {
+    async fn wait(&mut self) -> std::io::Result<ExitOutcome> {
+        match self.exit {
+            Some(code) => Ok(ExitOutcome {
+                success: code == 0,
+                code: Some(code),
+            }),
+            // Never resolves, so the caller's own timeout is what ends the
+            // wait — the only way a fake can exercise a timeout-and-kill path.
+            None => std::future::pending().await,
+        }
+    }
+
+    async fn kill(&mut self) {
+        *self.killed.lock().expect("killed lock poisoned") = true;
     }
 }
