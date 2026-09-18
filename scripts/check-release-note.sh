@@ -42,8 +42,8 @@ check_release_note() {
   # `|| true` is load-bearing under `set -euo pipefail`: a body with no marker
   # makes grep exit 1, which aborted the whole check before it could print the
   # error explaining what was missing.
-  open_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *release-notes *-->' | head -1 | cut -d: -f1 || true)"
-  close_at="$(printf '%s\n' "$BODY" | grep -n '<!-- *\/release-notes *-->' | head -1 | cut -d: -f1 || true)"
+  open_at="$(printf '%s\n' "$BODY" | grep -n '^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$' | head -1 | cut -d: -f1 || true)"
+  close_at="$(printf '%s\n' "$BODY" | grep -n '^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$' | head -1 | cut -d: -f1 || true)"
   if [ -n "$open_at" ] && { [ -z "$close_at" ] || [ "$close_at" -lt "$open_at" ]; }; then
     reject "The release-notes block opens with <!-- release-notes --> but never closes." \
       "Close it with <!-- /release-notes --> (note the slash) — see the PR template."
@@ -52,7 +52,7 @@ check_release_note() {
   # Extract the block interior, then strip HTML comments (single/multi-line) so
   # leftover template guidance never counts as a real note.
   block="$(printf '%s\n' "$BODY" \
-    | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
+    | awk '/^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$/{f=1;next} /^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$/{f=0} f' \
     | awk '{ l=$0
              if (inc) { if (l ~ /-->/) { sub(/.*-->/,"",l); inc=0 } else next }
              gsub(/<!--.*-->/,"",l)
@@ -75,7 +75,7 @@ check_release_note() {
   # markers and never the heading — which is why any heading text passes; this
   # checks that a separator EXISTS, not that it is well written.
   heading_before_marker="$(printf '%s\n' "$BODY" \
-    | awk '/<!-- *release-notes *-->/{ print last; exit }
+    | awk '/^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$/{ print last; exit }
            { if ($0 ~ /[^[:space:]]/) last = $0 }')"
   if ! printf '%s\n' "$heading_before_marker" | grep -qE '^[[:space:]]*#{1,6}[[:space:]]+[^[:space:]]'; then
     reject "The release-notes block needs a Markdown heading immediately above <!-- release-notes -->." \

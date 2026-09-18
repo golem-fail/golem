@@ -318,13 +318,13 @@ while IFS=$'\x1f' read -r sha subject; do
     # a category would ship as a phantom note. The PR gate rejects that, but a
     # body edited after merge never re-runs it — warn loudly rather than fail, so
     # one malformed body can't block a release.
-    if grep -q '<!-- *release-notes *-->' <<<"$body" \
-       && ! grep -q '<!-- *\/release-notes *-->' <<<"$body"; then
+    if grep -q '^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$' <<<"$body" \
+       && ! grep -q '^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$' <<<"$body"; then
       echo "warning: PR #$pr has an unclosed release-notes block (missing <!-- /release-notes -->);" >&2
       echo "         notes were read to end-of-body — check the generated entries." >&2
     fi
     block="$(printf '%s\n' "$body" \
-      | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
+      | awk '/^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$/{f=1;next} /^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$/{f=0} f' \
       | strip_comments)"
     # Issue links: GitHub closing keywords in the PR body → "closes #N".
     closes="$(printf '%s\n' "$body" \

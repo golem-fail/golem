@@ -38,7 +38,7 @@ strip_comments() {
 
 # Existing typed lines already in the block (comments stripped).
 existing="$(printf '%s\n' "$body" \
-  | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
+  | awk '/^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$/{f=1;next} /^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$/{f=0} f' \
   | strip_comments | grep -E "$typed_re" || true)"
 
 # Union: existing first, then new lines whose trimmed text isn't already present.
@@ -53,12 +53,13 @@ done < <(printf '%s\n' "$existing"; grep -E "$typed_re" "$LINES_FILE" 2>/dev/nul
 
 [[ ! -s "$union_file" ]] && { printf '%s' "$body"; exit 0; }   # nothing to write
 
-if grep -qF '<!-- release-notes -->' <<<"$body" && grep -qF '<!-- /release-notes -->' <<<"$body"; then
+if grep -q '^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$' <<<"$body" \
+   && grep -q '^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$' <<<"$body"; then
   # Replace the block interior with the union.
   awk -v uf="$union_file" '
     BEGIN { while ((getline l < uf) > 0) U[n++]=l }
-    /<!-- *\/release-notes *-->/ && inblk { for (i=0;i<n;i++) print U[i]; print; inblk=0; next }
-    /<!-- *release-notes *-->/  && !inblk { print; inblk=1; next }
+    /^[[:space:]]*<!-- *\/release-notes *-->[[:space:]]*$/ && inblk { for (i=0;i<n;i++) print U[i]; print; inblk=0; next }
+    /^[[:space:]]*<!-- *release-notes *-->[[:space:]]*$/  && !inblk { print; inblk=1; next }
     inblk { next }
     { print }
   ' <<<"$body"
