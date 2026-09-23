@@ -1,7 +1,10 @@
 [[apps]]
 name = "app"
 bundle = "fail.golem.test"
-install_script = "scripts/install-app.sh"
+# Wrapper, not the rendered template directly: it generates the Tauri mobile
+# project when it is missing and re-applies the manifest/plist declarations
+# Tauri has no config for, then execs scripts/install-app.sh. See #22.
+install_script = "scripts/install-test-app.sh"
 
 # Native second app used by tests that need primitives Tauri 2.x doesn't
 # expose (accessibility ids, native push receive bridge, etc.). Install

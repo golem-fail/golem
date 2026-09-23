@@ -47,9 +47,6 @@ sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION
 sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION\"/" \
     "$ROOT/npm/package.json"
 
-sed -i '' "s|<string>[0-9]*\.[0-9]*\.[0-9]*</string>|<string>$NEW_VERSION</string>|" \
-    "$ROOT/test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist"
-
 # 3. Companion health endpoints
 sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION\"/" \
     "$ROOT/companions/ios/GolemRunnerUITests/RequestRouter.swift"
@@ -81,7 +78,6 @@ FILES=(
     "$ROOT/test-app/package.json"
     "$ROOT/test-app/src-tauri/tauri.conf.json"
     "$ROOT/npm/package.json"
-    "$ROOT/test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist"
     "$ROOT/companions/ios/GolemRunnerUITests/RequestRouter.swift"
     "$ROOT/companions/ios/GolemRunnerUITests/GolemRunnerUITests.swift"
     "$ROOT/companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java"
