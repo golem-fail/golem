@@ -63,6 +63,30 @@ pub async fn resolve_element(
     let may_hide_keyboard = !step.keep_keyboard.unwrap_or(false);
     let mut tried_hide_keyboard = false;
 
+    // A selector that states nothing matches everything — `matches_selector`
+    // only tests the criteria that are set — so the poll below would return
+    // the first node in the tree and the step would pass against whatever
+    // that happens to be. Refuse instead of resolving: a step that cannot
+    // say what it targets has no right answer, and the silent wrong one is
+    // the worst outcome available to a test runner (#226).
+    //
+    // Checked here rather than at plan time because the emptiness is often
+    // not visible until now: `${var}` that interpolated to nothing, a mixin
+    // that did not inject what it was supposed to. Resolution is also the
+    // only place that needs no list of which actions target an element — if
+    // we are resolving at all, the step does.
+    if selector.is_unconstrained()
+        && !step
+            .on
+            .as_ref()
+            .is_some_and(|g| g.x.is_some() || g.y.is_some())
+    {
+        crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
+            "Step has no selector: nothing to target. An empty selector matches every element, so this would have acted on whichever came first. Give it `on_text`/`on_accessibility_label` (or coordinates), and check that any `${{…}}` in it resolved.",
+        );
+    }
+
     // Handle coordinate-only selector: { x = 150, y = 300 } or { x = "50%", y = "25%" }
     // No element resolution needed — just return the coordinates.
     let has_element_selector = selector.text.is_some()
@@ -905,6 +929,171 @@ mod tests {
         assert_eq!(elem.text.as_deref(), Some("Option A"));
         assert!(elem.enabled);
         assert!(elem.clickable);
+    }
+
+    // ── empty selector (#226) ─────────────────────────────────────────
+
+    /// The bug: `matches_selector` only tests criteria that are set, so a
+    /// step with none used to resolve to the first node in the tree and pass.
+    /// Assert on the CODE and the message — a bare `is_err()` would also pass
+    /// on a timeout, which is precisely the outcome this is not.
+    #[tokio::test]
+    async fn a_step_with_no_selector_is_refused_not_resolved() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Button",
+            "Submit",
+            Bounds::new(100, 200, 100, 44),
+        ));
+
+        let driver = MockPlatformDriver::new(root);
+        // Exactly what `on_tex = "Save"` or a `${var}` that resolved to
+        // nothing leaves behind.
+        let step = make_step("tap");
+
+        let err = resolve_element(&step, &driver, None)
+            .await
+            .expect_err("a step with no selector SHALL be refused");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::ParseMissingParam),
+            "got: {err}"
+        );
+        assert!(
+            err.to_string().contains("no selector"),
+            "the message SHALL say what is missing: {err}"
+        );
+    }
+
+    /// The refusal must not become reject-everything: coordinates are a
+    /// legitimate way to target without element criteria, and still resolve.
+    #[tokio::test]
+    async fn coordinates_alone_still_resolve() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(150)),
+            y: Some(golem_parser::CoordValue::Pixels(300)),
+            ..Default::default()
+        });
+
+        let (_elem, (x, y)) = resolve_element(&step, &driver, None)
+            .await
+            .expect("a coordinate-only selector SHALL still resolve");
+        assert_eq!((x, y), (150, 300));
+    }
+
+    /// Every criterion, alone, must count as constrained — otherwise the
+    /// refusal starts rejecting valid steps. Paired with the test above:
+    /// one says "empty is refused", this says "almost empty is not".
+    #[test]
+    fn any_single_criterion_makes_a_selector_constrained() {
+        assert!(
+            Selector::default().is_unconstrained(),
+            "the default selector states nothing"
+        );
+
+        let anchor = || Some(AnchorSelector::Text("X".into()));
+        let cases: Vec<(&str, Selector)> = vec![
+            (
+                "text",
+                Selector {
+                    text: Some("X".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "accessibility_label",
+                Selector {
+                    accessibility_label: Some("X".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "index",
+                Selector {
+                    index: Some(1),
+                    ..Default::default()
+                },
+            ),
+            (
+                "enabled",
+                Selector {
+                    enabled: Some(true),
+                    ..Default::default()
+                },
+            ),
+            (
+                "checked",
+                Selector {
+                    checked: Some(true),
+                    ..Default::default()
+                },
+            ),
+            (
+                "clickable",
+                Selector {
+                    clickable: Some(true),
+                    ..Default::default()
+                },
+            ),
+            (
+                "below",
+                Selector {
+                    below: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "above",
+                Selector {
+                    above: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "right_of",
+                Selector {
+                    right_of: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "left_of",
+                Selector {
+                    left_of: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "contains",
+                Selector {
+                    contains: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "inside",
+                Selector {
+                    inside: anchor(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "traits",
+                Selector {
+                    traits: vec!["button".into()],
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (name, selector) in cases {
+            assert!(
+                !selector.is_unconstrained(),
+                "`{name}` alone SHALL constrain the selector"
+            );
+        }
     }
 
     // ── 11. resolve_coord: pixel value with no element is absolute ───
