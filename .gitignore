@@ -42,29 +42,17 @@ npm/vendor/
 # (root LICENSE stays the single source of truth; this copy is a build artifact)
 npm/LICENSE
 
-# Tauri generated platform projects (machine-specific) — ignore
-# everything inside, then carve out the two test-app files that carry
-# declarations Tauri gives us no other place to put:
+# Tauri generated platform projects (machine-specific) — ignored whole.
 #
-#   AndroidManifest.xml — the `uses-permission` lines `permissions_*.test`
-#     grants via `pm grant`, and the `golem-test://` intent-filter the
-#     deep_link flows drive.
-#   Info.plist          — the iOS `CFBundleURLTypes` registration of that
-#     same scheme, without which `simctl openurl` cannot reach the app.
-#
-# Neither `init` nor `build` overwrites a file that already exists, so
-# committing them is enough to survive a fresh clone. Both files carry
-# comments explaining what must not be moved and why.
+# There used to be a carve-out here tracking the test app's
+# AndroidManifest.xml (and later its iOS Info.plist) for the declarations
+# Tauri has no config for. It backfired: git then handed a clone a PARTIAL
+# gen/ tree, and `tauri android build` refuses one of those outright
+# ("delete the gen/android folder and run tauri android init"), so a fresh
+# clone could not build the test app at all. The declarations are now
+# re-applied after generation by scripts/patch-test-app-projects.sh, which
+# scripts/install-test-app.sh runs before every build. See #22.
 **/src-tauri/gen/**
-!test-app/src-tauri/gen/
-!test-app/src-tauri/gen/android/
-!test-app/src-tauri/gen/android/app/
-!test-app/src-tauri/gen/android/app/src/
-!test-app/src-tauri/gen/android/app/src/main/
-!test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml
-!test-app/src-tauri/gen/apple/
-!test-app/src-tauri/gen/apple/golem-test-app_iOS/
-!test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist
 
 # Xcode build output
 companions/ios/build/

@@ -64,7 +64,8 @@ These crates inherit via `version.workspace = true` — no changes needed:
 | `test-app/src-tauri/Cargo.toml` | `version` |
 | `test-app/package.json` | `version` |
 | `test-app/src-tauri/tauri.conf.json` | `version` |
-| `test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist` | `CFBundleShortVersionString`, `CFBundleVersion` |
+
+The test app's iOS `Info.plist` is **not** in that list any more. It lives under the generated, fully-ignored `gen/apple/`, and Tauri writes `CFBundleShortVersionString` / `CFBundleVersion` into it from `tauri.conf.json` when it generates the project — so bumping the config is what bumps the bundle.
 
 ### Companion apps (health endpoint)
 
