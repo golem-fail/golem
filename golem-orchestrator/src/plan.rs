@@ -171,6 +171,33 @@ pub async fn plan(
             active_profile,
         ) {
             Ok((flow, profile_notes)) => {
+                // Structural checks, on the merged and mixin-expanded flow so
+                // a `goto` into a mixin's block or devices inherited from
+                // golem.toml read correctly. These are errors, not lints: a
+                // dangling `goto` or an action nothing implements cannot
+                // produce a meaningful run, and finding out after an emulator
+                // boot and an install wastes minutes per flow.
+                //
+                // Reported as a ParseFailure rather than aborting: one bad
+                // flow file fails on its own and the rest of the suite still
+                // runs, which is how an unparseable file already behaves.
+                let errors = golem_parser::validation::validate_flow(&flow);
+                if !errors.is_empty() {
+                    let detail = errors
+                        .iter()
+                        .map(|e| e.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    parse_failures.push(ParseFailure {
+                        path: path.clone(),
+                        error: format!(
+                            "{} validation error{}: {detail}",
+                            errors.len(),
+                            if errors.len() == 1 { "" } else { "s" },
+                        ),
+                    });
+                    continue;
+                }
                 lint_warnings.extend(profile_notes);
                 lint_warnings.extend(lint_warnings_for(path, &flow));
                 flows.push(ParsedFlow {
@@ -826,6 +853,140 @@ on_index = 2
         assert!(
             lint_warnings_for(Path::new("flows/clean.test.toml"), &flow).is_empty(),
             "a correct flow SHALL produce no lint warnings"
+        );
+    }
+
+    /// A flow that cannot produce a meaningful run is rejected before any
+    /// device work, and takes only itself down — the rest of the suite still
+    /// plans, the way an unparseable file already behaves.
+    #[tokio::test]
+    async fn plan_rejects_a_structurally_invalid_flow_without_failing_the_suite() {
+        let tmp = TempDir::new().expect("new() SHALL succeed");
+        let bad = write_flow(
+            tmp.path(),
+            "bad.test.toml",
+            r#"
+[flow]
+name = "bad"
+
+[[flow.apps]]
+name = "app"
+bundle = "com.example.app"
+[[flow.apps.devices]]
+os = "android"
+
+[[block]]
+name = "b"
+
+[[block.steps]]
+action = "taap"
+
+[[block.branch]]
+if_visible = "X"
+goto = "nowhere"
+"#,
+        );
+        let good = write_flow(
+            tmp.path(),
+            "good.test.toml",
+            r#"
+[flow]
+name = "good"
+
+[[flow.apps]]
+name = "app"
+bundle = "com.example.app"
+[[flow.apps.devices]]
+os = "android"
+
+[[block]]
+name = "b"
+
+[[block.steps]]
+action = "tap"
+on_text = "Submit"
+"#,
+        );
+
+        let suite = plan(
+            &[bad.clone(), good.clone()],
+            &[],
+            tmp.path(),
+            None,
+            None,
+            1,
+            None,
+            true,
+        )
+        .await
+        .expect("plan SHALL NOT error on an invalid flow");
+
+        assert_eq!(
+            suite.parse_failures.len(),
+            1,
+            "only the invalid flow SHALL fail: {:?}",
+            suite.parse_failures
+        );
+        let failure = &suite.parse_failures[0];
+        assert_eq!(failure.path, bad);
+        for needle in ["2 validation errors", "taap", "nowhere"] {
+            assert!(
+                failure.error.contains(needle),
+                "the failure SHALL name what is wrong ({needle:?}): {}",
+                failure.error
+            );
+        }
+        assert!(
+            suite.flows.iter().any(|f| f.path == good),
+            "the valid flow SHALL still plan"
+        );
+    }
+
+    /// The over-strictness guard for wiring `validate_flow` in.
+    ///
+    /// Its checks had never gated a run, so nothing had ever confirmed they
+    /// agree with the flows people write — and they did not: `KNOWN_ACTIONS`
+    /// was 27 actions behind until #229. This runs the real merged, expanded
+    /// flow through the real check, which is what the plan path now does.
+    #[test]
+    fn every_checked_in_flow_passes_validation_after_merge_and_expansion() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("golem-orchestrator has a parent directory")
+            .to_path_buf();
+        let listed = std::process::Command::new("git")
+            .args(["ls-files", "-z", "--", "*.test.toml"])
+            .current_dir(&root)
+            .output()
+            .expect("git ls-files SHALL run inside the repo");
+        let project_defaults = golem_parser::config::load_project_config(&root)
+            .ok()
+            .flatten();
+
+        let mut problems = Vec::new();
+        let mut checked = 0;
+        for rel in String::from_utf8_lossy(&listed.stdout)
+            .split('\0')
+            .filter(|p| !p.is_empty())
+        {
+            let path = root.join(rel);
+            // `project_apps` is empty on purpose: a flow that needs golem.toml's
+            // [[apps]] to validate would be asserting the fixture, not the check.
+            let Ok((flow, _)) = parse_one(&path, &[], project_defaults.as_ref(), &root, None)
+            else {
+                continue; // parse/mixin failures are a different path
+            };
+            checked += 1;
+            for err in golem_parser::validation::validate_flow(&flow) {
+                problems.push(format!("{rel}: {:?} — {}", err.kind, err.message));
+            }
+        }
+
+        assert!(checked >= 20, "expected the e2e corpus, merged {checked}");
+        assert!(
+            problems.is_empty(),
+            "checked-in flows SHALL pass the validation the plan now enforces:\n{}",
+            problems.join("\n")
         );
     }
 

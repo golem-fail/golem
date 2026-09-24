@@ -191,6 +191,38 @@ impl ReportAccumulator {
                     repeat: None,
                 });
             }
+            EventKind::FlowParseFailed { path, error } => {
+                // A flow file that never became a flow: unreadable, bad TOML,
+                // a mixin that wouldn't expand, or structurally invalid.
+                //
+                // This arm was missing, and the gap was invisible because the
+                // other half of the report had it: the server-side summary
+                // printed "1 failed" while the accumulator — which is what
+                // `any_failed` and therefore the exit code read — had no flow
+                // at all, so golem exited 0. A syntax error in a flow file
+                // passed CI.
+                self.flows.push(AccumulatedFlow {
+                    // Matches how suite.rs names the same failure, so the two
+                    // halves cannot disagree about which flow this is.
+                    flow_name: std::path::Path::new(path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    device_id: event.device_id.clone(),
+                    os_major: None,
+                    steps: Vec::new(),
+                    warnings: vec![error.clone()],
+                    duration_ms: 0,
+                    success: false,
+                    skipped_reason: None,
+                    first_failure_code: Some(golem_events::FailureCode::ParseFlowFile),
+                    started_at: Some(event.wall_time),
+                    finished_at: Some(event.wall_time),
+                    recordings: Vec::new(),
+                    repeat: None,
+                });
+            }
             EventKind::BlockStarted { iteration, .. } => {
                 self.current_block_iter.insert(dev_key, *iteration);
             }
@@ -549,6 +581,46 @@ mod tests {
             report.flows.is_empty(),
             "device-recovery events SHALL NOT create flow entries, got {} flow(s)",
             report.flows.len(),
+        );
+    }
+
+    /// A flow file that never parsed has to reach the report, because the
+    /// report is what the exit code is computed from. It did not: the
+    /// server-side summary said "1 failed" while `any_failed` saw nothing, so
+    /// a syntax error in a flow file exited 0 and passed CI.
+    #[test]
+    fn flow_parse_failed_is_a_failure_that_reaches_the_report() {
+        let mut acc = ReportAccumulator::new();
+        acc.process(&make_event(
+            0,
+            "suite",
+            EventKind::FlowParseFailed {
+                path: "e2e/login.test.toml".into(),
+                error: "1 validation error: Unknown action 'taap'".into(),
+            },
+        ));
+        let report = acc.into_suite_report();
+        assert_eq!(report.flows.len(), 1, "the failure SHALL produce a flow");
+        let flow = &report.flows[0];
+        assert!(!flow.success, "a flow that never parsed SHALL be a failure");
+        assert!(
+            flow.is_failed(),
+            "is_failed drives the exit code and SHALL be true"
+        );
+        assert_eq!(
+            flow.flow_name, "login.test",
+            "named by file_stem, the same way suite.rs names the same failure \
+             — `.test.toml` leaves `.test` on, and the two halves matching \
+             matters more than the name being pretty"
+        );
+        assert_eq!(
+            flow.first_failure_code,
+            Some(golem_events::FailureCode::ParseFlowFile)
+        );
+        assert!(
+            flow.warnings.iter().any(|w| w.contains("Unknown action")),
+            "the reason SHALL survive into the report: {:?}",
+            flow.warnings
         );
     }
 
