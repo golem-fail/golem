@@ -228,13 +228,18 @@ case "$PLATFORM" in
           echo "       around an empty web bundle and would install a blank app." >&2
           exit 1
         fi
-        DIST_NEWEST=""
+        # A plain `[[ … ]] && VAR=…` here is a trap: as the loop body's last
+        # command it returns 1 whenever the condition is false, and `set -e`
+        # then kills the script with no output. Whether that happened
+        # depended on `find`'s ordering, so it passed on macOS and failed on
+        # Linux. `if` has no such status.
+        DIST_NEWEST=0
         while IFS= read -r f; do
           m=$(golem_mtime "$f")
-          [[ -z "$DIST_NEWEST" || "$m" -gt "$DIST_NEWEST" ]] && DIST_NEWEST="$m"
+          if (( m > DIST_NEWEST )); then DIST_NEWEST="$m"; fi
         done < <(find "$DIST_DIR" -type f)
-        if [[ -z "$DIST_NEWEST" ]] || (( DIST_NEWEST < BUILD_START_TS )); then
-          echo "error: no file under $DIST_DIR was written by this build (newest ${DIST_NEWEST:-none}" >&2
+        if (( DIST_NEWEST == 0 )) || (( DIST_NEWEST < BUILD_START_TS )); then
+          echo "error: no file under $DIST_DIR was written by this build (newest $DIST_NEWEST" >&2
           echo "       < build start $BUILD_START_TS). beforeBuildCommand did not re-run, so the" >&2
           echo "       .app embeds whatever the previous build left behind." >&2
           exit 1
