@@ -54,6 +54,52 @@ pub struct Selector {
     pub traits: Vec<String>,
 }
 
+impl Selector {
+    /// True when the selector states no criterion at all.
+    ///
+    /// [`matches_selector`] only tests the criteria that are set, so such a
+    /// selector matches **every** element in the tree and the caller ends up
+    /// acting on whichever one comes first. That is a silent wrong target,
+    /// not a miss, so callers reject it rather than resolve it (#226).
+    ///
+    /// The destructure has no `..`: a criterion added to [`Selector`] fails
+    /// to compile until it is accounted for here, because the cost of
+    /// forgetting is not a broken build but a step that quietly stops
+    /// filtering.
+    pub fn is_unconstrained(&self) -> bool {
+        let Selector {
+            text,
+            accessibility_label,
+            index,
+            enabled,
+            checked,
+            clickable,
+            below,
+            above,
+            right_of,
+            left_of,
+            contains,
+            // Only meaningful alongside `contains`, which is checked.
+            contains_min_matches: _,
+            inside,
+            traits,
+        } = self;
+        text.is_none()
+            && accessibility_label.is_none()
+            && index.is_none()
+            && enabled.is_none()
+            && checked.is_none()
+            && clickable.is_none()
+            && below.is_none()
+            && above.is_none()
+            && right_of.is_none()
+            && left_of.is_none()
+            && contains.is_none()
+            && inside.is_none()
+            && traits.is_empty()
+    }
+}
+
 /// Find all elements matching the selector in the hierarchy tree.
 ///
 /// Traverses the entire tree recursively (depth-first), collecting all matches.

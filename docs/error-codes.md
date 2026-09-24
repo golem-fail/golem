@@ -48,7 +48,7 @@ Codes appear in every output format:
 | `F508` | `max_steps` exceeded |
 | `P400` | Unknown action keyword |
 | `P404` | Missing reference — block, sub-flow, or fixture |
-| `P422` | Required param missing or invalid (incl. gesture geometry) |
+| `P422` | Required param missing or invalid (incl. gesture geometry, empty selector) |
 | `P450` | Variable syntax/type error, unknown generator |
 | `P460` | Flow file parse / mixin failure |
 | `P461` | Suite device-constraint unsatisfiable |
