@@ -15,6 +15,10 @@ set -euo pipefail
 #         <!-- /release-notes -->
 #     A PR with no block falls back to its conventional-commit subject (skipping
 #     non-user-facing types). One PR can contribute lines to several sections.
+#     The PR is found from the "(#N)" a squash merge appends to the subject, and
+#     when that is missing by asking the API which PR owns the commit — a merge
+#     with an edited title has no "(#N)", and reading the subject instead of the
+#     block is silently wrong rather than merely empty.
 #   • Dependency updates — computed from the LOCKFILE DIFF, never commit messages.
 #     Only *direct* deps are listed (a crate whose key appears in a manifest's
 #     dependency table); everything else collapses to "+N transitive". Runtime vs
@@ -304,11 +308,21 @@ else
   RANGE="$NEW"  # first release: whole history
 fi
 
-while IFS=$'\x1f' read -r sha subject; do
+while IFS=$'\x1f' read -r sha full_sha subject; do
   [[ -z "$subject" ]] && continue
   pr=""
   if [[ "$subject" =~ \(#([0-9]+)\)[[:space:]]*$ ]]; then
     pr="${BASH_REMATCH[1]}"
+  else
+    # A squash merge usually appends "(#N)" — but not always, and the failure
+    # is silent and wrong rather than absent: without a PR number the authored
+    # block is never read, and the commit subject ships instead, bucketed by
+    # whatever conventional type it happens to carry. #219 went out of the
+    # generator as a `fix(` subject under Fixed when its block said `internal`.
+    # Ask which PR owns the commit rather than trusting the subject to say.
+    pr="$(gh api "repos/$SLUG/commits/$full_sha/pulls" \
+            --jq 'map(select(.merged_at != null)) | .[0].number // empty' 2>/dev/null || true)"
+    [[ "$pr" =~ ^[0-9]+$ ]] || pr=""
   fi
 
   block=""; pr_suffix=""
@@ -362,7 +376,7 @@ while IFS=$'\x1f' read -r sha subject; do
       [[ -n "$bucket" ]] && emit_note "$bucket" "$(sentence "$desc")$pr_suffix"
     fi
   fi
-done < <(git log --no-merges --format='%h%x1f%s' "$RANGE" 2>/dev/null || true)
+done < <(git log --no-merges --format='%h%x1f%H%x1f%s' "$RANGE" 2>/dev/null || true)
 
 # ── section 2: dependency updates (lockfile diff, direct-only) ──────────────
 
