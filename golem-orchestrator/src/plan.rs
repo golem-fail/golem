@@ -299,6 +299,30 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
         })
         .collect();
     warnings.extend(
+        golem_parser::validation::lint_unknown_step_fields(flow)
+            .into_iter()
+            .map(|issue| {
+                let block = issue.block_name.as_deref().unwrap_or("<unnamed>");
+                let hint = match issue.suggestion {
+                    Some(field) => format!("did you mean `{field}`?"),
+                    None => "`on_` is golem's selector prefix — check the spelling".to_string(),
+                };
+                format!(
+                    "{}:{}::{} `{}` on action `{}` is not a step field, so it \
+                     was ignored — {} A step whose selector keys are all \
+                     misspelled has no criteria at all and matches the first \
+                     element on screen, so the step passes against the wrong \
+                     target.",
+                    path.display(),
+                    block,
+                    issue.step_index,
+                    issue.key,
+                    issue.action,
+                    hint,
+                )
+            }),
+    );
+    warnings.extend(
         golem_parser::validation::lint_push_notification_phys(flow)
             .into_iter()
             .map(|issue| {
@@ -737,6 +761,72 @@ mod tests {
             install_env: None,
             profile: None,
         }
+    }
+
+    /// The lint is only worth having if its text reaches the user, and the
+    /// wiring is the half that has historically gone missing — `validate_flow`
+    /// still has no caller at all. Drive `lint_warnings_for`, not the lint
+    /// function, so a dropped `warnings.extend` fails here.
+    #[test]
+    fn lint_warnings_name_a_misspelled_step_field() {
+        let flow = golem_parser::parse_flow(
+            r#"
+[flow]
+name = "typo"
+
+[[block]]
+name = "b"
+
+[[block.steps]]
+action = "tap"
+on_text = "Save"
+on_indx = 2
+"#,
+        )
+        .expect("fixture SHALL parse");
+
+        let warnings = lint_warnings_for(Path::new("flows/typo.test.toml"), &flow);
+        assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
+        let w = &warnings[0];
+        for needle in [
+            "flows/typo.test.toml",
+            "`on_indx`",
+            "did you mean `on_index`?",
+            "matches the first",
+        ] {
+            assert!(w.contains(needle), "warning SHALL contain {needle:?}: {w}");
+        }
+    }
+
+    /// A correct flow must stay silent — a lint that cries wolf on the
+    /// parameters actions really take is worse than the typo it hunts.
+    #[test]
+    fn lint_warnings_stay_quiet_on_real_parameters() {
+        let flow = golem_parser::parse_flow(
+            r#"
+[flow]
+name = "clean"
+
+[[block]]
+name = "b"
+
+[[block.steps]]
+action = "get_http"
+url = "https://example.com"
+extract = { id = "$.id" }
+
+[[block.steps]]
+action = "tap"
+on_text = "Save"
+on_index = 2
+"#,
+        )
+        .expect("fixture SHALL parse");
+
+        assert!(
+            lint_warnings_for(Path::new("flows/clean.test.toml"), &flow).is_empty(),
+            "a correct flow SHALL produce no lint warnings"
+        );
     }
 
     // golem.toml's [vars] / [options] / [[teardown]] reach every parsed flow.

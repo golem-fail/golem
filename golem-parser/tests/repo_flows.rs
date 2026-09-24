@@ -58,3 +58,58 @@ fn every_checked_in_flow_still_parses() {
         failures.join("\n")
     );
 }
+
+/// The same corpus, against the step-field lint (#216).
+///
+/// That lint calls a key a typo partly on a one-edit heuristic, so its
+/// failure mode is the mirror of the bug: a real action parameter that
+/// happens to sit one letter from a field name would warn on every correct
+/// flow that uses it. The repo's own flows are the only place the actual
+/// parameter vocabulary is exercised in the shapes people write, so they
+/// are what says whether the heuristic is safe.
+///
+/// Scoped to this one lint on purpose — `validate_flow` and the other lints
+/// are not asserted clean here, because a flow legitimately failing an
+/// unrelated check would then block this one from ever being trusted.
+#[test]
+fn no_checked_in_flow_trips_the_step_field_lint() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("golem-parser has a parent directory")
+        .to_path_buf();
+
+    let listed = Command::new("git")
+        .args(["ls-files", "-z", "--", "*.test.toml"])
+        .current_dir(&repo_root)
+        .output()
+        .expect("git ls-files SHALL run inside the repo");
+
+    let mut warnings = Vec::new();
+    for rel in String::from_utf8_lossy(&listed.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+    {
+        let path = repo_root.join(rel);
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(flow) = golem_parser::parse_flow(&body) else {
+            continue;
+        };
+        for issue in golem_parser::validation::lint_unknown_step_fields(&flow) {
+            warnings.push(format!(
+                "{rel}:{}::{} `{}` (action `{}`)",
+                issue.block_name.as_deref().unwrap_or("<unnamed>"),
+                issue.step_index,
+                issue.key,
+                issue.action,
+            ));
+        }
+    }
+
+    assert!(
+        warnings.is_empty(),
+        "the step-field lint SHALL NOT fire on checked-in flows:\n{}",
+        warnings.join("\n")
+    );
+}
