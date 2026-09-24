@@ -113,3 +113,52 @@ fn no_checked_in_flow_trips_the_step_field_lint() {
         warnings.join("\n")
     );
 }
+
+/// The corpus against `validate_flow`'s action check.
+///
+/// `KNOWN_ACTIONS` had fallen 27 actions behind the runner's dispatch, and
+/// 41 steps across these flows named one of them. Nothing noticed, because
+/// `validate_flow` has no caller (#225). A cross-crate test now keeps the
+/// list in sync with the dispatch; this one keeps it honest against what
+/// people actually write, which is the half a list-to-list comparison
+/// cannot see.
+#[test]
+fn no_checked_in_flow_names_an_unknown_action() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("golem-parser has a parent directory")
+        .to_path_buf();
+
+    let listed = Command::new("git")
+        .args(["ls-files", "-z", "--", "*.test.toml"])
+        .current_dir(&repo_root)
+        .output()
+        .expect("git ls-files SHALL run inside the repo");
+
+    let mut unknown = Vec::new();
+    for rel in String::from_utf8_lossy(&listed.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+    {
+        let Ok(body) = std::fs::read_to_string(repo_root.join(rel)) else {
+            continue;
+        };
+        let Ok(flow) = golem_parser::parse_flow(&body) else {
+            continue;
+        };
+        for err in golem_parser::validation::validate_flow(&flow) {
+            if matches!(
+                err.kind,
+                golem_parser::validation::ValidationErrorKind::UnknownAction
+            ) {
+                unknown.push(format!("{rel}: {}", err.message));
+            }
+        }
+    }
+
+    assert!(
+        unknown.is_empty(),
+        "checked-in flows SHALL only name actions validate_flow accepts:\n{}",
+        unknown.join("\n")
+    );
+}
