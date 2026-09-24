@@ -31,12 +31,7 @@ use crate::install_cache::{evaluate_cache_gates, rank_by_install_cache, CacheVer
 /// genuine failures behind a 3s delay; better to fail fast on unknowns
 /// and add the pattern explicitly when a new transient is identified.
 fn is_transient_install_error(err: &str) -> bool {
-    // CoreSimulator's IPC pipe occasionally crashes during install on
-    // a freshly-booted iOS 26 sim. Format observed in stderr tail:
-    //   "Mach error -308 - (ipc/mig) server died"
-    //   "domain=NSMachErrorDomain, code=-308"
-    // Match the canonical 308 token to catch both renderings.
-    if err.contains("Mach error -308") || err.contains("NSMachErrorDomain, code=-308") {
+    if is_coresimulator_ipc_blip(err) {
         return true;
     }
     // adb's intermittent "device offline" race during emulator early boot.
@@ -55,6 +50,65 @@ fn is_transient_install_error(err: &str) -> bool {
         return true;
     }
     false
+}
+
+/// Block until `device` can accept an install, whichever platform it is.
+///
+/// Exhaustive `match` on purpose — no `_` arm, so a third platform has to
+/// state its own readiness gate rather than silently inheriting "ready".
+async fn wait_for_install_readiness(device: &DeviceInfo) -> anyhow::Result<()> {
+    match device.platform {
+        Platform::Android => wait_for_android_package_service(&device.udid).await,
+        Platform::Ios => wait_for_ios_installd(&device.udid).await,
+    }
+}
+
+/// CoreSimulator's IPC pipe occasionally crashes while a freshly-booted
+/// iOS sim is still settling. Two renderings seen in stderr tails:
+///   "Mach error -308 - (ipc/mig) server died"
+///   "domain=NSMachErrorDomain, code=-308"
+/// Matching the canonical 308 token catches both.
+///
+/// Shared by the install-error classifier and the pre-install probe so
+/// there is one spelling of -308 in the file: the probe treats the blip
+/// as "not ready yet", the classifier as "worth one retry".
+fn is_coresimulator_ipc_blip(err: &str) -> bool {
+    err.contains("Mach error -308") || err.contains("NSMachErrorDomain, code=-308")
+}
+
+/// Poll a booted iOS simulator until `installd` answers a trivial query.
+/// Cheap (~200ms per probe), caps at ~30s.
+///
+/// `simctl listapps` is the probe because it round-trips through the very
+/// service `simctl install` uses. The obvious cheaper candidates do not
+/// work: `simctl getenv` is answered from the device plist by
+/// CoreSimulatorService and exits 0 even on a *shutdown* device, and
+/// `get_app_container` exits 0 while printing "Unable to lookup in
+/// current state: Shutdown" — both would pass before the sim could
+/// install anything. `spawn <udid> /usr/bin/true` does prove the device
+/// is up, but through launchd rather than installd, and costs twice as
+/// much.
+///
+/// A probe that comes back with the -308 blip counts as not-ready rather
+/// than an error: that is the failure we are here to absorb, and it costs
+/// a 200ms retry instead of a multi-second install script that lands in
+/// the cache as `FailedScript` for the rest of the suite. The classifier's
+/// retry stays as the backstop for a blip that lands after the probe.
+async fn wait_for_ios_installd(udid: &str) -> anyhow::Result<()> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let out = golem_common::command::output_argv("xcrun", &["simctl", "listapps", udid]).await;
+        if let Ok(o) = out {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            if o.status.success() && !is_coresimulator_ipc_blip(&stderr) {
+                return Ok(());
+            }
+        }
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!("installd did not answer for {udid} within 30s");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
 
 /// Poll the Android emulator until `sys.boot_completed = 1` AND the
@@ -2468,17 +2522,20 @@ async fn run_install_with_build_coord(
     // transient classifier retries once on this error, but a clean
     // probe-then-install avoids the failure entirely (and the
     // FailedScript cache poisoning that comes with it).
-    if matches!(device.platform, Platform::Android) {
-        if let Err(e) = wait_for_android_package_service(&device.udid).await {
-            if let Some(em) = emitter {
-                em.emit(golem_events::EventKind::InstallOutput {
-                    app_name: app_name.to_string(),
-                    line: format!("boot probe warning: {e}"),
-                });
-            }
-            // Fall through — install attempt may still succeed, or the
-            // transient classifier will retry. Probe is best-effort.
+    //
+    // iOS boot probe: the same shape for the same reason. `simctl install`
+    // talks to the sim's `installd`, whose IPC pipe can still be crashing
+    // and respawning moments after `bootstatus -b` returns, surfacing as
+    // `Mach error -308`.
+    if let Err(e) = wait_for_install_readiness(device).await {
+        if let Some(em) = emitter {
+            em.emit(golem_events::EventKind::InstallOutput {
+                app_name: app_name.to_string(),
+                line: format!("boot probe warning: {e}"),
+            });
         }
+        // Fall through — install attempt may still succeed, or the
+        // transient classifier will retry. Probe is best-effort.
     }
 
     // Serialize the per-device install fan-out host-wide via `OpClass::Install`:
@@ -2724,7 +2781,14 @@ async fn reboot_ios_device(udid: &str) -> anyhow::Result<()> {
     if !status.status.success() {
         anyhow::bail!("reboot: simctl bootstatus failed for {udid}");
     }
-    // Grace for services + companion host to settle before a new flow lands.
+    // Gate on installd first: `bootstatus -b` returning does not mean the
+    // sim can install yet.
+    wait_for_ios_installd(udid).await?;
+    // Then keep the grace sleep. The probe is NOT a replacement for it —
+    // dropping it here made a post-recovery run fail with an unresponsive
+    // companion, repeatably, where the sleep passes. installd answering
+    // says the sim can install; it says nothing about the rest of the sim
+    // being ready to host a companion.
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     Ok(())
 }
@@ -4544,8 +4608,10 @@ mod tests {
     mod recovery {
         use super::super::{
             reboot_android_device, reboot_ios_device, wait_for_android_package_service,
+            wait_for_install_readiness, wait_for_ios_installd,
         };
         use golem_common::command::{set_test_runner, Canned, FakeCommandRunner};
+        use golem_devices::DeviceInfo;
         use std::sync::Arc;
 
         #[tokio::test(start_paused = true)]
@@ -4659,6 +4725,10 @@ mod tests {
                 &["xcrun", "simctl", "bootstatus", "SIM", "-b"],
                 Canned::ok_stdout(""),
             );
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::ok_stdout("{ }\n"),
+            );
             let _g = set_test_runner(fake.clone());
 
             reboot_ios_device("SIM")
@@ -4666,8 +4736,9 @@ mod tests {
                 .expect("ios reboot SHALL succeed");
             assert_eq!(
                 fake.recorded().len(),
-                3,
-                "SHALL run shutdown, boot, bootstatus in sequence"
+                4,
+                "SHALL run shutdown, boot, bootstatus, then gate on installd \
+                 before the grace sleep"
             );
         }
 
@@ -4692,6 +4763,170 @@ mod tests {
                 format!("{err:#}").contains("bootstatus failed"),
                 "got: {err:#}"
             );
+        }
+
+        // ── wait_for_install_readiness — platform dispatch ──────────
+        // The probes themselves are covered below; these cover the wiring.
+        // Without them, pointing the iOS arm at `Ok(())` leaves the whole
+        // suite green while no iOS device is ever probed.
+
+        fn dev(platform: golem_devices::Platform, udid: &str) -> DeviceInfo {
+            DeviceInfo {
+                udid: udid.to_string(),
+                platform,
+                ..super::device(
+                    "probe-target",
+                    platform,
+                    golem_devices::DeviceType::Phone,
+                    26,
+                )
+            }
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn readiness_probes_installd_on_ios() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::ok_stdout("{ }\n"),
+            );
+            let _g = set_test_runner(fake.clone());
+
+            wait_for_install_readiness(&dev(golem_devices::Platform::Ios, "SIM"))
+                .await
+                .expect("ios readiness SHALL succeed when listapps answers");
+            assert_eq!(
+                fake.recorded(),
+                vec![vec![
+                    "xcrun".to_string(),
+                    "simctl".into(),
+                    "listapps".into(),
+                    "SIM".into()
+                ]],
+                "an iOS device SHALL be gated on installd, not waved through"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn readiness_probes_the_package_service_on_android() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "getprop",
+                    "sys.boot_completed",
+                ],
+                Canned::ok_stdout("1\n"),
+            );
+            fake.expect(
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "pm",
+                    "list",
+                    "packages",
+                    "-f",
+                    "android",
+                ],
+                Canned::ok_stdout("package:/system/framework/framework-res.apk=android\n"),
+            );
+            let _g = set_test_runner(fake.clone());
+
+            wait_for_install_readiness(&dev(golem_devices::Platform::Android, "emulator-5554"))
+                .await
+                .expect("android readiness SHALL succeed when pm answers");
+            assert!(
+                fake.recorded().iter().all(|c| c[0] == "adb"),
+                "an Android device SHALL take the adb path, never simctl: {:?}",
+                fake.recorded()
+            );
+        }
+
+        // ── wait_for_ios_installd ───────────────────────────────────
+        // `simctl listapps` stands in for `simctl install`: same service,
+        // a fraction of the cost. Virtual time (`start_paused`) means the
+        // 500ms polls and the 30s cap cost nothing to exercise.
+
+        #[tokio::test(start_paused = true)]
+        async fn installd_ready_on_the_first_clean_listapps() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::ok_stdout("{ }\n"),
+            );
+            let _g = set_test_runner(fake.clone());
+
+            wait_for_ios_installd("SIM")
+                .await
+                .expect("installd SHALL be ready when listapps answers cleanly");
+            assert_eq!(
+                fake.call_count(),
+                1,
+                "a ready sim SHALL cost exactly one probe, not a grace sleep"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn installd_retries_past_the_mach_308_blip() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            // The blip, then a settled installd — the sequence the whole
+            // change exists to absorb.
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::exit(1, "", "Mach error -308 - (ipc/mig) server died"),
+            );
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::ok_stdout("{ }\n"),
+            );
+            let _g = set_test_runner(fake.clone());
+
+            wait_for_ios_installd("SIM")
+                .await
+                .expect("a -308 blip SHALL be waited out, not surfaced");
+            assert_eq!(
+                fake.call_count(),
+                2,
+                "SHALL re-probe after the blip rather than accepting it"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn installd_rejects_a_zero_exit_that_names_the_blip() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            // Exit 0 with -308 on stderr — the Android probe gates on the
+            // same shape, because a command can report success while
+            // naming the very transient that breaks the next install.
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::exit(0, "", "domain=NSMachErrorDomain, code=-308"),
+            );
+            let _g = set_test_runner(fake);
+
+            let err = wait_for_ios_installd("SIM")
+                .await
+                .expect_err("a zero exit naming -308 SHALL NOT count as ready");
+            assert!(format!("{err:#}").contains("installd"), "got: {err:#}");
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn installd_times_out_when_listapps_never_answers() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["xcrun", "simctl", "listapps", "SIM"],
+                Canned::exit(149, "", "Bad or unknown session"),
+            );
+            let _g = set_test_runner(fake);
+
+            let err = wait_for_ios_installd("SIM")
+                .await
+                .expect_err("a wedged sim SHALL time out rather than block forever");
+            assert!(format!("{err:#}").contains("within 30s"), "got: {err:#}");
         }
 
         #[tokio::test(start_paused = true)]
