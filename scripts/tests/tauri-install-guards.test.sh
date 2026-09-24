@@ -72,7 +72,8 @@ case "\${FAKE_BEHAVIOUR:-}" in
     # are dated forward rather than the .app back, so both clear
     # BUILD_START_TS and only the new check can fire.
     make_app; fresh_assets
-    touch -t "\$(date -v+5S +%Y%m%d%H%M.%S)" dist/index.html dist/assets/main.js ;;
+    ahead=\$(date -v+5S +%Y%m%d%H%M.%S 2>/dev/null || date -d '+5 seconds' +%Y%m%d%H%M.%S)
+    touch -t "\$ahead" dist/index.html dist/assets/main.js ;;
   empty-dist)
     make_app
     : > dist/index.html ;;

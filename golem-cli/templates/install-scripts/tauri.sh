@@ -58,6 +58,23 @@ golem_hash() {
   done | shasum | cut -d' ' -f1
 }
 
+# Seconds-since-epoch mtime of a path. BSD and GNU `stat` disagree on the
+# flag, and the iOS guards below are useless if the call aborts — which is
+# what a bare `stat -f %m` does everywhere that isn't macOS.
+#
+# Probed once into an array rather than tried-and-fallen-back per call:
+# GNU `stat -f` is --file-system, so it can print something for the file
+# before failing on the format operand, and `A || B` in a command
+# substitution would capture both halves as one corrupt number.
+if stat -c %Y . >/dev/null 2>&1; then
+  GOLEM_STAT=(stat -c %Y)     # GNU coreutils
+else
+  GOLEM_STAT=(stat -f %m)     # BSD / macOS
+fi
+golem_mtime() {
+  "${GOLEM_STAT[@]}" "$1"
+}
+
 # Install JS dependencies when the inputs have moved since the last install.
 # Skipped entirely when PM_INSTALL is empty — a Tauri app with no JS frontend
 # has nothing to install, and guessing would be worse than doing nothing.
@@ -182,7 +199,7 @@ case "$PLATFORM" in
     # Picking up a months-old .app because the rename-step failed silently
     # is what bit us for weeks; this turns it into a loud failure.
     if [[ "$MODE" != "install-only" ]]; then
-      APP_MTIME=$(stat -f %m "$APP_PATH")
+      APP_MTIME=$(golem_mtime "$APP_PATH")
       if (( APP_MTIME < BUILD_START_TS )); then
         echo "error: .app at $APP_PATH was not refreshed by this build (mtime $APP_MTIME < build start $BUILD_START_TS). The tauri-cli rename likely failed and we'd be installing a stale bundle." >&2
         exit 1
@@ -211,7 +228,11 @@ case "$PLATFORM" in
           echo "       around an empty web bundle and would install a blank app." >&2
           exit 1
         fi
-        DIST_NEWEST=$(find "$DIST_DIR" -type f -exec stat -f %m {} + 2>/dev/null | sort -n | tail -1)
+        DIST_NEWEST=""
+        while IFS= read -r f; do
+          m=$(golem_mtime "$f")
+          [[ -z "$DIST_NEWEST" || "$m" -gt "$DIST_NEWEST" ]] && DIST_NEWEST="$m"
+        done < <(find "$DIST_DIR" -type f)
         if [[ -z "$DIST_NEWEST" ]] || (( DIST_NEWEST < BUILD_START_TS )); then
           echo "error: no file under $DIST_DIR was written by this build (newest ${DIST_NEWEST:-none}" >&2
           echo "       < build start $BUILD_START_TS). beforeBuildCommand did not re-run, so the" >&2
