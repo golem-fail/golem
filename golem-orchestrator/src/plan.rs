@@ -2131,13 +2131,14 @@ on_text = "Submit"
     }
 
     #[test]
-    fn expand_hardware_entries_absent_defaults_to_virtual_only() {
+    fn expand_hardware_entries_absent_accepts_either_shape() {
         let dc = dc_with_hardware(None);
         let result = expand_hardware_entries(&dc).expect("expand_hardware_entries() SHALL succeed");
         assert_eq!(
             result,
-            vec![Some(false)],
-            "SHALL default to virtual-only when `hardware` is omitted"
+            vec![None],
+            "omitting `hardware` SHALL accept either shape, as ONE box — \
+             two pinned boxes would be a coverage axis demanding both"
         );
     }
 
@@ -3288,9 +3289,9 @@ on_text = "Submit"
         );
         assert_eq!(reqs[0].platform, Some(Platform::Android));
         assert_eq!(
-            reqs[0].physical,
-            Some(false),
-            "default booted box SHALL require a virtual device"
+            reqs[0].physical, None,
+            "a flow with no devices block never stated a shape, so the default \
+             box SHALL accept either"
         );
     }
 

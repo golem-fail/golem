@@ -4073,8 +4073,33 @@ async fn try_pick_free(
     if free.is_empty() {
         return None;
     }
+    let free = prefer_virtual(&free);
     let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix).await;
     Some(pick.clone())
+}
+
+/// Narrow a free-candidate set to its virtual devices, when it has any.
+///
+/// A slot with `physical: None` (the default, since `hardware` is
+/// unspecified on most flows) matches a connected phone as readily as a
+/// simulator. Emulators are reproducible and disposable; somebody's phone
+/// is neither, so it is the fallback rather than a coin toss.
+///
+/// Applied BEFORE `rank_by_install_cache`, so shape outranks install-cache
+/// warmth: a cold sim is picked over a warm phone. Re-installing is
+/// seconds; a surprise run on real hardware is a support ticket.
+///
+/// Not applied to the auto-boot path — `shutdown` cannot hold a physical
+/// device (Android discovers phys only through `adb devices`, which lists
+/// connected ones as booted; iOS discovers no physical devices at all), so
+/// a filter there would never be false.
+fn prefer_virtual<'a>(free: &[&'a DeviceInfo]) -> Vec<&'a DeviceInfo> {
+    let virtual_only: Vec<&DeviceInfo> = free.iter().copied().filter(|d| !d.physical).collect();
+    if virtual_only.is_empty() {
+        free.to_vec()
+    } else {
+        virtual_only
+    }
 }
 
 /// Find the best available device for a platform, honouring slot
@@ -5230,6 +5255,74 @@ mod tests {
             runtime_id: None,
             device_type_id: None,
         }
+    }
+
+    // ---------------------------------------------------------------
+    // prefer_virtual — shape preference inside the free pool
+    //
+    // Covers the `hardware`-absent default (issue #30): the slot now
+    // matches a connected phone as readily as a simulator, so the picker
+    // is the only thing standing between an unsuspecting flow and
+    // somebody's real device.
+    // ---------------------------------------------------------------
+    fn phys(name: &str) -> DeviceInfo {
+        DeviceInfo {
+            physical: true,
+            ..device(
+                name,
+                Platform::Android,
+                golem_devices::DeviceType::Phone,
+                34,
+            )
+        }
+    }
+
+    fn virt(name: &str) -> DeviceInfo {
+        device(
+            name,
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            34,
+        )
+    }
+
+    #[test]
+    fn a_free_virtual_device_wins_over_a_free_phone() {
+        let (p, v) = (phys("pixel"), virt("emu"));
+        let free = vec![&p, &v];
+        let kept = prefer_virtual(&free);
+        assert_eq!(
+            kept.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+            vec!["emu"],
+            "a free simulator SHALL exclude the phone from ranking entirely, \
+             not merely outrank it"
+        );
+    }
+
+    #[test]
+    fn a_phone_is_used_when_no_virtual_device_is_free() {
+        let (a, b) = (phys("pixel"), phys("galaxy"));
+        let free = vec![&a, &b];
+        let kept = prefer_virtual(&free);
+        assert_eq!(
+            kept.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+            vec!["pixel", "galaxy"],
+            "phys-only SHALL pass through untouched — preferring virtual must \
+             not mean refusing hardware"
+        );
+    }
+
+    #[test]
+    fn an_all_virtual_pool_is_passed_through_in_order() {
+        let (a, b) = (virt("emu-a"), virt("emu-b"));
+        let free = vec![&a, &b];
+        let kept = prefer_virtual(&free);
+        assert_eq!(
+            kept.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+            vec!["emu-a", "emu-b"],
+            "order SHALL survive so install-cache ranking still breaks ties \
+             by input order"
+        );
     }
 
     fn empty_slot() -> DeviceSlot {

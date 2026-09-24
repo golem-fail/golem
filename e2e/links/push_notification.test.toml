@@ -18,6 +18,9 @@ name = "app-b"
 [[flow.apps.devices]]
 os = ["ios:latest", "android:latest"]
 type = "phone"
+# Explicit, not inherited: `hardware` unspecified accepts either shape, and
+# this flow's action cannot work on real hardware (see the header).
+hardware = "virtual"
 
 [[block]]
 name = "verify_initial_state"

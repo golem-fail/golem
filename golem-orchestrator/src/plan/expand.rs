@@ -558,7 +558,7 @@ pub(super) fn default_any_booted_requirements(
             platform: Some(p),
             os_version: None,
             device_type: None,
-            physical: Some(false),
+            physical: None,
             name: None,
             playstore: None,
             accessibility_label: None,
@@ -683,23 +683,28 @@ pub(super) fn expand_type_entries(
         .collect()
 }
 
-/// Expand the `hardware` field. Absent → `[Some(false)]` (virtual-only
-/// default — physical devices require explicit opt-in). Single string
-/// → one entry. Array → N entries (partial-axis expansion candidate).
+/// Expand the `hardware` field. Absent → `[None]` (accept either shape;
+/// the picker prefers virtual when both are free). Single string → one
+/// entry. Array → N entries (partial-axis expansion candidate).
 /// Unrecognised values error out with the allowed list.
+///
+/// Absent is deliberately ONE `None` box rather than two pinned boxes
+/// (`[Some(false), Some(true)]`): two boxes are a coverage axis and would
+/// demand a device of each shape, which is what the explicit array form
+/// means. Unspecified means "don't care", not "run both".
 pub(super) fn expand_hardware_entries(
     dc: &golem_parser::DeviceConstraint,
 ) -> Result<Vec<Option<bool>>> {
     let Some(hw_sv) = &dc.hardware else {
-        return Ok(vec![Some(false)]);
+        return Ok(vec![None]);
     };
     let values = hw_sv.to_vec();
     if values.is_empty() {
         return Err(golem_events::coded(
             golem_events::FailureCode::ParseDeviceConstraint,
             anyhow::anyhow!(
-                "`hardware = []` matches no device — omit the field for the \
-                 virtual-only default, or list at least one value."
+                "`hardware = []` matches no device — omit the field to accept \
+                 either shape, or list at least one value."
             ),
         ));
     }

@@ -328,25 +328,33 @@ pub fn lint_unknown_step_fields(flow: &FlowFile) -> Vec<UnknownStepFieldIssue> {
     issues
 }
 
-/// `push_notification` is sim/emu-only on both platforms. Flag any
-/// flow whose app explicitly opts into `hardware = "real"` (or
-/// `["virtual", "real"]`) AND uses the action — the runtime would
-/// bail on the phys-device run. Apps with `hardware` absent default
-/// to virtual-only today and don't trigger the lint; if the default
-/// changes (see roadmap), this trigger condition flips to include
-/// the absent case too.
+/// `push_notification` is sim/emu-only on both platforms. Flag any flow
+/// whose app could be scheduled onto real hardware AND uses the action —
+/// the runtime would bail on the phys-device run.
+///
+/// "Could be scheduled onto real hardware" is `hardware = "real"`, the
+/// array form `["virtual", "real"]`, *or* `hardware` left unspecified —
+/// an unspecified `hardware` accepts either shape, so an app with a phone
+/// attached can land on it. An app with no `[[flow.apps.devices]]` block
+/// at all is unspecified too, and counts for the same reason.
+///
+/// This is a warning rather than an error precisely because the phys run
+/// is only possible, not certain: the picker prefers virtual, so most
+/// such flows never touch hardware. Silencing it is a one-line
+/// `hardware = "virtual"`, which is also the honest declaration.
 pub fn lint_push_notification_phys(flow: &FlowFile) -> Vec<PushNotificationPhysIssue> {
-    // Apps whose device constraints permit real hardware.
+    // Apps whose device constraints permit real hardware — including by
+    // saying nothing, since an absent `hardware` no longer pins virtual.
     let phys_capable_apps: Vec<&str> = flow
         .flow
         .apps
         .iter()
         .filter(|app| {
-            app.devices.iter().any(|dc| {
-                dc.hardware
-                    .as_ref()
-                    .is_some_and(|h| h.to_vec().iter().any(|v| v == "real"))
-            })
+            app.devices.is_empty()
+                || app.devices.iter().any(|dc| match &dc.hardware {
+                    None => true,
+                    Some(h) => h.to_vec().iter().any(|v| v == "real"),
+                })
         })
         .map(|app| app.name.as_str())
         .collect();
@@ -1012,13 +1020,42 @@ text = "OK"
         assert!(issues.is_empty(), "no within means no issue: {issues:?}");
     }
 
-    // 19. lint_push_notification_phys: no phys-capable app => no issues even
-    //     when push_notification is used
+    // 19. lint_push_notification_phys: only an explicit `hardware = "virtual"`
+    //     is quiet — absent hardware accepts either shape, so it is flagged.
     #[test]
-    fn lint_push_notif_no_phys_capable_apps() {
+    fn lint_push_notif_explicit_virtual_is_the_only_quiet_shape() {
         let toml_str = r#"
 [flow]
 name = "virtual only"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[flow.apps.devices]]
+os = "android"
+hardware = "virtual"
+
+[[block]]
+
+[[block.steps]]
+action = "push_notification"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert!(
+            issues.is_empty(),
+            "an app pinned to virtual can never reach hardware: {issues:?}"
+        );
+    }
+
+    // 19b. Absent `hardware` permits real since #30, so the action that
+    //      cannot run on hardware must warn there too.
+    #[test]
+    fn lint_push_notif_absent_hardware_is_flagged() {
+        let toml_str = r#"
+[flow]
+name = "unspecified shape"
 
 [[flow.apps]]
 name = "myapp"
@@ -1034,10 +1071,41 @@ action = "push_notification"
 "#;
         let flow = parse_flow(toml_str).expect("should parse");
         let issues = lint_push_notification_phys(&flow);
-        assert!(
-            issues.is_empty(),
-            "absent hardware defaults to virtual, SHALL not flag: {issues:?}"
+        assert_eq!(
+            issues.len(),
+            1,
+            "saying nothing about `hardware` SHALL be treated as permitting \
+             real, not as pinning virtual: {issues:?}"
         );
+        assert_eq!(issues[0].app_name, "myapp");
+    }
+
+    // 19c. An app with no `[[flow.apps.devices]]` block at all is unspecified
+    //      by the same reasoning, and reaches the same default.
+    #[test]
+    fn lint_push_notif_no_devices_block_is_flagged() {
+        let toml_str = r#"
+[flow]
+name = "no devices block"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[block]]
+
+[[block.steps]]
+action = "push_notification"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert_eq!(
+            issues.len(),
+            1,
+            "an app with no devices block runs on whatever is booted, phones \
+             included: {issues:?}"
+        );
+        assert_eq!(issues[0].app_name, "myapp");
     }
 
     // 20. lint_push_notification_phys: app opts into real hardware AND uses the
@@ -1119,6 +1187,7 @@ bundle = "com.example.virtual"
 
 [[flow.apps.devices]]
 os = "android"
+hardware = "virtual"
 
 [[block]]
 
