@@ -2450,6 +2450,28 @@ token = "abc123"
         );
     }
 
+    /// `to` is the grouped selector's alias, so a step-level `to = "..."`
+    /// binds to `on` and a string cannot become a `SelectorGroup`. That is
+    /// why `await_email`'s recipient filter is spelled `recipient` and not
+    /// `to` (#227) — the documented `to` filter was unreachable, and the
+    /// error a user got said nothing about email.
+    #[test]
+    fn a_step_level_to_string_is_the_selector_alias_not_a_param() {
+        let err = parse_step("action = \"await_email\"\nto = \"user@example.com\"")
+            .expect_err("a string `to` SHALL NOT parse as a selector");
+        assert!(
+            err.to_string().contains("expected struct SelectorGroup"),
+            "got: {err}"
+        );
+
+        let flow = parse_step("action = \"await_email\"\nrecipient = \"user@example.com\"")
+            .expect("`recipient` SHALL parse");
+        assert!(
+            flow.block[0].steps[0].params.contains_key("recipient"),
+            "`recipient` SHALL reach params where the action reads it"
+        );
+    }
+
     #[test]
     fn unknown_key_in_grouped_selector_is_rejected() {
         assert_rejects_key("action = \"tap\"\non = { contais = \"X\" }", "contais");
