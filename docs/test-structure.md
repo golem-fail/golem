@@ -159,13 +159,13 @@ type = "phone"
 
 Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, phone}` under every strategy. Prefer the array form when it captures the same intent.
 
-**No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Virtual-only (sim/emulator) by default — physical devices are never picked implicitly. Fails fast if nothing is booted.
+**No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted), on a device of either shape — a simulator is preferred when one is free. Fails fast if nothing is booted.
 
 #### Hardware Axis (virtual / real)
 
 ```toml
 [[flow.apps.devices]]
-# (hardware omitted)                # default: virtual-only (sim/emulator)
+# (hardware omitted)                # default: either shape, virtual preferred
 
 [[flow.apps.devices]]
 hardware = "virtual"                # explicit: virtual-only
@@ -177,7 +177,11 @@ hardware = "real"                   # physical device required
 hardware = ["virtual", "real"]      # coverage axis — both tick boxes emitted
 ```
 
-Physical devices require **explicit opt-in** via `hardware = "real"`. The default is virtual-only so an accidentally-connected phone doesn't get swept into a flow it wasn't meant for.
+Omitting `hardware` means **either shape is acceptable**, and golem prefers a virtual one: a free simulator/emulator always wins over a connected phone, even a phone the app is already installed on. A physical device is used only when no virtual device is free *and already booted* — so a plugged-in phone is usable without editing the flow, without becoming the default target.
+
+That preference lives in the picker, not the constraint, so it applies only where both are already running. It does not reorder the wider ladder: a free connected phone is still chosen ahead of booting a cold simulator, because booting one costs far more than the difference between the two devices.
+
+Say `hardware = "virtual"` when the flow genuinely cannot run on hardware — `push_notification` is the standard case, and it has a lint that says so.
 
 Under `coverage = "one"` / `"smart"`, `hardware = ["virtual", "real"]` gives graceful degradation: the sim box usually succeeds first, the physical box is skipped via the coverage gate. If you want to *insist* on physical, use `hardware = "real"` on its own.
 

@@ -590,7 +590,7 @@ steps = [
 ]
 ```
 
-A `[lint]` warning fires at parse time when a flow uses `push_notification` and any of its apps declares `hardware = "real"` or `["virtual", "real"]`, so authors get an early breadcrumb that the action will fail on the phys branch unless they wrap it in `branch` like above.
+A `[lint]` warning fires at parse time when a flow uses `push_notification` and any of its apps could be scheduled onto real hardware — `hardware = "real"`, `["virtual", "real"]`, or `hardware` left unspecified (which accepts either shape). It's an early breadcrumb that the action will fail on the phys branch unless you wrap it in `branch` like above. Pin `hardware = "virtual"` to state that the flow is sim/emu-only and silence it.
 
 **Receive bridge.** The action only delivers — the app must wire up its native receiver to forward the payload into its UI / state. See `test-app-b/ios/GolemTestB/GolemTestBApp.swift` and `test-app-b/android/app/src/main/java/fail/golem/testb/MainActivity.kt` for a minimal SwiftUI / Compose implementation. Tauri 2.x's `@tauri-apps/plugin-notification` is for *local* notifications (app schedules its own); it doesn't expose remote-push delivery to JS today, which is why `test-app` (Tauri) doesn't carry the bridge and `test-app-b` (native) does.
 
