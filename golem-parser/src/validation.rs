@@ -1,4 +1,4 @@
-use crate::{BranchCondition, FlowFile};
+use crate::{BranchCondition, FlowFile, Step};
 use std::collections::HashSet;
 
 /// One structural problem found by [`validate_flow`]: a human-readable
@@ -94,6 +94,199 @@ pub struct PushNotificationPhysIssue {
     pub block_name: Option<String>,
     pub step_index: usize,
     pub app_name: String,
+}
+
+/// A step param key that reads like a field golem would have used, but
+/// isn't one — so serde swept it into the open `params` map and nothing
+/// ever looked at it.
+#[derive(Debug, Clone)]
+pub struct UnknownStepFieldIssue {
+    pub block_name: Option<String>,
+    pub step_index: usize,
+    pub action: String,
+    /// The key as written.
+    pub key: String,
+    /// The single field within one edit of `key`, when there is exactly
+    /// one. Absent for an `on_*` key that resembles nothing.
+    pub suggestion: Option<String>,
+}
+
+/// Every named field on [`Step`], as spelled in TOML.
+///
+/// The destructure is the point: `Step` is matched exhaustively with no
+/// `..`, so adding a field fails to compile until it is listed here. The
+/// alternative — a hand-kept array — drifts the moment someone adds a
+/// field, and it drifts silently, which is the exact failure this lint
+/// exists to catch.
+fn step_field_names() -> &'static [&'static str] {
+    #[allow(clippy::no_effect_underscore_binding)]
+    fn _exhaustive(step: &Step) {
+        let Step {
+            action: _,
+            on_text: _,
+            on_accessibility_label: _,
+            on_index: _,
+            on_enabled: _,
+            on_checked: _,
+            on_clickable: _,
+            on_below: _,
+            on_above: _,
+            on_right_of: _,
+            on_left_of: _,
+            on: _,
+            input: _,
+            if_fail: _,
+            save_to: _,
+            timeout: _,
+            retry: _,
+            retry_delay: _,
+            app: _,
+            restart: _,
+            auto_scroll: _,
+            scroll_timeout: _,
+            keep_keyboard: _,
+            visibility_percentage: _,
+            within: _,
+            start: _,
+            end: _,
+            points: _,
+            duration: _,
+            scale: _,
+            rotation: _,
+            velocity: _,
+            fingers: _,
+            params: _,
+        } = step;
+    }
+    &[
+        "action",
+        "on_text",
+        "on_accessibility_label",
+        "on_index",
+        "on_enabled",
+        "on_checked",
+        "on_clickable",
+        "on_below",
+        "on_above",
+        "on_right_of",
+        "on_left_of",
+        "on",
+        // `on`'s TOML alias — a step may spell the grouped selector either way.
+        "to",
+        "input",
+        "if_fail",
+        "save_to",
+        "timeout",
+        "retry",
+        "retry_delay",
+        "app",
+        "restart",
+        "auto_scroll",
+        "scroll_timeout",
+        "keep_keyboard",
+        "visibility_percentage",
+        "within",
+        "start",
+        "end",
+        "points",
+        "duration",
+        "scale",
+        "rotation",
+        "velocity",
+        "fingers",
+    ]
+}
+
+/// True when `a` and `b` are within one insertion, deletion or
+/// substitution. Bounded rather than a full edit distance because that is
+/// all the lint acts on, and a length gap over one settles it immediately.
+fn within_one_edit(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let (long, short) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+    if long.len() - short.len() > 1 {
+        return false;
+    }
+    let mut i = 0;
+    let mut j = 0;
+    let mut edited = false;
+    while i < long.len() && j < short.len() {
+        if long[i] == short[j] {
+            i += 1;
+            j += 1;
+            continue;
+        }
+        if edited {
+            return false;
+        }
+        edited = true;
+        // Same length → substitution advances both; otherwise the extra
+        // character belongs to the longer string alone.
+        if long.len() == short.len() {
+            j += 1;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Flag step keys that landed in the catch-all `params` map but look like
+/// they were meant to be step fields.
+///
+/// `Step` ends in `#[serde(flatten)] params`, the open map action
+/// parameters arrive through, so `deny_unknown_fields` is not available
+/// here the way it is on the selector structs (#32) — an unrecognised key
+/// is indistinguishable, to serde, from a parameter golem does not model.
+/// The cost of that is silent: `on_text = "Save", on_indx = 2` drops the
+/// disambiguator and resolves against every "Save" on screen, and
+/// `on_tex = "Save"` alone leaves the step with no criteria at all —
+/// which matches the FIRST element in the tree, because
+/// `matches_selector` only tests the criteria that are set. Both pass.
+///
+/// Two rules, in decreasing confidence:
+///
+/// 1. `on_` is golem's prefix. Every action is in `KNOWN_ACTIONS` and the
+///    parameter vocabulary is golem's own, so an `on_*` key that is not a
+///    flat selector cannot be a legitimate parameter — it is a typo.
+/// 2. Any other key within one edit of a field name, when exactly one
+///    field is that close. Ties are left alone rather than guessed at.
+pub fn lint_unknown_step_fields(flow: &FlowFile) -> Vec<UnknownStepFieldIssue> {
+    let fields = step_field_names();
+    let mut issues = Vec::new();
+    for block in &flow.block {
+        for (idx, step) in block.steps.iter().enumerate() {
+            // Sorted so the warnings a flow produces don't reorder between
+            // runs — params is a HashMap.
+            let mut keys: Vec<&String> = step.params.keys().collect();
+            keys.sort();
+            for key in keys {
+                let near: Vec<&str> = fields
+                    .iter()
+                    .copied()
+                    .filter(|f| within_one_edit(f, key))
+                    .collect();
+                let suggestion = match near.as_slice() {
+                    [only] => Some((*only).to_string()),
+                    _ => None,
+                };
+                // A correctly spelled flat selector is a named field, so
+                // serde consumed it and it is not in `params` at all — the
+                // bare prefix is enough, and an exemption list here would be
+                // a condition that can never be false.
+                let is_stray_on = key.starts_with("on_");
+                if !is_stray_on && suggestion.is_none() {
+                    continue;
+                }
+                issues.push(UnknownStepFieldIssue {
+                    block_name: block.name.clone(),
+                    step_index: idx,
+                    action: step.action.clone(),
+                    key: key.clone(),
+                    suggestion,
+                });
+            }
+        }
+    }
+    issues
 }
 
 /// `push_notification` is sim/emu-only on both platforms. Flag any
@@ -988,5 +1181,140 @@ text = "OK"
             issues.is_empty(),
             "no push_notification step SHALL produce no issues: {issues:?}"
         );
+    }
+
+    // ---------------------------------------------------------------
+    // lint_unknown_step_fields — typos that serde swept into `params`
+    // ---------------------------------------------------------------
+
+    fn lint_keys(step_body: &str) -> Vec<(String, Option<String>)> {
+        let toml_str = format!(
+            "[flow]\nname = \"t\"\n\n[[block]]\nname = \"b\"\n\n[[block.steps]]\n{step_body}\n"
+        );
+        let flow = parse_flow(&toml_str).expect("fixture SHALL parse");
+        lint_unknown_step_fields(&flow)
+            .into_iter()
+            .map(|i| (i.key, i.suggestion))
+            .collect()
+    }
+
+    #[test]
+    fn lint_flags_a_misspelled_flat_selector() {
+        assert_eq!(
+            lint_keys("action = \"tap\"\non_tex = \"Save\""),
+            vec![("on_tex".to_string(), Some("on_text".to_string()))]
+        );
+    }
+
+    #[test]
+    fn lint_flags_a_misspelled_modifier_beside_a_working_selector() {
+        // The quiet one: the step still resolves, against every "Save" on
+        // screen instead of the second.
+        assert_eq!(
+            lint_keys("action = \"tap\"\non_text = \"Save\"\non_indx = 2"),
+            vec![("on_indx".to_string(), Some("on_index".to_string()))]
+        );
+    }
+
+    #[test]
+    fn lint_flags_an_on_prefixed_key_that_resembles_nothing() {
+        // No suggestion to offer, but `on_` is golem's prefix, so it is
+        // still a typo and not somebody's action parameter.
+        assert_eq!(
+            lint_keys("action = \"tap\"\non_wibble = \"Save\""),
+            vec![("on_wibble".to_string(), None)]
+        );
+    }
+
+    #[test]
+    fn lint_flags_a_misspelled_non_selector_field() {
+        assert_eq!(
+            lint_keys("action = \"type\"\ninpu = \"hello\""),
+            vec![("inpu".to_string(), Some("input".to_string()))]
+        );
+    }
+
+    #[test]
+    fn lint_leaves_real_action_parameters_alone() {
+        // Every key an action actually consumes, plus the ones mixin
+        // expansion injects. A warning on any of these fires on a correct
+        // flow, which is worse than the typo it is looking for.
+        for key in [
+            "url",
+            "body",
+            "headers",
+            "extract",
+            "session",
+            "count",
+            "direction",
+            "label",
+            "message",
+            "path",
+            "payload",
+            "permissions",
+            "vars",
+            "x",
+            "y",
+            "args",
+            "script",
+            "run",
+            "fixture",
+            "inbox",
+            "provider",
+            "subject",
+            "title",
+            "button",
+            "enabled",
+            "latitude",
+            "longitude",
+            "as",
+            "mixin",
+        ] {
+            let found = lint_keys(&format!("action = \"tap\"\n{key} = \"v\""));
+            assert!(
+                found.is_empty(),
+                "`{key}` is a real parameter and SHALL NOT be flagged, got {found:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_correct_flat_selector_never_reaches_the_lint() {
+        // Why the `on_` rule needs no exemption list: serde binds the real
+        // ones to named fields, so only a misspelling can reach `params`.
+        let flow = parse_flow(
+            "[flow]\nname = \"t\"\n\n[[block]]\nname = \"b\"\n\n[[block.steps]]\n\
+             action = \"tap\"\non_text = \"Save\"\non_index = 2\non_enabled = true\n",
+        )
+        .expect("fixture SHALL parse");
+        assert!(
+            flow.block[0].steps[0].params.is_empty(),
+            "spelled-correctly selectors SHALL be fields, not params: {:?}",
+            flow.block[0].steps[0].params
+        );
+        assert!(lint_unknown_step_fields(&flow).is_empty());
+    }
+
+    #[test]
+    fn lint_stays_quiet_when_two_fields_are_equally_close() {
+        // `tn` is one substitution from both `to` and `on`. Naming one of
+        // them would be a coin flip, and warning without a name would be
+        // noise on a key that may well be a parameter — so say nothing.
+        assert!(
+            lint_keys("action = \"tap\"\ntn = \"X\"").is_empty(),
+            "an ambiguous near-miss SHALL NOT be guessed at"
+        );
+    }
+
+    #[test]
+    fn within_one_edit_is_bounded_at_one() {
+        assert!(within_one_edit("on_text", "on_tex")); // deletion
+        assert!(within_one_edit("on_index", "on_indx")); // substitution + shift
+        assert!(within_one_edit("input", "inputs")); // insertion
+        assert!(within_one_edit("scale", "scale")); // identical
+        assert!(!within_one_edit("on_text", "on_txet")); // two substitutions
+        assert!(!within_one_edit("app", "as"));
+        assert!(!within_one_edit("on", "to"));
+        assert!(!within_one_edit("points", "path"));
     }
 }
