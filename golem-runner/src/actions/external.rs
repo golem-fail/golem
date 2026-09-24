@@ -178,6 +178,22 @@ pub(crate) async fn handle_run(
 /// namespace (e.g. inbox_name.imap_host, inbox_name.imap_port, etc.).
 /// Optionally filters by `to` address. Applies `extract` regexes to capture
 /// fields from the email body. Stores results under `save_to`.
+/// The step's `recipient` glob when the polled email fails it, else `None`.
+///
+/// Split out of the action so the decision is testable without an IMAP
+/// server — the action around it cannot be reached in a unit test, which is
+/// how this filter stayed broken.
+///
+/// The param is `recipient`, not `to`, and cannot go back to being `to`:
+/// `Step` declares `#[serde(alias = "to")] on`, so a step-level `to` binds to
+/// the grouped selector and a string there fails the whole flow with
+/// `invalid type: string, expected struct SelectorGroup`. The documented
+/// `to` filter was therefore unreachable from the day it was written (#227).
+fn recipient_mismatch<'a>(step: &'a Step, email_to: &str) -> Option<&'a str> {
+    let filter = step.params.get("recipient").and_then(|v| v.as_str())?;
+    (!glob_match(filter, email_to)).then_some(filter)
+}
+
 pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) -> Result<()> {
     let inbox_name = step
         .params
@@ -242,7 +258,6 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
         })?
         .to_string();
 
-    let to_filter = step.params.get("to").and_then(|v| v.as_str());
     let timeout = step.timeout.unwrap_or(30000);
 
     let subject_pattern = step
@@ -254,16 +269,13 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
     let poller = ImapPoller::new(imap_host, imap_port, user, pass);
     let email = poller.await_email(subject_pattern, timeout, 2000).await?;
 
-    // Filter by `to` if specified
-    if let Some(to) = to_filter {
-        if !glob_match(to, &email.to) {
-            crate::fail_code!(
-                golem_events::FailureCode::FlowExternalFailed,
-                "await_email: email 'to' field {:?} does not match filter {:?}",
-                email.to,
-                to,
-            );
-        }
+    if let Some(filter) = recipient_mismatch(step, &email.to) {
+        crate::fail_code!(
+            golem_events::FailureCode::FlowExternalFailed,
+            "await_email: recipient {:?} does not match filter {:?}",
+            email.to,
+            filter,
+        );
     }
 
     // Apply extract regexes
@@ -943,6 +955,60 @@ mod tests {
                 "no request SHALL be issued for an unsupported method"
             );
         }
+    }
+
+    // ── await_email recipient filter (#227) ───────────────────────
+
+    fn email_step(params: &[(&str, &str)]) -> Step {
+        let mut step = Step {
+            action: "await_email".to_string(),
+            ..Default::default()
+        };
+        for (k, v) in params {
+            step.params
+                .insert((*k).to_string(), toml::Value::String((*v).to_string()));
+        }
+        step
+    }
+
+    #[test]
+    fn recipient_filter_reads_the_recipient_param() {
+        assert_eq!(
+            recipient_mismatch(&email_step(&[("recipient", "a@b.com")]), "a@b.com"),
+            None,
+            "an exact match SHALL pass"
+        );
+        assert_eq!(
+            recipient_mismatch(&email_step(&[("recipient", "*@b.com")]), "x@b.com"),
+            None,
+            "the filter SHALL be a glob"
+        );
+        assert_eq!(
+            recipient_mismatch(&email_step(&[("recipient", "a@b.com")]), "c@d.com"),
+            Some("a@b.com"),
+            "a mismatch SHALL be reported, carrying the filter for the message"
+        );
+    }
+
+    #[test]
+    fn no_recipient_param_filters_nothing() {
+        assert_eq!(
+            recipient_mismatch(&email_step(&[]), "anyone@example.com"),
+            None
+        );
+    }
+
+    /// The param used to be `to`, which no flow could ever set — `Step`
+    /// aliases `to` onto the grouped selector. Reading `to` again would
+    /// resurrect a filter that silently never applies, so pin the key:
+    /// a step carrying only `to` SHALL behave as though no filter was given.
+    #[test]
+    fn a_to_param_is_not_the_recipient_filter() {
+        assert_eq!(
+            recipient_mismatch(&email_step(&[("to", "a@b.com")]), "c@d.com"),
+            None,
+            "`to` SHALL NOT be read as the recipient filter"
+        );
     }
 
     // ── run action executes a project-scoped script file ──────────────

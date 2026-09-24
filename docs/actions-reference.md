@@ -665,7 +665,7 @@ that object by name: `imap_host`, `imap_port`, `user`, `pass`. So
 | Field | Default | Description |
 |-------|---------|-------------|
 | `inbox` | — | Name of a variable holding an inbox object; the `imap_host` / `imap_port` / `user` / `pass` fields on it are used to connect |
-| `to` | — | Glob filter for recipient |
+| `recipient` | — | Glob filter for the recipient address. Spelled `recipient`, not `to`: a step-level `to` is the grouped selector alias |
 | `subject` | `"*"` | Subject glob pattern |
 | `extract` | — | Table of field names to regex patterns |
 | `timeout` | `30000` | Polling timeout (ms) |
