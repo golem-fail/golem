@@ -186,7 +186,11 @@ case "$PLATFORM" in
     else
       TARGET_DIR="src-tauri/gen/apple/build/aarch64"
     fi
-    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null)
+    # `|| true`: when the per-arch dir does not exist, find exits nonzero and
+    # `set -e` would kill the script on the assignment — silently, before the
+    # broader search below and before the explicit error that names the
+    # problem. An empty APP_PATH is the state the next lines are written for.
+    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null || true)
     if [[ -z "$APP_PATH" ]]; then
       APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
     fi

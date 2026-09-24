@@ -34,7 +34,10 @@ trap 'rm -rf "$WORK"' EXIT
 BIN="$WORK/bin"
 mkdir -p "$BIN"
 
-APP_REL="src-tauri/gen/apple/build/arm64-sim/Test.app"
+# Both per-arch dirs, because the script picks by `uname -m`: an arm64 host
+# looks in arm64-sim, an x86_64 one (every Linux CI runner) in x86_64. A
+# fixture that only made the local arch's dir passed here and failed there.
+APP_DIRS=(src-tauri/gen/apple/build/arm64-sim src-tauri/gen/apple/build/x86_64)
 
 # `xcrun`: report the device as a simulator, accept the install.
 cat > "$BIN/xcrun" <<'STUB'
@@ -51,8 +54,11 @@ STUB
 # with a .app recreates it, exactly as a real build does.
 cat > "$BIN/faketauri" <<STUB
 #!/usr/bin/env bash
-APP="$APP_REL"
-make_app() { mkdir -p "\$APP"; printf 'plist\n' > "\$APP/Info.plist"; }
+APPS=(${APP_DIRS[*]/%//Test.app})
+make_app() {
+  local a
+  for a in "\${APPS[@]}"; do mkdir -p "\$a"; printf 'plist\n' > "\$a/Info.plist"; done
+}
 fresh_assets() { touch dist/index.html dist/assets/main.js; }
 case "\${FAKE_BEHAVIOUR:-}" in
   ok)
@@ -95,9 +101,13 @@ sed -e "s|{{TAURI_DIR}}|app|" \
 # the stub does not touch stays visibly stale.
 make_project() {
   local dir="$1"
-  mkdir -p "$dir/app/$APP_REL" "$dir/app/dist/assets" "$dir/app/src-tauri"
+  mkdir -p "$dir/app/dist/assets" "$dir/app/src-tauri"
   printf '{ "build": { "frontendDist": "../dist" } }\n' > "$dir/app/src-tauri/tauri.conf.json"
-  printf 'plist\n' > "$dir/app/$APP_REL/Info.plist"
+  local a
+  for a in "${APP_DIRS[@]}"; do
+    mkdir -p "$dir/app/$a/Test.app"
+    printf 'plist\n' > "$dir/app/$a/Test.app/Info.plist"
+  done
   printf '<!doctype html>\n' > "$dir/app/dist/index.html"
   printf 'bundle\n' > "$dir/app/dist/assets/main.js"
   find "$dir/app" -exec touch -t 202001010000 {} + 2>/dev/null
