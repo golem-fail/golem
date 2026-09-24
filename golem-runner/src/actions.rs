@@ -254,11 +254,46 @@ mod tests {
             }
         }
 
+        // 3. Keywords from golem-parser's `KNOWN_ACTIONS`, the list
+        //    `validate_flow` rejects a step against. A third copy of the same
+        //    vocabulary, and the one that rotted: it sat 27 actions behind —
+        //    every `browse_*`, plus `accept_alert`, `double_tap`, `gesture`
+        //    and `pinch` — because nothing called `validate_flow`, so nothing
+        //    ever ran the list against a real flow. Checked here rather than
+        //    in golem-parser because this is where the other two copies
+        //    already meet (see the cross-crate `include_str!` above).
+        let parser = include_str!("../../golem-parser/src/validation.rs");
+        let mut in_parser = BTreeSet::new();
+        let mut in_list = false;
+        for line in parser.lines() {
+            let t = line.trim_start();
+            if t.starts_with("const KNOWN_ACTIONS") {
+                in_list = true;
+                continue;
+            }
+            if !in_list {
+                continue;
+            }
+            if t.starts_with("];") {
+                break;
+            }
+            for tok in tokens(line, '"') {
+                in_parser.insert(tok);
+            }
+        }
+
         // `load_mixin` is a parse-time action: golem-parser expands it into the
         // referenced mixin's steps before runtime dispatch, so it never appears
         // in the `match action` above. It is a real, documented user action, just
-        // not a runtime dispatch arm — exclude it from the sync check.
+        // not a runtime dispatch arm — exclude it from the sync check. The
+        // parser's list is the one place it legitimately appears, since that is
+        // the layer that expands it.
         in_doc.remove("load_mixin");
+        assert!(
+            in_parser.remove("load_mixin"),
+            "KNOWN_ACTIONS SHALL still accept `load_mixin` — the parser expands \
+             it, so a flow naming it must validate",
+        );
 
         let code_only: Vec<_> = in_code.difference(&in_doc).collect();
         let doc_only: Vec<_> = in_doc.difference(&in_code).collect();
@@ -267,6 +302,15 @@ mod tests {
             "actions.rs dispatch and docs/actions-reference.md are out of sync.\n  \
              in code but undocumented: {code_only:?}\n  \
              documented but not in code: {doc_only:?}",
+        );
+
+        let unvalidated: Vec<_> = in_code.difference(&in_parser).collect();
+        let phantom: Vec<_> = in_parser.difference(&in_code).collect();
+        assert!(
+            unvalidated.is_empty() && phantom.is_empty(),
+            "golem-parser's KNOWN_ACTIONS is out of sync with the dispatch.\n  \
+             dispatched but rejected by validate_flow: {unvalidated:?}\n  \
+             accepted by validate_flow but not dispatched: {phantom:?}",
         );
     }
 
