@@ -184,6 +184,16 @@ pub fn start_companion_command_with_reg(
             } else {
                 args.extend(["-e".into(), "port".into(), port.to_string()]);
             }
+            // Pin the runner to the entry-point test. Without a filter
+            // AndroidJUnitRunner runs every test in the package, so the
+            // bounded smoke test would execute on every real bring-up —
+            // binding a second port and stopping a server the host is
+            // waiting on.
+            args.extend([
+                "-e".into(),
+                "class".into(),
+                "fail.golem.companion.CompanionServerTest#startServer".into(),
+            ]);
             args.push("fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into());
             args
         }

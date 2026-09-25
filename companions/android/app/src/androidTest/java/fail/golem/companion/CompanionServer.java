@@ -97,6 +97,9 @@ public class CompanionServer {
     /** ADB serial passed from the host (e.g. "emulator-5554"). */
     private final String deviceSerial;
     private volatile long lastRequestTime = System.currentTimeMillis();
+    private volatile ServerSocket serverSocket;
+    private volatile boolean stopping;
+    private Thread watchdog;
 
     public CompanionServer(UiAutomation uiAutomation) {
         this(uiAutomation, DEFAULT_PORT, null);
@@ -121,9 +124,19 @@ public class CompanionServer {
 
     public void start() throws IOException {
         startInactivityWatchdog();
-        ServerSocket serverSocket = tryBind(port);
+        serverSocket = tryBind(port);
         while (true) {
-            Socket client = serverSocket.accept();
+            Socket client;
+            try {
+                client = serverSocket.accept();
+            } catch (IOException e) {
+                // stop() closes the socket out from under accept(), which
+                // unblocks it with an exception indistinguishable from a real
+                // fault. The flag decides, not the exception — otherwise a
+                // deliberate shutdown surfaces as an instrumentation failure.
+                if (stopping) return;
+                throw e;
+            }
             new Thread(() -> {
                 try {
                     lastRequestTime = System.currentTimeMillis();
@@ -137,8 +150,32 @@ public class CompanionServer {
         }
     }
 
+    /**
+     * Unblock {@link #start()} and release the listening port. Visible for the
+     * smoke test — the production entry point never stops the server, it runs
+     * until the instrumentation process dies.
+     */
+    void stop() {
+        stopping = true;
+        if (watchdog != null) watchdog.interrupt();
+        ServerSocket s = serverSocket;
+        if (s != null) {
+            try { s.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    /**
+     * The port actually bound, or -1 before {@link #start()} has bound one.
+     * Differs from the requested port when it was 0 (ephemeral) or when
+     * {@link #tryBind} re-registered onto a free one.
+     */
+    int boundPort() {
+        ServerSocket s = serverSocket;
+        return s == null ? -1 : s.getLocalPort();
+    }
+
     private void startInactivityWatchdog() {
-        Thread watchdog = new Thread(() -> {
+        watchdog = new Thread(() -> {
             while (true) {
                 try {
                     Thread.sleep(60_000); // check every minute
@@ -221,7 +258,7 @@ public class CompanionServer {
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.14.0")
+                        .put("version", "0.14.1")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))

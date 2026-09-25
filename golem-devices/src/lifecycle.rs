@@ -340,6 +340,9 @@ mod tests {
                 "-e",
                 "port",
                 "8225",
+                "-e",
+                "class",
+                "fail.golem.companion.CompanionServerTest#startServer",
                 "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
             ]
         );
@@ -431,6 +434,9 @@ mod tests {
                 "-e",
                 "reg_port",
                 "9999",
+                "-e",
+                "class",
+                "fail.golem.companion.CompanionServerTest#startServer",
                 "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
             ]
         );
