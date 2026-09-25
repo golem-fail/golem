@@ -60,15 +60,21 @@ make_app() {
   for a in "\${APPS[@]}"; do mkdir -p "\$a"; printf 'plist\n' > "\$a/Info.plist"; done
 }
 fresh_assets() { touch dist/index.html dist/assets/main.js; }
+#
+# Assets first, .app second, in that order: a real build writes the web
+# bundle and then links around it, and the guard under test asserts the
+# .app is the newer of the two. Doing it the other way round passed
+# whenever both landed inside one second and failed when they straddled a
+# boundary — which under a loaded parallel suite is a coin toss.
 case "\${FAKE_BEHAVIOUR:-}" in
   ok)
-    make_app; fresh_assets ;;
+    fresh_assets; make_app ;;
   rename-bug)
-    make_app; fresh_assets
+    fresh_assets; make_app
     echo "Error failed to rename app /x/Test.app: Directory not empty (os error 66)" >&2
     exit 1 ;;
   other-error)
-    make_app; fresh_assets
+    fresh_assets; make_app
     echo "error: linking with cc failed: exit status 1" >&2
     exit 1 ;;
   stale-app)
