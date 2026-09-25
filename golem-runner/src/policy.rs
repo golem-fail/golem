@@ -97,9 +97,9 @@ fn action_multiplier(step: &Step) -> u64 {
         // settle (the first tap after a fresh app launch on iOS 26 spends
         // multiple seconds on WebKit Inspector enrichment + tree
         // stabilisation; a 1x = 5s budget consistently underflows).
-        "tap" | "double_tap" | "backspace" | "long_press" | "swipe" | "pinch" | "gesture"
-        | "rotate" | "type" | "assert_visible" | "assert_not_visible" | "assert_alert"
-        | "accept_alert" | "dismiss_alert" | "read" => 2,
+        "tap" | "double_tap" | "backspace" | "clear_text" | "long_press" | "swipe" | "pinch"
+        | "gesture" | "rotate" | "type" | "assert_visible" | "assert_not_visible"
+        | "assert_alert" | "accept_alert" | "dismiss_alert" | "read" => 2,
 
         // 5x — app lifecycle. Stop is fast (~1-2s) but its post-settle
         // animation can drag, leaving the next launch racing against a
@@ -132,6 +132,9 @@ fn action_multiplier(step: &Step) -> u64 {
 ///
 /// Returns 0 for non-gesture actions. Used to ensure the timeout
 /// covers the gesture itself plus settle time.
+/// Field length `clear_text` budgets for, absent a count on the step.
+const CLEAR_TEXT_BUDGET_CHARS: u64 = 64;
+
 fn intrinsic_duration_ms(step: &Step) -> u64 {
     match step.action.as_str() {
         "long_press" => step
@@ -195,6 +198,16 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
                 .unwrap_or(1);
             count * 500
         }
+        "clear_text" => {
+            // Same 500ms/char as `backspace`, but the count comes from the
+            // field at run time, so it can't be read off the step. 64 chars
+            // covers the inputs a flow realistically clears (names, emails,
+            // search terms) and costs nothing when the field is shorter —
+            // this is a ceiling on waiting, not a delay. Add a pass of
+            // hierarchy fetches on top: the handler measures before every
+            // round of deletes.
+            CLEAR_TEXT_BUDGET_CHARS * 500 + 3 * 1_000
+        }
         _ => 0,
     }
 }
@@ -223,6 +236,7 @@ fn needs_post_settle(step: &Step) -> bool {
             | "double_tap"
             | "type"
             | "backspace"
+            | "clear_text"
             | "long_press"
             | "swipe"
             | "scroll"

@@ -27,8 +27,9 @@ use external::{
     handle_push_notification, handle_run,
 };
 use interaction::{
-    handle_backspace, handle_double_tap, handle_gesture, handle_hide_keyboard, handle_long_press,
-    handle_pinch, handle_rotate_gesture, handle_scroll, handle_swipe, handle_tap, handle_type,
+    handle_backspace, handle_clear_text, handle_double_tap, handle_gesture, handle_hide_keyboard,
+    handle_long_press, handle_pinch, handle_rotate_gesture, handle_scroll, handle_swipe,
+    handle_tap, handle_type,
 };
 use media::{handle_add_media, handle_screenshot};
 
@@ -51,6 +52,7 @@ pub async fn execute_action(
         "double_tap" => handle_double_tap(step, driver, ctx).await,
         "type" => handle_type(step, driver, ctx).await,
         "backspace" => handle_backspace(step, driver, ctx).await,
+        "clear_text" => handle_clear_text(step, driver, ctx).await,
         "long_press" => handle_long_press(step, driver, ctx).await,
         "swipe" => handle_swipe(step, driver, ctx).await,
         "pinch" => handle_pinch(step, driver).await,

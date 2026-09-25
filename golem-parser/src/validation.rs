@@ -53,6 +53,7 @@ const KNOWN_ACTIONS: &[&str] = &[
     "assert_visible",
     "await_email",
     "backspace",
+    "clear_text",
     "bash",
     "clear_data",
     "create_inbox",
@@ -505,11 +506,15 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
             // 11. `backspace` operates on the focused field — a selector
             //     can't be honored reliably (a tap-to-focus mis-places the
             //     caret; there's no cross-platform move-to-end), so reject it.
-            if step.action == "backspace" && step.has_element_selector() {
+            if matches!(step.action.as_str(), "backspace" | "clear_text")
+                && step.has_element_selector()
+            {
                 errors.push(ValidationError {
-                    message: "backspace does not take a selector — it deletes from the \
-                         currently focused field; type or tap the field first"
-                        .to_string(),
+                    message: format!(
+                        "{} does not take a selector — it deletes from the \
+                         currently focused field; type or tap the field first",
+                        step.action
+                    ),
                     kind: ValidationErrorKind::SelectorNotAllowed,
                 });
             }
