@@ -871,15 +871,32 @@ impl WebKitInspector {
 // Public API: fetch WebView DOM
 // ---------------------------------------------------------------------------
 
-/// Map webview DOM (layout-viewport) coords to screen coords as a `(dx, dy)`
-/// offset added to each node's bounds. `ios.rs` folded the NATIVE safe-area
-/// inset into `webview_bounds_top`; for a `viewport-fit=cover` page (detected
-/// by a non-zero CSS `env(safe-area-inset-top)`) the layout viewport top is the
-/// screen top, so that inset must be cancelled — using the value actually added
-/// (`native_safe_area_top`), NOT the CSS env, which can differ (e.g. native 54
-/// vs CSS 62 on a Dynamic-Island device) and would over-cancel, shifting every
-/// element up by the difference. Non-cover pages cancel nothing. The visual-
-/// viewport offset (keyboard) is always subtracted.
+/// Map webview DOM coords to screen coords as a `(dx, dy)` offset added to
+/// each node's bounds. `ios.rs` folded the NATIVE safe-area inset into
+/// `webview_bounds_top`; for a `viewport-fit=cover` page (detected by a
+/// non-zero CSS `env(safe-area-inset-top)`) the layout viewport top is the
+/// screen top, so that inset must be cancelled — using the value actually
+/// added (`native_safe_area_top`), NOT the CSS env, which can differ (e.g.
+/// native 54 vs CSS 62 on a Dynamic-Island device) and would over-cancel,
+/// shifting every element up by the difference. Non-cover pages cancel
+/// nothing.
+///
+/// The visual-viewport offset is deliberately NOT subtracted, though the
+/// parameters are still taken so the caller keeps reporting them. It used to
+/// be, for the soft-keyboard case: `getBoundingClientRect()` was understood to
+/// stay layout-viewport-relative while iOS shifted only the visual viewport,
+/// so the on-screen position was `bcr - vv.offsetTop`. That is no longer how
+/// WKWebView behaves. Measured on iOS 26.5, tree against a `--trace`
+/// screenshot of the same instant, keyboard up:
+///
+/// - iPhone 17: element on screen at 216pt, `bcr` 216, `vv.offsetTop` 46 —
+///   subtracting put it at 170, which is precisely where the field ABOVE sits.
+/// - iPad A16: element on screen at 402pt, `bcr` 402, `vv.offsetTop` 337 —
+///   subtracting put it at 97.
+///
+/// In both, `bcr` already equalled the true screen position. Keyboard down,
+/// `vv.offsetTop` is 0 and the term was a no-op, which is why only the
+/// keyboard-up path was ever wrong.
 fn webview_screen_offset(
     webview_bounds_left: i32,
     webview_bounds_top: i32,
@@ -889,13 +906,23 @@ fn webview_screen_offset(
     vv_offset_left: i32,
     vv_offset_top: i32,
 ) -> (i32, i32) {
-    let cancel_top = if css_safe_area_top > 0 {
-        native_safe_area_top
-    } else {
-        0
-    };
-    let dx = webview_bounds_left - css_safe_area_left - vv_offset_left;
-    let dy = webview_bounds_top - cancel_top - vv_offset_top;
+    // Un-contaminate the safe-area probe before testing it. The JS reads
+    // env() off a `position:fixed` element's `getBoundingClientRect()`, and
+    // fixed elements track the VISUAL viewport on iOS — so with the keyboard
+    // up the probe reports `env - vv.offsetTop`, not `env`. Adding the offset
+    // back recovers the real value, exactly (measured: -34+96=62 and
+    // -305+337=32, against native insets of 54 and 32).
+    //
+    // Corrected here rather than in the JS because that script is shared with
+    // the Android CDP path, which consumes neither of these fields: changing
+    // the probe element regressed Android webview e2e, and changing how it is
+    // read regressed iOS. Arithmetic on values we already have costs nothing
+    // and touches neither.
+    let css_top = css_safe_area_top + vv_offset_top;
+    let css_left = css_safe_area_left + vv_offset_left;
+    let cancel_top = if css_top > 0 { native_safe_area_top } else { 0 };
+    let dx = webview_bounds_left - css_left;
+    let dy = webview_bounds_top - cancel_top;
     (dx, dy)
 }
 
@@ -1047,22 +1074,63 @@ mod tests {
         assert_eq!(dy, 54);
     }
 
+    // The tuples below are transcribed from live iOS 26.5 runs, each checked
+    // against a `--trace` screenshot of the same instant. `css_safe_area_top`
+    // is the RAW value the JS probe reported — contaminated by the keyboard
+    // where it was — so the arithmetic under test is exercised end to end.
+    // Keep the numbers literal.
+
     #[test]
-    fn webview_offset_subtracts_visual_viewport() {
-        // Keyboard-shifted visual viewport is always subtracted (cover case).
-        let (_, dy) = webview_screen_offset(0, 54, 0, 62, 54, 0, 10);
-        assert_eq!(dy, -10);
+    fn keyboard_up_iphone_lands_the_element_where_it_is() {
+        // iPhone 17, cover page, typing in the Search field. On screen at
+        // 216pt with `bcr` 216, so the mapping must not move it. Probe read
+        // 15 while the real env is 62; `vv.offsetTop` 46 recovers it.
+        let (_, dy) = webview_screen_offset(0, 54, 0, 15, 54, 0, 46);
+        assert_eq!(
+            dy, 0,
+            "bcr is already the on-screen position: the cover inset SHALL \
+             cancel and the visual-viewport offset SHALL NOT be re-applied"
+        );
     }
 
     #[test]
-    fn webview_offset_subtracts_css_inset_and_viewport_horizontally() {
+    fn keyboard_up_iphone_survives_a_negative_probe_reading() {
+        // Same device, bigger keyboard shift (form_fill's email field): the
+        // probe reports -34. Uncorrected, `-34 > 0` is false, the cover
+        // cancellation switches off and every element jumps 54pt.
+        let (_, dy) = webview_screen_offset(0, 54, 0, -34, 54, 0, 96);
+        assert_eq!(
+            dy, 0,
+            "a negative probe reading is contamination, not a non-cover page"
+        );
+    }
+
+    #[test]
+    fn keyboard_up_ipad_survives_a_large_negative_probe_reading() {
+        // iPad A16: on screen at 402pt, `bcr` 402, probe -305, vv 337.
+        // The error scales with the keyboard, not the device.
+        let (_, dy) = webview_screen_offset(0, 32, 0, -305, 32, 0, 337);
+        assert_eq!(dy, 0, "-305 + 337 = 32 = the real env inset");
+    }
+
+    #[test]
+    fn keyboard_down_readings_are_unchanged() {
+        // These were always correct and must stay byte-identical: with
+        // `vv.offsetTop` at 0 the correction is a no-op on both axes.
+        assert_eq!(webview_screen_offset(0, 54, 0, 62, 54, 0, 0).1, 0);
+        assert_eq!(webview_screen_offset(0, 32, 0, 32, 32, 0, 0).1, 0);
+    }
+
+    #[test]
+    fn webview_offset_subtracts_the_css_inset_horizontally() {
         // The horizontal axis has no native/CSS split to reconcile: a landscape
         // notch inset is reported by CSS only, so `css_safe_area_left` is what
-        // gets subtracted, along with any horizontal visual-viewport shift.
+        // gets subtracted — after the same un-contamination, since a fixed
+        // element's rect is shifted on both axes.
         let (dx, _) = webview_screen_offset(100, 0, 44, 0, 0, 6, 0);
         assert_eq!(
             dx, 50,
-            "dx SHALL be webview_left - css_safe_area_left - vv_offset_left"
+            "dx SHALL be webview_left - (css_safe_area_left + vv_offset_left)"
         );
     }
 
