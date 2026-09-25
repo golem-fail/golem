@@ -58,6 +58,23 @@ golem_hash() {
   done | shasum | cut -d' ' -f1
 }
 
+# Seconds-since-epoch mtime of a path. BSD and GNU `stat` disagree on the
+# flag, and the iOS guards below are useless if the call aborts — which is
+# what a bare `stat -f %m` does everywhere that isn't macOS.
+#
+# Probed once into an array rather than tried-and-fallen-back per call:
+# GNU `stat -f` is --file-system, so it can print something for the file
+# before failing on the format operand, and `A || B` in a command
+# substitution would capture both halves as one corrupt number.
+if stat -c %Y . >/dev/null 2>&1; then
+  GOLEM_STAT=(stat -c %Y)     # GNU coreutils
+else
+  GOLEM_STAT=(stat -f %m)     # BSD / macOS
+fi
+golem_mtime() {
+  "${GOLEM_STAT[@]}" "$1"
+}
+
 # Install JS dependencies when the inputs have moved since the last install.
 # Skipped entirely when PM_INSTALL is empty — a Tauri app with no JS frontend
 # has nothing to install, and guessing would be worse than doing nothing.
@@ -109,21 +126,47 @@ case "$PLATFORM" in
       rm -rf src-tauri/gen/apple/build/aarch64
       # Tauri 2.x iOS targets: aarch64-sim / x86_64 / aarch64.
       # Known bug: tauri-cli 2.10 + Xcode 26 exits nonzero on a post-archive
-      # rename step even after producing a valid signed .app. We tolerate
-      # nonzero exit here; the presence+validity check below is the gate.
-      set +e
-      if [[ "$IS_SIMULATOR" == "1" ]]; then
-        HOST_ARCH=$(uname -m)
-        if [[ "$HOST_ARCH" == "x86_64" ]]; then
-          $TAURI_CMD ios build --debug --target x86_64 1>&2
+      # rename step even after producing a valid signed .app. That ONE
+      # failure is tolerated below; every other nonzero exit is fatal.
+      #
+      # `tee` rather than plain redirection: the log is needed to tell the
+      # tolerated failure from the rest, and swallowing a multi-minute
+      # build's output until it finishes would be a bad trade for it.
+      TAURI_LOG=$(mktemp)
+      trap 'rm -f "$TAURI_LOG"' EXIT
+      tauri_ios_build() {
+        if [[ "$IS_SIMULATOR" == "1" ]]; then
+          HOST_ARCH=$(uname -m)
+          if [[ "$HOST_ARCH" == "x86_64" ]]; then
+            $TAURI_CMD ios build --debug --target x86_64
+          else
+            $TAURI_CMD ios build --debug --target aarch64-sim
+          fi
         else
-          $TAURI_CMD ios build --debug --target aarch64-sim 1>&2
+          $TAURI_CMD ios build --debug --target aarch64
         fi
-      else
-        $TAURI_CMD ios build --debug --target aarch64 1>&2
-      fi
-      TAURI_EXIT=$?
+      }
+      set +e
+      tauri_ios_build 2>&1 | tee "$TAURI_LOG" >&2
+      # PIPESTATUS, not $? — $? is tee's status and is always 0.
+      TAURI_EXIT=${PIPESTATUS[0]}
       set -e
+
+      # Fail fast on anything that isn't the known rename bug. Accepting
+      # every nonzero exit meant a real build failure continued to the
+      # install step and reported whatever .app happened to be lying
+      # around.
+      if [[ "$TAURI_EXIT" -ne 0 ]]; then
+        if grep -qF 'failed to rename app' "$TAURI_LOG" \
+           && grep -qF 'Directory not empty' "$TAURI_LOG"; then
+          echo "warning: tolerated the known tauri-cli rename failure (exit $TAURI_EXIT)" >&2
+        else
+          echo "error: tauri ios build exited $TAURI_EXIT, and not with the known" >&2
+          echo "       'failed to rename app ... Directory not empty' bug. See the build" >&2
+          echo "       output above." >&2
+          exit 1
+        fi
+      fi
     else
       echo "install-only: reusing prior build for $DEVICE_ID" >&2
       TAURI_EXIT=0
@@ -143,7 +186,11 @@ case "$PLATFORM" in
     else
       TARGET_DIR="src-tauri/gen/apple/build/aarch64"
     fi
-    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null)
+    # `|| true`: when the per-arch dir does not exist, find exits nonzero and
+    # `set -e` would kill the script on the assignment — silently, before the
+    # broader search below and before the explicit error that names the
+    # problem. An empty APP_PATH is the state the next lines are written for.
+    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null || true)
     if [[ -z "$APP_PATH" ]]; then
       APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
     fi
@@ -156,14 +203,57 @@ case "$PLATFORM" in
     # Picking up a months-old .app because the rename-step failed silently
     # is what bit us for weeks; this turns it into a loud failure.
     if [[ "$MODE" != "install-only" ]]; then
-      APP_MTIME=$(stat -f %m "$APP_PATH")
+      APP_MTIME=$(golem_mtime "$APP_PATH")
       if (( APP_MTIME < BUILD_START_TS )); then
         echo "error: .app at $APP_PATH was not refreshed by this build (mtime $APP_MTIME < build start $BUILD_START_TS). The tauri-cli rename likely failed and we'd be installing a stale bundle." >&2
         exit 1
       fi
     fi
-    if [[ "$TAURI_EXIT" -ne 0 ]]; then
-      echo "warning: tauri exited $TAURI_EXIT but .app was built; proceeding to install" >&2
+    # Web-asset freshness. The bundle is compressed into the Rust binary:
+    # a unique string placed in the frontend source appears in the built
+    # assets and NOWHERE in the produced .app, so the .app cannot be
+    # searched for what it embedded. The inputs are checkable instead —
+    # the assets must exist, must have been rebuilt by THIS run, and the
+    # .app must be newer than them. That covers a fresh-looking .app built
+    # from empty or stale assets without claiming to see inside the blob.
+    if [[ "$MODE" != "install-only" ]]; then
+      # Same source of truth Tauri itself uses, so no second place to
+      # configure. `frontendDist` is relative to src-tauri.
+      FRONTEND_DIST=$(sed -n 's/.*"frontendDist"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        src-tauri/tauri.conf.json 2>/dev/null | head -1)
+      DIST_DIR="src-tauri/$FRONTEND_DIST"
+      if [[ -z "$FRONTEND_DIST" || ! -d "$DIST_DIR" ]]; then
+        # A dev-URL or asset-protocol config has no directory to check.
+        # Skipping loudly beats hard-failing a project shape that is valid.
+        echo "note: no frontendDist directory to verify; skipping the web-asset check" >&2
+      else
+        if [[ ! -s "$DIST_DIR/index.html" ]]; then
+          echo "error: $DIST_DIR/index.html is missing or empty — the .app was built" >&2
+          echo "       around an empty web bundle and would install a blank app." >&2
+          exit 1
+        fi
+        # A plain `[[ … ]] && VAR=…` here is a trap: as the loop body's last
+        # command it returns 1 whenever the condition is false, and `set -e`
+        # then kills the script with no output. Whether that happened
+        # depended on `find`'s ordering, so it passed on macOS and failed on
+        # Linux. `if` has no such status.
+        DIST_NEWEST=0
+        while IFS= read -r f; do
+          m=$(golem_mtime "$f")
+          if (( m > DIST_NEWEST )); then DIST_NEWEST="$m"; fi
+        done < <(find "$DIST_DIR" -type f)
+        if (( DIST_NEWEST == 0 )) || (( DIST_NEWEST < BUILD_START_TS )); then
+          echo "error: no file under $DIST_DIR was written by this build (newest $DIST_NEWEST" >&2
+          echo "       < build start $BUILD_START_TS). beforeBuildCommand did not re-run, so the" >&2
+          echo "       .app embeds whatever the previous build left behind." >&2
+          exit 1
+        fi
+        if (( APP_MTIME < DIST_NEWEST )); then
+          echo "error: .app at $APP_PATH (mtime $APP_MTIME) predates the web assets it should" >&2
+          echo "       embed (newest $DIST_NEWEST) — it was linked before they were written." >&2
+          exit 1
+        fi
+      fi
     fi
 
     if [[ "$IS_SIMULATOR" == "1" ]]; then

@@ -105,6 +105,39 @@ impl Fingerprint {
     }
 }
 
+/// Lockfiles whose contents decide what a build resolves to.
+///
+/// Hashed explicitly when git is not tracking them. `git status
+/// --porcelain` names an untracked file but never its contents, and says
+/// nothing at all about an ignored one — measured both ways, the hash is
+/// byte-identical across a content change. So in a tree whose `Cargo.lock`
+/// is untracked, `cargo update` leaves the fingerprint unchanged and the
+/// install cache reports a hit for a different dependency tree.
+///
+/// Deliberately not the same list as the install script's
+/// `GOLEM_DEP_INPUTS`: that one decides whether to re-run `npm install`,
+/// which `Cargo.lock` has no bearing on. No drift guard between them.
+const UNTRACKED_LOCKFILES: [&str; 7] = [
+    "Cargo.lock",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lockb",
+    "bun.lock",
+    "Podfile.lock",
+];
+
+/// Whether git has `name` in the index — `git ls-files` prints the path
+/// when tracked and nothing when not, for both untracked and ignored.
+fn is_git_tracked(project_root: &Path, name: &str) -> bool {
+    Command::new("git")
+        .args(["ls-files", "--", name])
+        .current_dir(project_root)
+        .output()
+        .ok()
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty())
+}
+
 fn git_fingerprint(project_root: &Path) -> Option<Fingerprint> {
     let rev_out = Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -130,7 +163,27 @@ fn git_fingerprint(project_root: &Path) -> Option<Fingerprint> {
     if !porc_out.status.success() {
         return None;
     }
-    let porcelain = sha1_hex(&porc_out.stdout);
+    // Fold untracked lockfile contents into the SAME hash rather than a
+    // new field: `Fingerprint` is serialized into the install cache's
+    // `PersistedInstall`, so a shape change would fail to deserialize
+    // every existing entry. Appending to the hash input leaves the shape
+    // alone and simply misses once per stale entry, which is correct.
+    //
+    // A tree whose only untracked file is a lockfile now carries a
+    // porcelain suffix in `short_label` where it previously read clean.
+    // That is honest: the tree has a build input git cannot see.
+    let mut hash_input = porc_out.stdout.clone();
+    for name in UNTRACKED_LOCKFILES {
+        let path = project_root.join(name);
+        if !path.is_file() || is_git_tracked(project_root, name) {
+            continue;
+        }
+        if let Ok(bytes) = std::fs::read(&path) {
+            hash_input.extend_from_slice(name.as_bytes());
+            hash_input.extend_from_slice(&bytes);
+        }
+    }
+    let porcelain = sha1_hex(&hash_input);
 
     Some(Fingerprint::Git { rev, porcelain })
 }
@@ -570,6 +623,118 @@ mod tests {
                     "clean tree label SHALL omit the porcelain suffix"
                 );
             }
+            other => panic!("git repo SHALL produce Git variant, got {other:?}"),
+        }
+    }
+
+    // Shared git driver for the lockfile cases below.
+    fn git_in(root: &Path) -> impl Fn(&[&str]) + '_ {
+        move |args: &[&str]| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(root)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .expect("git runs");
+            assert!(
+                out.status.success(),
+                "git {:?} SHALL succeed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    }
+
+    // 11b. An UNTRACKED lockfile's contents SHALL move the fingerprint.
+    //      `git status --porcelain` prints "?? Cargo.lock" either way, so
+    //      before this the hash was byte-identical across the edit and the
+    //      install cache reported a hit for a different dependency tree.
+    #[test]
+    fn an_untracked_lockfile_edit_moves_the_fingerprint() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = git_in(root);
+        run(&["init", "-q"]);
+        std::fs::write(root.join("a.txt"), "src").expect("write");
+        run(&["add", "a.txt"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        std::fs::write(root.join("Cargo.lock"), "version = 1\n").expect("write");
+        let before = Fingerprint::compute(root);
+        std::fs::write(root.join("Cargo.lock"), "version = 2\n").expect("write");
+        let after = Fingerprint::compute(root);
+
+        assert_ne!(
+            before, after,
+            "editing an untracked lockfile SHALL change the fingerprint"
+        );
+    }
+
+    // 11c. Same for a GITIGNORED lockfile, where porcelain says nothing at
+    //      all — the blinder case of the two.
+    #[test]
+    fn a_gitignored_lockfile_edit_moves_the_fingerprint() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = git_in(root);
+        run(&["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "package-lock.json\n").expect("write");
+        run(&["add", ".gitignore"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        std::fs::write(root.join("package-lock.json"), r#"{"v":1}"#).expect("write");
+        let before = Fingerprint::compute(root);
+        std::fs::write(root.join("package-lock.json"), r#"{"v":2}"#).expect("write");
+        let after = Fingerprint::compute(root);
+
+        assert_ne!(
+            before, after,
+            "editing an ignored lockfile SHALL change the fingerprint"
+        );
+    }
+
+    // 11d. A TRACKED lockfile is already covered by porcelain, so it must
+    //      not be hashed twice — and a clean tree holding one must still
+    //      read as clean rather than growing a spurious dirty suffix.
+    #[test]
+    fn a_tracked_lockfile_leaves_a_clean_tree_clean() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = git_in(root);
+        run(&["init", "-q"]);
+        std::fs::write(root.join("Cargo.lock"), "version = 1\n").expect("write");
+        run(&["add", "Cargo.lock"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        match Fingerprint::compute(root) {
+            Fingerprint::Git { porcelain, .. } => assert_eq!(
+                porcelain, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                "a tracked lockfile SHALL NOT be folded in — porcelain already covers it"
+            ),
+            other => panic!("git repo SHALL produce Git variant, got {other:?}"),
+        }
+    }
+
+    // 11e. No lockfile at all: the hash input must be exactly the porcelain
+    //      bytes, so trees without one are untouched by this change.
+    #[test]
+    fn a_tree_with_no_lockfile_is_unchanged() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = git_in(root);
+        run(&["init", "-q"]);
+        std::fs::write(root.join("a.txt"), "src").expect("write");
+        run(&["add", "a.txt"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        match Fingerprint::compute(root) {
+            Fingerprint::Git { porcelain, .. } => assert_eq!(
+                porcelain, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                "no lockfile SHALL leave the clean-tree hash exactly as it was"
+            ),
             other => panic!("git repo SHALL produce Git variant, got {other:?}"),
         }
     }
