@@ -637,6 +637,15 @@ fn build_config_json(
 
 use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};
 
+/// "" for 1, "s" otherwise — the flake block says "across N run(s)".
+fn plural(n: u32) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
+}
+
 fn render_flake_summary(entries: &[FlakeEntry]) -> String {
     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
     render_flake_summary_with_color(entries, use_color)
@@ -648,6 +657,9 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
     // `Results:` lines start at column 13 (after the timestamp + space),
     // so the flake block aligns when piped beside them.
     const INDENT: &str = "             ";
+    // Rows and the tally sit one level inside the section divider, so the
+    // per-(test, device) granularity reads as nested under "per test".
+    const ROW_INDENT: &str = "  ";
     const DIM: &str = "\x1b[2m";
     const CYAN: &str = "\x1b[36m";
     const RESET: &str = "\x1b[0m";
@@ -669,8 +681,18 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
         .filter(|e| e.failed == 0 && e.passed > 0)
         .count();
 
+    // The divider is a section LABEL, not a tally. `Summary` above counts
+    // flow runs and this block counts tests aggregated over repeats, so the
+    // two numbers legitimately differ; saying "per test" on the divider and
+    // putting the counts on their own line stops them reading as a
+    // contradiction. The per-(test, device) rows then indent one level
+    // further, making the third granularity visibly nested under this one.
     let header_body = format!(
-        "── {flakes} flake{}, {stable_fails} fail{}, {stable_passes} stable across {total_runs} runs ──",
+        "── per test, across {total_runs} run{} ──",
+        plural(total_runs)
+    );
+    let tally = format!(
+        "{flakes} flake{}, {stable_fails} fail{}, {stable_passes} stable",
         if flakes == 1 { "" } else { "s" },
         if stable_fails == 1 { "" } else { "s" },
     );
@@ -678,16 +700,18 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
     let mut out = String::new();
     if use_color {
         let _ = writeln!(out, "\n{INDENT}{CYAN}{header_body}{RESET}");
+        let _ = writeln!(out, "{INDENT}{ROW_INDENT}{tally}");
     } else {
         let _ = writeln!(out, "\n{INDENT}{header_body}");
+        let _ = writeln!(out, "{INDENT}{ROW_INDENT}{tally}");
     }
 
     if flakes == 0 && stable_fails == 0 {
         let line = "all flows passed in every run";
         if use_color {
-            let _ = writeln!(out, "{INDENT}{DIM}{line}{RESET}");
+            let _ = writeln!(out, "{INDENT}{ROW_INDENT}{DIM}{line}{RESET}");
         } else {
-            let _ = writeln!(out, "{INDENT}{line}");
+            let _ = writeln!(out, "{INDENT}{ROW_INDENT}{line}");
         }
         return out;
     }
@@ -717,10 +741,10 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
             };
             let _ = writeln!(
                 out,
-                "{INDENT}{label_color}{label}{RESET}  {body_color}{body}{body_reset}",
+                "{INDENT}{ROW_INDENT}{label_color}{label}{RESET}  {body_color}{body}{body_reset}",
             );
         } else {
-            let _ = writeln!(out, "{INDENT}{label}  {body}");
+            let _ = writeln!(out, "{INDENT}{ROW_INDENT}{label}  {body}");
         }
     }
     out
@@ -739,6 +763,9 @@ fn render_queue_wait_with_color(
 ) -> String {
     use std::fmt::Write;
     const INDENT: &str = "             ";
+    // Rows and the tally sit one level inside the section divider, so the
+    // per-(test, device) granularity reads as nested under "per test".
+    const ROW_INDENT: &str = "  ";
     const DIM: &str = "\x1b[2m";
     const RESET: &str = "\x1b[0m";
 
@@ -905,8 +932,8 @@ mod tests {
     fn render_empty_entries_reports_all_passed() {
         let out = render_flake_summary(&[]);
         assert!(
-            out.contains("0 flakes, 0 fails, 0 stable across 0 runs"),
-            "empty input SHALL render a zeroed header, got: {out}",
+            out.contains("per test, across 0 runs") && out.contains("0 flakes, 0 fails, 0 stable"),
+            "empty input SHALL name the granularity and render a zeroed tally, got: {out}",
         );
         assert!(
             out.contains("all flows passed in every run"),
@@ -921,7 +948,7 @@ mod tests {
         let entries = vec![entry("a (dev)", 3, 0, 0, 3), entry("b (dev)", 3, 0, 0, 3)];
         let out = render_flake_summary(&entries);
         assert!(
-            out.contains("0 flakes, 0 fails, 2 stable across 3 runs"),
+            out.contains("per test, across 3 runs") && out.contains("0 flakes, 0 fails, 2 stable"),
             "two stable passes over 3 runs SHALL be summarized, got: {out}",
         );
         assert!(
@@ -945,7 +972,7 @@ mod tests {
         ];
         let out = render_flake_summary(&entries);
         assert!(
-            out.contains("1 flake, 1 fail, 0 stable across 3 runs"),
+            out.contains("1 flake, 1 fail, 0 stable"),
             "single flake + single fail SHALL render singular nouns, got: {out}",
         );
     }
@@ -962,7 +989,7 @@ mod tests {
         ];
         let out = render_flake_summary(&entries);
         assert!(
-            out.contains("2 flakes, 2 fails, 0 stable across 3 runs"),
+            out.contains("2 flakes, 2 fails, 0 stable"),
             "two flakes + two fails SHALL render plural nouns, got: {out}",
         );
     }
@@ -991,8 +1018,62 @@ mod tests {
         );
         // Header counts the categories correctly: 1 flake, 1 fail, 1 stable.
         assert!(
-            out.contains("1 flake, 1 fail, 1 stable across 3 runs"),
+            out.contains("1 flake, 1 fail, 1 stable"),
             "header SHALL tally one of each category, got: {out}"
+        );
+    }
+
+    // 5b. The three granularities in the end-of-suite block are visually
+    //     distinct (#64): the divider NAMES the level, the tally sits on its
+    //     own line, and the per-(test, device) rows indent one step further
+    //     so they read as nested inside it.
+    #[test]
+    fn the_flake_block_names_its_granularity_and_nests_its_rows() {
+        let entries = vec![
+            entry("flaky (dev)", 1, 2, 0, 3),
+            entry("good (dev)", 3, 0, 0, 3),
+        ];
+        let out = render_flake_summary(&entries);
+        let lines: Vec<&str> = out.lines().filter(|l| !l.trim().is_empty()).collect();
+
+        assert!(
+            lines[0].contains("── per test, across 3 runs ──"),
+            "the divider SHALL say which level it aggregates, not carry the \
+             tally: {out}"
+        );
+        assert!(
+            lines[1]
+                .trim_start()
+                .starts_with("1 flake, 0 fails, 1 stable"),
+            "the tally SHALL sit on its own line below the divider: {out}"
+        );
+
+        // Indentation, not just content: a row must be strictly deeper than
+        // the divider naming its level.
+        let indent = |l: &str| l.len() - l.trim_start().len();
+        let row = lines
+            .iter()
+            .find(|l| l.contains("flaky (dev)"))
+            .expect("a per-test row SHALL render");
+        assert!(
+            indent(row) > indent(lines[0]),
+            "per-(test, device) rows SHALL indent inside the section: {out}"
+        );
+        assert_eq!(
+            indent(row),
+            indent(lines[1]),
+            "rows and the tally SHALL share one level — both are inside the \
+             section, neither inside the other: {out}"
+        );
+    }
+
+    // 5c. One run is not "1 runs".
+    #[test]
+    fn the_flake_block_says_one_run_in_the_singular() {
+        let out = render_flake_summary(&[entry("a (dev)", 0, 1, 0, 1)]);
+        assert!(
+            out.contains("── per test, across 1 run ──"),
+            "a single run SHALL read `1 run`, got: {out}"
         );
     }
 
