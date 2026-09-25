@@ -127,6 +127,40 @@ fn keyword(label: &str, color: &str, use_color: bool) -> String {
     }
 }
 
+/// The end-of-suite `Summary` tally, minus the timestamp and keyword.
+///
+/// Split out of the `eprintln!` so the wording is testable: the suite block
+/// reports at three granularities in adjacent lines, and which level each
+/// number belongs to is the whole point of the line (#64).
+///
+/// `flow runs:` is the level here. Under `--repeat` the flake block below
+/// counts the same work per TEST, so the two tallies legitimately disagree —
+/// "2 passed" here beside "1 stable" there is one flow run twice, not a
+/// contradiction. Naming the level is what makes that readable.
+fn suite_summary_body(
+    passed: usize,
+    failed: usize,
+    skip_suffix: &str,
+    blocked_suffix: &str,
+    a11y: &str,
+    use_color: bool,
+) -> String {
+    let level = dim_label("flow runs:", use_color);
+    format!("{level} {passed} passed, {failed} failed{skip_suffix}{blocked_suffix}{a11y}")
+}
+
+/// Dim granularity label for a summary tally (`flow runs:`). The end-of-suite
+/// block reports at three different levels in adjacent lines; dimming the
+/// label keeps the numbers the bright thing while still saying what they
+/// count.
+fn dim_label(label: &str, use_color: bool) -> String {
+    if use_color {
+        format!("{DIM}{label}{RESET}")
+    } else {
+        label.to_string()
+    }
+}
+
 /// Render a step path as `{global}::{block}({iter})::{local}` — global
 /// right-padded to 5 chars dim, `::` dim, block cyan, iteration dim parens
 /// (omitted when 0), local index bold. Empty block degrades to
@@ -730,11 +764,19 @@ pub async fn stream_human(
                 } else {
                     String::new()
                 };
-                let kw = keyword("Summary", BOLD_GREEN, use_color);
                 let dur = fmt_dur(*duration_ms, use_color);
                 let a11y = a11y_rollup(a11y_suite_total.0, a11y_suite_total.1, use_color);
+                let body = suite_summary_body(
+                    *passed,
+                    *failed,
+                    &skip_suffix,
+                    &blocked_suffix,
+                    &a11y,
+                    use_color,
+                );
                 eprintln!(
-                    "{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}{blocked_suffix}{a11y}"
+                    "{ts}{} {dur}  {body}",
+                    keyword("Summary", BOLD_GREEN, use_color)
                 );
             }
             EventKind::InstallStarted {
@@ -1196,6 +1238,57 @@ mod tests {
     }
 
     // 10. keyword: no-color path left-pads label to 4 chars.
+    #[test]
+    // suite_summary_body — the flow-run level of the end-of-suite block.
+    // #64: three granularities render in adjacent lines, so this line has to
+    // say which one it is.
+    #[test]
+    fn the_suite_summary_names_the_level_its_numbers_count() {
+        let out = suite_summary_body(2, 0, "", "", "", false);
+        assert_eq!(
+            out, "flow runs: 2 passed, 0 failed",
+            "the tally SHALL be labelled with its granularity, so it cannot \
+             be misread as the per-test counts rendered just below it"
+        );
+    }
+
+    #[test]
+    fn the_suite_summary_keeps_its_suffixes_after_the_tally() {
+        let out = suite_summary_body(
+            0,
+            3,
+            ", 1 skipped",
+            " (2 blocked by a failed install)",
+            " · a11y: 1 error(s), 0 warning(s)",
+            false,
+        );
+        assert_eq!(
+            out,
+            "flow runs: 0 passed, 3 failed, 1 skipped (2 blocked by a failed install) · a11y: 1 error(s), 0 warning(s)",
+            "labelling the level SHALL NOT reorder or drop anything that \
+             followed the counts"
+        );
+    }
+
+    #[test]
+    fn the_suite_summary_level_label_is_dim_only_in_color_mode() {
+        let plain = suite_summary_body(1, 0, "", "", "", false);
+        let colored = suite_summary_body(1, 0, "", "", "", true);
+        assert!(
+            !plain.contains('\x1b'),
+            "plain SHALL have no ANSI: {plain:?}"
+        );
+        assert!(
+            colored.starts_with("\x1b[2mflow runs:\x1b[0m"),
+            "the label SHALL be dim so the numbers stay the bright thing: {colored:?}"
+        );
+        assert_eq!(
+            colored.replace("\x1b[2m", "").replace("\x1b[0m", ""),
+            plain,
+            "color SHALL be purely decorative"
+        );
+    }
+
     #[test]
     fn keyword_no_color_left_pads_to_four() {
         assert_eq!(
