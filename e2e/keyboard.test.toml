@@ -37,8 +37,25 @@ steps = [
   { action = "type", input = " query" },
   { action = "assert_visible", on_text = "golem test query" },
 
+  # Empty the field without knowing its length. Focus-only like `backspace`;
+  # the caret is at the end (the selector-less `type` above left it there), so
+  # the deletes reach every character.
+  { action = "clear_text" },
+  { action = "assert_not_visible", on_text = "golem test query" },
+  { action = "assert_visible", on_text = "Search" },
+
+  # Clearing an already-empty field no-ops. An empty field reports its
+  # placeholder as the text the user sees; that is not content to delete, and
+  # a clear that missed the distinction would backspace once per placeholder
+  # character into the field before it.
+  { action = "clear_text" },
+  { action = "assert_visible", on_text = "Search" },
+
+  { action = "type", input = "refilled" },
+  { action = "assert_visible", on_text = "refilled" },
+
   # Dismiss again — both fields' values persist.
   { action = "hide_keyboard" },
   { action = "assert_visible", on_text = "test@example.com" },
-  { action = "assert_visible", on_text = "golem test query" },
+  { action = "assert_visible", on_text = "refilled" },
 ]

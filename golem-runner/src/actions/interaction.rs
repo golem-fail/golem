@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use golem_driver::{Direction, PlatformDriver};
+use golem_element::Element;
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
@@ -314,6 +315,116 @@ pub(crate) async fn handle_backspace(
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
     Ok(())
+}
+
+/// Number of characters the focused field actually holds.
+///
+/// `text` is what the *user sees*, which for an empty input is the
+/// placeholder: the webview traversal emits `placeholder` only while an
+/// empty input is showing it, and the native normaliser resolves an input's
+/// `text` through value → placeholder → label. Both make
+/// `text == placeholder` the signal for "nothing typed". Without this a
+/// clear on an empty iOS field would backspace once per placeholder
+/// character. A field whose real contents happen to equal its placeholder
+/// reads as empty — unavoidable without a wire-format change, and harmless
+/// (the clear no-ops on an already-matching field).
+fn focused_content_len(elem: &Element) -> usize {
+    let text = elem.text.as_deref().unwrap_or("");
+    if let Some(placeholder) = elem.placeholder.as_deref() {
+        if !placeholder.is_empty() && text == placeholder {
+            return 0;
+        }
+    }
+    text.chars().count()
+}
+
+/// Depth-first search for the input-focused node.
+fn find_focused(root: &Element) -> Option<&Element> {
+    if root.focused {
+        return Some(root);
+    }
+    root.children.iter().find_map(find_focused)
+}
+
+/// Passes of (measure → delete) before giving up. One suffices whenever the
+/// caret sits at the end; a second covers a field that re-formats what it
+/// holds as characters are removed (a phone/currency mask re-inserting
+/// separators). A caret left mid-field can never finish, and is caught by
+/// the no-progress check rather than by burning all the passes.
+const CLEAR_TEXT_MAX_PASSES: usize = 3;
+
+/// Empty the currently focused text field.
+///
+/// Focus-only for the same reason as [`handle_backspace`] — a selector-driven
+/// tap would re-place the caret at the tap point.
+///
+/// Composed host-side from the hierarchy plus `backspace` rather than given a
+/// companion endpoint: both platforms already report the focused node and its
+/// contents, so the length is knowable without new wire surface. The
+/// alternatives each cost more and work less well — iOS has no XCUITest
+/// "clear", its select-all needs a long-press and a tap on localised edit-menu
+/// text, and `typeKey(.command)` depends on a hardware keyboard the simulator
+/// only sometimes has and a device never does. Android's `ACTION_SET_TEXT`
+/// would work but writes the field directly, bypassing the IME that a real
+/// user's deletes go through.
+pub(crate) async fn handle_clear_text(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
+    if step.has_element_selector() {
+        anyhow::bail!(
+            "clear_text operates on the currently focused field and does not take \
+             a selector — `type` or `tap` the field first, then `clear_text`"
+        );
+    }
+
+    let mut previous_len: Option<usize> = None;
+    for _ in 0..CLEAR_TEXT_MAX_PASSES {
+        let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+        crate::record_tree_fetch(meta.node_count);
+        let mut vp = golem_element::Viewport::from_root(&root);
+        if meta.keyboard_height > 0 {
+            vp.height -= meta.keyboard_height;
+        }
+        // The visible tree decides, as everywhere else: a field the user
+        // can't see is not one a step may act on.
+        let visible = golem_element::filter_viewport(&root, &vp);
+
+        let Some(focused) = find_focused(&visible) else {
+            anyhow::bail!(
+                "clear_text found no focused field — `type` or `tap` the field first, \
+                 then `clear_text`"
+            );
+        };
+
+        let len = focused_content_len(focused);
+        if len == 0 {
+            return Ok(());
+        }
+        // Deleting from a caret the user left mid-field only ever removes the
+        // prefix, so the tail survives every pass. Stalling is reported, not
+        // retried — there is no cross-platform way to move the caret to the
+        // end (see `handle_backspace`).
+        if previous_len.is_some_and(|prev| len >= prev) {
+            anyhow::bail!(
+                "clear_text stalled with {len} character(s) left in the field — the \
+                 caret is not at the end of the text, so deletes can't reach the rest. \
+                 Re-focus the field with `type` before clearing."
+            );
+        }
+        previous_len = Some(len);
+
+        if driver.backspace(len as u32).await? == Some(true) {
+            ctx.extend_next_settle
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    anyhow::bail!(
+        "clear_text could not empty the field in {CLEAR_TEXT_MAX_PASSES} passes — it \
+         keeps refilling as characters are deleted"
+    )
 }
 
 /// Find the target element and long press at its center coordinates.
@@ -837,7 +948,8 @@ mod tests {
             .await
             .expect("type SHALL succeed");
         assert!(
-            ctx.extend_next_settle.load(Ordering::Relaxed),
+            ctx.extend_next_settle
+                .load(std::sync::atomic::Ordering::Relaxed),
             "un-verified mutation (Some(true)) SHALL arm the extended settle"
         );
 
@@ -876,6 +988,196 @@ mod tests {
         let type_calls: Vec<_> = calls.iter().filter(|c| c.0 == "type_text").collect();
         assert_eq!(type_calls.len(), 1);
         assert_eq!(type_calls[0].1, vec![" more"]);
+    }
+
+    // ── 3d. clear_text ───────────────────────────────────────────────
+
+    /// Root holding one focused input carrying `text`, plus an unfocused
+    /// input ahead of it — so a test that measures the wrong node measures
+    /// the decoy.
+    fn root_with_focused_field(text: &str, placeholder: Option<&str>) -> Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut decoy = make_element_with_id("TextField", "decoy", Bounds::new(20, 40, 300, 44));
+        decoy.text = Some("decoy contents that are much longer".to_string());
+        root.children.push(decoy);
+
+        let mut field = make_element_with_id("TextField", "field", Bounds::new(20, 100, 300, 44));
+        field.text = Some(text.to_string());
+        field.placeholder = placeholder.map(str::to_string);
+        field.focused = true;
+        root.children.push(field);
+        root
+    }
+
+    fn backspace_counts(driver: &MockPlatformDriver) -> Vec<String> {
+        driver
+            .get_calls()
+            .iter()
+            .filter(|c| c.0 == "backspace")
+            .map(|c| c.1[0].clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_field_showing_its_placeholder_holds_nothing() {
+        let empty = root_with_focused_field("Enter email", Some("Enter email"));
+        assert_eq!(
+            focused_content_len(find_focused(&empty).expect("focused")),
+            0
+        );
+
+        let filled = root_with_focused_field("a@b.c", Some("Enter email"));
+        assert_eq!(
+            focused_content_len(find_focused(&filled).expect("focused")),
+            5
+        );
+    }
+
+    #[test]
+    fn content_length_counts_characters_not_bytes() {
+        let root = root_with_focused_field("日本語", None);
+        assert_eq!(
+            focused_content_len(find_focused(&root).expect("focused")),
+            3
+        );
+    }
+
+    #[test]
+    fn find_focused_skips_unfocused_fields() {
+        let root = root_with_focused_field("abc", None);
+        let found = find_focused(&root).expect("focused node");
+        assert_eq!(found.accessibility_label.as_deref(), Some("field"));
+    }
+
+    #[tokio::test]
+    async fn clear_text_deletes_exactly_the_focused_fields_length() {
+        let driver = MockPlatformDriver::new(root_with_focused_field("golem test", None));
+        // Second measure sees the field emptied by the deletes.
+        driver.push_hierarchy(root_with_focused_field("golem test", None));
+        driver.push_hierarchy(root_with_focused_field("", None));
+
+        let ctx = test_ctx(Path::new("."));
+        handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect("clear_text SHALL succeed");
+
+        // 10 chars, one pass — not the 35-char decoy.
+        assert_eq!(backspace_counts(&driver), vec!["10"]);
+    }
+
+    #[tokio::test]
+    async fn clear_text_on_a_field_showing_its_placeholder_deletes_nothing() {
+        let driver =
+            MockPlatformDriver::new(root_with_focused_field("Enter email", Some("Enter email")));
+
+        let ctx = test_ctx(Path::new("."));
+        handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect("clear_text on an empty field SHALL succeed");
+
+        assert!(
+            backspace_counts(&driver).is_empty(),
+            "an empty field SHALL NOT be backspaced over its placeholder"
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_text_reports_a_caret_that_deletes_cannot_reach() {
+        // A caret left mid-field: each pass removes the prefix and the tail
+        // survives, so the measured length stops falling.
+        let driver = MockPlatformDriver::new(root_with_focused_field("tail", None));
+
+        let ctx = test_ctx(Path::new("."));
+        let err = handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect_err("a stalled clear SHALL fail");
+
+        let msg = err.to_string();
+        assert!(msg.contains("stalled"), "unexpected error: {msg}");
+        assert!(msg.contains("caret"), "unexpected error: {msg}");
+        assert_eq!(
+            backspace_counts(&driver).len(),
+            1,
+            "a stall SHALL be reported after the first fruitless pass, not retried"
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_text_reports_when_no_field_is_focused() {
+        let driver = MockPlatformDriver::new(root_with_button("Submit"));
+
+        let ctx = test_ctx(Path::new("."));
+        let err = handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect_err("clear_text with nothing focused SHALL fail");
+
+        assert!(
+            err.to_string().contains("no focused field"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_text_ignores_a_focused_field_the_user_cannot_see() {
+        // The visible tree decides. A field scrolled off-screen is not one a
+        // step may act on, even though the OS still reports it focused.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut offscreen =
+            make_element_with_id("TextField", "field", Bounds::new(20, 1200, 300, 44));
+        offscreen.text = Some("golem test".to_string());
+        offscreen.focused = true;
+        root.children.push(offscreen);
+        let driver = MockPlatformDriver::new(root);
+
+        let ctx = test_ctx(Path::new("."));
+        let err = handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect_err("an off-screen field SHALL NOT be cleared");
+
+        assert!(
+            err.to_string().contains("no focused field"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_text_rejects_a_selector() {
+        let driver = MockPlatformDriver::new(root_with_focused_field("abc", None));
+        let mut step = make_step("clear_text");
+        step.on_text = Some("Search".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        let err = handle_clear_text(&step, &driver, &ctx)
+            .await
+            .expect_err("a selector SHALL be rejected");
+
+        assert!(
+            err.to_string().contains("does not take"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            backspace_counts(&driver).is_empty(),
+            "a rejected step SHALL NOT touch the field"
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_text_arms_the_extended_settle_when_the_companion_could_not_verify() {
+        let driver = MockPlatformDriver::new(root_with_focused_field("abc", None));
+        driver.push_hierarchy(root_with_focused_field("abc", None));
+        driver.push_hierarchy(root_with_focused_field("", None));
+        driver.set_type_verify(Some(true));
+
+        let ctx = test_ctx(Path::new("."));
+        handle_clear_text(&make_step("clear_text"), &driver, &ctx)
+            .await
+            .expect("clear_text SHALL succeed");
+
+        assert!(
+            ctx.extend_next_settle
+                .load(std::sync::atomic::Ordering::Relaxed),
+            "an unverified mutation SHALL arm the extended settle"
+        );
     }
 
     // ── 4. backspace action with count ───────────────────────────────
