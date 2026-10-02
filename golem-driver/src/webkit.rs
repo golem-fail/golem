@@ -926,6 +926,39 @@ fn webview_screen_offset(
     (dx, dy)
 }
 
+/// Whether the web view lays its page out below the native top safe-area
+/// inset: its layout viewport, in points, is at least that inset shorter than
+/// its frame. A web view that does not inset its content (Capacitor's default
+/// `contentInset: "never"`) lays out at full frame height from the screen
+/// top, even when the page never declares `viewport-fit=cover`, so the CSS
+/// `env()` probe cannot see it.
+///
+/// The layout height converts to points through the layout WIDTH, which
+/// fills the frame width: `visualViewport.scale` would also carry pinch and
+/// focus zoom. Missing measurements keep the inset, the behaviour before
+/// this check existed.
+fn content_inset_applied(
+    layout_width_css: i32,
+    layout_height_css: i32,
+    webview_size: Option<(i32, i32)>,
+    native_safe_area_top: i32,
+) -> bool {
+    let Some((webview_width, webview_height)) = webview_size else {
+        return true;
+    };
+    if layout_width_css <= 0
+        || layout_height_css <= 0
+        || webview_width <= 0
+        || native_safe_area_top <= 0
+    {
+        return true;
+    }
+    let layout_height_pt =
+        i64::from(layout_height_css) * i64::from(webview_width) / i64::from(layout_width_css);
+    // 1pt of slack for rounding between CSS and native frames.
+    layout_height_pt + i64::from(native_safe_area_top) <= i64::from(webview_height) + 1
+}
+
 /// Fetch the live DOM tree from an iOS WKWebView via WebKit Inspector.
 ///
 /// Connects to the simulator's inspector socket, evaluates the DOM traversal
@@ -946,6 +979,8 @@ pub(crate) async fn fetch_webview_dom(
     inspector: &mut WebKitInspector,
     webview_bounds_left: i32,
     webview_bounds_top: i32,
+    // The web view's native frame size, to tell whether its content is inset.
+    webview_size: Option<(i32, i32)>,
     // The NATIVE safe-area top inset that `ios.rs` folded into
     // `webview_bounds_top`. Used to cancel exactly that inset for cover pages
     // (the page's CSS env can differ and must not be used as the amount).
@@ -1030,6 +1065,27 @@ pub(crate) async fn fetch_webview_dom(
         .and_then(|v| v.as_i64())
         .unwrap_or(0) as i32;
 
+    let layout = wrapper.get("meta").and_then(|m| m.get("layoutViewport"));
+    let layout_dim = |k: &str| {
+        layout
+            .and_then(|l| l.get(k))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32
+    };
+    // `ios.rs` folded the native inset in on the assumption that the page
+    // starts below it. Un-fold it for a web view that does not inset its
+    // content, so the cover-page cancel below has nothing left to cancel.
+    let (webview_bounds_top, native_safe_area_top) = if content_inset_applied(
+        layout_dim("width"),
+        layout_dim("height"),
+        webview_size,
+        native_safe_area_top,
+    ) {
+        (webview_bounds_top, native_safe_area_top)
+    } else {
+        (webview_bounds_top - native_safe_area_top, 0)
+    };
+
     if let Some(mut tree) = wrapper.get("tree").cloned() {
         if (vv_scale - 1.0).abs() > 0.01 {
             crate::cdp::scale_bounds_by_dpr(&mut tree, vv_scale);
@@ -1065,6 +1121,42 @@ mod tests {
             dy, 0,
             "cover cancels the native 54, not the CSS 62 (was -8)"
         );
+    }
+
+    // content_inset_applied: measured on iPhone 17 / iOS 26.5, a 402x874pt
+    // web view with a 62pt native top inset (#266).
+    #[test]
+    fn an_inset_web_view_keeps_the_native_inset() {
+        // `contentInset: "automatic"` (and Tauri): layout 778 = 874 - 62 - 34.
+        assert!(content_inset_applied(402, 778, Some((402, 874)), 62));
+    }
+
+    #[test]
+    fn a_web_view_that_does_not_inset_its_content_drops_the_native_inset() {
+        // Capacitor's default `contentInset: "never"`: the page lays out at
+        // full frame height from the screen top, with no viewport-fit=cover.
+        assert!(!content_inset_applied(402, 874, Some((402, 874)), 62));
+    }
+
+    #[test]
+    fn a_web_view_inset_only_at_the_bottom_drops_the_top_inset() {
+        // Starts below native chrome, so only the home indicator is inset.
+        assert!(!content_inset_applied(402, 840, Some((402, 874)), 62));
+    }
+
+    #[test]
+    fn inset_detection_converts_through_layout_width_not_zoom() {
+        // No viewport meta: a 980 CSS px layout scaled into 402pt. The same
+        // inset web view as above, so the inset is kept.
+        assert!(content_inset_applied(980, 1897, Some((402, 874)), 62));
+        assert!(!content_inset_applied(980, 2131, Some((402, 874)), 62));
+    }
+
+    #[test]
+    fn missing_measurements_keep_the_native_inset() {
+        assert!(content_inset_applied(0, 0, Some((402, 874)), 62));
+        assert!(content_inset_applied(402, 874, None, 62));
+        assert!(content_inset_applied(402, 874, Some((402, 874)), 0));
     }
 
     #[test]

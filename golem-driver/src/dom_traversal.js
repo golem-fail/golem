@@ -245,6 +245,20 @@
     // Probe failed (e.g. body not yet attached) — leave inset at 0.
   }
 
+  // ── Layout viewport size ─────────────────────────────────────────────
+  //
+  // A WKWebView whose scroll view insets its content (Tauri, Capacitor with
+  // `contentInset: "automatic"`) lays the page out below the status bar, and
+  // the layout viewport is shorter than the web view by that inset. One that
+  // does not (Capacitor's default) lays it out from the screen top at full
+  // height. The iOS caller compares this with the native frame to tell the
+  // two apart. `documentElement.client*`, not `innerHeight`: pinch and
+  // focus zoom leave the layout viewport alone.
+  const layoutViewport = {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  };
+
   return JSON.stringify({
     tree,
     meta: {
@@ -254,6 +268,7 @@
       url: location.href,
       visualViewport,
       cssSafeAreaInset,
+      layoutViewport,
     },
   });
 })()

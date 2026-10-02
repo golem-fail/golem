@@ -51,6 +51,32 @@ pub(crate) fn find_webview_bounds(val: &serde_json::Value) -> Option<(i32, i32)>
     None
 }
 
+/// Size `(width, height)` of the first WebView element, in the hierarchy's
+/// units. Reads iOS `{width,height}` or Android `{left,top,right,bottom}`.
+pub(crate) fn find_webview_size(val: &serde_json::Value) -> Option<(i32, i32)> {
+    if let Some(arr) = val.as_array() {
+        return arr.iter().find_map(find_webview_size);
+    }
+    let is_webview = val
+        .get("class")
+        .and_then(|v| v.as_str())
+        .is_some_and(|c| c == "android.webkit.WebView")
+        || val
+            .get("element_type")
+            .and_then(|v| v.as_str())
+            .is_some_and(|e| e == "web_view");
+    if is_webview {
+        let b = val.get("bounds")?;
+        let n = |k: &str| b.get(k).and_then(|v| v.as_i64()).map(|v| v as i32);
+        let w = n("width").or_else(|| Some(n("right")? - n("left")?))?;
+        let h = n("height").or_else(|| Some(n("bottom")? - n("top")?))?;
+        return Some((w, h));
+    }
+    val.get("children")
+        .and_then(|c| c.as_array())
+        .and_then(|children| children.iter().find_map(find_webview_size))
+}
+
 /// Replace the first WebView element's children with DOM data from CDP/WebKit Inspector.
 ///
 /// Recognizes both Android and iOS WebView element types. Handles array roots.
