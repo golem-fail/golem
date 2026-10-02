@@ -16,8 +16,9 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE="$REPO_ROOT/golem-cli/templates/install-scripts/tauri.sh"
+# The tauri template with its `{{>…}}` partials already spliced, rendered by
+# tauri_install_guards.rs through the same code `golem install-script` uses.
+TEMPLATE="${TAURI_TEMPLATE:?set TAURI_TEMPLATE; run this through cargo t (tauri_install_guards.rs)}"
 
 PASS=0
 FAIL=0
