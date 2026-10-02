@@ -1,5 +1,7 @@
-//! Runs the Tauri install-script iOS guard suite
-//! (`scripts/tests/tauri-install-guards.test.sh`) under `cargo t`.
+//! Runs the Tauri install-script guard suite
+//! (`scripts/tests/tauri-install-guards.test.sh`) under `cargo t`: the iOS
+//! stale-bundle guards, the Android APK pick and freshness guard, and the
+//! `BUILD_TYPE` / `TAURI_BUILD_*` mapping onto tauri's build flags.
 //!
 //! The guards exist because the pipeline once installed weeks-old bundles
 //! silently (#189). Two of the three holes that remained live in the shell
@@ -28,7 +30,7 @@ use std::process::Command;
 use golem_cli::scaffold::{render_install_script, InstallFramework};
 
 #[test]
-fn the_ios_stale_bundle_guards_hold_in_every_build_outcome() {
+fn the_stale_artifact_guards_hold_in_every_build_outcome() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("golem-cli has a parent directory")

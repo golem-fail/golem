@@ -15,6 +15,14 @@
 #        dev-iteration and for a future golem-side build-once optimisation
 #        (see roadmap: "Install Cache: Build-Once, Install-to-Many").
 #
+# Environment (template config — set via [[apps]] install_env or the shell):
+#   BUILD_TYPE           = "debug" (default) | "release"
+#                          release on Android needs a signingConfig in
+#                          src-tauri/gen/android; Android installs only signed APKs.
+#   TAURI_BUILD_CONFIG   = passed to `tauri … build --config` (JSON, or a path
+#                          to a config file merged over tauri.conf.json)
+#   TAURI_BUILD_FEATURES = passed to `tauri … build --features` (comma-separated)
+#
 # Exit 0 on success; nonzero on failure (stderr surfaces to golem).
 
 set -euo pipefail
@@ -29,6 +37,23 @@ TAURI_DIR="{{TAURI_DIR}}"               # path to Tauri project (contains src-ta
 IOS_SCHEME="{{IOS_SCHEME}}"             # iOS scheme name
 TAURI_CMD="{{TAURI_CMD}}"               # tauri CLI runner (npx/yarn/pnpm/bun/cargo tauri)
 PM_INSTALL="{{PM_INSTALL}}"             # dependency install: npm install | yarn | pnpm install | bun install
+
+BUILD_TYPE="${BUILD_TYPE:-debug}"
+TAURI_BUILD_CONFIG="${TAURI_BUILD_CONFIG:-}"
+TAURI_BUILD_FEATURES="${TAURI_BUILD_FEATURES:-}"
+
+# `tauri … build` defaults to release; --debug selects debug.
+TAURI_BUILD_ARGS=()
+case "$BUILD_TYPE" in
+  debug)   TAURI_BUILD_ARGS+=(--debug) ;;
+  release) ;;
+  *)
+    echo "error: unknown BUILD_TYPE='$BUILD_TYPE' (expected 'debug' or 'release')" >&2
+    exit 1
+    ;;
+esac
+if [[ -n "$TAURI_BUILD_CONFIG" ]]; then TAURI_BUILD_ARGS+=(--config "$TAURI_BUILD_CONFIG"); fi
+if [[ -n "$TAURI_BUILD_FEATURES" ]]; then TAURI_BUILD_ARGS+=(--features "$TAURI_BUILD_FEATURES"); fi
 
 cd "$TAURI_DIR"
 
@@ -98,7 +123,7 @@ case "$PLATFORM" in
 
     if [[ "$MODE" != "install-only" ]]; then
       BUILD_START_TS=$(date +%s)
-      echo "building Tauri iOS for $DEVICE_ID..." >&2
+      echo "building Tauri iOS ($BUILD_TYPE) for $DEVICE_ID..." >&2
       # Clear prior build artifacts. The rename step that tauri-cli does
       # at the end of `ios build` fails with "Directory not empty" if the
       # target-arch dir already exists from a prior run — and the failure
@@ -120,16 +145,13 @@ case "$PLATFORM" in
       TAURI_LOG=$(mktemp)
       trap 'rm -f "$TAURI_LOG"' EXIT
       tauri_ios_build() {
+        local target=aarch64
         if [[ "$IS_SIMULATOR" == "1" ]]; then
-          HOST_ARCH=$(uname -m)
-          if [[ "$HOST_ARCH" == "x86_64" ]]; then
-            $TAURI_CMD ios build --debug --target x86_64
-          else
-            $TAURI_CMD ios build --debug --target aarch64-sim
-          fi
-        else
-          $TAURI_CMD ios build --debug --target aarch64
+          if [[ "$(uname -m)" == "x86_64" ]]; then target=x86_64; else target=aarch64-sim; fi
         fi
+        # The `+` expansion: bash < 4.4 calls an empty array unbound under
+        # `set -u`, and a release build with no config passes no flags.
+        $TAURI_CMD ios build ${TAURI_BUILD_ARGS[@]+"${TAURI_BUILD_ARGS[@]}"} --target "$target"
       }
       set +e
       tauri_ios_build 2>&1 | tee "$TAURI_LOG" >&2
@@ -249,18 +271,27 @@ case "$PLATFORM" in
     fi
     ;;
   android)
+    APK_DIR="src-tauri/gen/android/app/build/outputs/apk"
     if [[ "$MODE" != "install-only" ]]; then
-      echo "building Tauri Android..." >&2
+      BUILD_START_TS=$(date +%s)
+      echo "building Tauri Android ($BUILD_TYPE)..." >&2
+      # Gradle leaves an up-to-date APK unwritten, which the freshness guard
+      # below cannot tell from a stale one. Removing the outputs makes every
+      # build write its APK, at the cost of re-running only the packaging.
+      rm -rf "$APK_DIR"
       # Tauri produces a universal APK by default; build without installing.
-      $TAURI_CMD android build --debug --apk 1>&2
+      $TAURI_CMD android build ${TAURI_BUILD_ARGS[@]+"${TAURI_BUILD_ARGS[@]}"} --apk 1>&2
     else
       echo "install-only: reusing prior APK for $DEVICE_ID" >&2
     fi
 
-    APK=$(golem_pick_apk src-tauri/gen/android/app/build/outputs/apk)
+    APK=$(golem_pick_apk "$APK_DIR" "$BUILD_TYPE")
     if [[ -z "$APK" ]]; then
-      echo "error: no APK found (build may have been skipped — re-run without install-only)" >&2
+      golem_no_apk_error "$APK_DIR"
       exit 1
+    fi
+    if [[ "$MODE" != "install-only" ]]; then
+      golem_require_fresh "$APK" "$BUILD_START_TS" || exit 1
     fi
     adb -s "$DEVICE_ID" install -r "$APK" 1>&2
     ;;

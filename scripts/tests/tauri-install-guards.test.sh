@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tests the iOS stale-bundle guards in the Tauri install-script template
-# (#189): the narrowed tauri-cli failure tolerance, and the web-asset
-# freshness checks.
+# Tests the stale-artifact guards in the Tauri install-script template
+# (#189, #71): on iOS the narrowed tauri-cli failure tolerance and the
+# web-asset freshness checks; on Android the APK pick and freshness guard;
+# and the BUILD_TYPE / TAURI_BUILD_* mapping onto tauri's build flags.
 #
 # The TEMPLATE is the thing under test, rendered once with a stub for
 # `{{TAURI_CMD}}` — that seam is what lets a case script an arbitrary build
@@ -55,6 +56,7 @@ STUB
 # with a .app recreates it, exactly as a real build does.
 cat > "$BIN/faketauri" <<STUB
 #!/usr/bin/env bash
+echo "\$*" > tauri-args
 APPS=(${APP_DIRS[*]/%//Test.app})
 make_app() {
   local a
@@ -67,7 +69,19 @@ fresh_assets() { touch dist/index.html dist/assets/main.js; }
 # .app is the newer of the two. Doing it the other way round passed
 # whenever both landed inside one second and failed when they straddled a
 # boundary — which under a loaded parallel suite is a coin toss.
+# Android: the APK lands where AGP puts a universal build, signed or not.
+apk_type=release
+for a in "\$@"; do [[ "\$a" == --debug ]] && apk_type=debug; done
+apk_dir=src-tauri/gen/android/app/build/outputs/apk/universal/\$apk_type
 case "\${FAKE_BEHAVIOUR:-}" in
+  android-ok)
+    mkdir -p "\$apk_dir"; : > "\$apk_dir/app-universal-\$apk_type.apk" ;;
+  android-unsigned)
+    mkdir -p "\$apk_dir"; : > "\$apk_dir/app-universal-\$apk_type-unsigned.apk" ;;
+  android-stale)
+    # A build step that copies an old APK into place rather than writing one.
+    mkdir -p "\$apk_dir"; : > "\$apk_dir/app-universal-\$apk_type.apk"
+    touch -t 202001010000 "\$apk_dir/app-universal-\$apk_type.apk" ;;
   ok)
     fresh_assets; make_app ;;
   rename-bug)
@@ -96,7 +110,12 @@ case "\${FAKE_BEHAVIOUR:-}" in
 esac
 exit 0
 STUB
-chmod +x "$BIN/xcrun" "$BIN/faketauri"
+# `adb`: record what would be installed.
+cat > "$BIN/adb" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" > adb-args
+STUB
+chmod +x "$BIN/xcrun" "$BIN/faketauri" "$BIN/adb"
 
 sed -e "s|{{TAURI_DIR}}|app|" \
     -e "s|{{IOS_SCHEME}}|Test_iOS|" \
@@ -120,14 +139,19 @@ make_project() {
   find "$dir/app" -exec touch -t 202001010000 {} + 2>/dev/null
 }
 
-# run_case <name> <behaviour> — sets OUT and RC.
+# run_case <name> <behaviour> [platform] — sets OUT, RC and CASE_DIR (the
+# Tauri dir, where the stubs record their args). Extra `KEY=value` words
+# for the script's environment go in $CASE_ENV.
 run_case() {
   local dir="$WORK/$1"
   make_project "$dir"
-  OUT="$(cd "$dir" && PATH="$BIN:$PATH" FAKE_BEHAVIOUR="$2" \
-         bash "$WORK/install.sh" ios SIM com.example.test 2>&1)"
+  CASE_DIR="$dir/app"
+  # shellcheck disable=SC2086 # CASE_ENV is a list of KEY=value words
+  OUT="$(cd "$dir" && env PATH="$BIN:$PATH" FAKE_BEHAVIOUR="$2" ${CASE_ENV:-} \
+         bash "$WORK/install.sh" "${3:-ios}" SIM com.example.test 2>&1)"
   RC=$?
 }
+recorded() { cat "$CASE_DIR/$1" 2>/dev/null; }
 
 echo "tauri install-script iOS guards"
 
@@ -173,6 +197,59 @@ if [[ $RC -ne 0 ]] && grep -qF "predates the web assets" <<<"$OUT"; then
   ok "a .app older than the assets it should embed fails the install"
 else
   no "a .app older than the assets it should embed fails the install" "rc=$RC: $OUT"
+fi
+
+# ── Android ────────────────────────────────────────────────────────────
+echo "tauri install-script Android guards"
+
+run_case adebug android-ok android
+if [[ $RC -eq 0 ]] && [[ "$(recorded adb-args)" == *"universal/debug/app-universal-debug.apk" ]]; then
+  ok "a debug build installs the debug APK"
+else
+  no "a debug build installs the debug APK" "rc=$RC adb='$(recorded adb-args)': $OUT"
+fi
+check_args() {
+  if [[ "$(recorded tauri-args)" == "$2" ]]; then ok "$1"; else no "$1" "got '$(recorded tauri-args)'"; fi
+}
+check_args "debug is the default build type" "android build --debug --apk"
+
+CASE_ENV="BUILD_TYPE=release TAURI_BUILD_CONFIG=ci.json TAURI_BUILD_FEATURES=a,b" \
+  run_case arelease android-ok android
+if [[ $RC -eq 0 ]] && [[ "$(recorded adb-args)" == *"universal/release/app-universal-release.apk" ]]; then
+  ok "a release build installs the release APK"
+else
+  no "a release build installs the release APK" "rc=$RC adb='$(recorded adb-args)': $OUT"
+fi
+check_args "release drops --debug and passes --config and --features" \
+  "android build --config ci.json --features a,b --apk"
+
+CASE_ENV="BUILD_TYPE=release" run_case aunsigned android-unsigned android
+if [[ $RC -ne 0 ]] && grep -qF "only unsigned APKs" <<<"$OUT" && [[ -z "$(recorded adb-args)" ]]; then
+  ok "an unsigned-only release build fails, naming the signing problem"
+else
+  no "an unsigned-only release build fails, naming the signing problem" "rc=$RC: $OUT"
+fi
+
+run_case astale android-stale android
+if [[ $RC -ne 0 ]] && grep -qF "not refreshed by this build" <<<"$OUT" && [[ -z "$(recorded adb-args)" ]]; then
+  ok "an APK this build did not write is not installed"
+else
+  no "an APK this build did not write is not installed" "rc=$RC: $OUT"
+fi
+
+CASE_ENV="BUILD_TYPE=profile" run_case abogus android-ok android
+if [[ $RC -ne 0 ]] && grep -qF "unknown BUILD_TYPE" <<<"$OUT"; then
+  ok "an unknown BUILD_TYPE fails before building"
+else
+  no "an unknown BUILD_TYPE fails before building" "rc=$RC: $OUT"
+fi
+
+# ── iOS build flags ────────────────────────────────────────────────────
+CASE_ENV="BUILD_TYPE=release TAURI_BUILD_FEATURES=a" run_case irelease ok
+if [[ $RC -eq 0 ]] && [[ "$(recorded tauri-args)" == "ios build --features a --target "* ]]; then
+  ok "an iOS release build drops --debug and passes --features"
+else
+  no "an iOS release build drops --debug and passes --features" "rc=$RC args='$(recorded tauri-args)': $OUT"
 fi
 
 echo
