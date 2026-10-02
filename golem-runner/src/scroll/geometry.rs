@@ -58,9 +58,17 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
     buf.push(']');
 }
 
-/// Horizon fingerprint: only includes elements whose bounds intersect a thin
-/// strip at the top or bottom edge of the viewport. Inner scrollable changes
-/// (which happen in the middle of the screen) won't affect this fingerprint.
+/// Horizon fingerprint: only includes elements whose visible bounds intersect
+/// a thin strip at the top or bottom edge of the viewport. Inner scrollable
+/// changes (which happen in the middle of the screen) won't affect this
+/// fingerprint.
+///
+/// Strip membership uses `effective_bounds`, not raw `bounds`: an inner
+/// scrollable's clipped overflow rows (zero visible area) have raw bounds
+/// that sweep through the strips as the inner list scrolls, which would read
+/// as a page scroll and keep the engine swiping inside the absorber. The raw
+/// position is still what gets recorded — a visible rect clamped at the
+/// viewport edge would hide a real page scroll of an edge-straddling element.
 pub(crate) fn horizon_fingerprint(root: &Element, viewport: &Viewport) -> String {
     let strip_height = viewport.height / 8; // top/bottom 12.5%
     let top_strip_bottom = viewport.y + strip_height;
@@ -86,12 +94,14 @@ fn build_horizon_fingerprint(
     bottom_max: i32,
 ) {
     let b = &element.bounds;
-    let elem_top = b.y;
-    let elem_bottom = b.y + b.height;
+    let eff = element.effective_bounds();
+    let elem_top = eff.y;
+    let elem_bottom = eff.y + eff.height;
     // Element intersects top strip or bottom strip
     let in_top = elem_top < top_max && elem_bottom > top_min;
     let in_bottom = elem_top < bottom_max && elem_bottom > bottom_min;
-    if in_top || in_bottom {
+    let on_screen = eff.width > 0 && eff.height > 0;
+    if on_screen && (in_top || in_bottom) {
         buf.push_str(&element.element_type);
         buf.push(':');
         if let Some(ref text) = element.text {
