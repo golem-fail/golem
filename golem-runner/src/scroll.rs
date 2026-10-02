@@ -145,6 +145,28 @@ fn located_correction(
     }
 }
 
+/// Start lanes a precise nudge tries in turn, see [`nudge_swipe_start`].
+const NUDGE_LANES: usize = 3;
+
+/// Start point for a precise nudge in `lane`: lane 0 is the centre-column
+/// default, lanes 1 and 2 move to the 85% and 15% columns on the cross axis
+/// (rows for a horizontal nudge). A widget that takes pointer input (a
+/// drawing pad, a carousel) often fills the centre column right where a
+/// near-miss target sits, and absorbs every nudge that starts there; the
+/// blind presets get past it the same way.
+fn nudge_swipe_start(safe_vp: &Viewport, direction: Direction, lane: usize) -> (i32, i32) {
+    let (x, y) = default_swipe_start(safe_vp, direction);
+    let cross = |len: i32| match lane {
+        1 => len * 85 / 100,
+        2 => len * 15 / 100,
+        _ => len / 2,
+    };
+    match direction {
+        Direction::Down | Direction::Up => (cross(safe_vp.width), y),
+        Direction::Left | Direction::Right => (x, cross(safe_vp.height)),
+    }
+}
+
 /// Scroll through a view to find an element matching the given selector.
 ///
 /// The algorithm uses a strategy-based approach:
@@ -272,11 +294,11 @@ pub async fn scroll_to_element(
     const NUDGE_MARGIN_PX: i32 = 24; // land clear of the safe-area edge
     const NUDGE_MIN_PX: i32 = 40; // floor so a nudge actually moves the page
     const NUDGE_MIN_MOVE_PX: i32 = 8; // travel below this ⇒ don't trust ratio
-    const NUDGE_NO_PROGRESS_LIMIT: u32 = 3; // consumed/stuck ⇒ fall back to blind
     let mut nudge_ratio: f64 = 1.0;
     let mut last_nudge_edge: Option<i32> = None;
     let mut last_nudge_px: i32 = 0;
-    let mut nudge_no_progress: u32 = 0;
+    // Which start lane the next nudge uses (see `nudge_swipe_start`).
+    let mut nudge_lane: usize = 0;
     let mut nudge_prev_remaining: i32 = i32::MAX;
     let mut nudge_disabled: bool = false;
 
@@ -313,12 +335,26 @@ pub async fn scroll_to_element(
         } else {
             safe_vp.width * NUDGE_STRIDE_PCT / 100
         };
-        let nudge = if container.is_none() && !nudge_disabled {
+        let mut nudge = if container.is_none() && !nudge_disabled {
             located_correction(&root, selector, &safe_vp, vertical, NUDGE_MARGIN_PX)
                 .filter(|&(_, remaining, _)| remaining > 0 && remaining <= stride_px)
         } else {
             None
         };
+        // No-progress guard: a miss that isn't shrinking means the last nudge
+        // was absorbed where it started (or over-corrected). Move to the next
+        // lane; once every lane has failed, hand over to the blind path rather
+        // than nudging to the deadline.
+        if let Some((_, remaining, _)) = nudge {
+            if remaining >= nudge_prev_remaining {
+                nudge_lane += 1;
+                if nudge_lane >= NUDGE_LANES {
+                    nudge_disabled = true;
+                    nudge = None;
+                }
+            }
+            nudge_prev_remaining = remaining;
+        }
         let nudging = nudge.is_some();
 
         // Compute swipe coordinates
@@ -339,21 +375,9 @@ pub async fn scroll_to_element(
             let commanded =
                 ((remaining as f64 / nudge_ratio).round() as i32).clamp(NUDGE_MIN_PX, stride_px);
             let pct = (commanded * 100 / dim.max(1)).clamp(3, 90) as u32;
-            let (sx, sy) = default_swipe_start(&safe_vp, corr_dir);
+            let (sx, sy) = nudge_swipe_start(&safe_vp, corr_dir, nudge_lane);
             last_nudge_edge = Some(edge);
             last_nudge_px = commanded;
-            // No-progress guard: if the miss isn't shrinking (nudge consumed by
-            // an absorber, or over-corrected), fall back to the blind path
-            // rather than nudging to the deadline.
-            if remaining < nudge_prev_remaining {
-                nudge_no_progress = 0;
-            } else {
-                nudge_no_progress += 1;
-                if nudge_no_progress >= NUDGE_NO_PROGRESS_LIMIT {
-                    nudge_disabled = true;
-                }
-            }
-            nudge_prev_remaining = remaining;
             if let Some(e) = emitter {
                 e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
                     to_index: strategy_idx,
@@ -843,6 +867,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn nudge_lanes_move_off_the_centre_column() {
+        let safe = Viewport {
+            x: 0,
+            y: 59,
+            width: 402,
+            height: 741,
+        };
+        let (_, y) = default_swipe_start(&safe, Direction::Down);
+        assert_eq!(nudge_swipe_start(&safe, Direction::Down, 0), (201, y));
+        assert_eq!(nudge_swipe_start(&safe, Direction::Down, 1), (341, y));
+        assert_eq!(nudge_swipe_start(&safe, Direction::Down, 2), (60, y));
+        let (x, _) = default_swipe_start(&safe, Direction::Left);
+        assert_eq!(
+            nudge_swipe_start(&safe, Direction::Left, 1),
+            (x, 741 * 85 / 100),
+            "a horizontal nudge SHALL move across rows"
+        );
+    }
+
     struct SequenceMockDriver {
         hierarchies: Mutex<Vec<Element>>,
         call_index: AtomicU32,
@@ -1218,6 +1262,55 @@ mod tests {
                 "keyboard-up swipe SHALL have non-zero displacement, got ({fx},{fy})→({tx},{ty})"
             );
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn an_absorbed_nudge_retries_from_another_lane_then_hands_over() {
+        // The #19 "Dark Mode" shape: the target sits just below the safe band,
+        // and every nudge is absorbed, so the tree never changes.
+        let page = {
+            let mut root = make_element("View", default_bounds());
+            root.children.push(make_element_with_text(
+                "Label",
+                "Counter",
+                Bounds::new(0, 100, 200, 40),
+            ));
+            root.children.push(make_element_with_text(
+                "Label",
+                "Dark Mode",
+                Bounds::new(32, 830, 71, 21),
+            ));
+            root
+        };
+        let driver = SequenceMockDriver::new(std::iter::repeat_n(page, 30).collect());
+
+        let _ = scroll_to_element(
+            &sel_with_text("Dark Mode"),
+            &driver,
+            Direction::Down,
+            Some(2000),
+            None,
+            None,
+            1.0,
+        )
+        .await;
+
+        let starts: Vec<i32> = driver
+            .get_calls()
+            .into_iter()
+            .filter(|(m, _)| m == "gesture_swipe")
+            .map(|(_, a)| a[0].parse().expect("x"))
+            .collect();
+        assert!(starts.len() >= 4, "got swipes from x={starts:?}");
+        assert_eq!(
+            &starts[..3],
+            &[187, 318, 56],
+            "each absorbed nudge SHALL start from the next lane"
+        );
+        assert_eq!(
+            starts[3], 187,
+            "with every lane absorbed, the blind preset SHALL take over, not a 4th nudge"
+        );
     }
 
     // ── 4. Bounce detection triggers direction reversal ─────────────
