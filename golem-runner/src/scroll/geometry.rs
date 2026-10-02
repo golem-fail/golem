@@ -58,9 +58,17 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
     buf.push(']');
 }
 
-/// Horizon fingerprint: only includes elements whose bounds intersect a thin
-/// strip at the top or bottom edge of the viewport. Inner scrollable changes
-/// (which happen in the middle of the screen) won't affect this fingerprint.
+/// Horizon fingerprint: only includes elements whose visible bounds intersect
+/// a thin strip at the top or bottom edge of the viewport. Inner scrollable
+/// changes (which happen in the middle of the screen) won't affect this
+/// fingerprint.
+///
+/// Strip membership uses `effective_bounds`, not raw `bounds`: an inner
+/// scrollable's clipped overflow rows (zero visible area) have raw bounds
+/// that sweep through the strips as the inner list scrolls, which would read
+/// as a page scroll and keep the engine swiping inside the absorber. The raw
+/// position is still what gets recorded — a visible rect clamped at the
+/// viewport edge would hide a real page scroll of an edge-straddling element.
 pub(crate) fn horizon_fingerprint(root: &Element, viewport: &Viewport) -> String {
     let strip_height = viewport.height / 8; // top/bottom 12.5%
     let top_strip_bottom = viewport.y + strip_height;
@@ -86,12 +94,14 @@ fn build_horizon_fingerprint(
     bottom_max: i32,
 ) {
     let b = &element.bounds;
-    let elem_top = b.y;
-    let elem_bottom = b.y + b.height;
+    let eff = element.effective_bounds();
+    let elem_top = eff.y;
+    let elem_bottom = eff.y + eff.height;
     // Element intersects top strip or bottom strip
     let in_top = elem_top < top_max && elem_bottom > top_min;
     let in_bottom = elem_top < bottom_max && elem_bottom > bottom_min;
-    if in_top || in_bottom {
+    let on_screen = eff.width > 0 && eff.height > 0;
+    if on_screen && (in_top || in_bottom) {
         buf.push_str(&element.element_type);
         buf.push(':');
         if let Some(ref text) = element.text {
@@ -487,40 +497,39 @@ pub fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i
 
 // ── Container swipe geometry ─────────────────────────────────────────
 
+/// The part of a container a finger can use: its bounds clipped to the
+/// safe viewport, as `(left, top, right, bottom)`. Clipping to the raw
+/// screen instead would let a container peeking in at the bottom edge put
+/// the gesture inside the system-gesture inset, where the OS takes it and
+/// the container never moves.
+fn container_visible_span(cb: &golem_element::Bounds, safe_vp: &Viewport) -> (i32, i32, i32, i32) {
+    (
+        cb.x.max(safe_vp.x),
+        cb.y.max(safe_vp.y),
+        (cb.x + cb.width).min(safe_vp.x + safe_vp.width),
+        (cb.y + cb.height).min(safe_vp.y + safe_vp.height),
+    )
+}
+
 /// Compute the swipe START point for an inner-scrollable (`within`)
-/// container, clipped to the visible portion of the container bounds.
+/// container, clipped to the part of it inside the safe viewport.
 ///
-/// The container's bounds may extend beyond the viewport; this clips to
-/// the visible intersection and starts the finger near the trailing edge
-/// (70%) on the swipe axis, centered on the cross-axis. Pure geometry —
-/// the same value is recomputed on every direction reversal.
+/// Starts the finger near the trailing edge (70%) on the swipe axis,
+/// centered on the cross-axis. Pure geometry — the same value is
+/// recomputed on every direction reversal.
 pub(crate) fn container_swipe_start(
     cb: &golem_element::Bounds,
-    viewport: &Viewport,
+    safe_vp: &Viewport,
     direction: Direction,
 ) -> (i32, i32) {
-    let vis_top = cb.y.max(0);
-    let vis_bot = (cb.y + cb.height).min(viewport.height);
-    let vis_cx = (cb.x.max(0) + (cb.x + cb.width).min(viewport.width)) / 2;
+    let (vis_left, vis_top, vis_right, vis_bot) = container_visible_span(cb, safe_vp);
+    let vis_cx = (vis_left + vis_right) / 2;
+    let vis_cy = (vis_top + vis_bot) / 2;
     match direction {
         Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
         Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
-        Direction::Left => {
-            let vis_left = cb.x.max(0);
-            let vis_right = (cb.x + cb.width).min(viewport.width);
-            (
-                vis_left + (vis_right - vis_left) * 30 / 100,
-                (vis_top + vis_bot) / 2,
-            )
-        }
-        Direction::Right => {
-            let vis_left = cb.x.max(0);
-            let vis_right = (cb.x + cb.width).min(viewport.width);
-            (
-                vis_left + (vis_right - vis_left) * 70 / 100,
-                (vis_top + vis_bot) / 2,
-            )
-        }
+        Direction::Left => (vis_left + (vis_right - vis_left) * 30 / 100, vis_cy),
+        Direction::Right => (vis_left + (vis_right - vis_left) * 70 / 100, vis_cy),
     }
 }
 
@@ -534,14 +543,11 @@ pub(crate) fn container_swipe_start(
 /// so the gesture never grazes the container edge.
 pub(crate) fn container_swipe_coords(
     cb: &golem_element::Bounds,
-    viewport: &Viewport,
+    safe_vp: &Viewport,
     direction: Direction,
     start: (i32, i32),
 ) -> (i32, i32, i32, i32) {
-    let vis_top = cb.y.max(0);
-    let vis_bot = (cb.y + cb.height).min(viewport.height);
-    let vis_left = cb.x.max(0);
-    let vis_right = (cb.x + cb.width).min(viewport.width);
+    let (vis_left, vis_top, vis_right, vis_bot) = container_visible_span(cb, safe_vp);
     let vis_h = vis_bot - vis_top;
     let vis_w = vis_right - vis_left;
     let dy = vis_h * 80 / 100;

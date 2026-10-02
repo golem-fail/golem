@@ -283,7 +283,7 @@ pub async fn scroll_to_element(
     // Container swipe start position
     let mut container_start = container
         .as_ref()
-        .map(|cb| container_swipe_start(cb, &viewport, direction));
+        .map(|cb| container_swipe_start(cb, &safe_vp, direction));
 
     loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
@@ -373,7 +373,7 @@ pub async fn scroll_to_element(
             // on common card widths (~200 CSS px in a ~400 CSS px
             // viewport) so the engine can re-check between gestures.
             let start = *container_start.as_ref().expect("container_start set");
-            container_swipe_coords(cb, &viewport, direction, start)
+            container_swipe_coords(cb, &safe_vp, direction, start)
         } else {
             let strat = &strategies[strategy_idx];
             let (sx, sy) = dynamic_start_override.unwrap_or(strat.start);
@@ -671,7 +671,7 @@ pub async fn scroll_to_element(
             direction = reverse_direction(direction);
             strategies = swipe_strategies(&viewport, direction);
             if let Some(ref cb) = container {
-                container_start = Some(container_swipe_start(cb, &viewport, direction));
+                container_start = Some(container_swipe_start(cb, &safe_vp, direction));
             }
             continue;
         }
@@ -691,7 +691,7 @@ pub async fn scroll_to_element(
         }
         strategies = swipe_strategies(&viewport, direction);
         if let Some(ref cb) = container {
-            container_start = Some(container_swipe_start(cb, &viewport, direction));
+            container_start = Some(container_swipe_start(cb, &safe_vp, direction));
         }
     }
 }
@@ -1522,6 +1522,108 @@ mod tests {
         );
     }
 
+    // ── 15b. Horizon fingerprint vs an inner scrollable's clipped rows ──
+
+    /// Webview-shaped page: header + footer in the edge strips, and a
+    /// mid-screen inner list (y 300..500) whose overflow rows are clipped
+    /// (zero `visible_bounds`) yet carry raw bounds that span the whole
+    /// screen, including both edge strips. `inner_offset` is how far the
+    /// inner list has been scrolled.
+    fn page_with_inner_list(inner_offset: i32) -> Element {
+        let list = Bounds::new(0, 300, 375, 200);
+        let mut root = make_element("View", default_bounds());
+        root.visible_bounds = Some(default_bounds());
+        let mut header = make_element_with_text("Header", "Title", Bounds::new(0, 0, 375, 50));
+        header.visible_bounds = Some(header.bounds);
+        root.children.push(header);
+        let mut container = make_element("div", list);
+        container.visible_bounds = Some(list);
+        for i in 0..30 {
+            let raw = Bounds::new(0, list.y - 600 + i * 50 - inner_offset, 375, 50);
+            let clipped = raw.intersect(&list);
+            let mut row = make_element_with_text("div", &format!("Item {i}"), raw);
+            row.visible_bounds = Some(if clipped.area() > 0 {
+                clipped
+            } else {
+                Bounds::new(0, 0, 0, 0)
+            });
+            container.children.push(row);
+        }
+        root.children.push(container);
+        let mut footer = make_element_with_text("Footer", "Bottom", Bounds::new(0, 770, 375, 42));
+        footer.visible_bounds = Some(footer.bounds);
+        root.children.push(footer);
+        root
+    }
+
+    #[test]
+    fn horizon_fingerprint_ignores_clipped_inner_overflow_in_edge_strips() {
+        let vp = Viewport::new(375, 812);
+        let before = page_with_inner_list(0);
+        let after = page_with_inner_list(300);
+        assert_ne!(
+            hierarchy_fingerprint(&before),
+            hierarchy_fingerprint(&after),
+            "the inner list moved, so the full fingerprint SHALL change"
+        );
+        assert_eq!(
+            horizon_fingerprint(&before, &vp),
+            horizon_fingerprint(&after, &vp),
+            "clipped rows passing through the edge strips SHALL NOT read as a page scroll"
+        );
+    }
+
+    #[test]
+    fn horizon_fingerprint_records_raw_position_of_edge_clamped_element() {
+        // A header straddling the top edge: its visible rect is clamped to
+        // y=0 in both trees, but the page did move.
+        let vp = Viewport::new(375, 812);
+        let page = |raw_y: i32| {
+            let mut root = make_element("View", default_bounds());
+            let mut header =
+                make_element_with_text("Header", "Title", Bounds::new(0, raw_y, 375, 100));
+            header.visible_bounds = Some(Bounds::new(0, 0, 375, 100 + raw_y));
+            root.children.push(header);
+            root
+        };
+        assert_ne!(
+            horizon_fingerprint(&page(-20), &vp),
+            horizon_fingerprint(&page(-60), &vp)
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn inner_list_absorbing_first_swipe_switches_start_point() {
+        let mut found = page_with_inner_list(300);
+        found.children.push(make_element_with_text(
+            "Button",
+            "Target",
+            Bounds::new(10, 600, 100, 44),
+        ));
+        let driver = SequenceMockDriver::new(vec![
+            page_with_inner_list(0),
+            page_with_inner_list(300),
+            found,
+        ]);
+        let selector = sel_with_text("Target");
+
+        scroll_to_element(&selector, &driver, Direction::Down, None, None, None, 0.0)
+            .await
+            .expect("should find element on the second swipe");
+
+        let starts: Vec<(String, String)> = driver
+            .get_calls()
+            .into_iter()
+            .filter(|(m, _)| m == "gesture_swipe")
+            .map(|(_, a)| (a[0].clone(), a[1].clone()))
+            .collect();
+        assert_eq!(starts.len(), 2);
+        assert_ne!(
+            starts[0], starts[1],
+            "a swipe the inner list absorbed SHALL NOT be repeated from the same start"
+        );
+    }
+
     // ── make_safe_viewport ─────────────────────────────────────────
 
     fn meta_with(
@@ -2260,6 +2362,26 @@ mod tests {
             "start SHALL use the clipped visible band, not raw bounds"
         );
         assert!(down.1 < vp.height, "start y SHALL stay within the viewport");
+    }
+
+    #[test]
+    fn container_swipe_stays_out_of_bottom_gesture_inset() {
+        // Pixel 8 Pro shape: 2992px screen, 72px gesture-nav inset, so the
+        // safe band ends at y=2920. A carousel peeks in at y=2859..3042.
+        let screen = Viewport::new(1344, 2992);
+        let safe_vp = make_safe_viewport(&screen, &meta_with(151, 72, 0, vec![]));
+        let cb = Bounds::new(135, 2859, 1074, 183);
+        for direction in [Direction::Left, Direction::Right] {
+            let start = container_swipe_start(&cb, &safe_vp, direction);
+            let (fx, fy, tx, ty) = container_swipe_coords(&cb, &safe_vp, direction, start);
+            for y in [fy, ty] {
+                assert!(
+                    (cb.y..safe_vp.y + safe_vp.height).contains(&y),
+                    "{direction:?} swipe y={y} SHALL be on the container and above the inset"
+                );
+            }
+            assert_ne!(fx, tx, "{direction:?} swipe SHALL move horizontally");
+        }
     }
 
     // ── container_swipe_coords ─────────────────────────────────────
