@@ -117,7 +117,7 @@ case "$PLATFORM" in
   ios)
     # Detect simulator vs physical device.
     IS_SIMULATOR=0
-    if xcrun simctl list devices --json 2>/dev/null | grep -q "\"$DEVICE_ID\""; then
+    if golem_is_simulator "$DEVICE_ID"; then
       IS_SIMULATOR=1
     fi
 
