@@ -7,7 +7,7 @@
 # previous dependency tree and the run reported green. These tests pin the
 # replacement: the gates compare what a tree was generated FROM.
 #
-# The real `npm install` / `expo prebuild` are never run. Each template is
+# The real `npm install` / `expo prebuild` are never run. The gates are
 # sourced into a throwaway project with those commands stubbed as recorders,
 # so a test asserts on what the script DECIDED to do, in milliseconds.
 
@@ -15,7 +15,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXPO_TEMPLATE="$REPO_ROOT/golem-cli/templates/install-scripts/expo.sh"
-TAURI_TEMPLATE="$REPO_ROOT/golem-cli/templates/install-scripts/tauri.sh"
+DEPS_PARTIAL="$REPO_ROOT/golem-cli/templates/install-scripts/_deps.sh"
 
 PASS=0
 FAIL=0
@@ -32,17 +32,22 @@ check_eq() {
   if [[ "$2" == "$3" ]]; then ok "$1"; else no "$1" "expected '$2', got '$3'"; fi
 }
 
-# Extract just the freshness helpers plus the two ensure_* functions from a
-# template, so they can be sourced without running the whole install. The
-# region is delimited by the template's own section comments.
-extract_helpers() {
-  # $1 = template path, $2 = last function to include
-  awk -v last="$2" '
-    /^# ── freshness stamps ─/ { grab = 1 }
-    grab { print }
-    grab && $0 == "}" && seen_last { exit }
-    grab && $0 ~ "^" last "\\(\\) \\{" { seen_last = 1 }
-  ' "$1"
+# The dependency gate lives in the `{{>deps}}` partial, a plain bash body
+# that sources as-is. Expo's prebuild gate stays in the Expo template and is
+# cut out of it by its section comment. `ensure_deps` maps the tests' calls
+# onto the partial's entry point, which takes the install command.
+load_helpers() {
+  cat "$DEPS_PARTIAL"
+  # shellcheck disable=SC2016 # expanded when sourced, not here
+  echo 'ensure_deps() { golem_ensure_deps "$PM_INSTALL"; }'
+  if [[ -n "${1:-}" ]]; then
+    awk '
+      /^# ── prebuild freshness ─/ { grab = 1 }
+      grab { print }
+      grab && /^ensure_prebuild\(\) \{/ { seen = 1 }
+      grab && seen && $0 == "}" { exit }
+    ' "$1"
+  fi
 }
 
 new_project() {
@@ -61,7 +66,7 @@ run_expo() {
   (
     cd "$dir" || exit 1
     # shellcheck disable=SC1090
-    source <(extract_helpers "$EXPO_TEMPLATE" ensure_prebuild)
+    source <(load_helpers "$EXPO_TEMPLATE")
     PM_INSTALL="record_install"
     PM_RUNNER="record_prebuild"
     record_install() { echo "install" >> "$dir/actions"; mkdir -p node_modules; }
@@ -110,7 +115,7 @@ run_expo_rewriting() {
   (
     cd "$dir" || exit 1
     # shellcheck disable=SC1090
-    source <(extract_helpers "$EXPO_TEMPLATE" ensure_prebuild)
+    source <(load_helpers "$EXPO_TEMPLATE")
     PM_INSTALL="record_install"
     record_install() {
       echo "install" >> "$dir/actions"
@@ -133,7 +138,7 @@ d3=$(new_project)
 (
   cd "$d3" || exit 1
   # shellcheck disable=SC1090
-  source <(extract_helpers "$EXPO_TEMPLATE" ensure_prebuild)
+  source <(load_helpers "$EXPO_TEMPLATE")
   PM_INSTALL="false"
   ensure_deps
 ) > /dev/null 2>&1
@@ -180,7 +185,7 @@ run_tauri() {
   (
     cd "$dir" || exit 1
     # shellcheck disable=SC1090
-    source <(extract_helpers "$TAURI_TEMPLATE" ensure_deps)
+    source <(load_helpers)
     PM_INSTALL="$pm"
     record_install() { echo "install" >> "$dir/actions"; mkdir -p node_modules; }
     ensure_deps
