@@ -136,6 +136,7 @@ pub enum InstallFramework {
     NativeAndroid,
     Tauri,
     Expo,
+    Capacitor,
 }
 
 impl InstallFramework {
@@ -145,6 +146,7 @@ impl InstallFramework {
             InstallFramework::NativeAndroid => "native-android",
             InstallFramework::Tauri => "tauri",
             InstallFramework::Expo => "expo",
+            InstallFramework::Capacitor => "capacitor",
         }
     }
 
@@ -158,6 +160,9 @@ impl InstallFramework {
             }
             InstallFramework::Tauri => include_str!("../templates/install-scripts/tauri.sh"),
             InstallFramework::Expo => include_str!("../templates/install-scripts/expo.sh"),
+            InstallFramework::Capacitor => {
+                include_str!("../templates/install-scripts/capacitor.sh")
+            }
         }
     }
 }
@@ -730,6 +735,7 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(InstallFramework::NativeAndroid.label(), "native-android");
         assert_eq!(InstallFramework::Tauri.label(), "tauri");
         assert_eq!(InstallFramework::Expo.label(), "expo");
+        assert_eq!(InstallFramework::Capacitor.label(), "capacitor");
     }
 
     // 14. render_template leaves text untouched when no placeholder matches.
@@ -848,6 +854,43 @@ install_script = { ios = "scripts/ios.sh" }
             !content.contains("{{"),
             "no placeholders SHALL remain, got:\n{content}"
         );
+    }
+
+    #[test]
+    fn write_install_script_renders_capacitor_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::Capacitor,
+            &[
+                ("CAP_DIR", "./mobile"),
+                ("CAP_CMD", "pnpm cap"),
+                ("PM_INSTALL", "pnpm install"),
+                ("WEB_BUILD", "pnpm run build"),
+                ("WEB_DIR", "dist"),
+            ],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        for line in [
+            r#"CAP_DIR="./mobile""#,
+            r#"CAP_CMD="pnpm cap""#,
+            r#"PM_INSTALL="pnpm install""#,
+            r#"WEB_BUILD="pnpm run build""#,
+            r#"WEB_DIR="dist""#,
+        ] {
+            assert!(content.contains(line), "{line} SHALL be substituted");
+        }
+        for f in [
+            "golem_android_build_install()",
+            "golem_ios_build_install()",
+            "golem_ensure_deps()",
+        ] {
+            assert!(content.contains(f), "{f} SHALL be spliced in");
+        }
+        assert!(!content.contains("{{"), "no placeholders SHALL remain");
     }
 
     // 18. update on a missing golem.toml surfaces a read error (not a panic).
@@ -983,12 +1026,17 @@ install_script = "scripts/old.sh"
             ("EXPO_DIR", "."),
             ("PM_RUNNER", "npx expo"),
             ("PM_INSTALL", "npm install"),
+            ("CAP_DIR", "."),
+            ("CAP_CMD", "npx cap"),
+            ("WEB_BUILD", "npm run build"),
+            ("WEB_DIR", "www"),
         ];
         for fw in [
             InstallFramework::NativeIos,
             InstallFramework::NativeAndroid,
             InstallFramework::Tauri,
             InstallFramework::Expo,
+            InstallFramework::Capacitor,
         ] {
             let out = tmp.path().join(format!("{}.sh", fw.label()));
             write_install_script(&out, fw, &placeholders).expect("write");
@@ -1061,6 +1109,7 @@ install_script = "scripts/old.sh"
             InstallFramework::NativeAndroid,
             InstallFramework::Tauri,
             InstallFramework::Expo,
+            InstallFramework::Capacitor,
         ] {
             let out = render_install_script(fw, &[]).expect("render");
             assert!(
@@ -1079,6 +1128,7 @@ install_script = "scripts/old.sh"
             InstallFramework::NativeAndroid,
             InstallFramework::Tauri,
             InstallFramework::Expo,
+            InstallFramework::Capacitor,
         ] {
             let t = fw.template();
             let helpers = t.find("{{>helpers}}");

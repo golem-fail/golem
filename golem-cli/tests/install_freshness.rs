@@ -35,6 +35,13 @@ fn install_templates_rebuild_when_their_inputs_change() {
     );
 }
 
+/// A template, the repo script rendered from it, and the placeholder values.
+type RenderedScript = (
+    InstallFramework,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+
 /// The repo's own install scripts are the templates with placeholders filled
 /// in. They drift silently otherwise: a fix to the template would ship to
 /// scaffolded projects while this repo's own e2e kept exercising the old
@@ -46,7 +53,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         .expect("golem-cli has a parent directory")
         .to_path_buf();
 
-    let cases: [(InstallFramework, &str, &[(&str, &str)]); 4] = [
+    let cases: [RenderedScript; 5] = [
         (
             InstallFramework::Expo,
             "scripts/install-app-e.sh",
@@ -82,6 +89,17 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
                 ("XCODE_PROJECT", "test-app-b/ios/GolemTestB.xcodeproj"),
                 ("XCODE_SCHEME", "GolemTestB"),
                 ("CONFIGURATION", "Debug"),
+            ],
+        ),
+        (
+            InstallFramework::Capacitor,
+            "scripts/install-app-c.sh",
+            &[
+                ("CAP_DIR", "test-app-c"),
+                ("CAP_CMD", "npx cap"),
+                ("PM_INSTALL", "npm install"),
+                ("WEB_BUILD", "npm run build"),
+                ("WEB_DIR", "www"),
             ],
         ),
     ];

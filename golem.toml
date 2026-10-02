@@ -33,6 +33,13 @@ bundle = "fail.golem.teste"
 install_script = "scripts/install-app-e.sh"
 install_env = { EXPO_BUILD_MODE = "eas", EAS_PROFILE = "preview" }
 
+# Capacitor app. scripts/install-test-app-c.sh generates the android/ and
+# ios/ projects when missing, then runs the rendered Capacitor template.
+[[apps]]
+name = "app-c"
+bundle = "fail.golem.testc"
+install_script = "scripts/install-test-app-c.sh"
+
 # Per-platform OS-level tweaks applied once per device session before
 # any flow runs. Suppresses defaults that bias test results across
 # emulator wipes / fresh sim images.
