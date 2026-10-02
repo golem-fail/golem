@@ -33,6 +33,10 @@ pub fn run() -> Result<()> {
             "expo           (Expo — managed React Native w/ prebuild)",
             InstallFramework::Expo,
         ),
+        (
+            "capacitor      (Capacitor / Ionic)",
+            InstallFramework::Capacitor,
+        ),
     ];
     let idx = Select::with_theme(&theme)
         .with_prompt("Framework")
@@ -284,6 +288,65 @@ pub fn run() -> Result<()> {
             placeholders.push(("PM_INSTALL", pm_install.to_string()));
             placeholders.push(("IOS_SCHEME", ios_scheme));
         }
+        InstallFramework::Capacitor => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let found = discover_capacitor_dirs(&cwd, 5);
+            let cap_dir = if found.is_empty() {
+                Input::with_theme(&theme)
+                    .with_prompt("Capacitor project directory (contains capacitor.config.*)")
+                    .default(".".into())
+                    .interact_text()?
+            } else {
+                let mut items = found.clone();
+                items.push(OTHER_LABEL.into());
+                let idx = Select::with_theme(&theme)
+                    .with_prompt("Capacitor project directory")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+                if idx == items.len() - 1 {
+                    Input::with_theme(&theme)
+                        .with_prompt("Enter path")
+                        .interact_text()?
+                } else {
+                    items[idx].clone()
+                }
+            };
+            let project = cwd.join(&cap_dir);
+
+            // (cap runner, install, script runner, label)
+            let pm_items = [
+                ("npx cap", "npm install", "npm run", "npm (npx)"),
+                ("yarn cap", "yarn", "yarn", "yarn"),
+                ("pnpm cap", "pnpm install", "pnpm run", "pnpm"),
+                ("bunx cap", "bun install", "bun run", "bun"),
+            ];
+            let detect_items: Vec<(&str, &str)> =
+                pm_items.iter().map(|(r, _, _, l)| (*r, *l)).collect();
+            let default_idx = detect_tauri_command(&project, &detect_items);
+            let pm_idx = Select::with_theme(&theme)
+                .with_prompt("Package manager")
+                .items(&pm_items.iter().map(|(_, _, _, l)| *l).collect::<Vec<_>>())
+                .default(default_idx)
+                .interact()?;
+            let (cap_cmd, pm_install, pm_run, _) = pm_items[pm_idx];
+
+            let web_build: String = Input::with_theme(&theme)
+                .with_prompt("Web build command (empty for none)")
+                .default(default_web_build(&project, pm_run))
+                .allow_empty(true)
+                .interact_text()?;
+            let web_dir: String = Input::with_theme(&theme)
+                .with_prompt("Web assets directory (webDir in the Capacitor config)")
+                .default(detect_capacitor_web_dir(&project).unwrap_or_else(|| "www".into()))
+                .interact_text()?;
+
+            placeholders.push(("CAP_DIR", cap_dir));
+            placeholders.push(("CAP_CMD", cap_cmd.to_string()));
+            placeholders.push(("PM_INSTALL", pm_install.to_string()));
+            placeholders.push(("WEB_BUILD", web_build));
+            placeholders.push(("WEB_DIR", web_dir));
+        }
     }
 
     // For native-{ios,android}, include platform in default filename so the
@@ -519,6 +582,80 @@ fn discover_expo_dirs(root: &Path, max_depth: usize) -> Vec<String> {
     out
 }
 
+/// Discover Capacitor project directories under `root` — dirs containing a
+/// `capacitor.config.{ts,js,json}`. Paths are returned relative to `root`.
+fn discover_capacitor_dirs(root: &Path, max_depth: usize) -> Vec<String> {
+    let mut hits = Vec::<PathBuf>::new();
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            p.is_file()
+                && matches!(
+                    p.file_name().and_then(|n| n.to_str()),
+                    Some("capacitor.config.ts")
+                        | Some("capacitor.config.js")
+                        | Some("capacitor.config.json")
+                )
+        },
+        &mut hits,
+    );
+    let mut out: Vec<String> = hits
+        .iter()
+        .filter_map(|p| p.parent())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .map(|s| if s.is_empty() { ".".to_string() } else { s })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The `webDir` a Capacitor project declares, read as text from its config.
+/// A `.ts`/`.js` config is code, so this matches the common literal form
+/// (`webDir: 'dist'`) only; anything else falls back to the caller's default.
+fn detect_capacitor_web_dir(project: &Path) -> Option<String> {
+    fn literal_web_dir(text: &str) -> Option<String> {
+        let at = text.find("webDir")?;
+        let rest = text[at + "webDir".len()..]
+            .trim_start_matches(|c: char| c == '"' || c == '\'' || c.is_whitespace());
+        let rest = rest.strip_prefix(':')?.trim_start();
+        let quote = rest
+            .chars()
+            .next()
+            .filter(|c| matches!(c, '"' | '\'' | '`'))?;
+        let value = &rest[1..];
+        value.find(quote).map(|end| value[..end].to_string())
+    }
+    [
+        "capacitor.config.json",
+        "capacitor.config.ts",
+        "capacitor.config.js",
+    ]
+    .iter()
+    .filter_map(|name| std::fs::read_to_string(project.join(name)).ok())
+    .find_map(|text| literal_web_dir(&text))
+}
+
+/// `<pm_run> build` when the project's package.json has a `build` script,
+/// else empty (no web build step).
+fn default_web_build(project: &Path, pm_run: &str) -> String {
+    let has_build = std::fs::read_to_string(project.join("package.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .is_some_and(|v| v.pointer("/scripts/build").is_some());
+    if has_build {
+        format!("{pm_run} build")
+    } else {
+        String::new()
+    }
+}
+
 /// Invoke `xcodebuild -list` on a project/workspace and parse scheme names.
 /// Returns empty Vec if xcodebuild fails or produces no schemes.
 fn discover_xcode_schemes(project_path: &str) -> Vec<String> {
@@ -663,7 +800,9 @@ fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
     match framework {
         InstallFramework::NativeIos => format!("scripts/install-{slug}-ios.sh"),
         InstallFramework::NativeAndroid => format!("scripts/install-{slug}-android.sh"),
-        InstallFramework::Tauri | InstallFramework::Expo => format!("scripts/install-{slug}.sh"),
+        InstallFramework::Tauri | InstallFramework::Expo | InstallFramework::Capacitor => {
+            format!("scripts/install-{slug}.sh")
+        }
     }
 }
 
@@ -673,7 +812,7 @@ fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
     match framework {
         InstallFramework::NativeIos => Some("ios"),
         InstallFramework::NativeAndroid => Some("android"),
-        InstallFramework::Tauri | InstallFramework::Expo => None,
+        InstallFramework::Tauri | InstallFramework::Expo | InstallFramework::Capacitor => None,
     }
 }
 
@@ -779,6 +918,77 @@ mod tests {
         std::fs::write(root.join("nope/readme.md"), "").expect("value SHALL be present");
         let found = discover_expo_dirs(root, 5);
         assert_eq!(found, vec!["mobile".to_string(), "other".to_string()]);
+    }
+
+    #[test]
+    fn discover_capacitor_dirs_finds_every_config_flavour() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for (dir, file) in [
+            ("a", "capacitor.config.ts"),
+            ("b/mobile", "capacitor.config.json"),
+            ("c", "capacitor.config.js"),
+            ("d", "app.json"),
+        ] {
+            std::fs::create_dir_all(tmp.path().join(dir)).expect("mkdir");
+            std::fs::write(tmp.path().join(dir).join(file), "{}").expect("write");
+        }
+        assert_eq!(
+            discover_capacitor_dirs(tmp.path(), 5),
+            vec!["a".to_string(), "b/mobile".into(), "c".into()]
+        );
+    }
+
+    #[test]
+    fn detect_capacitor_web_dir_reads_json_and_literal_ts() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("capacitor.config.json"),
+            r#"{ "appId": "x", "webDir": "www" }"#,
+        )
+        .expect("write");
+        assert_eq!(detect_capacitor_web_dir(tmp.path()).as_deref(), Some("www"));
+
+        let ts = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            ts.path().join("capacitor.config.ts"),
+            "const config: CapacitorConfig = {\n  appId: 'x',\n  webDir: 'dist',\n};",
+        )
+        .expect("write");
+        assert_eq!(detect_capacitor_web_dir(ts.path()).as_deref(), Some("dist"));
+    }
+
+    #[test]
+    fn detect_capacitor_web_dir_moves_past_a_config_without_one() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("capacitor.config.json"),
+            r#"{ "appId": "x" }"#,
+        )
+        .expect("write");
+        std::fs::write(
+            tmp.path().join("capacitor.config.ts"),
+            "export default { webDir: \"build\" };",
+        )
+        .expect("write");
+        assert_eq!(
+            detect_capacitor_web_dir(tmp.path()).as_deref(),
+            Some("build")
+        );
+        let empty = tempfile::tempdir().expect("tempdir");
+        assert_eq!(detect_capacitor_web_dir(empty.path()), None);
+    }
+
+    #[test]
+    fn default_web_build_follows_the_build_script() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{ "scripts": { "build": "vite build" } }"#,
+        )
+        .expect("write");
+        assert_eq!(default_web_build(tmp.path(), "pnpm run"), "pnpm run build");
+        std::fs::write(tmp.path().join("package.json"), r#"{ "scripts": {} }"#).expect("write");
+        assert_eq!(default_web_build(tmp.path(), "npm run"), "");
     }
 
     #[test]
