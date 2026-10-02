@@ -32,6 +32,8 @@ PM_INSTALL="{{PM_INSTALL}}"             # dependency install: npm install | yarn
 
 cd "$TAURI_DIR"
 
+{{>helpers}}
+
 # ── freshness stamps ────────────────────────────────────────────────
 # Tauri builds the frontend through `beforeBuildCommand` in tauri.conf.json,
 # which runs the project's own build script — it never installs dependencies.
@@ -56,23 +58,6 @@ golem_hash() {
   for f in "$@"; do
     if [[ -f "$f" ]]; then printf '%s\n' "$f"; cat "$f"; fi
   done | shasum | cut -d' ' -f1
-}
-
-# Seconds-since-epoch mtime of a path. BSD and GNU `stat` disagree on the
-# flag, and the iOS guards below are useless if the call aborts — which is
-# what a bare `stat -f %m` does everywhere that isn't macOS.
-#
-# Probed once into an array rather than tried-and-fallen-back per call:
-# GNU `stat -f` is --file-system, so it can print something for the file
-# before failing on the format operand, and `A || B` in a command
-# substitution would capture both halves as one corrupt number.
-if stat -c %Y . >/dev/null 2>&1; then
-  GOLEM_STAT=(stat -c %Y)     # GNU coreutils
-else
-  GOLEM_STAT=(stat -f %m)     # BSD / macOS
-fi
-golem_mtime() {
-  "${GOLEM_STAT[@]}" "$1"
 }
 
 # Install JS dependencies when the inputs have moved since the last install.
@@ -186,13 +171,9 @@ case "$PLATFORM" in
     else
       TARGET_DIR="src-tauri/gen/apple/build/aarch64"
     fi
-    # `|| true`: when the per-arch dir does not exist, find exits nonzero and
-    # `set -e` would kill the script on the assignment — silently, before the
-    # broader search below and before the explicit error that names the
-    # problem. An empty APP_PATH is the state the next lines are written for.
-    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null || true)
+    APP_PATH=$(golem_pick_app "$TARGET_DIR" 2)
     if [[ -z "$APP_PATH" ]]; then
-      APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
+      APP_PATH=$(golem_pick_app src-tauri/gen/apple/build 5)
     fi
     if [[ -z "$APP_PATH" || ! -f "$APP_PATH/Info.plist" ]]; then
       echo "error: tauri build failed (exit $TAURI_EXIT) and no valid .app was produced" >&2
@@ -203,11 +184,11 @@ case "$PLATFORM" in
     # Picking up a months-old .app because the rename-step failed silently
     # is what bit us for weeks; this turns it into a loud failure.
     if [[ "$MODE" != "install-only" ]]; then
-      APP_MTIME=$(golem_mtime "$APP_PATH")
-      if (( APP_MTIME < BUILD_START_TS )); then
-        echo "error: .app at $APP_PATH was not refreshed by this build (mtime $APP_MTIME < build start $BUILD_START_TS). The tauri-cli rename likely failed and we'd be installing a stale bundle." >&2
+      if ! golem_require_fresh "$APP_PATH" "$BUILD_START_TS"; then
+        echo "       The tauri-cli rename likely failed." >&2
         exit 1
       fi
+      APP_MTIME=$(golem_mtime "$APP_PATH")
     fi
     # Web-asset freshness. The bundle is compressed into the Rust binary:
     # a unique string placed in the frontend source appears in the built
@@ -276,8 +257,7 @@ case "$PLATFORM" in
       echo "install-only: reusing prior APK for $DEVICE_ID" >&2
     fi
 
-    # Find produced APK (-print -quit avoids SIGPIPE under pipefail)
-    APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -print -quit)
+    APK=$(golem_pick_apk src-tauri/gen/android/app/build/outputs/apk)
     if [[ -z "$APK" ]]; then
       echo "error: no APK found (build may have been skipped — re-run without install-only)" >&2
       exit 1

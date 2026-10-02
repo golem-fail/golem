@@ -46,6 +46,8 @@ DERIVED_DATA="${DERIVED_DATA:-./build/DerivedData}"
 
 cd "$EXPO_DIR"
 
+{{>helpers}}
+
 # ── freshness stamps ────────────────────────────────────────────────
 # A gate that asks "does this directory exist?" answers yes forever: after a
 # lockfile change the native build is redone against the PREVIOUS dependency
@@ -207,7 +209,7 @@ build_local() {
       else
         echo "install-only: reusing prior iOS build for $DEVICE_ID" >&2
       fi
-      install_ios_artifact "$(find "$products" -maxdepth 1 -name '*.app' -type d -print -quit 2>/dev/null || true)"
+      install_ios_artifact "$(golem_pick_app "$products")"
       ;;
     android)
       if [[ "$MODE" != "install-only" ]]; then
@@ -218,7 +220,7 @@ build_local() {
       else
         echo "install-only: reusing prior APK for $DEVICE_ID" >&2
       fi
-      install_android_artifact "$(find android/app/build/outputs/apk/release -name '*.apk' -print -quit 2>/dev/null || true)"
+      install_android_artifact "$(golem_pick_apk android/app/build/outputs/apk/release)"
       ;;
     *)
       echo "error: unknown platform $PLATFORM" >&2
@@ -278,7 +280,7 @@ build_eas() {
       rm -rf build/eas/ios-extract && mkdir -p build/eas/ios-extract
       tar -xzf "build/eas/app-ios.bin" -C build/eas/ios-extract 2>/dev/null || true
       local app
-      app=$(find build/eas/ios-extract -maxdepth 3 -name '*.app' -type d -print -quit 2>/dev/null || true)
+      app=$(golem_pick_app build/eas/ios-extract 3)
       if [[ -z "$app" ]]; then
         # Not a simulator tarball — assume .ipa for a physical device.
         install_ios_artifact "$(find build/eas -maxdepth 1 -name '*.bin' -print -quit)"

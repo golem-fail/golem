@@ -162,6 +162,40 @@ impl InstallFramework {
     }
 }
 
+fn install_partial(name: &str) -> Option<&'static str> {
+    match name {
+        "helpers" => Some(include_str!("../templates/install-scripts/_helpers.sh")),
+        _ => None,
+    }
+}
+
+/// Splice each `{{>name}}` include with the named partial's body.
+///
+/// Runs before placeholder substitution, so a placeholder value that happens
+/// to contain `{{>…}}` stays literal. Partials can't include partials: one
+/// level keeps every splice visible in the template that asks for it.
+fn resolve_partials(template: &str) -> Result<String> {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find("{{>") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 3..];
+        let end = after
+            .find("}}")
+            .ok_or_else(|| anyhow::anyhow!("unterminated partial include `{{{{>`"))?;
+        let name = after[..end].trim();
+        let body = install_partial(name)
+            .ok_or_else(|| anyhow::anyhow!("unknown install-script partial `{name}`"))?;
+        if body.contains("{{>") {
+            bail!("install-script partial `{name}` includes another partial");
+        }
+        out.push_str(body.trim_end_matches('\n'));
+        rest = &after[end + 2..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
 /// Replace `{{PLACEHOLDER}}` tokens in a template with provided values.
 fn render_template(template: &str, placeholders: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
@@ -171,6 +205,18 @@ fn render_template(template: &str, placeholders: &[(&str, &str)]) -> String {
     out
 }
 
+/// Render `framework`'s install script: partials spliced, then placeholders
+/// filled. The result is standalone bash.
+pub fn render_install_script(
+    framework: InstallFramework,
+    placeholders: &[(&str, &str)],
+) -> Result<String> {
+    Ok(render_template(
+        &resolve_partials(framework.template())?,
+        placeholders,
+    ))
+}
+
 /// Write a rendered install-script template to `output_path`. Creates
 /// parent directories and sets the script executable on Unix.
 pub fn write_install_script(
@@ -178,7 +224,7 @@ pub fn write_install_script(
     framework: InstallFramework,
     placeholders: &[(&str, &str)],
 ) -> Result<()> {
-    let rendered = render_template(framework.template(), placeholders);
+    let rendered = render_install_script(framework, placeholders)?;
 
     if let Some(parent) = output_path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -955,6 +1001,188 @@ install_script = "scripts/old.sh"
                 "{}: has leftover placeholder",
                 fw.label()
             );
+            let syntax = std::process::Command::new("bash")
+                .arg("-n")
+                .arg(&out)
+                .output()
+                .expect("bash runs");
+            assert!(
+                syntax.status.success(),
+                "{}: rendered script SHALL be valid bash:\n{}",
+                fw.label(),
+                String::from_utf8_lossy(&syntax.stderr)
+            );
         }
+    }
+
+    #[test]
+    fn resolve_partials_splices_the_helpers_body_inline() {
+        let out = resolve_partials("#!/usr/bin/env bash\nA=1\n{{>helpers}}\nmain\n").expect("ok");
+        let helpers = install_partial("helpers").expect("helpers partial exists");
+        assert!(
+            out.contains(helpers.trim_end_matches('\n')),
+            "the helpers body SHALL be spliced inline, got:\n{out}"
+        );
+        assert!(out.starts_with("#!/usr/bin/env bash\nA=1\n"));
+        assert!(
+            out.ends_with("\nmain\n"),
+            "text after the include SHALL follow on its own line"
+        );
+        assert!(!out.contains("{{>"));
+    }
+
+    #[test]
+    fn resolve_partials_rejects_an_unknown_partial() {
+        let err = resolve_partials("{{>nope}}\n").expect_err("unknown partial");
+        assert!(
+            err.to_string().contains("nope"),
+            "the error SHALL name the partial, got: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_partials_rejects_an_unterminated_include() {
+        assert!(resolve_partials("{{>helpers\n").is_err());
+    }
+
+    #[test]
+    fn partials_resolve_before_placeholders() {
+        let out = render_template(
+            &resolve_partials("X={{X}}\n").expect("ok"),
+            &[("X", "{{>helpers}}")],
+        );
+        assert_eq!(
+            out, "X={{>helpers}}\n",
+            "a placeholder value SHALL never be read as an include"
+        );
+    }
+
+    #[test]
+    fn every_template_includes_the_helpers_partial() {
+        for fw in [
+            InstallFramework::NativeIos,
+            InstallFramework::NativeAndroid,
+            InstallFramework::Tauri,
+            InstallFramework::Expo,
+        ] {
+            let out = render_install_script(fw, &[]).expect("render");
+            assert!(
+                out.contains("golem_pick_apk()") && out.contains("golem_mtime()"),
+                "{}: rendered script SHALL carry the helpers inline",
+                fw.label()
+            );
+            assert!(!out.contains("{{>"), "{}: unresolved include", fw.label());
+        }
+    }
+
+    /// Runs `body` in bash under the templates' strict mode, with the
+    /// helpers partial defined and `dir` as cwd. Returns stdout.
+    fn run_helpers(dir: &Path, body: &str) -> String {
+        let script = format!(
+            "set -euo pipefail\n{}\n{body}\n",
+            install_partial("helpers").expect("helpers")
+        );
+        let out = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(script)
+            .current_dir(dir)
+            .output()
+            .expect("bash runs");
+        assert!(
+            out.status.success(),
+            "helpers script failed:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn touch_aged(path: &Path, secs_ago: u64) {
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        let f = fs::File::create(path).expect("create");
+        let t = std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago);
+        f.set_modified(t).expect("set mtime");
+    }
+
+    #[test]
+    fn pick_apk_takes_the_newest_installable_apk() {
+        let tmp = TempDir::new().expect("tempdir");
+        let apk = tmp.path().join("apk");
+        touch_aged(&apk.join("debug/app-debug.apk"), 300);
+        touch_aged(&apk.join("release/app-release.apk"), 200);
+        touch_aged(&apk.join("release/app-release-unsigned.apk"), 10);
+        touch_aged(&apk.join("androidTest/debug/app-debug-androidTest.apk"), 10);
+        assert_eq!(
+            run_helpers(tmp.path(), "golem_pick_apk apk"),
+            "apk/release/app-release.apk",
+            "test and unsigned APKs SHALL never be picked, however new"
+        );
+        assert_eq!(
+            run_helpers(tmp.path(), "golem_pick_apk apk debug"),
+            "apk/debug/app-debug.apk",
+            "a variant SHALL narrow the pick to that variant's directory"
+        );
+    }
+
+    #[test]
+    fn pick_app_takes_the_newest_bundle_within_depth() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("p/Old.app")).expect("mkdir");
+        fs::create_dir_all(tmp.path().join("p/New.app")).expect("mkdir");
+        fs::create_dir_all(tmp.path().join("p/deep/Deeper.app")).expect("mkdir");
+        for (dir, age) in [
+            ("p/Old.app", 300),
+            ("p/New.app", 100),
+            ("p/deep/Deeper.app", 1),
+        ] {
+            let t = std::time::SystemTime::now() - std::time::Duration::from_secs(age);
+            fs::File::open(tmp.path().join(dir))
+                .expect("open dir")
+                .set_modified(t)
+                .expect("set mtime");
+        }
+        assert_eq!(run_helpers(tmp.path(), "golem_pick_app p"), "p/New.app");
+        assert_eq!(
+            run_helpers(tmp.path(), "golem_pick_app p 2"),
+            "p/deep/Deeper.app"
+        );
+    }
+
+    #[test]
+    fn pick_app_never_returns_a_bundle_nested_in_another() {
+        let tmp = TempDir::new().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("p/Outer.app/Watch/Inner.app")).expect("mkdir");
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(300);
+        fs::File::open(tmp.path().join("p/Outer.app"))
+            .expect("open dir")
+            .set_modified(old)
+            .expect("set mtime");
+        assert_eq!(run_helpers(tmp.path(), "golem_pick_app p 3"), "p/Outer.app");
+    }
+
+    #[test]
+    fn require_fresh_fails_only_for_an_artifact_older_than_the_build() {
+        let tmp = TempDir::new().expect("tempdir");
+        touch_aged(&tmp.path().join("old.apk"), 300);
+        touch_aged(&tmp.path().join("new.apk"), 0);
+        let out = run_helpers(
+            tmp.path(),
+            "start=$(( $(date +%s) - 60 ))\n\
+             golem_require_fresh new.apk \"$start\" && echo new-ok\n\
+             golem_require_fresh old.apk \"$start\" 2>/dev/null || echo old-rejected",
+        );
+        assert_eq!(out, "new-ok\nold-rejected\n");
+    }
+
+    #[test]
+    fn picks_from_a_missing_dir_are_empty_not_fatal() {
+        let tmp = TempDir::new().expect("tempdir");
+        assert_eq!(
+            run_helpers(
+                tmp.path(),
+                "A=$(golem_pick_apk nope); B=$(golem_pick_app nope); echo \"[$A$B]\""
+            ),
+            "[]\n",
+            "an assignment from a missing root SHALL survive set -e with an empty value"
+        );
     }
 }

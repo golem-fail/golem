@@ -28,10 +28,11 @@ GRADLE_ROOT="{{GRADLE_ROOT}}"           # directory containing settings.gradle (
 MODULE_NAME="{{MODULE_NAME}}"           # gradle submodule (e.g. app)
 GRADLE_TASK="{{GRADLE_TASK}}"           # e.g. installDebug, assembleDebug
 
+{{>helpers}}
+
 if [[ "$MODE" == "install-only" ]]; then
   echo "install-only: reusing prior APK for $DEVICE_SERIAL" >&2
-  # Find the APK produced by a prior gradle build (common Android layouts).
-  APK=$(find "$GRADLE_ROOT/$MODULE_NAME/build/outputs/apk" -name "*.apk" -print -quit 2>/dev/null)
+  APK=$(golem_pick_apk "$GRADLE_ROOT/$MODULE_NAME/build/outputs/apk")
   if [[ -z "$APK" ]]; then
     echo "error: no APK found under $GRADLE_ROOT/$MODULE_NAME/build/outputs/apk (build may have been skipped — re-run without install-only)" >&2
     exit 1

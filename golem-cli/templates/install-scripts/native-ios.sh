@@ -32,6 +32,8 @@ XCODE_SCHEME="{{XCODE_SCHEME}}"         # Xcode scheme name
 CONFIGURATION="{{CONFIGURATION}}"        # Debug or Release
 DERIVED_DATA="${DERIVED_DATA:-./build/DerivedData}"
 
+{{>helpers}}
+
 # Determine project flag
 PROJECT_FLAG=()
 if [[ "$XCODE_PROJECT" == *.xcworkspace ]]; then
@@ -69,8 +71,7 @@ else
   echo "install-only: reusing prior build for $DEVICE_UDID" >&2
 fi
 
-# Locate the .app bundle (-print -quit avoids SIGPIPE under pipefail)
-APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)
+APP_PATH=$(golem_pick_app "$PRODUCTS_DIR")
 
 if [[ -z "$APP_PATH" ]]; then
   echo "error: no .app bundle found in $PRODUCTS_DIR (build may have been skipped — re-run without install-only)" >&2

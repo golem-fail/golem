@@ -25,6 +25,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use golem_cli::scaffold::{render_install_script, InstallFramework};
+
 #[test]
 fn the_ios_stale_bundle_guards_hold_in_every_build_outcome() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -33,8 +35,19 @@ fn the_ios_stale_bundle_guards_hold_in_every_build_outcome() {
         .to_path_buf();
     let harness = repo_root.join("scripts/tests/tauri-install-guards.test.sh");
 
+    // Partials resolved, placeholders left for the harness to fill: the
+    // harness must test what `golem install-script` emits, and a second
+    // splice implementation in shell could drift from this one.
+    let template = tempfile::NamedTempFile::new().expect("temp template");
+    std::fs::write(
+        template.path(),
+        render_install_script(InstallFramework::Tauri, &[]).expect("render tauri template"),
+    )
+    .expect("write temp template");
+
     let out = Command::new("bash")
         .arg(&harness)
+        .env("TAURI_TEMPLATE", template.path())
         .current_dir(&repo_root)
         .output()
         .expect("the tauri-install-guards harness SHALL be runnable");

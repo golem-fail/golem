@@ -11,6 +11,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use golem_cli::scaffold::{render_install_script, InstallFramework};
+
 #[test]
 fn install_templates_rebuild_when_their_inputs_change() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -44,9 +46,9 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         .expect("golem-cli has a parent directory")
         .to_path_buf();
 
-    let cases: [(&str, &str, &[(&str, &str)]); 2] = [
+    let cases: [(InstallFramework, &str, &[(&str, &str)]); 2] = [
         (
-            "golem-cli/templates/install-scripts/expo.sh",
+            InstallFramework::Expo,
             "scripts/install-app-e.sh",
             &[
                 ("EXPO_DIR", "test-app-e"),
@@ -56,7 +58,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
             ],
         ),
         (
-            "golem-cli/templates/install-scripts/tauri.sh",
+            InstallFramework::Tauri,
             "scripts/install-app.sh",
             &[
                 ("TAURI_DIR", "test-app"),
@@ -67,16 +69,13 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         ),
     ];
 
-    for (template, rendered, placeholders) in cases {
-        let tmpl = std::fs::read_to_string(repo_root.join(template))
-            .unwrap_or_else(|e| panic!("read {template}: {e}"));
+    for (framework, rendered, placeholders) in cases {
+        let template = framework.label();
         let actual = std::fs::read_to_string(repo_root.join(rendered))
             .unwrap_or_else(|e| panic!("read {rendered}: {e}"));
 
-        let mut expected = tmpl;
-        for (key, value) in placeholders {
-            expected = expected.replace(&format!("{{{{{key}}}}}"), value);
-        }
+        let expected = render_install_script(framework, placeholders)
+            .unwrap_or_else(|e| panic!("render {template}: {e}"));
 
         assert!(
             !expected.contains("{{"),
@@ -84,7 +83,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         );
         assert_eq!(
             expected, actual,
-            "{rendered} is out of date with {template}; re-render it"
+            "{rendered} is out of date with the {template} template; re-render it"
         );
     }
 }
