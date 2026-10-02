@@ -105,7 +105,7 @@ install_ios_artifact() {
     echo "error: no .app to install (build may have been skipped — re-run without install-only)" >&2
     exit 1
   fi
-  if xcrun simctl list devices --json 2>/dev/null | grep -q "\"$DEVICE_ID\""; then
+  if golem_is_simulator "$DEVICE_ID"; then
     xcrun simctl install "$DEVICE_ID" "$app" 1>&2
   elif xcrun devicectl --version >/dev/null 2>&1; then
     xcrun devicectl device install app --device "$DEVICE_ID" "$app" 1>&2
@@ -162,7 +162,7 @@ build_local() {
   case "$PLATFORM" in
     ios)
       local products
-      if xcrun simctl list devices --json 2>/dev/null | grep -q "\"$DEVICE_ID\""; then
+      if golem_is_simulator "$DEVICE_ID"; then
         products="$DERIVED_DATA/Build/Products/Release-iphonesimulator"
       else
         products="$DERIVED_DATA/Build/Products/Release-iphoneos"
@@ -194,7 +194,7 @@ build_local() {
           exit 1
         fi
         local dest
-        if xcrun simctl list devices --json 2>/dev/null | grep -q "\"$DEVICE_ID\""; then
+        if golem_is_simulator "$DEVICE_ID"; then
           dest="platform=iOS Simulator,id=$DEVICE_ID"
         else
           dest="platform=iOS,id=$DEVICE_ID"

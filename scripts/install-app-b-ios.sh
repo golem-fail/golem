@@ -9,7 +9,20 @@
 #   $2 = device UDID
 #   $3 = bundle id (from [[flow.apps]] bundle)
 #   $4 = "install-only" to skip the build and reuse the previous artifact,
-#        or empty for full build+install (default)
+#        or empty for full build+install (default).
+#        Golem currently always passes empty; the flag is supported for manual
+#        dev-iteration and for a future golem-side build-once optimisation
+#        (see roadmap: "Install Cache: Build-Once, Install-to-Many").
+#
+# Environment (template config — set via [[apps]] install_env or the shell):
+#   CONFIGURATION    = overrides the build configuration below (Debug, Release)
+#   XCODE_SCHEME     = overrides the scheme below
+#   XCCONFIG         = path to an .xcconfig, passed as `xcodebuild -xcconfig`
+#   DEVELOPMENT_TEAM = Apple team ID for a physical device. Passed as the
+#                      DEVELOPMENT_TEAM build setting, with
+#                      -allowProvisioningUpdates. Unset: the project's own
+#                      signing settings apply.
+#   DERIVED_DATA     = xcodebuild derived-data dir (default ./build/DerivedData)
 #
 # Detects simulator vs physical device by checking simctl. Physical device
 # install requires Xcode 15+ (`xcrun devicectl`).
@@ -25,9 +38,102 @@ MODE="${4:-}"   # empty | install-only
 
 # ── Project config — edit these ─────────────────────────────────────
 XCODE_PROJECT="test-app-b/ios/GolemTestB.xcodeproj"       # e.g. MyApp.xcodeproj or MyApp.xcworkspace
-XCODE_SCHEME="GolemTestB"         # Xcode scheme name
-CONFIGURATION="Debug"        # Debug or Release
+XCODE_SCHEME="${XCODE_SCHEME:-GolemTestB}"         # Xcode scheme name
+CONFIGURATION="${CONFIGURATION:-Debug}"        # Debug or Release
+XCCONFIG="${XCCONFIG:-}"
+DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}"
 DERIVED_DATA="${DERIVED_DATA:-./build/DerivedData}"
+
+# ── shared helpers (spliced in by `golem install-script`) ───────────
+
+# Seconds-since-epoch mtime of a path. BSD and GNU `stat` disagree on the
+# flag, and a stale-artifact guard is useless if the call aborts — which is
+# what a bare `stat -f %m` does everywhere that isn't macOS.
+#
+# Probed once into an array rather than tried-and-fallen-back per call:
+# GNU `stat -f` is --file-system, so it can print something for the file
+# before failing on the format operand, and `A || B` in a command
+# substitution would capture both halves as one corrupt number.
+if stat -c %Y . >/dev/null 2>&1; then
+  GOLEM_STAT=(stat -c %Y)     # GNU coreutils
+else
+  GOLEM_STAT=(stat -f %m)     # BSD / macOS
+fi
+golem_mtime() {
+  "${GOLEM_STAT[@]}" "$1"
+}
+
+# Fail when $1 was not written at or after $2 (seconds since epoch, taken
+# before the build started). A build step that fails quietly leaves the
+# previous artifact in place, and installing it would test old code.
+golem_require_fresh() {
+  local m
+  m=$(golem_mtime "$1")
+  if (( m < $2 )); then
+    echo "error: $1 was not refreshed by this build (mtime $m < build start $2);" >&2
+    echo "       refusing to install a stale artifact." >&2
+    return 1
+  fi
+}
+
+# True when $1 is the UDID of a simulator (not a physical device).
+#
+# Matched against the "udid" field only, never a bare quoted string anywhere
+# in the JSON. Captured, not piped into `grep -q`: grep exits at the first
+# match, a large device list then takes SIGPIPE, and under pipefail that
+# reads as "not a simulator".
+golem_is_simulator() {
+  local json
+  json=$(xcrun simctl list devices --json 2>/dev/null) || return 1
+  grep -Eq "\"udid\"[[:space:]]*:[[:space:]]*\"$1\"" <<<"$json"
+}
+
+# Newest (by mtime) of the paths `find "$@"` prints; prints nothing when
+# there is no match or the search root is missing.
+#
+# Not `find … -print -quit` (whichever match the filesystem lists first) and
+# not `ls -t | head` (SIGPIPE under pipefail). A missing root must yield an
+# empty result rather than a nonzero exit: as an assignment's command
+# substitution it would kill the script under `set -e` before the caller's
+# own "no artifact" error could name the problem.
+golem_newest() {
+  local best="" best_m=0 p m
+  while IFS= read -r p; do
+    m=$(golem_mtime "$p")
+    if (( m > best_m )); then best="$p"; best_m="$m"; fi
+  done < <(find "$@" 2>/dev/null || true)
+  printf '%s' "$best"
+}
+
+# Newest installable APK under $1. $2 optionally narrows it to one variant
+# directory as AGP lays them out (`release`, `free/debug`), so a flavor or
+# buildType build is never mixed up with another one left behind.
+# Test APKs and unsigned release APKs are never installable, so never picked.
+golem_pick_apk() {
+  local dir="$1" variant="${2:-}"
+  local filter=(-name '*.apk' ! -name '*-androidTest.apk' ! -name '*-unsigned.apk')
+  if [[ -n "$variant" ]]; then filter+=(-path "*/$variant/*"); fi
+  golem_newest "$dir" -type f "${filter[@]}"
+}
+
+# Report on stderr why `golem_pick_apk "$1"` found nothing. An unsigned
+# release APK is the common case, and "no APK found" would send the reader
+# looking for a build that did run.
+golem_no_apk_error() {
+  if [[ -n "$(golem_newest "$1" -type f -name '*-unsigned.apk')" ]]; then
+    echo "error: $1 holds only unsigned APKs, and Android installs only signed ones." >&2
+    echo "       Add a release signingConfig to the Gradle project, or build debug." >&2
+  else
+    echo "error: no APK found under $1 (build may have been skipped — re-run without install-only)" >&2
+  fi
+}
+
+# Newest .app bundle at most $2 (default 1) levels under $1. Never one
+# nested inside another bundle (an App Clip or watch app): those are not
+# what gets installed, and their mtimes are not ordered against the outer one.
+golem_pick_app() {
+  golem_newest "$1" -maxdepth "${2:-1}" -name '*.app' -type d -prune
+}
 
 # Determine project flag
 PROJECT_FLAG=()
@@ -37,41 +143,62 @@ else
   PROJECT_FLAG=(-project "$XCODE_PROJECT")
 fi
 
-# Detect simulator vs physical device.
 IS_SIMULATOR=0
-if xcrun simctl list devices --json 2>/dev/null | grep -q "\"$DEVICE_UDID\""; then
+if golem_is_simulator "$DEVICE_UDID"; then
   IS_SIMULATOR=1
 fi
 
+BUILD_ARGS=(
+  "${PROJECT_FLAG[@]}"
+  -scheme "$XCODE_SCHEME"
+  -configuration "$CONFIGURATION"
+  -derivedDataPath "$DERIVED_DATA"
+)
+if [[ -n "$XCCONFIG" ]]; then BUILD_ARGS+=(-xcconfig "$XCCONFIG"); fi
+
 if [[ "$IS_SIMULATOR" == "1" ]]; then
-  DEST="platform=iOS Simulator,id=$DEVICE_UDID"
+  BUILD_ARGS+=(-destination "platform=iOS Simulator,id=$DEVICE_UDID")
   PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphonesimulator"
 else
-  DEST="platform=iOS,id=$DEVICE_UDID"
+  BUILD_ARGS+=(-destination "platform=iOS,id=$DEVICE_UDID")
   PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos"
+  if [[ -n "$DEVELOPMENT_TEAM" ]]; then
+    BUILD_ARGS+=(-allowProvisioningUpdates "DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM")
+  fi
 fi
 
 if [[ "$MODE" != "install-only" ]]; then
+  BUILD_START_TS=$(date +%s)
   echo "building $XCODE_SCHEME ($CONFIGURATION) for $DEVICE_UDID..." >&2
+  # An incremental build with nothing to do leaves the .app unwritten, which
+  # the freshness guard cannot tell from a stale one. Removing the bundles
+  # makes every build write its .app, at the cost of re-running the link
+  # and copy steps only.
+  rm -rf "$PRODUCTS_DIR"/*.app
 
-  xcodebuild \
-    "${PROJECT_FLAG[@]}" \
-    -scheme "$XCODE_SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination "$DEST" \
-    -derivedDataPath "$DERIVED_DATA" \
-    build \
-    -quiet 1>&2
+  # No `-quiet`: it hides the compiler and signing errors a failed build
+  # needs to show.
+  if ! xcodebuild "${BUILD_ARGS[@]}" build 1>&2; then
+    if [[ "$IS_SIMULATOR" == "0" ]]; then
+      echo "error: xcodebuild failed for physical device $DEVICE_UDID. If the errors above" >&2
+      echo "       are about signing or provisioning, set DEVELOPMENT_TEAM to your Apple" >&2
+      echo "       team ID (install_env or the shell). Then the build signs with" >&2
+      echo "       -allowProvisioningUpdates." >&2
+    fi
+    exit 1
+  fi
 else
   echo "install-only: reusing prior build for $DEVICE_UDID" >&2
 fi
 
-# Locate the .app bundle
-APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)
+APP_PATH=$(golem_pick_app "$PRODUCTS_DIR")
 
 if [[ -z "$APP_PATH" ]]; then
   echo "error: no .app bundle found in $PRODUCTS_DIR (build may have been skipped — re-run without install-only)" >&2
   exit 1
+fi
+if [[ "$MODE" != "install-only" ]]; then
+  golem_require_fresh "$APP_PATH" "$BUILD_START_TS" || exit 1
 fi
 
 echo "installing $APP_PATH on $DEVICE_UDID..." >&2

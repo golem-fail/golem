@@ -30,6 +30,18 @@ golem_require_fresh() {
   fi
 }
 
+# True when $1 is the UDID of a simulator (not a physical device).
+#
+# Matched against the "udid" field only, never a bare quoted string anywhere
+# in the JSON. Captured, not piped into `grep -q`: grep exits at the first
+# match, a large device list then takes SIGPIPE, and under pipefail that
+# reads as "not a simulator".
+golem_is_simulator() {
+  local json
+  json=$(xcrun simctl list devices --json 2>/dev/null) || return 1
+  grep -Eq "\"udid\"[[:space:]]*:[[:space:]]*\"$1\"" <<<"$json"
+}
+
 # Newest (by mtime) of the paths `find "$@"` prints; prints nothing when
 # there is no match or the search root is missing.
 #

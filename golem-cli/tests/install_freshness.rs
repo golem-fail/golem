@@ -46,7 +46,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         .expect("golem-cli has a parent directory")
         .to_path_buf();
 
-    let cases: [(InstallFramework, &str, &[(&str, &str)]); 3] = [
+    let cases: [(InstallFramework, &str, &[(&str, &str)]); 4] = [
         (
             InstallFramework::Expo,
             "scripts/install-app-e.sh",
@@ -73,6 +73,15 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
             &[
                 ("GRADLE_ROOT", "test-app-b/android"),
                 ("MODULE_NAME", "app"),
+            ],
+        ),
+        (
+            InstallFramework::NativeIos,
+            "scripts/install-app-b-ios.sh",
+            &[
+                ("XCODE_PROJECT", "test-app-b/ios/GolemTestB.xcodeproj"),
+                ("XCODE_SCHEME", "GolemTestB"),
+                ("CONFIGURATION", "Debug"),
             ],
         ),
     ];

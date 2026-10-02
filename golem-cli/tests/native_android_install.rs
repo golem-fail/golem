@@ -4,7 +4,11 @@
 //!
 //! One project and one set of stubs serve every case, with the behaviour
 //! picked through env vars: a freshly written executable costs ~350ms of exec
-//! overhead on macOS, which per case would make this nextest-SLOW.
+//! overhead on macOS, and per case that would double the runtime.
+//!
+//! Still nextest-SLOW (>2s) under the full parallel suite, ~0.9s on its own:
+//! 7 cases, each one bash run of the script plus its stubs, so the cost is
+//! process spawning under contention. Same shape as tauri_install_guards.rs.
 
 #![cfg(unix)]
 

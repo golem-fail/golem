@@ -216,7 +216,12 @@ So if your project has no install scripts anywhere, `--no-build` is redundant �
 
 ## Frameworks the scaffold supports
 
-- **native-ios** — xcodebuild + `xcrun simctl install` (simulator) / `xcrun devicectl` or `ios-deploy` (physical)
+- **native-ios** — xcodebuild + `xcrun simctl install` (simulator) / `xcrun devicectl` or `ios-deploy` (physical). Reads these variables from `install_env` or the shell:
+  - `CONFIGURATION` and `XCODE_SCHEME`: override the values written into the script.
+  - `XCCONFIG`: an `.xcconfig` path, passed as `-xcconfig`.
+  - `DEVELOPMENT_TEAM`: your Apple team ID, for a physical device. The script passes it as a build setting with `-allowProvisioningUpdates`. If a physical-device build fails, the error names this variable. **The physical-device path is not yet validated (#59).**
+
+  The script fails if the `.app` is older than the build start.
 - **native-android** — `./gradlew :<module>:assemble<Flavor><BuildType>`, then `adb -s <serial> install` of the APK that build wrote. Reads these variables from `install_env` or the shell:
   - `BUILD_TYPE`: the Gradle build type, `debug` by default. A release build needs a `signingConfig`, because Android installs only signed APKs.
   - `FLAVOR`: the product flavor. With more than one flavor dimension, use the full flavor name, for example `freeProd`.
