@@ -15,6 +15,7 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.
 - Sign off every commit: `git commit -s` (the DCO check fails unsigned commits — see `docs/contributing.md`). Author identity is the repo-local GitHub no-reply (auto); do NOT override it or reintroduce a personal/work email.
 - PR body needs a release-notes block — a `## Release notes` header, then one or more `- category: line` bullets (`- fixed:`/`- added:`/`- internal:`/…) between the `<!-- release-notes -->` and `<!-- /release-notes -->` markers — the leading `- ` is required, and note the slash in the closing marker (the header is required and CI checks for it — any heading text passes; the generator reads the markers, the header orients a human reviewer) — or the `no-release-note` label, else the required gate blocks merge.
+- Stacked PRs (a PR that builds on another open PR): use GitHub stacked PRs through the `gh stack` extension (`gh extension install github/gh-stack`). Do not chain base branches by hand. Start a new stack with `gh stack init`, add layers with `gh stack add`, and push and open the PRs with `gh stack submit`. To make PRs that are already open into a stack, run `gh stack link --base main <pr>…`, bottom to top. Merge from the bottom up. Merging the top PR merges the whole stack.
 
 ## Where information belongs (How / What / Why / Why not)
 Put each fact where it lives; don't write it in the wrong place.
