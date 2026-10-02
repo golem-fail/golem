@@ -1,6 +1,6 @@
 use crate::common::{
     build_backspace_body, build_gesture_body, build_long_press_body, build_swipe_body,
-    build_tap_body, build_type_body, find_webview_bounds, parse_hierarchy,
+    build_tap_body, build_type_body, find_webview_bounds, find_webview_size, parse_hierarchy,
     replace_webview_children, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
@@ -416,9 +416,12 @@ async fn try_enrich(
     mut state: WebKitState,
     wv_x: i32,
     wv_y: i32,
+    wv_size: Option<(i32, i32)>,
     safe_area_top: i32,
 ) -> Option<(WebKitState, i32)> {
-    match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y, safe_area_top).await {
+    match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y, wv_size, safe_area_top)
+        .await
+    {
         Some((dom, css_safe_area_top)) => {
             replace_webview_children(raw, dom);
             Some((state, css_safe_area_top))
@@ -455,6 +458,7 @@ impl PlatformDriver for IosDriver {
         let mut css_safe_area_top = 0;
         if let Some((wv_x, wv_y)) = find_webview_bounds(&raw) {
             let wv_y = wv_y + safe_area_top;
+            let wv_size = find_webview_size(&raw);
             // Check WebKit state (short lock, no async while held)
             let webkit_action = {
                 let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
@@ -534,7 +538,7 @@ impl PlatformDriver for IosDriver {
             // Now do async WebKit work outside the lock
             if let WebKitAction::Enrich(state) = webkit_action {
                 if let Some((state, css)) =
-                    try_enrich(&mut raw, state, wv_x, wv_y, safe_area_top).await
+                    try_enrich(&mut raw, state, wv_x, wv_y, wv_size, safe_area_top).await
                 {
                     css_safe_area_top = css;
                     // Put state back
@@ -544,7 +548,8 @@ impl PlatformDriver for IosDriver {
                     // Inspector failed — reconnect immediately
                     if let Some(new_state) = setup_webkit(&self.device_id).await {
                         if let Some((new_state, css)) =
-                            try_enrich(&mut raw, new_state, wv_x, wv_y, safe_area_top).await
+                            try_enrich(&mut raw, new_state, wv_x, wv_y, wv_size, safe_area_top)
+                                .await
                         {
                             css_safe_area_top = css;
                             let mut wk = self.webkit.lock().expect("webkit mutex poisoned");

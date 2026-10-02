@@ -14,7 +14,7 @@ pub(crate) use hierarchy::{
     build_backspace_body, build_gesture_body, build_long_press_body, build_swipe_body,
     build_tap_body, build_type_body, parse_text_unchanged,
 };
-pub(crate) use webview::{find_webview_bounds, replace_webview_children};
+pub(crate) use webview::{find_webview_bounds, find_webview_size, replace_webview_children};
 
 // Only reached from the inline test module below (`use super::*`) — the
 // non-test crate never names these directly, so the re-export is gated to
@@ -843,6 +843,20 @@ mod tests {
             Some((7, 8)),
             "ios webview SHALL read x/y from array"
         );
+    }
+
+    #[test]
+    fn find_webview_size_reads_ios_and_android_bounds() {
+        let ios = json!([
+            { "element_type": "window", "children": [
+                { "element_type": "web_view", "bounds": { "x": 0, "y": 0, "width": 402, "height": 874 } }
+            ] }
+        ]);
+        assert_eq!(find_webview_size(&ios), Some((402, 874)));
+        let android = json!({ "class": "android.webkit.WebView",
+            "bounds": { "left": 0, "top": 100, "right": 1080, "bottom": 2300 } });
+        assert_eq!(find_webview_size(&android), Some((1080, 2200)));
+        assert_eq!(find_webview_size(&json!({ "class": "x" })), None);
     }
 
     // 50. find_webview_bounds recurses into children.
