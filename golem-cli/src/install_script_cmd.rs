@@ -155,13 +155,8 @@ pub fn run() -> Result<()> {
                 .with_prompt("Module name (gradle submodule, e.g. 'app')")
                 .default("app".into())
                 .interact_text()?;
-            let task: String = Input::with_theme(&theme)
-                .with_prompt("Gradle task")
-                .default("installDebug".into())
-                .interact_text()?;
             placeholders.push(("GRADLE_ROOT", gradle_root));
             placeholders.push(("MODULE_NAME", module));
-            placeholders.push(("GRADLE_TASK", task));
         }
         InstallFramework::Tauri => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

@@ -217,7 +217,11 @@ So if your project has no install scripts anywhere, `--no-build` is redundant �
 ## Frameworks the scaffold supports
 
 - **native-ios** — xcodebuild + `xcrun simctl install` (simulator) / `xcrun devicectl` or `ios-deploy` (physical)
-- **native-android** — `./gradlew :<module>:installDebug` (routes to any connected device via `ANDROID_SERIAL`)
+- **native-android** — `./gradlew :<module>:assemble<Flavor><BuildType>`, then `adb -s <serial> install` of the APK that build wrote. Reads these variables from `install_env` or the shell:
+  - `BUILD_TYPE`: the Gradle build type, `debug` by default. A release build needs a `signingConfig`, because Android installs only signed APKs.
+  - `FLAVOR`: the product flavor. With more than one flavor dimension, use the full flavor name, for example `freeProd`.
+
+  The script fails if the APK is older than the build start. If `aapt2` is found under `ANDROID_HOME/build-tools`, the script also fails when the APK's `applicationId` is not the app's `bundle`.
 - **tauri** — `tauri ios build` / `tauri android build` then install. Detects package manager from lockfiles (`npm` / `yarn` / `pnpm` / `bun` / `cargo tauri`). Reads these variables from `install_env` or the shell:
   - `BUILD_TYPE`: `debug` (default) or `release`. A release build on Android needs a `signingConfig` in `src-tauri/gen/android`, because Android installs only signed APKs. Without one, the script stops with an error that names the signing problem.
   - `TAURI_BUILD_CONFIG`: passed to `tauri … build --config`. It is JSON, or the path to a config file that tauri merges over `tauri.conf.json`.
