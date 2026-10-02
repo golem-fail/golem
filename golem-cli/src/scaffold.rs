@@ -165,6 +165,9 @@ impl InstallFramework {
 fn install_partial(name: &str) -> Option<&'static str> {
     match name {
         "helpers" => Some(include_str!("../templates/install-scripts/_helpers.sh")),
+        "android" => Some(include_str!("../templates/install-scripts/_android.sh")),
+        "ios" => Some(include_str!("../templates/install-scripts/_ios.sh")),
+        "deps" => Some(include_str!("../templates/install-scripts/_deps.sh")),
         _ => None,
     }
 }
@@ -1066,6 +1069,28 @@ install_script = "scripts/old.sh"
                 fw.label()
             );
             assert!(!out.contains("{{>"), "{}: unresolved include", fw.label());
+        }
+    }
+
+    #[test]
+    fn partials_that_need_the_helpers_follow_them() {
+        for fw in [
+            InstallFramework::NativeIos,
+            InstallFramework::NativeAndroid,
+            InstallFramework::Tauri,
+            InstallFramework::Expo,
+        ] {
+            let t = fw.template();
+            let helpers = t.find("{{>helpers}}");
+            for dependent in ["{{>android}}", "{{>ios}}"] {
+                if let Some(at) = t.find(dependent) {
+                    assert!(
+                        helpers.is_some_and(|h| h < at),
+                        "{}: {dependent} SHALL come after {{{{>helpers}}}}",
+                        fw.label()
+                    );
+                }
+            }
         }
     }
 

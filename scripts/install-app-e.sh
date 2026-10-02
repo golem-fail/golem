@@ -137,29 +137,24 @@ golem_pick_app() {
   golem_newest "$1" -maxdepth "${2:-1}" -name '*.app' -type d -prune
 }
 
-# ── freshness stamps ────────────────────────────────────────────────
-# A gate that asks "does this directory exist?" answers yes forever: after a
-# lockfile change the native build is redone against the PREVIOUS dependency
-# tree, and the run reports green. golem's install cache can't catch this —
-# it correctly reports a rebuild, and the thing being rebuilt is stale.
+# ── JS dependency freshness (spliced in by `golem install-script`) ──
+# A gate that asks "does node_modules exist?" answers yes forever: after a
+# lockfile change the build is redone against the PREVIOUS dependency tree,
+# and the run reports green. golem's install cache can't catch this — it
+# correctly reports a rebuild, and the thing being rebuilt is stale.
 #
 # So each generated tree records what it was generated FROM, and the gate
 # compares that instead of merely checking for existence.
 #
 # Stamps live under node_modules: it is already ignored by every project's
 # VCS, so nothing appears in `git status`, and a wipe (`npm ci`, `rm -rf
-# node_modules`) takes the prebuild stamps with it — which conservatively
-# re-runs prebuild after a dependency wipe rather than trusting a native
-# project generated from a tree that is now gone.
+# node_modules`) takes the stamps with it.
 GOLEM_STAMP_DIR="node_modules/.golem"
 
 # Inputs that decide whether the installed dependency tree is current. Every
 # lockfile flavour is listed rather than just this project's, so the stamp
 # stays correct if the package manager is switched.
 GOLEM_DEP_INPUTS=(package.json package-lock.json yarn.lock pnpm-lock.yaml bun.lockb bun.lock)
-# Prebuild additionally depends on the Expo config, which is what decides the
-# shape of the generated native project.
-GOLEM_PREBUILD_INPUTS=("${GOLEM_DEP_INPUTS[@]}" app.json app.config.js app.config.ts)
 
 # Hash of the named files, in order. A file's NAME is hashed alongside its
 # contents so that swapping one lockfile flavour for an identical-looking
@@ -181,11 +176,38 @@ golem_stale() {
 # Record $2 as stamp $1. Every caller guards the preceding command with
 # `|| return 1` rather than leaning on `set -e`: a stamp written after a
 # failed install would remember the failure as done and skip the retry, and
-# this template is meant to be edited after scaffolding.
+# these templates are meant to be edited after scaffolding.
 golem_stamp() {
   mkdir -p "$GOLEM_STAMP_DIR"
   printf '%s' "$2" > "$GOLEM_STAMP_DIR/$1"
 }
+
+# Install JS dependencies with the command $1 (`npm install`, `yarn`, …)
+# when the inputs have moved since the last install. Does nothing when $1 is
+# empty or there is no package.json: a project with no JS has nothing to
+# install, and guessing would be worse than doing nothing.
+golem_ensure_deps() {
+  local pm_install="$1" want
+  [[ -n "$pm_install" ]] || return 0
+  [[ -f package.json ]] || return 0
+  want=$(golem_hash "${GOLEM_DEP_INPUTS[@]}")
+  if [[ -d node_modules ]] && ! golem_stale deps "$want"; then
+    return 0
+  fi
+  echo "installing JS dependencies (dependency inputs changed)..." >&2
+  $pm_install 1>&2 || return 1
+  # Re-hash AFTER the install: package managers rewrite the lockfile as
+  # part of installing, so stamping the pre-install hash would leave the
+  # stamp stale the moment it was written and reinstall on every run.
+  golem_stamp deps "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")"
+}
+
+# ── prebuild freshness ──────────────────────────────────────────────
+# Prebuild depends on the dependency inputs plus the Expo config, which is
+# what decides the shape of the generated native project. Its stamps live
+# beside the deps stamp, so a dependency wipe takes them too, and prebuild
+# re-runs rather than trusting a project generated from a tree that is gone.
+GOLEM_PREBUILD_INPUTS=("${GOLEM_DEP_INPUTS[@]}" app.json app.config.js app.config.ts)
 
 # ── shared install helpers ──────────────────────────────────────────
 install_ios_artifact() {
@@ -213,19 +235,6 @@ install_android_artifact() {
     exit 1
   fi
   adb -s "$DEVICE_ID" install -r "$apk" 1>&2
-}
-
-ensure_deps() {
-  local want
-  want=$(golem_hash "${GOLEM_DEP_INPUTS[@]}")
-  if [[ ! -d node_modules ]] || golem_stale deps "$want"; then
-    echo "installing JS dependencies (dependency inputs changed)..." >&2
-    $PM_INSTALL 1>&2 || return 1
-    # Re-hash AFTER the install: package managers rewrite the lockfile as
-    # part of installing, so stamping the pre-install hash would leave the
-    # stamp stale the moment it was written and reinstall on every run.
-    golem_stamp deps "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")"
-  fi
 }
 
 # Generate the native project for $1 (ios|android) when it is missing or was
@@ -257,7 +266,7 @@ build_local() {
         products="$DERIVED_DATA/Build/Products/Release-iphoneos"
       fi
       if [[ "$MODE" != "install-only" ]]; then
-        ensure_deps
+        golem_ensure_deps "$PM_INSTALL"
         ensure_prebuild ios
         local proj
         local ws
@@ -302,7 +311,7 @@ build_local() {
       ;;
     android)
       if [[ "$MODE" != "install-only" ]]; then
-        ensure_deps
+        golem_ensure_deps "$PM_INSTALL"
         ensure_prebuild android
         echo "building Android (release)..." >&2
         ( cd android && ./gradlew :app:assembleRelease ) 1>&2
