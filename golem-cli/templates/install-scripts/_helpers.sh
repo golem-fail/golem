@@ -58,6 +58,18 @@ golem_pick_apk() {
   golem_newest "$dir" -type f "${filter[@]}"
 }
 
+# Report on stderr why `golem_pick_apk "$1"` found nothing. An unsigned
+# release APK is the common case, and "no APK found" would send the reader
+# looking for a build that did run.
+golem_no_apk_error() {
+  if [[ -n "$(golem_newest "$1" -type f -name '*-unsigned.apk')" ]]; then
+    echo "error: $1 holds only unsigned APKs, and Android installs only signed ones." >&2
+    echo "       Add a release signingConfig to the Gradle project, or build debug." >&2
+  else
+    echo "error: no APK found under $1 (build may have been skipped — re-run without install-only)" >&2
+  fi
+}
+
 # Newest .app bundle at most $2 (default 1) levels under $1. Never one
 # nested inside another bundle (an App Clip or watch app): those are not
 # what gets installed, and their mtimes are not ordered against the outer one.
