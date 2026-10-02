@@ -283,7 +283,7 @@ pub async fn scroll_to_element(
     // Container swipe start position
     let mut container_start = container
         .as_ref()
-        .map(|cb| container_swipe_start(cb, &viewport, direction));
+        .map(|cb| container_swipe_start(cb, &safe_vp, direction));
 
     loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
@@ -373,7 +373,7 @@ pub async fn scroll_to_element(
             // on common card widths (~200 CSS px in a ~400 CSS px
             // viewport) so the engine can re-check between gestures.
             let start = *container_start.as_ref().expect("container_start set");
-            container_swipe_coords(cb, &viewport, direction, start)
+            container_swipe_coords(cb, &safe_vp, direction, start)
         } else {
             let strat = &strategies[strategy_idx];
             let (sx, sy) = dynamic_start_override.unwrap_or(strat.start);
@@ -671,7 +671,7 @@ pub async fn scroll_to_element(
             direction = reverse_direction(direction);
             strategies = swipe_strategies(&viewport, direction);
             if let Some(ref cb) = container {
-                container_start = Some(container_swipe_start(cb, &viewport, direction));
+                container_start = Some(container_swipe_start(cb, &safe_vp, direction));
             }
             continue;
         }
@@ -691,7 +691,7 @@ pub async fn scroll_to_element(
         }
         strategies = swipe_strategies(&viewport, direction);
         if let Some(ref cb) = container {
-            container_start = Some(container_swipe_start(cb, &viewport, direction));
+            container_start = Some(container_swipe_start(cb, &safe_vp, direction));
         }
     }
 }
@@ -2362,6 +2362,26 @@ mod tests {
             "start SHALL use the clipped visible band, not raw bounds"
         );
         assert!(down.1 < vp.height, "start y SHALL stay within the viewport");
+    }
+
+    #[test]
+    fn container_swipe_stays_out_of_bottom_gesture_inset() {
+        // Pixel 8 Pro shape: 2992px screen, 72px gesture-nav inset, so the
+        // safe band ends at y=2920. A carousel peeks in at y=2859..3042.
+        let screen = Viewport::new(1344, 2992);
+        let safe_vp = make_safe_viewport(&screen, &meta_with(151, 72, 0, vec![]));
+        let cb = Bounds::new(135, 2859, 1074, 183);
+        for direction in [Direction::Left, Direction::Right] {
+            let start = container_swipe_start(&cb, &safe_vp, direction);
+            let (fx, fy, tx, ty) = container_swipe_coords(&cb, &safe_vp, direction, start);
+            for y in [fy, ty] {
+                assert!(
+                    (cb.y..safe_vp.y + safe_vp.height).contains(&y),
+                    "{direction:?} swipe y={y} SHALL be on the container and above the inset"
+                );
+            }
+            assert_ne!(fx, tx, "{direction:?} swipe SHALL move horizontally");
+        }
     }
 
     // ── container_swipe_coords ─────────────────────────────────────
