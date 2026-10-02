@@ -46,7 +46,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         .expect("golem-cli has a parent directory")
         .to_path_buf();
 
-    let cases: [(InstallFramework, &str, &[(&str, &str)]); 2] = [
+    let cases: [(InstallFramework, &str, &[(&str, &str)]); 3] = [
         (
             InstallFramework::Expo,
             "scripts/install-app-e.sh",
@@ -65,6 +65,14 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
                 ("IOS_SCHEME", "app_iOS"),
                 ("TAURI_CMD", "cargo tauri"),
                 ("PM_INSTALL", "npm install"),
+            ],
+        ),
+        (
+            InstallFramework::NativeAndroid,
+            "scripts/install-app-b-android.sh",
+            &[
+                ("GRADLE_ROOT", "test-app-b/android"),
+                ("MODULE_NAME", "app"),
             ],
         ),
     ];

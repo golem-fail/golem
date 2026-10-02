@@ -565,17 +565,12 @@ mod tests {
         write_install_script(
             &out,
             InstallFramework::NativeAndroid,
-            &[
-                ("GRADLE_ROOT", "android"),
-                ("MODULE_NAME", "app"),
-                ("GRADLE_TASK", "installDebug"),
-            ],
+            &[("GRADLE_ROOT", "android"), ("MODULE_NAME", "app")],
         )
         .expect("write");
         assert!(out.exists());
         let content = fs::read_to_string(&out).expect("read");
         assert!(content.contains("MODULE_NAME=\"app\""));
-        assert!(content.contains("GRADLE_TASK=\"installDebug\""));
         assert!(content.contains("GRADLE_ROOT=\"android\""));
         assert!(!content.contains("{{"), "no placeholders remain");
 
@@ -979,7 +974,6 @@ install_script = "scripts/old.sh"
             ("CONFIGURATION", "Debug"),
             ("GRADLE_ROOT", "android"),
             ("MODULE_NAME", "app"),
-            ("GRADLE_TASK", "installDebug"),
             ("TAURI_DIR", "."),
             ("IOS_SCHEME", "X_iOS"),
             ("TAURI_CMD", "npx tauri"),
