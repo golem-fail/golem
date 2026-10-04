@@ -276,8 +276,23 @@ pub const AWAIT_FIRST_FRAME_DEADLINE: std::time::Duration = std::time::Duration:
 /// WebKit Inspector enrichment), so a webview-bearing launch is given more
 /// budget to render its first page before the gate gives up. A page that
 /// never hydrates within this window proceeds with a launch warning.
+///
+/// Kept under the runner's launch budget (5 × the default 5s step timeout):
+/// a deadline past it is never reached, and the launch fails with a timeout
+/// that blames the companion instead of proceeding with the warning.
 pub const AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE: std::time::Duration =
-    std::time::Duration::from_secs(30);
+    std::time::Duration::from_secs(20);
+
+/// A WebView DOM unchanged for this long counts as rendered, however small:
+/// a page with only a handful of elements never reaches
+/// [`AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES`] and would otherwise wait out the
+/// whole deadline on every launch.
+pub const AWAIT_FIRST_FRAME_WEBVIEW_STABLE: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The smallest WebView subtree, host node included, that the stability
+/// rule accepts. Below it the DOM is the host plus at most an empty document
+/// shell, which can sit unchanged for seconds while the page still loads.
+pub const AWAIT_FIRST_FRAME_WEBVIEW_STABLE_MIN_NODES: usize = 4;
 
 /// Minimum WebView-subtree node count to consider the page hydrated. An
 /// unrendered WebView is just the host node (and at most an empty document
@@ -311,6 +326,7 @@ async fn await_first_frame_default(
     // explicit hydration check — not just native-frame stability.
     let mut webview_seen = false;
     let mut last_webview_count: usize = 0;
+    let mut webview_stable_since: Option<tokio::time::Instant> = None;
     loop {
         // The deadline extends once a WebView is detected: webview launches
         // legitimately take longer to render their first page than native.
@@ -350,6 +366,23 @@ async fn await_first_frame_default(
             Err(_) => (0, None),
         };
         if let Some(wc) = webview_count {
+            let unchanged = webview_seen && wc == last_webview_count && count == prev_count;
+            if !unchanged || wc < AWAIT_FIRST_FRAME_WEBVIEW_STABLE_MIN_NODES {
+                webview_stable_since = None;
+            } else if webview_stable_since
+                .get_or_insert_with(tokio::time::Instant::now)
+                .elapsed()
+                >= AWAIT_FIRST_FRAME_WEBVIEW_STABLE
+            {
+                if golem_common::is_debug() {
+                    eprintln!(
+                        "  [launch] small webview page settled in {:?} ({wc} DOM nodes, unchanged for {:?})",
+                        start.elapsed(),
+                        AWAIT_FIRST_FRAME_WEBVIEW_STABLE
+                    );
+                }
+                return Ok(None);
+            }
             webview_seen = true;
             last_webview_count = wc;
         }
@@ -952,6 +985,80 @@ mod tests {
             warning.contains("webview DOM not ready"),
             "warning SHALL name the cause: {warning}"
         );
+    }
+
+    // A small page (a heading, a count, two buttons) never reaches the
+    // webview node minimum. Once its DOM holds still it SHALL settle, well
+    // inside the runner's launch budget, rather than wait out the deadline.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_settles_a_small_stable_webview() {
+        let small = AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES - 3;
+        let driver = WebviewSequencedMock::new(vec![0, small]);
+        let start = tokio::time::Instant::now();
+        let warning = driver
+            .await_first_frame()
+            .await
+            .expect("async operation SHALL succeed");
+        assert!(
+            warning.is_none(),
+            "a rendered small page SHALL not warn: {warning:?}"
+        );
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_WEBVIEW_STABLE,
+            "it SHALL wait for the DOM to hold still: {:?}",
+            start.elapsed()
+        );
+        assert!(
+            start.elapsed() < AWAIT_FIRST_FRAME_WEBVIEW_STABLE * 2,
+            "it SHALL settle once stable, not at the deadline: {:?}",
+            start.elapsed()
+        );
+    }
+
+    // A bare document shell can sit unchanged while the page still loads, so
+    // stability alone SHALL NOT settle it.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_does_not_settle_a_stable_empty_shell() {
+        // DOM children; the subtree count adds the host node, so this is one
+        // node short of the minimum.
+        let shell = AWAIT_FIRST_FRAME_WEBVIEW_STABLE_MIN_NODES - 2;
+        let driver = WebviewSequencedMock::new(vec![shell]);
+        let start = tokio::time::Instant::now();
+        let warning = driver
+            .await_first_frame()
+            .await
+            .expect("async operation SHALL succeed");
+        assert!(start.elapsed() >= AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE);
+        assert!(warning.is_some(), "a shell that never renders SHALL warn");
+    }
+
+    // A small DOM that keeps changing is still rendering; the stability
+    // window SHALL restart on every change.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_restarts_the_stability_window_on_change() {
+        let base = AWAIT_FIRST_FRAME_WEBVIEW_STABLE_MIN_NODES;
+        // Changes every poll for 4s (20 polls), then holds.
+        let mut seq: Vec<usize> = (0..20).map(|i| base + (i % 2)).collect();
+        seq.push(base);
+        let driver = WebviewSequencedMock::new(seq);
+        let start = tokio::time::Instant::now();
+        driver
+            .await_first_frame()
+            .await
+            .expect("async operation SHALL succeed");
+        assert!(
+            start.elapsed()
+                >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 20 + AWAIT_FIRST_FRAME_WEBVIEW_STABLE,
+            "settle SHALL count stability from the last change: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn the_webview_deadline_fits_inside_the_default_launch_budget() {
+        // The runner's launch budget at the default 5s step timeout.
+        let launch_budget = std::time::Duration::from_secs(25);
+        assert!(AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE < launch_budget);
     }
 
     // ── settle gate: error + reset paths ───────────────────────────
