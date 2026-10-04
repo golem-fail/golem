@@ -213,6 +213,7 @@ impl CommandRunner for SystemCommandRunner {
                     .stderr(std::process::Stdio::null());
             }
         }
+        cmd.stdin(std::process::Stdio::null());
         apply_opts(&mut cmd, opts);
         cmd.spawn()?;
         Ok(())
@@ -232,8 +233,14 @@ impl CommandRunner for SystemCommandRunner {
         apply_opts(&mut cmd, opts);
         // stdout discarded, stderr piped: install scripts report progress on
         // stderr, and a script that chats on stdout must not fill a pipe
-        // nobody drains.
-        let mut child = cmd.stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
+        // nobody drains. stdin is empty, never golem's own: when golem runs
+        // as a background job, a child that reads the terminal (xcodebuild
+        // does) is stopped with SIGTTIN.
+        let mut child = cmd
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
         let stderr = child
             .stderr
@@ -627,6 +634,79 @@ impl CommandRunner for FakeCommandRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const STDIN_PROBE_ENV: &str = "STDIN_PROBE_CHILD";
+    const READ_STDIN: &str = "if read -r line; then echo \"got:$line\" >&2; else echo eof >&2; fi";
+
+    /// The child half of `spawned_children_get_an_empty_stdin`. It does
+    /// nothing unless that test re-runs this binary with data on stdin.
+    #[tokio::test]
+    async fn stdin_probe_child() {
+        if std::env::var_os(STDIN_PROBE_ENV).is_none() {
+            return;
+        }
+        let runner = SystemCommandRunner;
+        let args = argv(&["-c", READ_STDIN]);
+
+        let mut streaming = runner
+            .spawn_streaming("sh", &args, &CommandOpts::default())
+            .await
+            .expect("spawn_streaming");
+        let line = streaming.stderr.recv().await.unwrap_or_default();
+        println!("RESULT streaming={line}");
+
+        let log = std::env::temp_dir().join(format!("stdin-probe-{}.log", std::process::id()));
+        let opts = CommandOpts {
+            log_file: Some(log.to_string_lossy().into_owned()),
+            ..CommandOpts::default()
+        };
+        runner
+            .spawn_detached("sh", &args, &opts)
+            .await
+            .expect("spawn_detached");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut detached = String::new();
+        while detached.trim().is_empty() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            detached = std::fs::read_to_string(&log).unwrap_or_default();
+        }
+        let _ = std::fs::remove_file(&log);
+        println!("RESULT detached={}", detached.trim());
+    }
+
+    /// Re-runs this test binary with data on its stdin. The test runner's own
+    /// stdin is usually already empty, so the children could only prove they
+    /// don't inherit it from a parent that has something to read.
+    #[test]
+    fn spawned_children_get_an_empty_stdin() {
+        use std::io::Write;
+        let mut parent = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "command::tests::stdin_probe_child",
+                "--exact",
+                "--nocapture",
+            ])
+            .env(STDIN_PROBE_ENV, "1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("re-run the test binary");
+        parent
+            .stdin
+            .take()
+            .expect("piped stdin")
+            .write_all(b"secret\nsecret\n")
+            .expect("feed stdin");
+        let out = parent.wait_with_output().expect("probe finishes");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for path in ["streaming", "detached"] {
+            assert!(
+                stdout.contains(&format!("RESULT {path}=eof")),
+                "a {path} child SHALL read EOF, not the parent's stdin:\n{stdout}"
+            );
+        }
+    }
 
     fn stdout_of(o: &Output) -> String {
         String::from_utf8_lossy(&o.stdout).into_owned()
