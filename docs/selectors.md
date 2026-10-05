@@ -21,6 +21,7 @@ The same selector grammar is used everywhere an element is named: `tap`,
 - [Nesting and chaining](#nesting-and-chaining)
 - [Occlusion-aware tapping](#occlusion-aware-tapping)
 - [`within` (scoping a scroll)](#within-scoping-a-scroll)
+- [Canvas-rendered UI (Compose, Compose Multiplatform, Flutter)](#canvas-rendered-ui-compose-compose-multiplatform-flutter)
 
 ## Two syntaxes
 
@@ -239,3 +240,103 @@ selector grammar. Two robust idioms for an inner list:
 
 See [`min_matches`](#min_matches--the-container-of-repeated-items) above and
 [Actions Reference → scroll](actions-reference.md) for the full action.
+
+## Canvas-rendered UI (Compose, Compose Multiplatform, Flutter)
+
+Jetpack Compose, Compose Multiplatform and Flutter draw the whole UI into one
+platform view. They do not appear to golem as one opaque leaf, the way a WebView
+without enrichment does. Each framework copies its semantics tree into the
+platform accessibility tree, so golem sees one node for each widget. Text
+selectors, relational selectors and viewport filtering work on these nodes.
+
+What changes is *which* annotation reaches golem, and how coarse the tree is.
+The Compose facts below come from Jetpack Compose (`test-app-b`) and Compose
+Multiplatform 1.11 (`test-app-k`), on Android API 36 and iOS 26. The Flutter
+facts come from the Flutter documentation. They are not yet checked on a device
+(see #72).
+
+### Version floors
+
+- **Compose Multiplatform 1.8.0 or later on iOS.** From 1.8.0 the Compose
+  accessibility tree syncs to iOS automatically. Version 1.7.3 and earlier
+  needed `AccessibilitySyncOptions`, which 1.8.0 removed.
+- **Flutter 3.19 or later** for `Semantics(identifier:)`.
+
+### Which annotation reaches golem
+
+| Annotation | Android | iOS |
+|------------|---------|-----|
+| Compose `contentDescription` | `accessibility_label`, on its own node. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
+| Compose `Modifier.testTag` | `resource-id`, only with `testTagsAsResourceId = true` on an ancestor. golem does not read `resource-id` today. | `accessibility_label`, with no opt-in. |
+| Flutter `Semantics(identifier:)` | `resource-id`. golem does not read `resource-id` today. | `accessibility_label`. |
+| Visible text | `text` | `text` |
+
+Visible text is the one path that works the same on both platforms. Use it, as
+[above](#prefer-visible-text-use-accessibility_label-sparingly). Do not put a
+`contentDescription` on a `Text` whose value a step checks, because on iOS the
+step then reads the description.
+
+### Element types
+
+`element_type`, and the `button` trait that reads it, are not reliable on a
+canvas UI:
+
+- **Android (Compose):** a `Text` is a `TextView`, and every other node is a
+  `View`. A Material `Button` adds a separate `Button` node. That node has no text
+  or label and is not clickable. The clickable node is the parent `View`, and the
+  button's text is a child `TextView`.
+- **iOS (Compose Multiplatform):** nodes get real types (`button`, `text`,
+  `other`). But the `button` node's text is the merged string, for example
+  `"Increment, +"`, and the visible `+` is a child `text` node.
+
+As a result, `{ text = "+", traits = ["button"] }` matches nothing on either
+platform. Select by text alone: `{ action = "tap", on_text = "+" }`.
+
+### Bounds and visibility
+
+Every Compose node carries `bounds` and `visible_bounds` on both platforms.
+golem's viewport filter drops off-screen nodes, and `scroll` brings them into
+view. There are two differences between the platforms:
+
+- **Android** leaves off-screen Compose nodes out of the tree.
+- **iOS** keeps every node of a non-lazy layout (for example a `Column` with
+  `verticalScroll`) in the tree, with `visible_bounds` equal to `bounds`. The
+  bounds are not clipped to the scroll container. A node that is on the screen
+  but under a bar outside the container still counts as visible.
+
+`assert_not_visible` searches the full tree, not the visible tree. Thus on iOS it
+treats an off-screen node of a non-lazy layout as present, and it waits until
+its timeout. A lazy layout (`LazyColumn`) disposes of off-screen items, so
+`assert_not_visible` works there on both platforms.
+
+### Merged semantics
+
+`Modifier.semantics(mergeDescendants = true)`, `Modifier.clickable` and Material
+components merge their children into one accessibility node. Flutter's
+`MergeSemantics` does the same. The merged container looks different on each
+platform:
+
+| | Android | iOS |
+|---|---------|-----|
+| Merged container | No text | Text is the children's text, joined: `"Click A, Click B"` |
+| Child text nodes | Present | Present |
+
+Child text nodes stay in the tree on both platforms. Thus these selectors work
+on both:
+
+- `on_text` on a child: `{ action = "tap", on_text = "Click B" }` taps inside the
+  clickable container.
+- `below` / `above` / `left_of` / `right_of` anchored on a child's text.
+
+`inside` and `contains` anchored on the **container's** text work only on iOS,
+because the Android container has no text. Anchor on a child's text, or on a
+heading, instead. golem has no parent/child selector (there is no `child_of`).
+`inside` and `contains` are geometric, so a coarse tree does not change them.
+
+### Flutter
+
+Flutter creates semantics for its standard widgets (`Text`, Material buttons,
+text fields). A custom widget, for example a `GestureDetector` on a `Container`
+or a `CustomPaint`, exposes nothing until you wrap it in `Semantics`. Thus
+semantics are opt-in for each custom widget. This is a bigger task than on
+Compose, where most interactive modifiers add semantics.
