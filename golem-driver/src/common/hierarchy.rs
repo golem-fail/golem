@@ -239,10 +239,16 @@ fn count_nodes(el: &Element) -> u32 {
 ///   `bounds` with `left/top/right/bottom` instead of `x/y/width/height`
 pub(crate) fn normalize_json(val: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = val {
-        // Rename raw `id` → `accessibility_label` (GOLEM companion format)
-        if map.contains_key("id") && !map.contains_key("accessibility_label") {
-            if let Some(v) = map.remove("id") {
-                map.insert("accessibility_label".to_string(), v);
+        // iOS `id` (accessibilityIdentifier) and Android `resourceId` are the
+        // developer-assigned identifier.
+        if let Some(id) = map.remove("id") {
+            if let Some(id) = id.as_str().filter(|s| !s.is_empty()) {
+                map.insert("accessibility_id".to_string(), id.into());
+            }
+        }
+        if let Some(rid) = map.remove("resourceId") {
+            if let Some(id) = rid.as_str().and_then(app_resource_id) {
+                map.insert("accessibility_id".to_string(), id.into());
             }
         }
 
@@ -393,7 +399,19 @@ pub(crate) fn normalize_android_rect(rect: &mut serde_json::Map<String, serde_js
     }
 }
 
-/// Promote `label` (aria-label) to `accessibility_label` when id is absent/empty.
+/// The app-assigned part of an Android resource name: `pkg:id/name` → `name`.
+/// A Compose `testTag` arrives bare. Framework ids (`android:id/content`) name
+/// layout plumbing, not anything an app author assigned, so they are dropped.
+fn app_resource_id(raw: &str) -> Option<&str> {
+    let name = match raw.split_once(":id/") {
+        Some(("android", _)) => return None,
+        Some((_, name)) => name,
+        None => raw,
+    };
+    (!name.is_empty()).then_some(name)
+}
+
+/// Promote `label` (aria-label) to `accessibility_label` when that is absent/empty.
 pub(crate) fn promote_label_to_id(map: &mut serde_json::Map<String, serde_json::Value>) {
     let label_str = map
         .get("label")

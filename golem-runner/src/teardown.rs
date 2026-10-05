@@ -98,6 +98,7 @@ mod tests {
             element_type: "View".to_string(),
             text: None,
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

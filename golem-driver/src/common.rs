@@ -205,27 +205,84 @@ mod tests {
 
     // ---- normalize_json ----
 
-    // 8. `id` is renamed to accessibility_label when none present.
+    // 8. `id` (iOS accessibilityIdentifier) becomes accessibility_id, not a label.
     #[test]
-    fn normalize_renames_id_to_accessibility_label() {
+    fn normalize_moves_id_to_accessibility_id() {
         let mut v = json!({ "id": "save_btn" });
         normalize_json(&mut v);
         assert_eq!(
-            v["accessibility_label"], "save_btn",
-            "id SHALL become accessibility_label"
+            v["accessibility_id"], "save_btn",
+            "id SHALL become accessibility_id"
         );
         assert!(v.get("id").is_none(), "raw id SHALL be removed");
+        assert!(
+            v.get("accessibility_label").is_none(),
+            "an identifier SHALL NOT pose as an accessibility label"
+        );
     }
 
-    // 9. `id` rename is skipped when accessibility_label already present.
+    // 9. iOS identifier and label both survive, each in its own field.
     #[test]
-    fn normalize_keeps_existing_accessibility_label_over_id() {
-        let mut v = json!({ "id": "a", "accessibility_label": "b" });
+    fn normalize_keeps_ios_label_beside_identifier() {
+        let mut v = json!({ "id": "tagged-text", "label": "Tagged" });
         normalize_json(&mut v);
-        assert_eq!(
-            v["accessibility_label"], "b",
-            "existing label SHALL win over id"
+        assert_eq!(v["accessibility_id"], "tagged-text");
+        assert_eq!(v["accessibility_label"], "Tagged");
+    }
+
+    // 9a. Null or empty `id` sets no accessibility_id.
+    #[test]
+    fn normalize_ignores_empty_id() {
+        for id in [json!(null), json!("")] {
+            let mut v = json!({ "id": id });
+            normalize_json(&mut v);
+            assert!(
+                v.get("accessibility_id").is_none(),
+                "empty id SHALL NOT set an id"
+            );
+        }
+    }
+
+    // 9b. Android resourceId drops its `pkg:id/` prefix.
+    #[test]
+    fn normalize_strips_package_from_resource_id() {
+        let mut v = json!({ "resourceId": "fail.golem.testb:id/save_btn" });
+        normalize_json(&mut v);
+        assert_eq!(v["accessibility_id"], "save_btn");
+        assert!(
+            v.get("resourceId").is_none(),
+            "raw resourceId SHALL be removed"
         );
+    }
+
+    // 9c. A bare resourceId (Compose testTag) is kept as is.
+    #[test]
+    fn normalize_keeps_bare_resource_id() {
+        let mut v = json!({ "resourceId": "tagged-text" });
+        normalize_json(&mut v);
+        assert_eq!(v["accessibility_id"], "tagged-text");
+    }
+
+    // 9d. Framework resource ids and empty ones set no accessibility_id.
+    #[test]
+    fn normalize_drops_framework_and_empty_resource_ids() {
+        for rid in ["android:id/content", ""] {
+            let mut v = json!({ "resourceId": rid });
+            normalize_json(&mut v);
+            assert!(
+                v.get("accessibility_id").is_none(),
+                "{rid:?} SHALL NOT set an id"
+            );
+        }
+    }
+
+    // 9e. contentDescription stays the label beside a resourceId.
+    #[test]
+    fn normalize_keeps_content_description_beside_resource_id() {
+        let mut v = json!({ "resourceId": "close_btn", "contentDescription": "Close" });
+        normalize_json(&mut v);
+        assert_eq!(v["accessibility_label"], "Close");
+        assert_eq!(v["accessibility_id"], "close_btn");
     }
 
     // 10. Android `class` simplifies to the final dotted segment.
@@ -351,7 +408,7 @@ mod tests {
             "child class SHALL normalize"
         );
         assert_eq!(
-            v["children"][0]["accessibility_label"], "child",
+            v["children"][0]["accessibility_id"], "child",
             "child id SHALL normalize"
         );
     }

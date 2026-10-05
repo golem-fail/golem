@@ -278,16 +278,26 @@ fn print_tree_inner(element: &Element, depth: usize, debug: bool) {
     }
 }
 
+/// ` label=… id=…` for the parts that add something beyond the visible text.
+fn label_and_id_part(e: &Element) -> String {
+    let text = e.text.as_deref();
+    let mut out = String::new();
+    for (key, value) in [
+        ("label", e.accessibility_label.as_deref()),
+        ("id", e.accessibility_id.as_deref()),
+    ] {
+        if let Some(v) = value.filter(|v| !v.is_empty() && Some(*v) != text) {
+            out.push_str(&format!(" {key}={v}"));
+        }
+    }
+    out
+}
+
 /// Render a single element's tree line (no trailing newline, no children).
 fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
     let indent = "  ".repeat(depth);
     let text = element.text.as_deref().unwrap_or("");
-    let label = element
-        .accessibility_label
-        .as_deref()
-        .filter(|s| !s.is_empty() && Some(*s) != element.text.as_deref())
-        .map(|s| format!(" label={s}"))
-        .unwrap_or_default();
+    let label = label_and_id_part(element);
     let et = &element.element_type;
     let b = element.effective_bounds();
 
@@ -348,11 +358,10 @@ fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
 /// affordance.
 fn is_selectable(e: &Element) -> bool {
     let has_text = e.text.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-    let has_label = e
-        .accessibility_label
-        .as_deref()
-        .map(|s| !s.is_empty())
-        .unwrap_or(false);
+    let has_label = [&e.accessibility_label, &e.accessibility_id]
+        .into_iter()
+        .flatten()
+        .any(|s| !s.is_empty());
     has_text || has_label || e.clickable || element_has_trait(e, "button")
 }
 
@@ -391,12 +400,7 @@ fn format_selectable_line(idx: usize, e: &Element) -> String {
         format!(" \"{text}\"")
     };
 
-    let label_part = e
-        .accessibility_label
-        .as_deref()
-        .filter(|s| !s.is_empty() && Some(*s) != e.text.as_deref())
-        .map(|s| format!(" label={s}"))
-        .unwrap_or_default();
+    let label_part = label_and_id_part(e);
 
     let traits = format_traits(e);
     let traits_part = if traits.is_empty() {
@@ -459,6 +463,7 @@ mod tests {
             element_type: element_type.to_string(),
             text: None,
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -563,6 +568,17 @@ mod tests {
         assert!(
             is_selectable(&e),
             "element with accessibility label SHALL be selectable"
+        );
+    }
+
+    // 8a. Non-empty accessibility_id makes an element selectable.
+    #[test]
+    fn element_with_accessibility_id_is_selectable() {
+        let mut e = elem("View");
+        e.accessibility_id = Some("tagged-text".to_string());
+        assert!(
+            is_selectable(&e),
+            "element with an accessibility id SHALL be selectable"
         );
     }
 
@@ -787,6 +803,20 @@ mod tests {
             line,
             "    button \"Go\" label=Go button (1,2 100x40)  ·button·has_text·short_text·wide·",
             "tree line SHALL render indent, type, text, label, bounds and traits"
+        );
+    }
+
+    // 24a. An accessibility_id renders as `id=` after the label.
+    #[test]
+    fn format_tree_line_with_label_and_id() {
+        let mut e = elem_with_text("text", "Tagged");
+        e.accessibility_label = Some("Tagged".to_string());
+        e.accessibility_id = Some("tagged-text".to_string());
+        e.bounds = Bounds::new(1, 2, 100, 40);
+        let line = format_tree_line(&e, 0, false);
+        assert!(
+            line.starts_with("text \"Tagged\" id=tagged-text (1,2 100x40)"),
+            "tree line SHALL show the id and skip a label equal to the text: {line}"
         );
     }
 

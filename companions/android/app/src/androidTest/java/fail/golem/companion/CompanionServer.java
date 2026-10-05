@@ -258,7 +258,7 @@ public class CompanionServer {
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.14.1")
+                        .put("version", "0.14.2")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -929,6 +929,8 @@ public class CompanionServer {
         json.put("text", text != null ? text.toString() : "");
         CharSequence desc = node.getContentDescription();
         json.put("contentDescription", desc != null ? desc.toString() : "");
+        String resourceId = node.getViewIdResourceName();
+        json.put("resourceId", resourceId != null ? resourceId : "");
         json.put("clickable", node.isClickable());
         json.put("enabled", node.isEnabled());
         json.put("focused", node.isFocused());
