@@ -1,0 +1,27 @@
+[flow]
+name = "Kotlin Multiplatform lifecycle test"
+tags = ["cross-platform", "kmp", "lifecycle"]
+
+# Minimal Kotlin Multiplatform (test-app-k) flow. It proves the KMP install
+# script builds, installs, launches, and drives both UI layers. On iOS,
+# "Home" is a native SwiftUI screen and the counter is a Compose
+# Multiplatform screen, so the flow crosses the boundary between them. On
+# Android both screens are Compose.
+[[flow.apps]]
+name = "app-k"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "home_to_counter"
+steps = [
+  { action = "assert_visible", on_text = "Home" },
+  { action = "tap", on_text = "Open counter" },
+  { action = "assert_visible", on_text = "Compose Counter" },
+  # "+" is the button's visible text on both platforms. Its contentDescription
+  # ("Increment") is a separate label on Android, but on iOS it merges into
+  # the button's label as "Increment, +".
+  { action = "tap", on_text = "+" },
+  { action = "assert_visible", on_text = "1", on_below = "Compose Counter" },
+]

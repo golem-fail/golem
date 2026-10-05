@@ -37,6 +37,10 @@ pub fn run() -> Result<()> {
             "capacitor      (Capacitor / Ionic)",
             InstallFramework::Capacitor,
         ),
+        (
+            "kmp            (Kotlin Multiplatform / Compose Multiplatform)",
+            InstallFramework::Kmp,
+        ),
     ];
     let idx = Select::with_theme(&theme)
         .with_prompt("Framework")
@@ -347,6 +351,65 @@ pub fn run() -> Result<()> {
             placeholders.push(("WEB_BUILD", web_build));
             placeholders.push(("WEB_DIR", web_dir));
         }
+        InstallFramework::Kmp => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let found = discover_kmp_dirs(&cwd, 5);
+            let kmp_dir = if found.is_empty() {
+                Input::with_theme(&theme)
+                    .with_prompt("Kotlin Multiplatform project root (contains settings.gradle.kts)")
+                    .default(".".into())
+                    .interact_text()?
+            } else {
+                let mut items = found.clone();
+                items.push(OTHER_LABEL.into());
+                let idx = Select::with_theme(&theme)
+                    .with_prompt("Kotlin Multiplatform project root")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+                if idx == items.len() - 1 {
+                    Input::with_theme(&theme)
+                        .with_prompt("Enter path")
+                        .interact_text()?
+                } else {
+                    items[idx].clone()
+                }
+            };
+            let project = cwd.join(&kmp_dir);
+            let android_module: String = Input::with_theme(&theme)
+                .with_prompt("Android app module")
+                .default(detect_kmp_android_module(&project).unwrap_or_else(|| "composeApp".into()))
+                .interact_text()?;
+            let ios_dir: String = Input::with_theme(&theme)
+                .with_prompt("Xcode app directory (relative to the project root)")
+                .default(detect_kmp_ios_dir(&project).unwrap_or_else(|| "iosApp".into()))
+                .interact_text()?;
+            let default_scheme = project
+                .join(&ios_dir)
+                .read_dir()
+                .ok()
+                .and_then(|entries| {
+                    entries
+                        .flatten()
+                        .map(|e| e.path())
+                        .find(|p| p.extension().is_some_and(|x| x == "xcodeproj"))
+                })
+                .and_then(|p| {
+                    discover_xcode_schemes(&p.to_string_lossy())
+                        .into_iter()
+                        .next()
+                })
+                .unwrap_or_else(|| ios_dir.clone());
+            let xcode_scheme: String = Input::with_theme(&theme)
+                .with_prompt("Xcode scheme")
+                .default(default_scheme)
+                .interact_text()?;
+
+            placeholders.push(("KMP_DIR", kmp_dir));
+            placeholders.push(("ANDROID_MODULE", android_module));
+            placeholders.push(("IOS_DIR", ios_dir));
+            placeholders.push(("XCODE_SCHEME", xcode_scheme));
+        }
     }
 
     // For native-{ios,android}, include platform in default filename so the
@@ -616,6 +679,97 @@ fn discover_capacitor_dirs(root: &Path, max_depth: usize) -> Vec<String> {
     out
 }
 
+/// Discover Kotlin Multiplatform project roots under `root`: dirs with a
+/// `settings.gradle(.kts)`, a module whose build script applies the
+/// multiplatform plugin, and a child dir holding an `.xcodeproj`.
+fn discover_kmp_dirs(root: &Path, max_depth: usize) -> Vec<String> {
+    let mut hits = Vec::<PathBuf>::new();
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            p.is_file()
+                && matches!(
+                    p.file_name().and_then(|n| n.to_str()),
+                    Some("settings.gradle.kts") | Some("settings.gradle")
+                )
+        },
+        &mut hits,
+    );
+    let mut out: Vec<String> = hits
+        .iter()
+        .filter_map(|p| p.parent())
+        .filter(|dir| detect_kmp_ios_dir(dir).is_some() && has_multiplatform_module(dir))
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .map(|s| if s.is_empty() { ".".to_string() } else { s })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Child dirs of `project` that have a Gradle build script, with its text.
+fn gradle_modules(project: &Path) -> Vec<(String, String)> {
+    let Ok(entries) = std::fs::read_dir(project) else {
+        return Vec::new();
+    };
+    let mut modules: Vec<(String, String)> = entries
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| {
+            let dir = e.path();
+            let text = std::fs::read_to_string(dir.join("build.gradle.kts"))
+                .or_else(|_| std::fs::read_to_string(dir.join("build.gradle")))
+                .ok()?;
+            Some((e.file_name().to_string_lossy().into_owned(), text))
+        })
+        .collect();
+    modules.sort();
+    modules
+}
+
+fn has_multiplatform_module(project: &Path) -> bool {
+    gradle_modules(project).iter().any(|(_, text)| {
+        text.contains("kotlin(\"multiplatform\")")
+            || text.contains("kotlinMultiplatform")
+            || text.contains("org.jetbrains.kotlin.multiplatform")
+    })
+}
+
+/// The module that applies the Android application plugin.
+fn detect_kmp_android_module(project: &Path) -> Option<String> {
+    gradle_modules(project)
+        .into_iter()
+        .find(|(_, text)| {
+            text.contains("androidApplication") || text.contains("com.android.application")
+        })
+        .map(|(name, _)| name)
+}
+
+/// The child dir that holds the Xcode project (the wizard names it iosApp).
+fn detect_kmp_ios_dir(project: &Path) -> Option<String> {
+    let mut dirs: Vec<String> = std::fs::read_dir(project)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter(|e| {
+            std::fs::read_dir(e.path()).is_ok_and(|mut inner| {
+                inner.any(|i| {
+                    i.is_ok_and(|i| i.path().extension().is_some_and(|x| x == "xcodeproj"))
+                })
+            })
+        })
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    dirs.sort();
+    dirs.into_iter().next()
+}
+
 /// The `webDir` a Capacitor project declares, read as text from its config.
 /// A `.ts`/`.js` config is code, so this matches the common literal form
 /// (`webDir: 'dist'`) only; anything else falls back to the caller's default.
@@ -800,9 +954,10 @@ fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
     match framework {
         InstallFramework::NativeIos => format!("scripts/install-{slug}-ios.sh"),
         InstallFramework::NativeAndroid => format!("scripts/install-{slug}-android.sh"),
-        InstallFramework::Tauri | InstallFramework::Expo | InstallFramework::Capacitor => {
-            format!("scripts/install-{slug}.sh")
-        }
+        InstallFramework::Tauri
+        | InstallFramework::Expo
+        | InstallFramework::Capacitor
+        | InstallFramework::Kmp => format!("scripts/install-{slug}.sh"),
     }
 }
 
@@ -812,7 +967,10 @@ fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
     match framework {
         InstallFramework::NativeIos => Some("ios"),
         InstallFramework::NativeAndroid => Some("android"),
-        InstallFramework::Tauri | InstallFramework::Expo | InstallFramework::Capacitor => None,
+        InstallFramework::Tauri
+        | InstallFramework::Expo
+        | InstallFramework::Capacitor
+        | InstallFramework::Kmp => None,
     }
 }
 
@@ -936,6 +1094,46 @@ mod tests {
             discover_capacitor_dirs(tmp.path(), 5),
             vec!["a".to_string(), "b/mobile".into(), "c".into()]
         );
+    }
+
+    /// A minimal KMP layout: shared (multiplatform), app (Android app),
+    /// iosApp/iosApp.xcodeproj.
+    fn kmp_project(root: &Path, app_module: &str) {
+        std::fs::create_dir_all(root.join("shared")).expect("mkdir");
+        std::fs::create_dir_all(root.join(app_module)).expect("mkdir");
+        std::fs::create_dir_all(root.join("iosApp/iosApp.xcodeproj")).expect("mkdir");
+        std::fs::write(root.join("settings.gradle.kts"), "include(\":shared\")").expect("write");
+        std::fs::write(
+            root.join("shared/build.gradle.kts"),
+            "plugins { alias(libs.plugins.kotlinMultiplatform) }",
+        )
+        .expect("write");
+        std::fs::write(
+            root.join(app_module).join("build.gradle.kts"),
+            "plugins { alias(libs.plugins.androidApplication) }",
+        )
+        .expect("write");
+    }
+
+    #[test]
+    fn discover_kmp_dirs_needs_a_multiplatform_module_and_an_xcode_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        kmp_project(&tmp.path().join("mobile"), "composeApp");
+        // A plain Android project: settings.gradle.kts, but no KMP module.
+        std::fs::create_dir_all(tmp.path().join("android/app")).expect("mkdir");
+        std::fs::write(tmp.path().join("android/settings.gradle.kts"), "").expect("write");
+        assert_eq!(discover_kmp_dirs(tmp.path(), 5), vec!["mobile".to_string()]);
+    }
+
+    #[test]
+    fn kmp_detection_finds_the_android_module_and_the_xcode_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        kmp_project(tmp.path(), "androidApp");
+        assert_eq!(
+            detect_kmp_android_module(tmp.path()).as_deref(),
+            Some("androidApp")
+        );
+        assert_eq!(detect_kmp_ios_dir(tmp.path()).as_deref(), Some("iosApp"));
     }
 
     #[test]
