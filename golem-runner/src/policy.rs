@@ -631,6 +631,7 @@ mod tests {
             element_type: kind.into(),
             text: Some(text.into()),
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

@@ -104,7 +104,7 @@ By default findings are **warnings only** and never fail a run; set
 
 | Check | Severity | Screenshot | Rule |
 |-------|----------|------------|------|
-| `missing_label` | Error | — | Actionable control with no text or accessibility label anywhere in its subtree. |
+| `missing_label` | Error | — | Actionable control with no text or accessibility label anywhere in its subtree. An identifier (iOS `accessibilityIdentifier`, Android `resource-id`) is not a label, because screen readers do not announce it. |
 | `touch_target_too_small` | Error / Warning | — | Min dimension below the dp threshold (see below). |
 | `text_too_small` | Warning | box: — · glyphs: `strict` | Two passes: the **box** height below the min dp (certain, all levels), plus a `strict` **pixel** pass estimating glyph size to catch small text in a tall/padded/multi-line box. See the note below. |
 | `duplicate_labels` | Warning | — | Sibling controls sharing identical visible text — a screen reader can't tell them apart. |

@@ -19,6 +19,9 @@ steps = [
   { action = "assert_visible", on_text = "Home" },
   { action = "tap", on_text = "Open counter" },
   { action = "assert_visible", on_text = "Compose Counter" },
+  # The heading's testTag reaches golem as an identifier: iOS
+  # accessibilityIdentifier, and Android resource-id (testTagsAsResourceId).
+  { action = "assert_visible", on_accessibility_label = "counter-title" },
   # "+" is the button's visible text on both platforms. Its contentDescription
   # ("Increment") is a separate label on Android, but on iOS it merges into
   # the button's label as "Increment, +".

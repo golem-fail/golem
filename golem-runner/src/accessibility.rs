@@ -1153,6 +1153,7 @@ mod tests {
             element_type: ty.into(),
             text: None,
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -1315,6 +1316,15 @@ mod tests {
         e.accessibility_label = Some("close".into());
         let issues = audit_hierarchy(&root_with(vec![e]), &vp(), &relaxed());
         assert!(issues.is_empty());
+    }
+
+    // Screen readers never announce an identifier, so it is not a name.
+    #[test]
+    fn missing_label_flags_control_with_only_an_accessibility_id() {
+        let mut e = el("Button", 0, 0, 50, 50);
+        e.accessibility_id = Some("close_btn".into());
+        let issues = audit_hierarchy(&root_with(vec![e]), &vp(), &relaxed());
+        assert_eq!(ids(&issues), ["missing_label"]);
     }
 
     #[test]

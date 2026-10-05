@@ -16,6 +16,7 @@ pub fn make_element(element_type: &str, bounds: Bounds) -> Element {
         element_type: element_type.to_string(),
         text: None,
         accessibility_label: None,
+        accessibility_id: None,
         placeholder: None,
         enabled: true,
         checked: false,

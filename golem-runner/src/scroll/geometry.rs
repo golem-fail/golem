@@ -43,7 +43,11 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
         buf.push_str(text);
     }
     buf.push(':');
-    if let Some(ref id) = element.accessibility_label {
+    if let Some(ref label) = element.accessibility_label {
+        buf.push_str(label);
+    }
+    buf.push(':');
+    if let Some(ref id) = element.accessibility_id {
         buf.push_str(id);
     }
     // Include bounds so scroll position changes are detected (WebViews report

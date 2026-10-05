@@ -47,7 +47,7 @@ directionals.
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|
 | `on_text` | `text` | Visible text. Glob (`*`, `?`), case-insensitive, anchored (full-string — use globs for partial: `"Item *"`, `"*@*"`). |
-| `on_accessibility_label` | `accessibility_label` | The element's accessibility identifier / aria-label. **See the guidance below — prefer `text`.** |
+| `on_accessibility_label` | `accessibility_label` | The element's accessibility label (aria-label, Android `contentDescription`) or its identifier (iOS `accessibilityIdentifier`, Android `resource-id`). `golem tree` shows these as `label=` and `id=`. **See the guidance below — prefer `text`.** |
 | `on_index` | `index` | The Nth match (0-based) after all other filters. |
 
 ### Prefer visible `text`; use `accessibility_label` sparingly
@@ -267,9 +267,13 @@ facts come from the Flutter documentation. They are not yet checked on a device
 | Annotation | Android | iOS |
 |------------|---------|-----|
 | Compose `contentDescription` | `accessibility_label`, on its own node. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
-| Compose `Modifier.testTag` | `resource-id`, only with `testTagsAsResourceId = true` on an ancestor. golem does not read `resource-id` today. | `accessibility_label`, with no opt-in. |
-| Flutter `Semantics(identifier:)` | `resource-id`. golem does not read `resource-id` today. | `accessibility_label`. |
+| Compose `Modifier.testTag` | Identifier (`resource-id`), only with `testTagsAsResourceId = true` on an ancestor. | Identifier (`accessibilityIdentifier`), with no opt-in. |
+| Flutter `Semantics(identifier:)` | Identifier (`resource-id`). | Identifier (`accessibilityIdentifier`). |
 | Visible text | `text` | `text` |
+
+The `accessibility_label` selector matches the label or the identifier. The a11y
+audit counts only the label as an accessible name, because a screen reader never
+announces an identifier.
 
 Visible text is the one path that works the same on both platforms. Use it, as
 [above](#prefer-visible-text-use-accessibility_label-sparingly). Do not put a

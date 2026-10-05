@@ -22,7 +22,8 @@ pub enum AnchorSelector {
 pub struct Selector {
     /// Glob pattern the element's `text` must match (elements with no text never match).
     pub text: Option<String>,
-    /// Glob pattern the element's `accessibility_label` must match.
+    /// Glob pattern the element's `accessibility_label` or `accessibility_id`
+    /// must match.
     pub accessibility_label: Option<String>,
     /// Keep only the Nth match (0-based) after all other filters and sorting are applied.
     pub index: Option<usize>,
@@ -103,7 +104,7 @@ impl Selector {
 /// Find all elements matching the selector in the hierarchy tree.
 ///
 /// Traverses the entire tree recursively (depth-first), collecting all matches.
-/// Then applies relational filters (below, above, right_of, left_of, child_of)
+/// Then applies relational filters (below, above, right_of, left_of)
 /// and the index filter if present.
 pub fn find_elements(root: &Element, selector: &Selector) -> Vec<FindResult> {
     let mut results = Vec::new();
@@ -426,13 +427,13 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
     }
 
     if let Some(ref pattern) = selector.accessibility_label {
-        match &element.accessibility_label {
-            Some(aid) => {
-                if !GlobMatcher::new(pattern).is_match(aid) {
-                    return false;
-                }
-            }
-            None => return false,
+        let matcher = GlobMatcher::new(pattern);
+        let matched = [&element.accessibility_label, &element.accessibility_id]
+            .into_iter()
+            .flatten()
+            .any(|s| matcher.is_match(s));
+        if !matched {
+            return false;
         }
     }
 
@@ -521,6 +522,7 @@ mod tests {
             element_type: element_type.to_string(),
             text: None,
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -1410,6 +1412,29 @@ mod tests {
             1,
             "elements without a label SHALL not match a label selector"
         );
+    }
+
+    // ── 35a. accessibility_label selector also matches accessibility_id ─
+
+    #[test]
+    fn accessibility_label_selector_matches_accessibility_id() {
+        let mut root = elem("View");
+        let mut tagged = elem_with_text("TextView", "Tagged");
+        tagged.accessibility_label = Some("Tag label".to_string());
+        tagged.accessibility_id = Some("tagged-text".to_string());
+        root.children.push(tagged);
+
+        for pattern in ["tagged-text", "Tag label", "tagged-*"] {
+            let s = Selector {
+                accessibility_label: Some(pattern.to_string()),
+                ..sel()
+            };
+            assert_eq!(
+                find_elements(&root, &s).len(),
+                1,
+                "{pattern:?} SHALL match the label or the id"
+            );
+        }
     }
 
     // ── 36. resolve_anchor with a full selector ──────────────────────

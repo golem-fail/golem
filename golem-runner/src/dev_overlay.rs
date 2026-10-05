@@ -265,6 +265,7 @@ mod tests {
             element_type: kind.into(),
             text: text.map(str::to_string),
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -28,7 +29,11 @@ fun CounterScreen() {
             modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Compose Counter", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Compose Counter",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.testTag("counter-title"),
+            )
             // No contentDescription: on iOS, Compose Multiplatform reports a
             // contentDescription as the label in place of the text, which
             // would hide the count's value from text selectors.

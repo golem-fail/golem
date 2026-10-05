@@ -133,6 +133,7 @@ fn stub_el(
         element_type: element_type.to_string(),
         text: text.map(str::to_string),
         accessibility_label: text.map(str::to_string),
+        accessibility_id: None,
         placeholder: placeholder.map(str::to_string),
         enabled: true,
         checked: false,

@@ -33,6 +33,12 @@ pub struct Element {
     pub element_type: String,
     pub text: Option<String>,
     pub accessibility_label: Option<String>,
+    /// The developer-assigned identifier (iOS `accessibilityIdentifier`,
+    /// Android `resource-id`). Kept apart from `accessibility_label` because
+    /// screen readers never announce it: the a11y audit must not count it as
+    /// a name, but the `accessibility_label` selector still matches it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accessibility_id: Option<String>,
     pub placeholder: Option<String>,
     #[serde(default)]
     pub enabled: bool,
@@ -330,7 +336,10 @@ fn collect_hit_meta(el: &Element, out: &mut Vec<HitMeta>) -> usize {
         // "selectable" set, so occlusion routing applies to whatever a
         // selector resolves to (a label may sit on a node distinct from the
         // clickable wrapper, e.g. a Compose Button's merged semantics node).
-        target: el.clickable || el.text.is_some() || el.accessibility_label.is_some(),
+        target: el.clickable
+            || el.text.is_some()
+            || el.accessibility_label.is_some()
+            || el.accessibility_id.is_some(),
         has_hit_points: !el.hit_points.is_empty(),
         subtree_end: 0,
         children: Vec::new(),
@@ -438,6 +447,7 @@ pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
         element_type: root.element_type.clone(),
         text: root.text.clone(),
         accessibility_label: root.accessibility_label.clone(),
+        accessibility_id: root.accessibility_id.clone(),
         placeholder: root.placeholder.clone(),
         enabled: root.enabled,
         checked: root.checked,
@@ -488,6 +498,7 @@ mod tests {
             element_type: element_type.to_string(),
             text: None,
             accessibility_label: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -740,6 +751,7 @@ mod tests {
             element_type: "TextField".to_string(),
             text: Some("hello".to_string()),
             accessibility_label: Some("input-1".to_string()),
+            accessibility_id: None,
             placeholder: Some("Enter name".to_string()),
             enabled: true,
             checked: false,
