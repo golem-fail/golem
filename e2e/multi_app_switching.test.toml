@@ -35,7 +35,9 @@ steps = [
 
   # Read the counter value into a variable for later verification
   { action = "read", on_below = "Counter", on_index = 0, save_to = "primary_counter", auto_scroll = true },
-  { action = "read", on_text = "cross-test@example.com", save_to = "primary_email" },
+  # The counter and the email field never fit on one phone screen, so each
+  # read scrolls to its own target.
+  { action = "read", on_text = "cross-test@example.com", save_to = "primary_email", auto_scroll = true },
 ]
 
 [[block]]
@@ -66,12 +68,15 @@ name = "switch_back_and_verify_state_preserved"
 steps = [
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  # Verify primary app state is preserved after app switching
-  { action = "assert_visible", on_text = "5", on_below = "Counter" },
-  { action = "assert_visible", on_text = "cross-test@example.com" },
+  # Android restores focus to the email field, which reopens the keyboard.
+  { action = "hide_keyboard" },
+  # Verify primary app state is preserved after app switching. The app keeps
+  # its scroll position, so each check scrolls to its own target.
+  { action = "assert_visible", on_text = "5", on_below = "Counter", auto_scroll = true },
+  { action = "assert_visible", on_text = "cross-test@example.com", auto_scroll = true },
 
   # Verify UI elements are still enabled and functional
-  { action = "assert_visible", on_text = "+", on_enabled = true },
+  { action = "assert_visible", on_text = "+", on_enabled = true, auto_scroll = true },
   { action = "assert_visible", on_text = "-", on_enabled = true },
   { action = "assert_visible", on_text = "Submit", on_enabled = true },
 
