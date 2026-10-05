@@ -305,6 +305,8 @@ Scripts are plain bash — customise freely after scaffolding. Extend to other f
   - Target buttons by their visible text, and give them a `contentDescription` for accessibility. On Android, a `contentDescription` is a separate accessibility label (`on = { accessibility_label = … }`). On iOS, Compose Multiplatform merges it into the button's label, as `"Increment, +"`.
   - Do not put a `contentDescription` on text whose value a step checks. On iOS the description replaces the visible text, so a counter labelled `"count"` reads as `"count"`, not as its value.
 
+  For element types, `testTag`, bounds and merged semantics, see [Selectors → Canvas-rendered UI](selectors.md#canvas-rendered-ui-compose-compose-multiplatform-flutter).
+
 - **nativescript** — NativeScript 8+. One cross-platform script: it installs JS dependencies when they changed, runs `ns build <platform>`, then installs the artifact that build wrote with `simctl` / `devicectl` or `adb`. It does not use `ns build --copy-to`, which covers only the device `.ipa` and has been broken for simulator builds. The iOS `.app` is looked up under both `platforms/ios/build/` and `platforms/ios/Build/`, because CLI versions differ.
 
   **Host needs:** the NativeScript CLI, as a `nativescript` devDependency (run with `npx ns`) or a global `ns`, and CocoaPods + Ruby for iOS.
