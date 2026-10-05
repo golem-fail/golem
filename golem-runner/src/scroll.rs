@@ -300,6 +300,10 @@ pub async fn scroll_to_element(
     // Which start lane the next nudge uses (see `nudge_swipe_start`).
     let mut nudge_lane: usize = 0;
     let mut nudge_prev_remaining: i32 = i32::MAX;
+    // Where the last nudge started, and a start chosen outside the absorber
+    // found there when that nudge made no progress.
+    let mut last_nudge_start: Option<(i32, i32)> = None;
+    let mut nudge_start_override: Option<(i32, i32)> = None;
     let mut nudge_disabled: bool = false;
 
     // Container swipe start position
@@ -345,12 +349,20 @@ pub async fn scroll_to_element(
         // was absorbed where it started (or over-corrected). Move to the next
         // lane; once every lane has failed, hand over to the blind path rather
         // than nudging to the deadline.
-        if let Some((_, remaining, _)) = nudge {
+        if let Some((corr_dir, remaining, _)) = nudge {
             if remaining >= nudge_prev_remaining {
                 nudge_lane += 1;
                 if nudge_lane >= NUDGE_LANES {
                     nudge_disabled = true;
                     nudge = None;
+                } else {
+                    // A widget that fills the width (a drawing pad) absorbs
+                    // every side lane too; starting above or below it is the
+                    // only way past. The side lanes remain the fallback when
+                    // no absorber is found at the failed start.
+                    nudge_start_override = last_nudge_start
+                        .and_then(|(x, y)| find_absorbing_bounds(&root, x, y, &safe_vp))
+                        .and_then(|absorber| pick_outside_absorber(absorber, corr_dir, &safe_vp));
                 }
             }
             nudge_prev_remaining = remaining;
@@ -375,7 +387,10 @@ pub async fn scroll_to_element(
             let commanded =
                 ((remaining as f64 / nudge_ratio).round() as i32).clamp(NUDGE_MIN_PX, stride_px);
             let pct = (commanded * 100 / dim.max(1)).clamp(3, 90) as u32;
-            let (sx, sy) = nudge_swipe_start(&safe_vp, corr_dir, nudge_lane);
+            let (sx, sy) = nudge_start_override
+                .take()
+                .unwrap_or_else(|| nudge_swipe_start(&safe_vp, corr_dir, nudge_lane));
+            last_nudge_start = Some((sx, sy));
             last_nudge_edge = Some(edge);
             last_nudge_px = commanded;
             if let Some(e) = emitter {
@@ -509,6 +524,14 @@ pub async fn scroll_to_element(
                     // back into view — give it a fresh no-improve budget so we
                     // don't accept the partial pre-reversal sighting.
                     no_improve = 0;
+                    // The miss is small again, so a measured nudge is the
+                    // right correction. Left off, the reversal corrects with
+                    // full-stride swipes, which carry momentum past a target
+                    // that sits just outside the band.
+                    nudge_disabled = false;
+                    nudge_lane = 0;
+                    nudge_prev_remaining = i32::MAX;
+                    nudge_start_override = None;
                     continue;
                 }
             }
@@ -1313,6 +1336,53 @@ mod tests {
         );
     }
 
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn an_absorbed_nudge_restarts_below_a_full_width_absorber() {
+        // A drawing pad spans the width around the default nudge start
+        // (y = 65% of 812 = 527), so every side lane is inside it too.
+        let page = {
+            let mut root = make_element("View", default_bounds());
+            root.children
+                .push(make_element("Pad", Bounds::new(10, 300, 355, 400)));
+            root.children.push(make_element_with_text(
+                "Label",
+                "Dark Mode",
+                Bounds::new(32, 830, 71, 21),
+            ));
+            root
+        };
+        let driver = SequenceMockDriver::new(std::iter::repeat_n(page, 30).collect());
+
+        let _ = scroll_to_element(
+            &sel_with_text("Dark Mode"),
+            &driver,
+            Direction::Down,
+            Some(2000),
+            None,
+            None,
+            1.0,
+        )
+        .await;
+
+        let starts: Vec<(i32, i32)> = driver
+            .get_calls()
+            .into_iter()
+            .filter(|(m, _)| m == "gesture_swipe")
+            .map(|(_, a)| (a[0].parse().expect("x"), a[1].parse().expect("y")))
+            .collect();
+        assert!(starts.len() >= 2, "got swipes from {starts:?}");
+        assert!(
+            (300..700).contains(&starts[0].1),
+            "the first nudge starts on the pad: {starts:?}"
+        );
+        // A Down nudge drags the finger up, so below the pad (y >= 700) is
+        // where it has room to travel.
+        assert!(
+            starts[1].1 >= 700,
+            "after an absorbed nudge, the next SHALL start below the pad, got {starts:?}"
+        );
+    }
+
     // ── 4. Bounce detection triggers direction reversal ─────────────
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1937,6 +2007,27 @@ mod tests {
         let p =
             pick_outside_absorber(absorber, Direction::Down, &safe_vp).expect("above strip exists");
         assert!(p.1 < 1200, "expected above strip, got y={}", p.1);
+    }
+
+    #[test]
+    fn pick_outside_absorber_starts_where_the_drag_has_room() {
+        // The test app's full-width drawing pad, mid-screen. A Down scroll
+        // drags the finger up, so it SHALL start below the pad, with the
+        // whole screen above to travel; an Up scroll, above it.
+        let safe_vp = Viewport {
+            x: 0,
+            y: 62,
+            width: 402,
+            height: 778,
+        };
+        let pad = golem_element::Bounds::new(16, 296, 370, 328);
+        let down = pick_outside_absorber(pad, Direction::Down, &safe_vp).expect("room below");
+        assert!(
+            down.1 > 296 + 328,
+            "Down SHALL start below the pad, got {down:?}"
+        );
+        let up = pick_outside_absorber(pad, Direction::Up, &safe_vp).expect("room above");
+        assert!(up.1 < 296, "Up SHALL start above the pad, got {up:?}");
     }
 
     #[test]
