@@ -306,3 +306,50 @@ pub fn create_device_command(
         ],
     }
 }
+
+/// `ps` invocation whose output [`stale_ios_companion_pids`] parses.
+pub(crate) fn list_processes_command() -> Vec<String> {
+    vec![
+        "ps".into(),
+        "-axo".into(),
+        "pid=,ppid=,stat=,command=".into(),
+    ]
+}
+
+/// PIDs to kill before launching a companion on simulator `udid`: every live
+/// `xcodebuild test-without-building` targeting exactly `id=<udid>`, plus its
+/// direct children (e.g. the `simctl diagnose` it runs after its runner dies).
+///
+/// Zombies are skipped: they can no longer relaunch a runner.
+pub(crate) fn stale_ios_companion_pids(ps_output: &str, udid: &str) -> Vec<u32> {
+    let destination = format!("id={udid}");
+    let rows: Vec<(u32, u32, bool)> = ps_output
+        .lines()
+        .filter_map(|line| {
+            let mut it = line.split_whitespace();
+            let pid = it.next()?.parse().ok()?;
+            let ppid = it.next()?.parse().ok()?;
+            let stat = it.next()?;
+            if stat.starts_with('Z') {
+                return None;
+            }
+            let argv: Vec<&str> = it.collect();
+            let is_companion = argv.first().is_some_and(|p| p.ends_with("xcodebuild"))
+                && argv.contains(&"test-without-building")
+                && argv.contains(&destination.as_str());
+            Some((pid, ppid, is_companion))
+        })
+        .collect();
+    let companions: Vec<u32> = rows
+        .iter()
+        .filter(|(_, _, is_companion)| *is_companion)
+        .map(|(pid, _, _)| *pid)
+        .collect();
+    let mut pids = companions.clone();
+    pids.extend(
+        rows.iter()
+            .filter(|(pid, ppid, _)| companions.contains(ppid) && !companions.contains(pid))
+            .map(|(pid, _, _)| *pid),
+    );
+    pids
+}

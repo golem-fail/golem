@@ -11,8 +11,9 @@ use golem_events::CodeExt;
 
 use super::commands::{
     boot_command, build_companion_command, clear_app_data_commands, create_device_command,
-    find_xctestrun, install_app_command, install_companion_command, port_forward_command,
-    shutdown_command, start_companion_command_with_reg,
+    find_xctestrun, install_app_command, install_companion_command, list_processes_command,
+    port_forward_command, shutdown_command, stale_ios_companion_pids,
+    start_companion_command_with_reg,
 };
 
 /// Set up ADB reverse so the Android emulator can reach the host's
@@ -329,6 +330,10 @@ pub async fn spawn_companion_with_reg(
         }
     }
 
+    if device.platform == Platform::Ios {
+        kill_stale_ios_companions(&device.udid).await;
+    }
+
     let args = start_companion_command_with_reg(device, companion_path, port, reg_port);
     let Some((program, arguments)) = args.split_first() else {
         bail!("empty companion start command");
@@ -357,6 +362,37 @@ pub async fn spawn_companion_with_reg(
         .await
         .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
     Ok(())
+}
+
+/// SIGKILL every earlier companion `xcodebuild` session on simulator `udid`
+/// and wait until none is left.
+///
+/// A leftover session must not outlive the launch of a new one. Launching a
+/// runner force-quits the one already on the simulator, and the session that
+/// owned it then relaunches its runner once ("Restarting after unexpected
+/// exit") after collecting diagnostics, about 20 s later. That relaunch
+/// force-quits the new companion in the middle of a request.
+///
+/// SIGKILL, not SIGTERM: a session that is shutting down can still relaunch
+/// its runner. Best-effort: a failed `ps` or `kill` never blocks the spawn.
+async fn kill_stale_ios_companions(udid: &str) {
+    let ps = list_processes_command();
+    let Some((ps_program, ps_args)) = ps.split_first() else {
+        return;
+    };
+    for _ in 0..20 {
+        let Ok(out) = golem_common::command::output(ps_program, ps_args).await else {
+            return;
+        };
+        let pids = stale_ios_companion_pids(&String::from_utf8_lossy(&out.stdout), udid);
+        if pids.is_empty() {
+            return;
+        }
+        let mut kill_args = vec!["-9".to_string()];
+        kill_args.extend(pids.iter().map(u32::to_string));
+        let _ = golem_common::command::output("kill", &kill_args).await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 /// Path for a companion's persisted stdout/stderr: `~/.golem/logs/
