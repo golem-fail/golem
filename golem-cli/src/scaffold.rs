@@ -138,6 +138,7 @@ pub enum InstallFramework {
     Expo,
     Capacitor,
     Kmp,
+    NativeScript,
 }
 
 impl InstallFramework {
@@ -149,6 +150,7 @@ impl InstallFramework {
             InstallFramework::Expo => "expo",
             InstallFramework::Capacitor => "capacitor",
             InstallFramework::Kmp => "kmp",
+            InstallFramework::NativeScript => "nativescript",
         }
     }
 
@@ -166,6 +168,9 @@ impl InstallFramework {
                 include_str!("../templates/install-scripts/capacitor.sh")
             }
             InstallFramework::Kmp => include_str!("../templates/install-scripts/kmp.sh"),
+            InstallFramework::NativeScript => {
+                include_str!("../templates/install-scripts/nativescript.sh")
+            }
         }
     }
 }
@@ -740,6 +745,7 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(InstallFramework::Expo.label(), "expo");
         assert_eq!(InstallFramework::Capacitor.label(), "capacitor");
         assert_eq!(InstallFramework::Kmp.label(), "kmp");
+        assert_eq!(InstallFramework::NativeScript.label(), "nativescript");
     }
 
     // 14. render_template leaves text untouched when no placeholder matches.
@@ -932,6 +938,39 @@ install_script = { ios = "scripts/ios.sh" }
         assert!(!content.contains("{{"), "no placeholders SHALL remain");
     }
 
+    #[test]
+    fn write_install_script_renders_nativescript_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::NativeScript,
+            &[
+                ("NS_DIR", "./mobile"),
+                ("NS_CMD", "pnpm ns"),
+                ("PM_INSTALL", "pnpm install"),
+            ],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        for line in [
+            r#"NS_DIR="./mobile""#,
+            r#"NS_CMD="pnpm ns""#,
+            r#"PM_INSTALL="pnpm install""#,
+        ] {
+            assert!(content.contains(line), "{line} SHALL be substituted");
+        }
+        for f in [
+            "golem_ensure_deps()",
+            "golem_ios_install_app()",
+            "golem_pick_apk()",
+        ] {
+            assert!(content.contains(f), "{f} SHALL be spliced in");
+        }
+        assert!(!content.contains("{{"), "no placeholders SHALL remain");
+    }
+
     // 18. update on a missing golem.toml surfaces a read error (not a panic).
     #[test]
     fn update_golem_toml_missing_file_errors() {
@@ -1072,6 +1111,8 @@ install_script = "scripts/old.sh"
             ("KMP_DIR", "."),
             ("ANDROID_MODULE", "composeApp"),
             ("IOS_DIR", "iosApp"),
+            ("NS_DIR", "."),
+            ("NS_CMD", "npx ns"),
         ];
         for fw in [
             InstallFramework::NativeIos,
@@ -1080,6 +1121,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Expo,
             InstallFramework::Capacitor,
             InstallFramework::Kmp,
+            InstallFramework::NativeScript,
         ] {
             let out = tmp.path().join(format!("{}.sh", fw.label()));
             write_install_script(&out, fw, &placeholders).expect("write");
@@ -1154,6 +1196,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Expo,
             InstallFramework::Capacitor,
             InstallFramework::Kmp,
+            InstallFramework::NativeScript,
         ] {
             let out = render_install_script(fw, &[]).expect("render");
             assert!(
@@ -1174,6 +1217,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Expo,
             InstallFramework::Capacitor,
             InstallFramework::Kmp,
+            InstallFramework::NativeScript,
         ] {
             let t = fw.template();
             let helpers = t.find("{{>helpers}}");

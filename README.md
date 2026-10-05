@@ -56,7 +56,7 @@ golem init
 # Create a flow template at flows/login.test.toml
 golem create login
 
-# (optional) scaffold an install script for your app — native-ios, native-android, tauri, expo, capacitor, or kmp
+# (optional) scaffold an install script for your app — native-ios, native-android, tauri, expo, capacitor, kmp, or nativescript
 golem install-script
 
 # See connected simulators, emulators, and devices

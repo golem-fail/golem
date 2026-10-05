@@ -41,6 +41,10 @@ pub fn run() -> Result<()> {
             "kmp            (Kotlin Multiplatform / Compose Multiplatform)",
             InstallFramework::Kmp,
         ),
+        (
+            "nativescript   (NativeScript 8+)",
+            InstallFramework::NativeScript,
+        ),
     ];
     let idx = Select::with_theme(&theme)
         .with_prompt("Framework")
@@ -410,6 +414,58 @@ pub fn run() -> Result<()> {
             placeholders.push(("IOS_DIR", ios_dir));
             placeholders.push(("XCODE_SCHEME", xcode_scheme));
         }
+        InstallFramework::NativeScript => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let found = discover_nativescript_dirs(&cwd, 5);
+            let ns_dir = if found.is_empty() {
+                Input::with_theme(&theme)
+                    .with_prompt("NativeScript project directory (contains nativescript.config.*)")
+                    .default(".".into())
+                    .interact_text()?
+            } else {
+                let mut items = found.clone();
+                items.push(OTHER_LABEL.into());
+                let idx = Select::with_theme(&theme)
+                    .with_prompt("NativeScript project directory")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+                if idx == items.len() - 1 {
+                    Input::with_theme(&theme)
+                        .with_prompt("Enter path")
+                        .interact_text()?
+                } else {
+                    items[idx].clone()
+                }
+            };
+            let project = cwd.join(&ns_dir);
+
+            // (local CLI runner, install, label). A project that pins the
+            // `nativescript` CLI runs it through its package manager.
+            let pm_items = [
+                ("npx ns", "npm install", "npm (npx)"),
+                ("yarn ns", "yarn", "yarn"),
+                ("pnpm ns", "pnpm install", "pnpm"),
+                ("bunx ns", "bun install", "bun"),
+            ];
+            let detect_items: Vec<(&str, &str)> =
+                pm_items.iter().map(|(r, _, l)| (*r, *l)).collect();
+            let default_idx = detect_tauri_command(&project, &detect_items);
+            let pm_idx = Select::with_theme(&theme)
+                .with_prompt("Package manager")
+                .items(&pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>())
+                .default(default_idx)
+                .interact()?;
+            let (local_cmd, pm_install, _) = pm_items[pm_idx];
+            let ns_cmd: String = Input::with_theme(&theme)
+                .with_prompt("NativeScript CLI command")
+                .default(default_ns_cmd(&project, local_cmd))
+                .interact_text()?;
+
+            placeholders.push(("NS_DIR", ns_dir));
+            placeholders.push(("NS_CMD", ns_cmd));
+            placeholders.push(("PM_INSTALL", pm_install.to_string()));
+        }
     }
 
     // For native-{ios,android}, include platform in default filename so the
@@ -770,6 +826,64 @@ fn detect_kmp_ios_dir(project: &Path) -> Option<String> {
     dirs.into_iter().next()
 }
 
+/// Discover NativeScript project directories under `root`: dirs with a
+/// `nativescript.config.{ts,js}` (NativeScript 8+), or a `package.json`
+/// that depends on `@nativescript/core`.
+fn discover_nativescript_dirs(root: &Path, max_depth: usize) -> Vec<String> {
+    let mut hits = Vec::<PathBuf>::new();
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            if !p.is_file() {
+                return false;
+            }
+            match p.file_name().and_then(|n| n.to_str()) {
+                Some("nativescript.config.ts") | Some("nativescript.config.js") => true,
+                Some("package.json") => package_json_depends_on(p, "@nativescript/core"),
+                _ => false,
+            }
+        },
+        &mut hits,
+    );
+    let mut out: Vec<String> = hits
+        .iter()
+        .filter_map(|p| p.parent())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .map(|s| if s.is_empty() { ".".to_string() } else { s })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Whether the `package.json` at `path` lists `dep` in any dependency table.
+fn package_json_depends_on(path: &Path, dep: &str) -> bool {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .is_some_and(|v| {
+            ["dependencies", "devDependencies"]
+                .iter()
+                .any(|table| v.get(table).and_then(|t| t.get(dep)).is_some())
+        })
+}
+
+/// `local_cmd` (the package manager's runner) when the project pins the
+/// `nativescript` CLI, else the global `ns`.
+fn default_ns_cmd(project: &Path, local_cmd: &str) -> String {
+    if package_json_depends_on(&project.join("package.json"), "nativescript") {
+        local_cmd.to_string()
+    } else {
+        "ns".to_string()
+    }
+}
+
 /// The `webDir` a Capacitor project declares, read as text from its config.
 /// A `.ts`/`.js` config is code, so this matches the common literal form
 /// (`webDir: 'dist'`) only; anything else falls back to the caller's default.
@@ -957,7 +1071,8 @@ fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
         InstallFramework::Tauri
         | InstallFramework::Expo
         | InstallFramework::Capacitor
-        | InstallFramework::Kmp => format!("scripts/install-{slug}.sh"),
+        | InstallFramework::Kmp
+        | InstallFramework::NativeScript => format!("scripts/install-{slug}.sh"),
     }
 }
 
@@ -970,7 +1085,8 @@ fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
         InstallFramework::Tauri
         | InstallFramework::Expo
         | InstallFramework::Capacitor
-        | InstallFramework::Kmp => None,
+        | InstallFramework::Kmp
+        | InstallFramework::NativeScript => None,
     }
 }
 
@@ -1134,6 +1250,47 @@ mod tests {
             Some("androidApp")
         );
         assert_eq!(detect_kmp_ios_dir(tmp.path()).as_deref(), Some("iosApp"));
+    }
+
+    #[test]
+    fn discover_nativescript_dirs_finds_config_or_core_dependency() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for dir in ["a", "b", "c", "a/node_modules/x"] {
+            std::fs::create_dir_all(tmp.path().join(dir)).expect("mkdir");
+        }
+        std::fs::write(tmp.path().join("a/nativescript.config.ts"), "").expect("write");
+        std::fs::write(
+            tmp.path().join("b/package.json"),
+            r#"{ "dependencies": { "@nativescript/core": "~9.1.0" } }"#,
+        )
+        .expect("write");
+        std::fs::write(
+            tmp.path().join("c/package.json"),
+            r#"{ "dependencies": {} }"#,
+        )
+        .expect("write");
+        std::fs::write(
+            tmp.path().join("a/node_modules/x/package.json"),
+            r#"{ "dependencies": { "@nativescript/core": "*" } }"#,
+        )
+        .expect("write");
+        assert_eq!(
+            discover_nativescript_dirs(tmp.path(), 5),
+            vec!["a".to_string(), "b".into()]
+        );
+    }
+
+    #[test]
+    fn default_ns_cmd_prefers_the_pinned_cli() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{ "devDependencies": { "nativescript": "~9.1.2" } }"#,
+        )
+        .expect("write");
+        assert_eq!(default_ns_cmd(tmp.path(), "pnpm ns"), "pnpm ns");
+        std::fs::write(tmp.path().join("package.json"), r#"{}"#).expect("write");
+        assert_eq!(default_ns_cmd(tmp.path(), "pnpm ns"), "ns");
     }
 
     #[test]

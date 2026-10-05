@@ -48,6 +48,13 @@ name = "app-k"
 bundle = "fail.golem.testk"
 install_script = "scripts/install-app-k.sh"
 
+# NativeScript app. `ns build` generates platforms/ on demand, so the
+# rendered template runs directly.
+[[apps]]
+name = "app-n"
+bundle = "fail.golem.testn"
+install_script = "scripts/install-app-n.sh"
+
 # Per-platform OS-level tweaks applied once per device session before
 # any flow runs. Suppresses defaults that bias test results across
 # emulator wipes / fresh sim images.

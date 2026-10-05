@@ -1,0 +1,12 @@
+<Page xmlns="http://schemas.nativescript.org/tns.xsd" navigatingTo="onNavigatingTo">
+    <ActionBar title="test-app-n" icon="" />
+
+    <StackLayout class="p-20">
+        <Label text="Counter" class="h1" />
+        <Label text="{{ count }}" class="h2" />
+        <StackLayout orientation="horizontal">
+            <Button text="+" automationText="Increment" tap="{{ onIncrement }}" class="-primary" />
+            <Button text="-" automationText="Decrement" tap="{{ onDecrement }}" class="-primary" />
+        </StackLayout>
+    </StackLayout>
+</Page>
