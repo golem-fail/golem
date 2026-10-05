@@ -1,0 +1,22 @@
+[flow]
+name = "NativeScript lifecycle test"
+tags = ["cross-platform", "nativescript", "lifecycle"]
+
+# Minimal NativeScript (test-app-n) flow. Its job is to prove the
+# NativeScript install script builds, installs, launches, and drives — not
+# to test app logic. NativeScript renders real native views, so text
+# selectors work on both platforms. (`automationText` reaches golem only on
+# iOS; see the nativescript section of docs/app-install.md.)
+[[flow.apps]]
+name = "app-n"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "counter"
+steps = [
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "tap", on_text = "+" },
+  { action = "assert_visible", on_text = "1", on_below = "Counter" },
+]
