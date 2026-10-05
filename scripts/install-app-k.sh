@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# golem install script — Capacitor / Ionic
+# golem install script — Kotlin Multiplatform (Compose Multiplatform)
 #
-# Invoked by golem before each flow to build and install a Capacitor app onto
-# a target simulator/emulator or physical device. Runs from the project root.
+# Invoked by golem before each flow to build and install a Kotlin
+# Multiplatform app onto a target simulator/emulator or physical device.
+# Runs from the project root.
 #
 # Args:
 #   $1 = platform ("ios" or "android")
@@ -11,22 +12,23 @@
 #   $4 = "install-only" to skip the build and reuse the previous artifact,
 #        or empty for full build+install (default).
 #
-# Steps: install JS dependencies when they changed, build the web app, copy
-# it into the native project with `cap sync`, then build and install with
-# Gradle (Android) or xcodebuild (iOS). The native projects (android/, ios/)
-# are source in a Capacitor app, so this script never creates them.
+# Android builds the app module with Gradle and installs the APK with adb.
+# iOS builds the Xcode project, whose "Run Script" phase builds the Kotlin
+# framework (`./gradlew :<module>:embedAndSignAppleFrameworkForXcode`). The
+# script checks that the Kotlin code is really in the built .app before it
+# installs it.
 #
 # Environment (template config — set via [[apps]] install_env or the shell):
 #   BUILD_TYPE       = "debug" (default) | "release". Selects the Gradle build
 #                      type and the Xcode configuration (Debug / Release).
-#                      A release build needs signing on Android, and
-#                      `webContentsDebuggingEnabled: true` in the Capacitor
-#                      config on both platforms: golem reads the page through
-#                      the web inspector, which release builds turn off.
+#                      A release build needs signing on Android.
 #   FLAVOR           = Gradle product flavor (default: none)
+#   XCODE_SCHEME     = overrides the scheme below
 #   XCCONFIG         = path to an .xcconfig, passed as `xcodebuild -xcconfig`
 #   DEVELOPMENT_TEAM = Apple team ID, for a physical iOS device
 #   DERIVED_DATA     = xcodebuild derived-data dir (default ./build/DerivedData)
+#   ORG_GRADLE_PROJECT_<name> = Gradle reads these as `-P<name>=…` itself,
+#                      for both platforms' builds.
 #
 # Exit 0 on success; nonzero on failure (stderr surfaces to golem).
 
@@ -38,11 +40,10 @@ BUNDLE_ID="${3:?bundle id required}"
 MODE="${4:-}"   # empty | install-only
 
 # ── Project config — edit these ─────────────────────────────────────
-CAP_DIR="test-app-c"             # path to the Capacitor project (contains capacitor.config.*)
-CAP_CMD="npx cap"             # Capacitor CLI runner: npx cap | yarn cap | pnpm cap | bunx cap
-PM_INSTALL="npm install"       # dependency install: npm install | yarn | pnpm install | bun install
-WEB_BUILD="npm run build"         # web build command (e.g. npm run build); empty = no build step
-WEB_DIR="www"             # `webDir` from the Capacitor config
+KMP_DIR="test-app-k"                 # project root (contains settings.gradle.kts)
+ANDROID_MODULE="androidApp"   # Android app module: composeApp | androidApp
+IOS_DIR="iosApp"                 # Xcode app directory, relative to KMP_DIR (e.g. iosApp)
+XCODE_SCHEME="${XCODE_SCHEME:-iosApp}"   # Xcode scheme name
 
 BUILD_TYPE="${BUILD_TYPE:-debug}"
 FLAVOR="${FLAVOR:-}"
@@ -59,7 +60,7 @@ case "$BUILD_TYPE" in
     ;;
 esac
 
-cd "$CAP_DIR"
+cd "$KMP_DIR"
 
 # ── shared helpers (spliced in by `golem install-script`) ───────────
 
@@ -150,71 +151,6 @@ golem_no_apk_error() {
 # what gets installed, and their mtimes are not ordered against the outer one.
 golem_pick_app() {
   golem_newest "$1" -maxdepth "${2:-1}" -name '*.app' -type d -prune
-}
-
-# ── JS dependency freshness (spliced in by `golem install-script`) ──
-# A gate that asks "does node_modules exist?" answers yes forever: after a
-# lockfile change the build is redone against the PREVIOUS dependency tree,
-# and the run reports green. golem's install cache can't catch this — it
-# correctly reports a rebuild, and the thing being rebuilt is stale.
-#
-# So each generated tree records what it was generated FROM, and the gate
-# compares that instead of merely checking for existence.
-#
-# Stamps live under node_modules: it is already ignored by every project's
-# VCS, so nothing appears in `git status`, and a wipe (`npm ci`, `rm -rf
-# node_modules`) takes the stamps with it.
-GOLEM_STAMP_DIR="node_modules/.golem"
-
-# Inputs that decide whether the installed dependency tree is current. Every
-# lockfile flavour is listed rather than just this project's, so the stamp
-# stays correct if the package manager is switched.
-GOLEM_DEP_INPUTS=(package.json package-lock.json yarn.lock pnpm-lock.yaml bun.lockb bun.lock)
-
-# Hash of the named files, in order. A file's NAME is hashed alongside its
-# contents so that swapping one lockfile flavour for an identical-looking
-# other still counts as a change. Missing files contribute nothing.
-golem_hash() {
-  local f
-  for f in "$@"; do
-    if [[ -f "$f" ]]; then printf '%s\n' "$f"; cat "$f"; fi
-  done | shasum | cut -d' ' -f1
-}
-
-# True when stamp $1 is absent or records something other than $2.
-golem_stale() {
-  local stamp="$GOLEM_STAMP_DIR/$1"
-  [[ -f "$stamp" ]] || return 0
-  [[ "$(cat "$stamp" 2>/dev/null)" != "$2" ]]
-}
-
-# Record $2 as stamp $1. Every caller guards the preceding command with
-# `|| return 1` rather than leaning on `set -e`: a stamp written after a
-# failed install would remember the failure as done and skip the retry, and
-# these templates are meant to be edited after scaffolding.
-golem_stamp() {
-  mkdir -p "$GOLEM_STAMP_DIR"
-  printf '%s' "$2" > "$GOLEM_STAMP_DIR/$1"
-}
-
-# Install JS dependencies with the command $1 (`npm install`, `yarn`, …)
-# when the inputs have moved since the last install. Does nothing when $1 is
-# empty or there is no package.json: a project with no JS has nothing to
-# install, and guessing would be worse than doing nothing.
-golem_ensure_deps() {
-  local pm_install="$1" want
-  [[ -n "$pm_install" ]] || return 0
-  [[ -f package.json ]] || return 0
-  want=$(golem_hash "${GOLEM_DEP_INPUTS[@]}")
-  if [[ -d node_modules ]] && ! golem_stale deps "$want"; then
-    return 0
-  fi
-  echo "installing JS dependencies (dependency inputs changed)..." >&2
-  $pm_install 1>&2 || return 1
-  # Re-hash AFTER the install: package managers rewrite the lockfile as
-  # part of installing, so stamping the pre-install hash would leave the
-  # stamp stale the moment it was written and reinstall on every run.
-  golem_stamp deps "$(golem_hash "${GOLEM_DEP_INPUTS[@]}")"
 }
 
 # ── Android build + install (spliced in by `golem install-script`) ──
@@ -386,52 +322,53 @@ golem_ios_build_install() {
 }
 
 case "$PLATFORM" in
-  ios|android) ;;
-  *)
-    echo "error: unknown platform $PLATFORM" >&2
-    exit 1
-    ;;
-esac
-
-if [[ ! -d "$PLATFORM" ]]; then
-  echo "error: no $PLATFORM/ project in $CAP_DIR. Create it once with" >&2
-  echo "       '$CAP_CMD add $PLATFORM' and commit it: it is source in a Capacitor app." >&2
-  exit 1
-fi
-
-if [[ "$MODE" != "install-only" ]]; then
-  golem_ensure_deps "$PM_INSTALL"
-
-  if [[ -n "$WEB_BUILD" ]]; then
-    WEB_BUILD_START=$(date +%s)
-    echo "building the web app ($WEB_BUILD)..." >&2
-    $WEB_BUILD 1>&2
-    # `cap sync` copies whatever is in webDir. A web build that quietly did
-    # nothing would ship the previous bundle inside a fresh native build.
-    WEB_NEWEST=$(golem_newest "$WEB_DIR" -type f)
-    if [[ -z "$WEB_NEWEST" ]]; then
-      echo "error: $WEB_DIR is empty after '$WEB_BUILD'. Is WEB_DIR the webDir of the Capacitor config?" >&2
-      exit 1
-    fi
-    golem_require_fresh "$WEB_NEWEST" "$WEB_BUILD_START"
-  fi
-
-  echo "cap sync $PLATFORM..." >&2
-  $CAP_CMD sync "$PLATFORM" 1>&2
-fi
-
-case "$PLATFORM" in
   android)
-    golem_android_build_install android app "$FLAVOR" "$BUILD_TYPE" \
+    golem_android_build_install . "$ANDROID_MODULE" "$FLAVOR" "$BUILD_TYPE" \
       "$DEVICE_ID" "$BUNDLE_ID" "$MODE"
     ;;
   ios)
-    # CocoaPods projects build through the workspace; Swift Package Manager
-    # projects (the Capacitor 8 default) have only the .xcodeproj.
-    XCODE_PROJECT="ios/App/App.xcodeproj"
-    if [[ -d ios/App/App.xcworkspace ]]; then XCODE_PROJECT="ios/App/App.xcworkspace"; fi
-    golem_ios_build_install "$XCODE_PROJECT" App "$XCODE_CONFIGURATION" "$XCCONFIG" \
-      "$DEVELOPMENT_TEAM" "$DERIVED_DATA" "$DEVICE_ID" "$MODE"
+    # The CocoaPods integration (`kotlin("native.cocoapods")`) builds through
+    # a workspace and needs `pod install`; direct integration has only the
+    # .xcodeproj.
+    XCODE_PROJECT=$(golem_newest "$IOS_DIR" -maxdepth 1 -name '*.xcworkspace' -type d)
+    if [[ -n "$XCODE_PROJECT" ]]; then
+      # Pods/Manifest.lock is CocoaPods' own record of what it installed; it
+      # differs from Podfile.lock when the Podfile moved on since.
+      if [[ "$MODE" != "install-only" ]] \
+        && ! cmp -s "$IOS_DIR/Podfile.lock" "$IOS_DIR/Pods/Manifest.lock"; then
+        echo "pod install ($IOS_DIR)..." >&2
+        ( cd "$IOS_DIR" && pod install ) 1>&2
+      fi
+    else
+      XCODE_PROJECT=$(golem_newest "$IOS_DIR" -maxdepth 1 -name '*.xcodeproj' -type d)
+    fi
+    if [[ -z "$XCODE_PROJECT" ]]; then
+      echo "error: no .xcodeproj or .xcworkspace in $KMP_DIR/$IOS_DIR" >&2
+      exit 1
+    fi
+
+    APP_PATH=$(golem_ios_build "$XCODE_PROJECT" "$XCODE_SCHEME" "$XCODE_CONFIGURATION" \
+      "$XCCONFIG" "$DEVELOPMENT_TEAM" "$DERIVED_DATA" "$DEVICE_ID" "$MODE")
+
+    # xcodebuild succeeds without the Kotlin framework when the project lacks
+    # the step that builds it, and the .app then fails at launch with nothing
+    # pointing here. `Konan_` is the Kotlin/Native runtime's symbol prefix:
+    # it is in the binary that holds the Kotlin code, wherever that is (the
+    # executable, a debug dylib, or a dynamic framework).
+    if ! grep -r -a -q "Konan_" "$APP_PATH"; then
+      echo "error: $APP_PATH contains no Kotlin code. Check both of these:" >&2
+      echo "       1. The iOS target in the shared module's build.gradle.kts declares" >&2
+      echo "          binaries.framework { … }." >&2
+      echo "       2. The Xcode target has a Run Script phase, before Compile Sources," >&2
+      echo "          that runs ./gradlew :<shared module>:embedAndSignAppleFrameworkForXcode." >&2
+      exit 1
+    fi
+
+    golem_ios_install_app "$DEVICE_ID" "$APP_PATH"
+    ;;
+  *)
+    echo "error: unknown platform $PLATFORM" >&2
+    exit 1
     ;;
 esac
 

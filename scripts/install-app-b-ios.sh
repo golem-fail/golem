@@ -154,18 +154,18 @@ golem_ios_install_app() {
   fi
 }
 
-# Build an Xcode scheme for the target device, then install the .app that
-# build wrote.
+# Build an Xcode scheme for the target device and print the path of the
+# .app that build wrote, on stdout. Everything else goes to stderr.
 #
-#   golem_ios_build_install <project> <scheme> <configuration> <xcconfig> \
-#                           <development_team> <derived_data> <udid> <mode>
+#   golem_ios_build <project> <scheme> <configuration> <xcconfig> \
+#                   <development_team> <derived_data> <udid> <mode>
 #
 # <project> is an .xcodeproj or .xcworkspace. <xcconfig> and
 # <development_team> may be empty; the team applies to a physical device
 # only. <mode> is "install-only" to skip the build and reuse the previous
 # .app. Every failure returns 1 explicitly: a caller in an `if` or `||`
 # turns `set -e` off for the whole function body.
-golem_ios_build_install() {
+golem_ios_build() {
   local project="$1" scheme="$2" configuration="$3" xcconfig="$4"
   local team="$5" derived_data="$6" udid="$7" mode="$8"
   local is_simulator=0 products_dir build_start app
@@ -223,8 +223,14 @@ golem_ios_build_install() {
   if [[ "$mode" != "install-only" ]]; then
     golem_require_fresh "$app" "$build_start" || return 1
   fi
+  printf '%s\n' "$app"
+}
 
-  golem_ios_install_app "$udid" "$app"
+# golem_ios_build, then install the .app it wrote. Same arguments.
+golem_ios_build_install() {
+  local app
+  app=$(golem_ios_build "$@") || return 1
+  golem_ios_install_app "$7" "$app"
 }
 
 golem_ios_build_install "$XCODE_PROJECT" "$XCODE_SCHEME" "$CONFIGURATION" "$XCCONFIG" \

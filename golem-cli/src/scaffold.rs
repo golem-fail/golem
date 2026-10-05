@@ -137,6 +137,7 @@ pub enum InstallFramework {
     Tauri,
     Expo,
     Capacitor,
+    Kmp,
 }
 
 impl InstallFramework {
@@ -147,6 +148,7 @@ impl InstallFramework {
             InstallFramework::Tauri => "tauri",
             InstallFramework::Expo => "expo",
             InstallFramework::Capacitor => "capacitor",
+            InstallFramework::Kmp => "kmp",
         }
     }
 
@@ -163,6 +165,7 @@ impl InstallFramework {
             InstallFramework::Capacitor => {
                 include_str!("../templates/install-scripts/capacitor.sh")
             }
+            InstallFramework::Kmp => include_str!("../templates/install-scripts/kmp.sh"),
         }
     }
 }
@@ -736,6 +739,7 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(InstallFramework::Tauri.label(), "tauri");
         assert_eq!(InstallFramework::Expo.label(), "expo");
         assert_eq!(InstallFramework::Capacitor.label(), "capacitor");
+        assert_eq!(InstallFramework::Kmp.label(), "kmp");
     }
 
     // 14. render_template leaves text untouched when no placeholder matches.
@@ -893,6 +897,41 @@ install_script = { ios = "scripts/ios.sh" }
         assert!(!content.contains("{{"), "no placeholders SHALL remain");
     }
 
+    #[test]
+    fn write_install_script_renders_kmp_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::Kmp,
+            &[
+                ("KMP_DIR", "./mobile"),
+                ("ANDROID_MODULE", "composeApp"),
+                ("IOS_DIR", "iosApp"),
+                ("XCODE_SCHEME", "iosApp"),
+            ],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        for line in [
+            r#"KMP_DIR="./mobile""#,
+            r#"ANDROID_MODULE="composeApp""#,
+            r#"IOS_DIR="iosApp""#,
+            r#"XCODE_SCHEME="${XCODE_SCHEME:-iosApp}""#,
+        ] {
+            assert!(content.contains(line), "{line} SHALL be substituted");
+        }
+        for f in [
+            "golem_android_build_install()",
+            "golem_ios_build()",
+            "golem_ios_install_app()",
+        ] {
+            assert!(content.contains(f), "{f} SHALL be spliced in");
+        }
+        assert!(!content.contains("{{"), "no placeholders SHALL remain");
+    }
+
     // 18. update on a missing golem.toml surfaces a read error (not a panic).
     #[test]
     fn update_golem_toml_missing_file_errors() {
@@ -1030,6 +1069,9 @@ install_script = "scripts/old.sh"
             ("CAP_CMD", "npx cap"),
             ("WEB_BUILD", "npm run build"),
             ("WEB_DIR", "www"),
+            ("KMP_DIR", "."),
+            ("ANDROID_MODULE", "composeApp"),
+            ("IOS_DIR", "iosApp"),
         ];
         for fw in [
             InstallFramework::NativeIos,
@@ -1037,6 +1079,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Tauri,
             InstallFramework::Expo,
             InstallFramework::Capacitor,
+            InstallFramework::Kmp,
         ] {
             let out = tmp.path().join(format!("{}.sh", fw.label()));
             write_install_script(&out, fw, &placeholders).expect("write");
@@ -1110,6 +1153,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Tauri,
             InstallFramework::Expo,
             InstallFramework::Capacitor,
+            InstallFramework::Kmp,
         ] {
             let out = render_install_script(fw, &[]).expect("render");
             assert!(
@@ -1129,6 +1173,7 @@ install_script = "scripts/old.sh"
             InstallFramework::Tauri,
             InstallFramework::Expo,
             InstallFramework::Capacitor,
+            InstallFramework::Kmp,
         ] {
             let t = fw.template();
             let helpers = t.find("{{>helpers}}");

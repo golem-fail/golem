@@ -40,6 +40,14 @@ name = "app-c"
 bundle = "fail.golem.testc"
 install_script = "scripts/install-test-app-c.sh"
 
+# Kotlin Multiplatform app: a native SwiftUI home screen on iOS that opens a
+# Compose Multiplatform screen. The Xcode project is committed, as in a real
+# KMP app, so the rendered template runs directly.
+[[apps]]
+name = "app-k"
+bundle = "fail.golem.testk"
+install_script = "scripts/install-app-k.sh"
+
 # Per-platform OS-level tweaks applied once per device session before
 # any flow runs. Suppresses defaults that bias test results across
 # emulator wipes / fresh sim images.
