@@ -300,9 +300,9 @@ view. There are two differences between the platforms:
 
 - **Android** leaves off-screen Compose nodes out of the tree.
 - **iOS** keeps every node of a non-lazy layout (for example a `Column` with
-  `verticalScroll`) in the tree, with `visible_bounds` equal to `bounds`. The
-  bounds are not clipped to the scroll container. A node that is on the screen
-  but under a bar outside the container still counts as visible.
+  `verticalScroll`) in the tree, with `visible_bounds` equal to `bounds`. That
+  is, Compose Multiplatform does not clip `visible_bounds` to the scroll
+  container.
 
 `assert_not_visible` searches the full tree, not the visible tree. Thus on iOS it
 treats an off-screen node of a non-lazy layout as present, and it waits until
