@@ -12,7 +12,8 @@
 #
 #   1. generate the native project if it is missing or half-there
 #   2. re-apply the declarations Tauri has no config for (#22)
-#   3. exec the rendered template, which builds and installs
+#   3. copy the app icon over the one `tauri <platform> init` generated
+#   4. exec the rendered template, which builds and installs
 #
 # Step 1 has to be explicit rather than left to `tauri <platform> build`,
 # which inits on its own: its init would run AFTER step 2 and undo it. On
@@ -52,5 +53,13 @@ if [[ ! -f "$marker" ]]; then
 fi
 
 bash scripts/patch-test-app-projects.sh "$PLATFORM"
+
+# The golem icon, generated once with `cargo tauri icon src-tauri/icons/icon.png`
+# into src-tauri/icons/{android,ios}. The generated project holds Tauri's
+# default icon, and gen/ is not committed, so the copy runs on every build.
+case "$PLATFORM" in
+  android) cp -R "$TAURI_DIR/src-tauri/icons/android/." "$GEN/android/app/src/main/res/" ;;
+  ios) cp "$TAURI_DIR"/src-tauri/icons/ios/*.png "$GEN/apple/Assets.xcassets/AppIcon.appiconset/" ;;
+esac
 
 exec bash scripts/install-app.sh "$@"
