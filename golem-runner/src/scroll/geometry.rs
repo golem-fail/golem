@@ -421,9 +421,10 @@ pub(crate) fn find_absorbing_bounds(
 /// point exists in the safe viewport (absorber covers the only useful
 /// region for this direction).
 ///
-/// Strategy: for Up/Down scrolls, swap to the OTHER side of the absorber
-/// vertically if there's room; otherwise try a side-edge with cross-axis
-/// at the absorber's center y. For Left/Right, mirror horizontally.
+/// Strategy: for Up/Down scrolls, prefer a side strip beside the absorber;
+/// otherwise start on the side of it the finger moves away from (below it
+/// for Down, above it for Up), then the other side. For Left/Right, try
+/// above/below first, then the side strips.
 pub(crate) fn pick_outside_absorber(
     absorber: golem_element::Bounds,
     direction: Direction,
@@ -452,17 +453,24 @@ pub(crate) fn pick_outside_absorber(
             } else if right_abs >= ABSORBER_MIN_ROOM_PX {
                 let x = absorber.x + absorber.width + right_abs / 2;
                 Some((x, cy))
-            } else if direction == Direction::Down && above_abs >= ABSORBER_MIN_ROOM_PX {
-                // Swipe Down means the finger moves UP from the start; for
-                // that we need start ABOVE the absorber so the upward
-                // motion stays clear.
-                let y = safe_vp.y + above_abs / 2;
-                Some((cx, y))
-            } else if direction == Direction::Up && below_abs >= ABSORBER_MIN_ROOM_PX {
-                let y = absorber.y + absorber.height + below_abs / 2;
-                Some((cx, y))
             } else {
-                None
+                // Start on the side the finger moves away from: swipe Down
+                // drags the finger UP, so below the absorber, with the whole
+                // drag above it as room to travel; swipe Up, above it. Not
+                // the side that keeps the drag clear of the absorber: the
+                // element under the touch's start owns the gesture, so
+                // crossing the absorber is harmless, and a start above it for
+                // Down leaves only the strip up to the safe-area top, which
+                // cut drags to ~30px and stalled the scroll.
+                let above =
+                    (above_abs >= ABSORBER_MIN_ROOM_PX).then(|| (cx, safe_vp.y + above_abs / 2));
+                let below = (below_abs >= ABSORBER_MIN_ROOM_PX)
+                    .then(|| (cx, absorber.y + absorber.height + below_abs / 2));
+                if direction == Direction::Down {
+                    below.or(above)
+                } else {
+                    above.or(below)
+                }
             }
         }
         Direction::Left | Direction::Right => {
