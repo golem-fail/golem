@@ -1,5 +1,5 @@
 {
-  "productName": "GOLEM Test App",
+  "productName": "Test Tauri (Golem)",
   "version": "0.14.1",
   "identifier": "fail.golem.test",
   "build": {
