@@ -811,6 +811,28 @@ impl PlatformDriver for AndroidDriver {
         // killed the activity and the launch races a still-tearing-down
         // task). The synchronous wait surfaces the failure here instead
         // of leaking it into the next step's element resolver.
+        //
+        // `-n` needs the launcher activity's name, which the app chooses
+        // (NativeScript's is `com.tns.NativeScriptActivity`), so ask the
+        // package manager. `.MainActivity` is only the fallback for a
+        // resolver that answers nothing usable.
+        let resolved = self
+            .adb(&[
+                "shell",
+                "cmd",
+                "package",
+                "resolve-activity",
+                "--brief",
+                "-c",
+                "android.intent.category.LAUNCHER",
+                bundle_id,
+            ])
+            .await
+            .ok();
+        let component = resolved
+            .as_deref()
+            .and_then(|out| parse_launcher_component(out, bundle_id))
+            .unwrap_or_else(|| format!("{bundle_id}/.MainActivity"));
         let am_start = || async {
             self.adb(&[
                 "shell",
@@ -822,7 +844,7 @@ impl PlatformDriver for AndroidDriver {
                 "-c",
                 "android.intent.category.LAUNCHER",
                 "-n",
-                &format!("{bundle_id}/.MainActivity"),
+                &component,
             ])
             .await
         };
@@ -1175,10 +1197,44 @@ impl PlatformDriver for AndroidDriver {
 // Tests
 // ===========================================================================
 
+/// The `package/activity` component in `cmd package resolve-activity
+/// --brief` output: its last line, when that names an activity of `bundle_id`.
+/// Anything else (`No activity found`, a resolver chooser) yields `None`.
+fn parse_launcher_component(output: &str, bundle_id: &str) -> Option<String> {
+    let last = output.lines().map(str::trim).rfind(|l| !l.is_empty())?;
+    let (package, activity) = last.split_once('/')?;
+    (package == bundle_id && !activity.is_empty()).then(|| last.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use golem_element::Bounds;
+
+    #[test]
+    fn launcher_component_reads_the_resolved_activity() {
+        let out = "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false\n\
+                   fail.golem.testn/com.tns.NativeScriptActivity\n";
+        assert_eq!(
+            parse_launcher_component(out, "fail.golem.testn").as_deref(),
+            Some("fail.golem.testn/com.tns.NativeScriptActivity")
+        );
+        assert_eq!(
+            parse_launcher_component("fail.golem.test/.MainActivity", "fail.golem.test").as_deref(),
+            Some("fail.golem.test/.MainActivity")
+        );
+    }
+
+    #[test]
+    fn launcher_component_rejects_anything_but_an_activity_of_the_app() {
+        assert_eq!(parse_launcher_component("No activity found\n", "a.b"), None);
+        assert_eq!(parse_launcher_component("", "a.b"), None);
+        // A chooser or another app's activity is not the app's launcher.
+        assert_eq!(
+            parse_launcher_component("android/com.android.internal.app.ResolverActivity", "a.b"),
+            None
+        );
+    }
 
     #[test]
     fn parse_wm_size_physical_and_override() {
