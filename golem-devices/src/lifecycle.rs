@@ -31,7 +31,7 @@ pub use exec::{
 #[cfg(test)]
 use crate::{DeviceInfo, Platform};
 #[cfg(test)]
-use commands::find_xctestrun;
+use commands::{find_xctestrun, stale_ios_companion_pids};
 #[cfg(test)]
 use exec::{is_already_booted_error, parse_emulator_serials, run_command};
 
@@ -807,6 +807,73 @@ mod tests {
             parse_emulator_serials("").is_empty(),
             "empty stdout SHALL yield no serials"
         );
+    }
+
+    const PS_WITH_STALE_COMPANIONS: &str = "\
+  876     1 S    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -xctestrun /x/ios.xctestrun -destination id=OTHER-UDID -parallel-testing-enabled NO
+ 4583     1 S    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -xctestrun /x/ios.xctestrun -destination id=AAAA-BBBB-CCCC -parallel-testing-enabled NO
+ 4995  4583 S    /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Resources/bin/simctl diagnose -l -b --timeout=600
+ 5000     1 Z    (xcodebuild)
+ 5001     1 Z    xcodebuild test-without-building -destination id=AAAA-BBBB-CCCC
+ 5002     1 S    xcodebuild build-for-testing -project /x/C.xcodeproj -destination id=AAAA-BBBB-CCCC
+ 5003     1 S    grep id=AAAA-BBBB-CCCC
+ 5004     1 S    xcodebuild test-without-building -destination id=AAAA-BBBB-CCCC-DDDD
+10371     1 S    xcodebuild test-without-building -project /x/C.xcodeproj -scheme GolemRunnerUITests -destination id=AAAA-BBBB-CCCC
+";
+
+    // A leftover companion xcodebuild on the same simulator relaunches its
+    // runner ~20 s after a new launch force-quits it, killing the new
+    // companion mid-request (ED507). Every such session, and its children,
+    // SHALL be selected; nothing on another simulator or of another kind.
+    #[test]
+    fn stale_ios_companion_pids_selects_same_udid_sessions_and_children() {
+        let pids = stale_ios_companion_pids(PS_WITH_STALE_COMPANIONS, "AAAA-BBBB-CCCC");
+        assert_eq!(pids, vec![4583, 10371, 4995]);
+    }
+
+    #[test]
+    fn stale_ios_companion_pids_empty_when_none_match() {
+        assert!(stale_ios_companion_pids(PS_WITH_STALE_COMPANIONS, "NOPE").is_empty());
+        assert!(stale_ios_companion_pids("", "AAAA-BBBB-CCCC").is_empty());
+    }
+
+    // The iOS spawn SHALL kill leftover sessions on its simulator, and wait
+    // until `ps` shows none, before it launches the new xcodebuild.
+    #[tokio::test]
+    async fn spawn_ios_companion_kills_stale_sessions_first() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        let ps = ["ps", "-axo", "pid=,ppid=,stat=,command="];
+        fake.expect(&ps, Canned::ok_stdout(PS_WITH_STALE_COMPANIONS));
+        fake.expect(&ps, Canned::ok_stdout(""));
+        fake.expect(
+            &["kill", "-9", "4583", "10371", "4995"],
+            Canned::ok_stdout(""),
+        );
+        let _g = set_test_runner(fake.clone());
+
+        spawn_companion_with_reg(&device, "/x/C.xcodeproj", 0, Some(9999))
+            .await
+            .expect("spawn SHALL succeed");
+
+        let calls = fake.recorded();
+        let programs: Vec<&str> = calls.iter().map(|c| c[0].as_str()).collect();
+        assert_eq!(programs, vec!["ps", "kill", "ps", "xcodebuild"]);
+    }
+
+    // A failing `ps` SHALL NOT block the spawn: the kill is best-effort.
+    #[tokio::test]
+    async fn spawn_ios_companion_proceeds_when_ps_fails() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        let _g = set_test_runner(fake.clone());
+
+        spawn_companion_with_reg(&device, "/x/C.xcodeproj", 0, Some(9999))
+            .await
+            .expect("spawn SHALL succeed");
+
+        let last = fake.recorded().pop().expect("a spawn SHALL be recorded");
+        assert_eq!(last[0], "xcodebuild");
     }
 
     // Helper: a process-unique temp directory path under the system temp
