@@ -257,10 +257,9 @@ platform accessibility tree, so golem sees one node for each widget. Text
 selectors, relational selectors and viewport filtering work on these nodes.
 
 What changes is *which* annotation reaches golem, and how coarse the tree is.
-The Compose facts below come from Jetpack Compose (`test-app-b`) and Compose
-Multiplatform 1.11 (`test-app-k`), on Android API 36 and iOS 26. The Flutter
-facts come from the Flutter documentation. They are not yet checked on a device
-(see #72).
+The facts below come from Jetpack Compose (`test-app-b`), Compose Multiplatform
+1.11 (`test-app-k`) and Flutter 3.47 (`test-app-d`), on Android API 36 and
+iOS 26.
 
 ### Version floors
 
@@ -276,6 +275,7 @@ facts come from the Flutter documentation. They are not yet checked on a device
 | Compose `contentDescription` | `accessibility_label`, on its own node, which has no other text, so the description is also that node's `text`. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
 | Compose `Modifier.testTag` | Identifier (`resource-id`), only with `testTagsAsResourceId = true` on an ancestor. | Identifier (`accessibilityIdentifier`), with no opt-in. |
 | Flutter `Semantics(identifier:)` | Identifier (`resource-id`). | Identifier (`accessibilityIdentifier`). |
+| Flutter widget text (`Text`, button text) | The label; golem reads it as `text` (see [What counts as text](#prefer-visible-text-use-accessibility_label-sparingly)). | `text` |
 | Visible text | `text` | `text` |
 
 The `accessibility_label` selector matches the label or the identifier. The a11y
@@ -299,15 +299,20 @@ canvas UI:
 - **iOS (Compose Multiplatform):** nodes get real types (`button`, `text`,
   `other`). But the `button` node's text is the merged string, for example
   `"Increment, +"`, and the visible `+` is a child `text` node.
+- **Flutter:** a button is a `Button` (Android) or `button` (iOS) node that
+  holds its own text. A `Text` is a plain `View` on Android and `text` on iOS.
+  An `Icon` with a `semanticLabel` looks the same as a `Text` on both
+  platforms. Only `Semantics(image: true)` and `Image` give an image node
+  (`ImageView` / `image`).
 
-As a result, `{ text = "+", traits = ["button"] }` matches nothing on either
-platform. Select by text alone: `{ action = "tap", on_text = "+" }`.
+As a result, on Compose `{ text = "+", traits = ["button"] }` matches nothing on
+either platform. Select by text alone: `{ action = "tap", on_text = "+" }`.
 
 ### Bounds and visibility
 
-Every Compose node carries `bounds` and `visible_bounds` on both platforms.
-golem's viewport filter drops off-screen nodes, and `scroll` brings them into
-view. There are two differences between the platforms:
+Every Compose and Flutter node carries `bounds` and `visible_bounds` on both
+platforms. golem's viewport filter drops off-screen nodes, and `scroll` brings
+them into view. Compose has two differences between the platforms:
 
 - **Android** leaves off-screen Compose nodes out of the tree.
 - **iOS** keeps every node of a non-lazy layout (for example a `Column` with
@@ -315,25 +320,29 @@ view. There are two differences between the platforms:
   is, Compose Multiplatform does not clip `visible_bounds` to the scroll
   container.
 
+A lazy Flutter `ListView` leaves its off-screen items out of the Android tree.
+On iOS it keeps them, with a zero-size frame at the origin.
+
 `assert_not_visible` searches the full tree, not the visible tree. Thus on iOS it
-treats an off-screen node of a non-lazy layout as present, and it waits until
-its timeout. A lazy layout (`LazyColumn`) disposes of off-screen items, so
+treats these nodes as present and waits until its timeout: an off-screen node
+of a non-lazy Compose layout, and an off-screen item of a Flutter `ListView`. A
+Compose lazy layout (`LazyColumn`) disposes of off-screen items, so
 `assert_not_visible` works there on both platforms.
 
 ### Merged semantics
 
 `Modifier.semantics(mergeDescendants = true)`, `Modifier.clickable` and Material
 components merge their children into one accessibility node. Flutter's
-`MergeSemantics` does the same. The merged container looks different on each
-platform:
+`MergeSemantics` does the same, but the two frameworks report the result
+differently:
 
-| | Android | iOS |
-|---|---------|-----|
-| Merged container | No text | Text is the children's text, joined: `"Click A, Click B"` |
-| Child text nodes | Present | Present |
+| | Compose, Android | Compose, iOS | Flutter, both platforms |
+|---|---|---|---|
+| Merged container | No text | Text is the children's text, joined: `"Click A, Click B"` | Text is the children's text, joined by a line break: `"Merged A\nMerged B"` |
+| Child text nodes | Present | Present | **Absent** |
 
-Child text nodes stay in the tree on both platforms. Thus these selectors work
-on both:
+On Compose, child text nodes stay in the tree on both platforms. Thus these
+selectors work on both:
 
 - `on_text` on a child: `{ action = "tap", on_text = "Click B" }` taps inside the
   clickable container.
@@ -341,13 +350,17 @@ on both:
 
 `inside` and `contains` anchored on the **container's** text work only on iOS,
 because the Android container has no text. Anchor on a child's text, or on a
-heading, instead. golem has no parent/child selector (there is no `child_of`).
+heading, instead.
+
+On Flutter, a merged child has no node of its own. Select the container by its
+joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. golem has no parent/child selector (there is no `child_of`).
 `inside` and `contains` are geometric, so a coarse tree does not change them.
 
 ### Flutter
 
-Flutter creates semantics for its standard widgets (`Text`, Material buttons,
-text fields). A custom widget, for example a `GestureDetector` on a `Container`
-or a `CustomPaint`, exposes nothing until you wrap it in `Semantics`. Thus
-semantics are opt-in for each custom widget. This is a bigger task than on
-Compose, where most interactive modifiers add semantics.
+Flutter creates semantics for its standard widgets (`Text`, `Icon` with a
+`semanticLabel`, Material buttons, text fields). A custom widget, for example a
+`GestureDetector` on a `Container` or a `CustomPaint`, exposes nothing until you
+wrap it in `Semantics`. Thus semantics are opt-in for each custom widget. This
+is a bigger task than on Compose, where most interactive modifiers add
+semantics.

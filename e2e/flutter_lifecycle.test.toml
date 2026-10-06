@@ -1,0 +1,24 @@
+[flow]
+name = "Flutter lifecycle test"
+tags = ["cross-platform", "flutter", "lifecycle"]
+
+# Minimal Flutter (test-app-d) flow. Its job is to prove the Flutter install
+# script builds, installs, launches, and drives — not to test app logic.
+# Flutter draws into one canvas view and copies its semantics tree into the
+# platform accessibility tree, so golem sees one node for each widget.
+[[flow.apps]]
+name = "app-d"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "counter"
+steps = [
+  { action = "assert_visible", on_text = "Flutter Counter" },
+  # The heading's Semantics(identifier:) reaches golem as an identifier: iOS
+  # accessibilityIdentifier, and Android resource-id.
+  { action = "assert_visible", on_accessibility_label = "counter-title" },
+  { action = "tap", on_text = "+" },
+  { action = "assert_visible", on_text = "1", on_below = "Flutter Counter" },
+]
