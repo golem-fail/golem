@@ -590,7 +590,7 @@ pub fn run() -> Result<()> {
 
 fn find_golem_toml() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
-    crate::project::find_project_root(&cwd).map(|p| p.join("golem.toml"))
+    golem_orchestrator::project::find_project_root(&cwd).map(|p| p.join("golem.toml"))
 }
 
 fn pathdiff_relative(path: &Path, base: &Path) -> Option<PathBuf> {

@@ -3,8 +3,8 @@
 //! Pure decision functions (`gate_decision`) and their I/O wrappers live
 //! here so they can be unit-tested in isolation from suite orchestration.
 
+use crate::{DeviceSlot, InstallEntry};
 use golem_devices::{DeviceInfo, Platform};
-use golem_orchestrator::{DeviceSlot, InstallEntry};
 
 /// Outcome of consulting the install cache for a single `(device, bundle)`
 /// pair. Hits are summarised optimistically; misses carry a specific

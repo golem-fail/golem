@@ -16,11 +16,22 @@ golem-parser = { path = "../golem-parser" }
 golem-devices = { path = "../golem-devices" }
 golem-runner = { path = "../golem-runner" }
 golem-events = { path = "../golem-events" }
+golem-driver = { path = "../golem-driver" }
+golem-report = { path = "../golem-report" }
+golem-vars = { path = "../golem-vars" }
+golem-common = { path = "../golem-common" }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+chrono = { workspace = true }
+dirs = "6"
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [lints]
 workspace = true

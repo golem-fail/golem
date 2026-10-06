@@ -3,14 +3,12 @@ use std::time::Instant;
 
 use std::sync::Arc;
 
+use crate::{device_matches_slot, plan, CoverageGroup, DeviceSlot, FlowRun, InstallEntry};
 use anyhow::Result;
 use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
 use golem_driver::PlatformDriver;
-use golem_orchestrator::{
-    device_matches_slot, plan, CoverageGroup, DeviceSlot, FlowRun, InstallEntry,
-};
 use golem_parser::FlowFile;
 use golem_report::{FlowReport, SuiteReport};
 use golem_runner::capture::CaptureConfig;
@@ -391,7 +389,7 @@ pub struct SuiteRunner {
     /// Suite-level install cache, shared by all flows so a given
     /// `(device, bundle)` install script runs at most once per suite.
     pub install_cache: golem_runner::installer::InstallCache,
-    /// Install matrix computed at `run_suite` start by `golem_orchestrator::plan()`.
+    /// Install matrix computed at `run_suite` start by `crate::plan()`.
     /// Only apps referenced by some flow appear here. Consumed by pre-install
     /// in the per-device setup loop. Empty until `run_suite` has been called.
     pub install_matrix: Arc<Vec<InstallEntry>>,
@@ -1152,7 +1150,7 @@ fn coverage_skip_report(
     let (device_name, covered_axes) = slots
         .first()
         .map(|s| {
-            let label = golem_orchestrator::shape_label(s);
+            let label = crate::shape_label(s);
             let axes: Vec<String> = label.split('/').map(|p| p.to_string()).collect();
             (Some(label), axes)
         })
@@ -1407,7 +1405,7 @@ async fn execute_flow_run(
                 event_tx.emit(
                     golem_events::DeviceId("suite".into()),
                     golem_events::EventKind::SlotSetupFailed {
-                        slot_label: golem_orchestrator::describe_slot(slot),
+                        slot_label: crate::describe_slot(slot),
                         reason: format!("{e:#}"),
                     },
                 );
@@ -2800,7 +2798,7 @@ async fn reboot_ios_device(udid: &str) -> anyhow::Result<()> {
 /// which planned runs actually executed vs. were pruned / cascade-
 /// skipped. Best-effort: errors print a warning but never fail the
 /// suite.
-fn write_plan_artifact(output_dir: &std::path::Path, parsed: &golem_orchestrator::ParsedSuite) {
+fn write_plan_artifact(output_dir: &std::path::Path, parsed: &crate::ParsedSuite) {
     use serde_json::json;
 
     let runs: Vec<_> = parsed
@@ -2813,11 +2811,7 @@ fn write_plan_artifact(output_dir: &std::path::Path, parsed: &golem_orchestrator
                 .get(run.flow_idx)
                 .map(|f| f.flow.flow.name.as_str())
                 .unwrap_or("?");
-            let slots: Vec<String> = run
-                .slots
-                .iter()
-                .map(golem_orchestrator::describe_slot)
-                .collect();
+            let slots: Vec<String> = run.slots.iter().map(crate::describe_slot).collect();
             json!({
                 "index": i + 1,
                 "flow_name": flow_name,
@@ -2859,7 +2853,7 @@ fn write_plan_artifact(output_dir: &std::path::Path, parsed: &golem_orchestrator
 /// the per-run lines, install entries, and device availability as
 /// human-readable strings so the stream renderer can print them verbatim
 /// and the orchestrator forwarder can relay the same payload to clients.
-fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_events::EventKind {
+fn build_suite_planned_event(parsed: &crate::ParsedSuite) -> golem_events::EventKind {
     let flow_runs: Vec<String> = parsed
         .flow_runs
         .iter()
@@ -2870,11 +2864,7 @@ fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_
                 .get(run.flow_idx)
                 .map(|f| f.flow.flow.name.as_str())
                 .unwrap_or("?");
-            let slots: Vec<String> = run
-                .slots
-                .iter()
-                .map(golem_orchestrator::describe_slot)
-                .collect();
+            let slots: Vec<String> = run.slots.iter().map(crate::describe_slot).collect();
             format!("#{} {}: {}", i + 1, flow_name, slots.join(" + "))
         })
         .collect();
@@ -4253,7 +4243,7 @@ async fn find_available_device(
             .max_by_key(|d| d.os_major)
             .expect("shutdown non-empty");
         let shape = slot
-            .map(golem_orchestrator::shape_label)
+            .map(crate::shape_label)
             .unwrap_or_else(|| best.platform.to_string());
         event_tx.emit(
             golem_events::DeviceId("suite".into()),
@@ -4294,7 +4284,7 @@ async fn find_available_device(
                         "slot requires physical device ({}); auto-create cannot \
                          provision real hardware. Connect a matching device or \
                          remove the `physical` constraint.",
-                        golem_orchestrator::describe_slot(s)
+                        crate::describe_slot(s)
                     );
                 }
                 if let Some(n) = &s.name {
@@ -4316,7 +4306,7 @@ async fn find_available_device(
                      specify `os = \"ios:...\"` or `os = \"android:...\"` on the \
                      `[[flow.apps.devices]]` block, or boot a matching device \
                      manually.",
-                    slot.map(golem_orchestrator::describe_slot)
+                    slot.map(crate::describe_slot)
                         .unwrap_or_else(|| "unconstrained".to_string())
                 ),
             };
@@ -4362,7 +4352,7 @@ async fn find_available_device(
 
     let wait_label = platform
         .map(|p| p.to_string())
-        .or_else(|| slot.map(golem_orchestrator::shape_label))
+        .or_else(|| slot.map(crate::shape_label))
         .unwrap_or_else(|| "any".to_string());
 
     // Owned snapshot we can refresh inside the loop. Initial copy from
@@ -5307,7 +5297,7 @@ mod tests {
     }
 
     // Parser + mixin expansion are covered by
-    // `golem_orchestrator::plan::tests` (parse_one path) and
+    // `crate::plan::tests` (parse_one path) and
     // `golem_parser::mixin` unit tests — no need to re-test at this layer.
 
     // ---------------------------------------------------------------
@@ -5959,7 +5949,7 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn build_suite_planned_event_empty_parsed_yields_empty_lists() {
-        let parsed = golem_orchestrator::ParsedSuite {
+        let parsed = crate::ParsedSuite {
             flows: Vec::new(),
             flow_runs: Vec::new(),
             coverage_groups: Vec::new(),
@@ -5984,7 +5974,7 @@ mod tests {
 
     #[test]
     fn build_suite_planned_event_formats_install_entries() {
-        let parsed = golem_orchestrator::ParsedSuite {
+        let parsed = crate::ParsedSuite {
             flows: Vec::new(),
             flow_runs: Vec::new(),
             coverage_groups: Vec::new(),

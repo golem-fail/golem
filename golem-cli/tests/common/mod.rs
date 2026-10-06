@@ -295,7 +295,7 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
     let code = rt.block_on(async {
         let server = if opts.daemon {
             Some(
-                golem_cli::orchestrator::start_server()
+                golem_orchestrator::ipc::start_server()
                     .await
                     .expect("daemon SHALL start"),
             )

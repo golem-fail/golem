@@ -8,8 +8,8 @@ golem is a Cargo workspace of focused crates. The CLI wires them together; a TOM
 
 | Crate | Responsibility |
 |-------|----------------|
-| `golem-cli` | Binary (`golem`). Arg parsing (clap, `src/cli.rs`), command dispatch (`run`, `tree`, `devices`, `init`, `create`, `install-script`), and the build script (`build.rs`) that compiles + caches the companions. Wires every other crate together. |
-| `golem-orchestrator` | The Plan → Execute model. Plan phase: parse flows, merge project apps, expand coverage (`coverage`), build the install matrix (`install_matrix`). Owns suite-level scheduling. |
+| `golem-cli` | Binary (`golem`). Arg parsing (clap, `src/cli.rs`), command dispatch (`run`, `tree`, `devices`, `init`, `create`, `install-script`) and output rendering. Wires every other crate together. |
+| `golem-orchestrator` | The Plan → Execute model. Plan phase: parse flows, merge project apps, expand coverage (`coverage`), build the install matrix (`install_matrix`). Execute phase: the suite runner (`suite`), the orchestrator socket protocol (`ipc`), companion registration and embedding (`registration`, `companions`, `companion_paths`), the install cache (`install_cache`) and project config discovery (`project`). Owns suite-level scheduling, and its build script (`build.rs`) compiles + caches the companions. |
 | `golem-runner` | Per-flow execution. Action handlers (`actions.rs` + `actions/`), block branching, subflows, `for_each` row iteration, scrolling, install/cleanup/teardown, perf capture, source fingerprinting for the install cache. |
 | `golem-driver` | Host-side device control + companion protocol. Per-platform modules (`android`, `ios`), WebView enrichment (`cdp` for Android, `webkit` for iOS), the Android custom-IME lifecycle (`ime`), and shared request/response DTOs (`common`). |
 | `golem-element` | The `Element` model, the `Selector` type, glob matching, and trait predicates (`button`, `short_text`, `large`, …). |
@@ -76,6 +76,10 @@ flowchart TD
     orch --> devices
     orch --> events
     orch --> browser
+    orch --> driver
+    orch --> vars
+    orch --> report
+    orch --> common
 
     browser --> parser
     browser --> events

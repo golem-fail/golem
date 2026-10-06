@@ -36,7 +36,7 @@ reboot). Wire the explicit escalation only if that backstop proves
 insufficient.
 
 **Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
-glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
+glue lives in `golem-orchestrator/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
 
 ## Confirm host-queue benefit on a load-saturated host
 
@@ -101,7 +101,7 @@ Bonus: lays groundwork for #188 (boot devices on demand) — the
 semaphore expands when new devices come online.
 
 **Files:** `golem-devices/src/resource_manager.rs` (device-pool
-semaphore + ordering rework), `golem-cli/src/suite.rs` (plug into
+semaphore + ordering rework), `golem-orchestrator/src/suite.rs` (plug into
 semaphore).
 
 ## Companion: driver-side restart of a wedged UiAutomation handle
@@ -121,7 +121,7 @@ fail.golem.companion` + re-`am instrument`. Defer until a wedge is
 actually observed surviving the shutdown + self-exit paths.
 
 **Files:** `golem-driver/src/android.rs` (detect persistent "no active
-window", trigger restart), `golem-cli/src/registration.rs` (re-register
+window", trigger restart), `golem-orchestrator/src/registration.rs` (re-register
 on companion restart).
 
 ## Loose-FIFO device queue (multi-tenant orchestrator)
@@ -190,7 +190,7 @@ better than today's pure-random ordering.
   natural FIFO.
 
 **Files:** `golem-devices/src/resource_manager.rs` (waiting registry,
-on-release handoff), `golem-cli/src/suite.rs::find_available_device`
+on-release handoff), `golem-orchestrator/src/suite.rs::find_available_device`
 (step-4 wait loop reads adaptive Tpoll, blocks on a per-shape
 signal instead of fixed sleep).
 
@@ -208,7 +208,7 @@ first mid-suite shutdown path and could race the allocator.
 
 ## Transient Install Errors: Retry Classifier Polish
 
-`golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
+`golem-orchestrator/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
 
 - `Mach error -308 (ipc/mig) server died` / `NSMachErrorDomain code=-308` — CoreSimulator IPC blip on freshly-booted iOS sims
 - `error: device offline` / `error: device not found` — adb device-state race during emulator early boot
@@ -222,7 +222,7 @@ first mid-suite shutdown path and could race the allocator.
 Single-device runs are stable; iPhone + iPad in parallel is where the tail lives. The two worst failure modes are now fixed; the remainder is the hard saturation/corruption tail.
 
 **Fixed — infra exists, don't rebuild:**
-- **Concurrent-startup wedge** → `OpClass::CompanionLaunch` serializes iOS XCUITest bring-up host-wide + a startup deadline (`golem-common/src/host_queue.rs`, `golem-cli/src/suite.rs`). Two sims launching `xcodebuild test-without-building` at once no longer collide and hang.
+- **Concurrent-startup wedge** → `OpClass::CompanionLaunch` serializes iOS XCUITest bring-up host-wide + a startup deadline (`golem-common/src/host_queue.rs`, `golem-orchestrator/src/suite.rs`). Two sims launching `xcodebuild test-without-building` at once no longer collide and hang.
 - **Companion-death ED404 cascade** → bounded companion-restart recovery in slot setup: a companion that goes unreachable mid-suite is relaunched (2 attempts) instead of failing every queued flow ED404. 2026-07 cross-platform sweep: ED404 10→0, suite 7/28→21/28. Registration deadline is tiered — `COLD_REG_DEADLINE` (90s, fresh install) vs `RELAUNCH_REG_DEADLINE` (25s, restart of an installed companion) — so a chronically-dying companion fails fast instead of burning ~a minute per restart (bounds the recovery tail).
 - **Cold-start `/hierarchy` warm-up** → `handleLaunch` does one throwaway `HierarchySerializer.serialize` after activate, behind the launch gate, so the first real `/hierarchy` hits a warm accessibility-snapshot path (the `/health` screenshot warm-up only attaches the screenshot subsystem). App-scoped, no SpringBoard query.
 
@@ -242,7 +242,7 @@ Single-device runs are stable; iPhone + iPad in parallel is where the tail lives
 
 Android multi-emu contention is the same *character* (host saturation → stochastic drops), mitigated by capping concurrency, not op serialization.
 
-**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`, `golem-cli/src/suite.rs` (companion restart + launch serialization).
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`, `golem-orchestrator/src/suite.rs` (companion restart + launch serialization).
 
 ## Distribution: remaining work
 

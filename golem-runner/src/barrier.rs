@@ -8,7 +8,7 @@
 //! # Scope: per-flow, never per-suite
 //!
 //! A `FailureBarrier` instance is constructed fresh for each flow execution
-//! (`run_single_flow_with_resources` in `golem-cli/src/suite.rs`) and cloned
+//! (`run_single_flow_with_resources` in `golem-orchestrator/src/suite.rs`) and cloned
 //! to the per-device tasks spawned for that flow. Multi-flow parallelism
 //! (e.g. `golem run a.toml b.toml`) calls the runner once per flow, so each
 //! flow gets its own independent barrier and a failure in flow A cannot
