@@ -45,6 +45,7 @@ pub fn run() -> Result<()> {
             "nativescript   (NativeScript 8+)",
             InstallFramework::NativeScript,
         ),
+        ("flutter        (Flutter 3.19+)", InstallFramework::Flutter),
     ];
     let idx = Select::with_theme(&theme)
         .with_prompt("Framework")
@@ -466,6 +467,38 @@ pub fn run() -> Result<()> {
             placeholders.push(("NS_CMD", ns_cmd));
             placeholders.push(("PM_INSTALL", pm_install.to_string()));
         }
+        InstallFramework::Flutter => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let found = discover_flutter_dirs(&cwd, 5);
+            let flutter_dir = if found.is_empty() {
+                Input::with_theme(&theme)
+                    .with_prompt("Flutter project directory (contains pubspec.yaml)")
+                    .default(".".into())
+                    .interact_text()?
+            } else {
+                let mut items = found.clone();
+                items.push(OTHER_LABEL.into());
+                let idx = Select::with_theme(&theme)
+                    .with_prompt("Flutter project directory")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+                if idx == items.len() - 1 {
+                    Input::with_theme(&theme)
+                        .with_prompt("Enter path")
+                        .interact_text()?
+                } else {
+                    items[idx].clone()
+                }
+            };
+            let flutter_cmd: String = Input::with_theme(&theme)
+                .with_prompt("Flutter CLI command")
+                .default(default_flutter_cmd(&cwd.join(&flutter_dir)).to_string())
+                .interact_text()?;
+
+            placeholders.push(("FLUTTER_DIR", flutter_dir));
+            placeholders.push(("FLUTTER_CMD", flutter_cmd));
+        }
     }
 
     // For native-{ios,android}, include platform in default filename so the
@@ -884,6 +917,53 @@ fn default_ns_cmd(project: &Path, local_cmd: &str) -> String {
     }
 }
 
+/// Discover Flutter app directories under `root`: dirs whose `pubspec.yaml`
+/// depends on the Flutter SDK. A pure Dart package has a pubspec too, but no
+/// `sdk: flutter` dependency.
+fn discover_flutter_dirs(root: &Path, max_depth: usize) -> Vec<String> {
+    let mut hits = Vec::<PathBuf>::new();
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            p.is_file()
+                && p.file_name().and_then(|n| n.to_str()) == Some("pubspec.yaml")
+                && pubspec_depends_on_flutter(p)
+        },
+        &mut hits,
+    );
+    let mut out: Vec<String> = hits
+        .iter()
+        .filter_map(|p| p.parent())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .map(|s| if s.is_empty() { ".".to_string() } else { s })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Whether the pubspec at `path` declares an `sdk: flutter` dependency. Read
+/// as text: the one line is all the scaffold needs, and a YAML parser would
+/// be a new dependency for it.
+fn pubspec_depends_on_flutter(path: &Path) -> bool {
+    std::fs::read_to_string(path).is_ok_and(|t| t.lines().any(|l| l.trim() == "sdk: flutter"))
+}
+
+/// `fvm flutter` when the project pins its SDK with FVM, else `flutter`.
+fn default_flutter_cmd(project: &Path) -> &'static str {
+    if project.join(".fvmrc").is_file() || project.join(".fvm").is_dir() {
+        "fvm flutter"
+    } else {
+        "flutter"
+    }
+}
+
 /// The `webDir` a Capacitor project declares, read as text from its config.
 /// A `.ts`/`.js` config is code, so this matches the common literal form
 /// (`webDir: 'dist'`) only; anything else falls back to the caller's default.
@@ -1072,7 +1152,8 @@ fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
         | InstallFramework::Expo
         | InstallFramework::Capacitor
         | InstallFramework::Kmp
-        | InstallFramework::NativeScript => format!("scripts/install-{slug}.sh"),
+        | InstallFramework::NativeScript
+        | InstallFramework::Flutter => format!("scripts/install-{slug}.sh"),
     }
 }
 
@@ -1086,7 +1167,8 @@ fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
         | InstallFramework::Expo
         | InstallFramework::Capacitor
         | InstallFramework::Kmp
-        | InstallFramework::NativeScript => None,
+        | InstallFramework::NativeScript
+        | InstallFramework::Flutter => None,
     }
 }
 
@@ -1278,6 +1360,39 @@ mod tests {
             discover_nativescript_dirs(tmp.path(), 5),
             vec!["a".to_string(), "b".into()]
         );
+    }
+
+    #[test]
+    fn discover_flutter_dirs_needs_a_flutter_sdk_dependency() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for dir in ["app", "dart_pkg", "app/ios/.symlinks/plugins/p"] {
+            std::fs::create_dir_all(tmp.path().join(dir)).expect("mkdir");
+        }
+        let flutter_pubspec = "name: x\ndependencies:\n  flutter:\n    sdk: flutter\n";
+        std::fs::write(tmp.path().join("app/pubspec.yaml"), flutter_pubspec).expect("write");
+        std::fs::write(
+            tmp.path().join("dart_pkg/pubspec.yaml"),
+            "name: y\ndependencies:\n  path: ^1.9.0\n",
+        )
+        .expect("write");
+        // A plugin symlinked under a hidden dir is a dependency, not an app.
+        std::fs::write(
+            tmp.path().join("app/ios/.symlinks/plugins/p/pubspec.yaml"),
+            flutter_pubspec,
+        )
+        .expect("write");
+        assert_eq!(
+            discover_flutter_dirs(tmp.path(), 5),
+            vec!["app".to_string()]
+        );
+    }
+
+    #[test]
+    fn default_flutter_cmd_uses_fvm_when_the_project_pins_it() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert_eq!(default_flutter_cmd(tmp.path()), "flutter");
+        std::fs::write(tmp.path().join(".fvmrc"), r#"{ "flutter": "3.35.0" }"#).expect("write");
+        assert_eq!(default_flutter_cmd(tmp.path()), "fvm flutter");
     }
 
     #[test]

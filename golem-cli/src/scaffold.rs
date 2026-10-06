@@ -139,6 +139,7 @@ pub enum InstallFramework {
     Capacitor,
     Kmp,
     NativeScript,
+    Flutter,
 }
 
 impl InstallFramework {
@@ -151,6 +152,7 @@ impl InstallFramework {
             InstallFramework::Capacitor => "capacitor",
             InstallFramework::Kmp => "kmp",
             InstallFramework::NativeScript => "nativescript",
+            InstallFramework::Flutter => "flutter",
         }
     }
 
@@ -171,6 +173,7 @@ impl InstallFramework {
             InstallFramework::NativeScript => {
                 include_str!("../templates/install-scripts/nativescript.sh")
             }
+            InstallFramework::Flutter => include_str!("../templates/install-scripts/flutter.sh"),
         }
     }
 }
@@ -746,6 +749,7 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(InstallFramework::Capacitor.label(), "capacitor");
         assert_eq!(InstallFramework::Kmp.label(), "kmp");
         assert_eq!(InstallFramework::NativeScript.label(), "nativescript");
+        assert_eq!(InstallFramework::Flutter.label(), "flutter");
     }
 
     // 14. render_template leaves text untouched when no placeholder matches.
@@ -965,6 +969,31 @@ install_script = { ios = "scripts/ios.sh" }
             "golem_ensure_deps()",
             "golem_ios_install_app()",
             "golem_pick_apk()",
+        ] {
+            assert!(content.contains(f), "{f} SHALL be spliced in");
+        }
+        assert!(!content.contains("{{"), "no placeholders SHALL remain");
+    }
+
+    #[test]
+    fn write_install_script_renders_flutter_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::Flutter,
+            &[("FLUTTER_DIR", "./mobile"), ("FLUTTER_CMD", "fvm flutter")],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        for line in [r#"FLUTTER_DIR="./mobile""#, r#"FLUTTER_CMD="fvm flutter""#] {
+            assert!(content.contains(line), "{line} SHALL be substituted");
+        }
+        for f in [
+            "golem_ios_install_app()",
+            "golem_pick_apk()",
+            "golem_pick_app()",
         ] {
             assert!(content.contains(f), "{f} SHALL be spliced in");
         }

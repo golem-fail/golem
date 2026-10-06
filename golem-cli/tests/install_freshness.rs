@@ -53,7 +53,7 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
         .expect("golem-cli has a parent directory")
         .to_path_buf();
 
-    let cases: [RenderedScript; 7] = [
+    let cases: [RenderedScript; 8] = [
         (
             InstallFramework::Expo,
             "scripts/install-app-e.sh",
@@ -120,6 +120,11 @@ fn the_repos_install_scripts_match_the_templates_they_were_rendered_from() {
                 ("NS_CMD", "npx ns"),
                 ("PM_INSTALL", "npm install"),
             ],
+        ),
+        (
+            InstallFramework::Flutter,
+            "scripts/install-app-d.sh",
+            &[("FLUTTER_DIR", "test-app-d"), ("FLUTTER_CMD", "flutter")],
         ),
     ];
 

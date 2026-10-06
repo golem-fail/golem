@@ -55,6 +55,13 @@ name = "app-n"
 bundle = "fail.golem.testn"
 install_script = "scripts/install-app-n.sh"
 
+# Flutter app. android/ and ios/ are committed, as in a real Flutter app, so
+# the rendered template runs directly.
+[[apps]]
+name = "app-d"
+bundle = "fail.golem.testd"
+install_script = "scripts/install-app-d.sh"
+
 # Per-platform OS-level tweaks applied once per device session before
 # any flow runs. Suppresses defaults that bias test results across
 # emulator wipes / fresh sim images.
