@@ -12,5 +12,8 @@
     "@nativescript/ios": "9.1.0",
     "@nativescript/webpack": "~5.0.25",
     "nativescript": "~9.1.2"
+  },
+  "overrides": {
+    "axios": "^1.20.0"
   }
 }
