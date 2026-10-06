@@ -52,6 +52,13 @@ directionals.
 
 ### Prefer visible `text`; use `accessibility_label` sparingly
 
+**What counts as text.** `text` is the text the platform reports as visible.
+When an element has no text of its own, its accessibility label is its text,
+on both platforms. Thus an icon-only button labelled `Close` matches
+`on_text = "Close"`. An image (Android `ImageView`, iOS `image`) is the
+exception: its label describes a picture, so it is never text. In a webview,
+`text` is the DOM text only.
+
 golem's premise is **testing like a human** — a human reads and taps *visible
 text*, not an accessibility identifier they can't see. So default to `on_text`
 (or a positional/`contains` selector). Reach for `on_accessibility_label` only
@@ -266,7 +273,7 @@ facts come from the Flutter documentation. They are not yet checked on a device
 
 | Annotation | Android | iOS |
 |------------|---------|-----|
-| Compose `contentDescription` | `accessibility_label`, on its own node. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
+| Compose `contentDescription` | `accessibility_label`, on its own node, which has no other text, so the description is also that node's `text`. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
 | Compose `Modifier.testTag` | Identifier (`resource-id`), only with `testTagsAsResourceId = true` on an ancestor. | Identifier (`accessibilityIdentifier`), with no opt-in. |
 | Flutter `Semantics(identifier:)` | Identifier (`resource-id`). | Identifier (`accessibilityIdentifier`). |
 | Visible text | `text` | `text` |
