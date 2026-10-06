@@ -52,6 +52,13 @@ directionals.
 
 ### Prefer visible `text`; use `accessibility_label` sparingly
 
+**What counts as text.** `text` is the text the platform reports as visible.
+When an element has no text of its own, its accessibility label is its text,
+on both platforms. Thus an icon-only button labelled `Close` matches
+`on_text = "Close"`. An image (Android `ImageView`, iOS `image`) is the
+exception: its label describes a picture, so it is never text. In a webview,
+`text` is the DOM text only.
+
 golem's premise is **testing like a human** — a human reads and taps *visible
 text*, not an accessibility identifier they can't see. So default to `on_text`
 (or a positional/`contains` selector). Reach for `on_accessibility_label` only

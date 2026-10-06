@@ -252,6 +252,13 @@ pub(crate) fn normalize_json(val: &mut serde_json::Value) {
             }
         }
 
+        // A native Android class is fully qualified ("android.view.View"). The
+        // DOM nodes merged in from a webview carry a bare tag name ("div").
+        let native_android = map
+            .get("class")
+            .and_then(|v| v.as_str())
+            .is_some_and(|c| c.contains('.'));
+
         // Android: rename `class` → `element_type`
         if map.contains_key("class") && !map.contains_key("element_type") {
             if let Some(class) = map.remove("class") {
@@ -282,6 +289,39 @@ pub(crate) fn normalize_json(val: &mut serde_json::Value) {
                     );
                 }
             }
+        }
+
+        // An image's label describes a picture, so it never stands in for
+        // visible text — on either platform. Any other native element's label
+        // does, as iOS reports it: Flutter on Android puts every widget's text
+        // into `contentDescription` and leaves `text` empty. Webview DOM nodes
+        // are excluded: their `contentDescription` falls back to the DOM id.
+        let is_image = matches!(
+            map.get("element_type").and_then(|v| v.as_str()),
+            Some("image" | "ImageView")
+        );
+        if native_android && !is_image {
+            let text_empty = map
+                .get("text")
+                .and_then(|v| v.as_str())
+                .is_none_or(str::is_empty);
+            let cd = map
+                .get("contentDescription")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+            if let (true, Some(cd)) = (text_empty, cd) {
+                map.insert("text".to_string(), serde_json::Value::String(cd));
+            }
+        }
+        if is_image && map.contains_key("label") {
+            // iOS: the companion's `text` is `title || label`; keep the title only.
+            let title = map
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            map.insert("text".to_string(), serde_json::Value::String(title));
         }
 
         // Fix checked state for switches/toggles: iOS reports state via value "0"/"1"
@@ -358,7 +398,7 @@ pub(crate) fn normalize_json(val: &mut serde_json::Value) {
             value
         } else if !placeholder.is_empty() {
             placeholder
-        } else if !label.is_empty() {
+        } else if !label.is_empty() && !is_image {
             label
         } else {
             current_text

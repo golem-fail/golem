@@ -318,6 +318,69 @@ mod tests {
         );
     }
 
+    // 12a. A native Android node with no text shows its contentDescription
+    //      as text (Flutter reports every widget's text that way).
+    #[test]
+    fn normalize_android_label_stands_in_for_missing_text() {
+        let mut v = json!({
+            "class": "android.view.View", "text": "", "contentDescription": "Flutter Counter"
+        });
+        normalize_json(&mut v);
+        assert_eq!(
+            v["text"], "Flutter Counter",
+            "the label SHALL stand in for text"
+        );
+        assert_eq!(v["accessibility_label"], "Flutter Counter");
+    }
+
+    // 12b. Visible text wins over contentDescription.
+    #[test]
+    fn normalize_android_keeps_visible_text_over_label() {
+        let mut v = json!({
+            "class": "android.widget.TextView", "text": "+", "contentDescription": "Increment"
+        });
+        normalize_json(&mut v);
+        assert_eq!(v["text"], "+");
+        assert_eq!(v["accessibility_label"], "Increment");
+    }
+
+    // 12c. An image's label never becomes text, on either platform.
+    #[test]
+    fn normalize_image_label_is_not_text() {
+        let mut android = json!({
+            "class": "android.widget.ImageView", "text": "", "contentDescription": "Pic"
+        });
+        normalize_json(&mut android);
+        assert_eq!(android["text"], "", "an Android image SHALL have no text");
+        assert_eq!(android["accessibility_label"], "Pic");
+
+        let mut ios = json!({
+            "element_type": "image", "text": "Pic", "label": "Pic", "title": ""
+        });
+        normalize_json(&mut ios);
+        assert_eq!(ios["text"], "", "an iOS image SHALL have no text");
+        assert_eq!(ios["accessibility_label"], "Pic");
+
+        let mut ios_button = json!({
+            "element_type": "button", "text": "Close", "label": "Close", "title": ""
+        });
+        normalize_json(&mut ios_button);
+        assert_eq!(
+            ios_button["text"], "Close",
+            "a non-image SHALL keep its label as text"
+        );
+    }
+
+    // 12d. A webview DOM node's contentDescription (aria-label or DOM id)
+    //      does not become text.
+    #[test]
+    fn normalize_dom_node_label_is_not_text() {
+        let mut v = json!({ "class": "div", "text": "", "contentDescription": "section-counter" });
+        normalize_json(&mut v);
+        assert_eq!(v["text"], "", "a DOM id SHALL NOT become visible text");
+        assert_eq!(v["accessibility_label"], "section-counter");
+    }
+
     // 13. Switch with value "1" is normalized to checked = true.
     #[test]
     fn normalize_switch_value_one_sets_checked() {
