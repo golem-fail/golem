@@ -96,6 +96,8 @@ cat > "$GH_FIXTURES/pr-101.body" <<'EOF'
 ## Release notes
 <!-- release-notes -->
 - added: authored note from pr one oh one
+- fixed: iOS taps land on the target
+- fixed: npm prereleases publish to next
 <!-- /release-notes -->
 EOF
 cat > "$GH_FIXTURES/pr-102.body" <<'EOF'
@@ -120,6 +122,9 @@ echo "release-notes.sh PR resolution:"
 assert_has  "a numbered subject uses that PR's authored block" \
   "Authored note from pr one oh one (#101)"
 assert_lacks "…and not the commit subject" "subject that should be ignored (#101)"
+
+assert_has  "a mixed-case lead word keeps its case" "- iOS taps land on the target (#101)"
+assert_has  "a lower-case tool name keeps its case" "- npm prereleases publish to next (#101)"
 
 assert_has  "an unnumbered subject still finds its PR and its block" \
   "Authored note from pr one oh two (#102)"

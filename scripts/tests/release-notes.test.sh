@@ -98,6 +98,7 @@ EOF
 cat > Cargo.toml <<'EOF'
 [workspace.dependencies]
 multi = "0.1"
+shared = "2"
 solo = "1"
 EOF
 cat > Cargo.lock <<'EOF'
@@ -110,8 +111,26 @@ name = "multi"
 version = "0.2.0"
 
 [[package]]
+name = "shared"
+version = "2.0.0"
+
+[[package]]
 name = "solo"
 version = "1.0.0"
+EOF
+# A test app's own Cargo lockfile, which pulls in `shared` only transitively.
+# The workspace declares `shared` as a runtime dependency, but that must not
+# make the test app's bump of it read as runtime.
+cat > test-app-f/Cargo.toml <<'EOF'
+[package]
+name = "fixture-app"
+
+[dependencies]
+EOF
+cat > test-app-f/Cargo.lock <<'EOF'
+[[package]]
+name = "shared"
+version = "2.0.0"
 EOF
 git add -A && git commit -qm "fixtures" && git tag v0.0.1
 
@@ -135,8 +154,28 @@ name = "multi"
 version = "0.3.0"
 
 [[package]]
+name = "shared"
+version = "2.0.0"
+
+[[package]]
 name = "solo"
 version = "1.1.0"
+EOF
+perl -pi -e 's/"2\.0\.0"/"2.1.0"/' test-app-f/Cargo.lock
+# A new Flutter app: its SDK packages record a placeholder 0.0.0 version.
+cat > test-app-f/pubspec.lock <<'EOF'
+packages:
+  dio:
+    dependency: "direct main"
+    source: hosted
+    version: "5.0.0"
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+sdks:
+  dart: ">=3.4.0 <4.0.0"
 EOF
 git add -A && git commit -qm "bump deps" && git tag v0.0.2
 
@@ -172,8 +211,17 @@ else fail "pub direct main groups under runtime — runtime block was: $RT"; fi
 if grep -qF 'test`' <<< "$DEV"; then ok "pub direct dev groups under dev"
 else fail "pub direct dev groups under dev — dev block was: $DEV"; fi
 
-# Transitive collapse: FirebaseCore + meta changed but are transitive.
-assert_has "transitive bumps collapse to a count" '+2 transitive'
+# Transitive collapse: FirebaseCore, meta and the test app's `shared` changed
+# but are transitive.
+assert_has "transitive bumps collapse to a count" '+3 transitive'
+
+# Scope: the workspace declares `shared` (runtime), but only the test app's
+# lockfile moved it, where it is transitive.
+assert_lacks "a test app's bump of a workspace dep is not listed as runtime" 'shared`'
+
+# pub SDK packages carry a placeholder version and are not dependency updates.
+assert_has  "a new hosted pub dep is listed" 'dio` **added** 5.0.0'
+assert_lacks "a pub SDK package is not listed" 'flutter`'
 
 # A crate resolving to several versions must stay on ONE line. Interpolating the
 # raw multi-line capture printed a bare newline mid-entry, splitting the bullet

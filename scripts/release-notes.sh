@@ -180,13 +180,16 @@ pods_direct_keys() {
   '
 }
 
-# name<TAB>version for every package in a pubspec.lock (YAML) on stdin.
+# name<TAB>version for every package in a pubspec.lock (YAML) on stdin. SDK
+# packages (`flutter`, `flutter_test`) are left out: they record a placeholder
+# version, 0.0.0, and move with the Flutter SDK, not with the lockfile.
 pub_lock_map() {
   awk '
     /^packages:/ { inpkgs=1; next }
     /^[a-z]/ && !/^packages:/ { inpkgs=0 }
-    inpkgs && /^  [A-Za-z0-9_]+:/ { name=$0; gsub(/[ \t:]/,"",name); next }
-    inpkgs && name != "" && /^    version:/ {
+    inpkgs && /^  [A-Za-z0-9_]+:/ { name=$0; gsub(/[ \t:]/,"",name); src=""; next }
+    inpkgs && name != "" && /^    source:/ { src=$0; sub(/^ *source:[ \t]*/,"",src) }
+    inpkgs && name != "" && /^    version:/ && src != "sdk" {
       v=$0; sub(/^ *version:[ \t]*/,"",v); gsub(/"/,"",v)
       print name "\t" v
     }
@@ -276,7 +279,16 @@ emit_note() {  # <canonical-bucket> <text-with-optional-(#N)>
 }
 
 # Capitalise first letter; leave the rest (identifiers/backticks) untouched.
-sentence() { local s="$1"; printf '%s' "${s^}"; }
+# A lead word that is lower-case on purpose keeps its case: a mixed-case name
+# (iOS, macOS, iPhone) or a lower-case tool name (npm, golem).
+sentence() {
+  local s="$1" w="${1%% *}"
+  if [[ "$w" =~ ^[a-z]+[A-Z] || "$w" =~ ^(npm|golem)$ ]]; then
+    printf '%s' "$s"
+  else
+    printf '%s' "${s^}"
+  fi
+}
 
 # Strip trailing whitespace.
 trim_trail() { local s="$1"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
@@ -385,12 +397,17 @@ done < <(git log --no-merges --format='%h%x1f%H%x1f%s' "$RANGE" 2>/dev/null || t
 # Direct deps are classed by manifest section; the workspace's OWN crates (path
 # members) are "internal" and dropped (their bump is just the release). Runtime
 # wins over dev if a dep is declared both ways.
+#
+# A class is keyed by scope as well as name — the scope is loc_class of the
+# manifest (rt = the shipped workspace, dev = the test apps). A lockfile is
+# looked up in its own scope, so a crate the workspace declares directly but a
+# test app only pulls in transitively reads as transitive there, not runtime.
 declare -A DEPCLASS=()
 declare -A INTERNAL=()
-set_class() {  # eco name class — runtime beats dev; never downgrade
-  local k="$1:$2"
+set_class() {  # scope eco name class — runtime beats dev; never downgrade
+  local k="$1:$2:$3"
   [[ "${DEPCLASS[$k]:-}" == "rt" ]] && return
-  DEPCLASS["$k"]="$3"
+  DEPCLASS["$k"]="$4"
 }
 
 # path → dev if it lives under a test-app* dir, else rt (workspace / npm wrapper).
@@ -402,10 +419,10 @@ if [[ -n "$PREV" ]]; then
   while IFS= read -r m; do
     [[ -z "$m" ]] && continue
     if [[ "$m" == test-app* ]]; then
-      while read -r _c key; do [[ -n "$key" ]] && set_class cargo "$key" dev; done \
+      while read -r _c key; do [[ -n "$key" ]] && set_class dev cargo "$key" dev; done \
         < <(cargo_manifest_keys "$m")
     else
-      while read -r c key; do [[ -n "$key" ]] && set_class cargo "$key" "$c"; done \
+      while read -r c key; do [[ -n "$key" ]] && set_class rt cargo "$key" "$c"; done \
         < <(cargo_manifest_keys "$m")
     fi
     n="$(git show "${NEW}:${m}" 2>/dev/null \
@@ -418,7 +435,7 @@ if [[ -n "$PREV" ]]; then
   while IFS= read -r m; do
     [[ -z "$m" ]] && continue
     cls="$(loc_class "$m")"
-    while IFS= read -r key; do [[ -n "$key" ]] && set_class npm "$key" "$cls"; done \
+    while IFS= read -r key; do [[ -n "$key" ]] && set_class "$cls" npm "$key" "$cls"; done \
       < <(git show "${NEW}:${m}" 2>/dev/null \
           | jq -r '((.dependencies//{}) + (.devDependencies//{})) | keys[]' 2>/dev/null || true)
   done < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
@@ -444,7 +461,7 @@ if [[ -n "$PREV" ]]; then
   for f in "${PODS_LOCKS[@]:-}"; do
     [[ -z "$f" ]] && continue
     cls="$(loc_class "$f")"
-    while IFS= read -r key; do [[ -n "$key" ]] && set_class pods "$key" "$cls"; done \
+    while IFS= read -r key; do [[ -n "$key" ]] && set_class "$cls" pods "$key" "$cls"; done \
       < <(git show "${NEW}:${f}" 2>/dev/null | pods_direct_keys || true)
   done
 
@@ -457,7 +474,7 @@ if [[ -n "$PREV" ]]; then
     while read -r c key; do
       [[ -z "$key" ]] && continue
       [[ "$forced" == "dev" ]] && c="dev"
-      set_class pub "$key" "$c"
+      set_class "$forced" pub "$key" "$c"
     done < <(git show "${NEW}:${f}" 2>/dev/null | pub_dep_classes || true)
   done
 fi
@@ -506,7 +523,7 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
     ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2}' | join_versions)"
     nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2}' | join_versions)"
     [[ "$ov" == "$nv" ]] && continue                     # unchanged
-    cls="${direct_force:-${DEPCLASS[${eco}:${name}]:-}}"
+    cls="${direct_force:-${DEPCLASS[$(loc_class "$path"):${eco}:${name}]:-}}"
     if [[ -z "$cls" ]]; then                             # transitive → count once
       [[ -z "${TRANS_SEEN[${eco}:${name}]:-}" ]] && { TRANS_SEEN[${eco}:${name}]=1; transitive=$((transitive+1)); }
       continue
