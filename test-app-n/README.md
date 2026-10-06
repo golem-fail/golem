@@ -10,6 +10,9 @@ Minimal NativeScript 9 app (plain JavaScript, XML UI) that exercises golem's
   same as the other test apps, so cross-app flows drive the same way.
 - **CLI:** `nativescript` is a devDependency, so the install script runs
   `npx ns` and needs no global CLI.
+- **`overrides.axios`:** the CLI pins axios to an exact version with known
+  advisories. The override lifts it within axios 1.x. Remove it when a
+  `nativescript` release pins a fixed axios.
 
 ## Build
 
