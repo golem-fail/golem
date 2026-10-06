@@ -23,15 +23,12 @@ if [[ ! -d "$APP_DIR/$PLATFORM" ]]; then
     npm run build 1>&2
     npx cap add "$PLATFORM" 1>&2
     # The app icon: `cap add` writes Capacitor's default, and the generated
-    # project is not committed, so the golem icon is applied to each new one.
-    # The generator adds its own adaptive-icon inset, so the full master is
-    # the foreground.
-    mkdir -p build/icon-assets
-    cp icon-1024.png build/icon-assets/icon-only.png
-    cp icon-1024.png build/icon-assets/icon-foreground.png
-    cp icon-background.png build/icon-assets/icon-background.png
-    npx capacitor-assets generate "--$PLATFORM" --assetPath build/icon-assets \
-      --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#ffffff' 1>&2
+    # project is not committed, so the golem icon set in icons/ (made once
+    # from icon-1024.png) is copied over each new one.
+    case "$PLATFORM" in
+      android) cp -R icons/android/. android/app/src/main/res/ ;;
+      ios) cp icons/ios/AppIcon-512@2x.png ios/App/App/Assets.xcassets/AppIcon.appiconset/ ;;
+    esac
   )
 fi
 
