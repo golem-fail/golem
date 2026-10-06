@@ -727,7 +727,7 @@ action = "launch"
 app = "${app_bundle}"
 [[step]]
 action = "assert_visible"
-text = "${wait_element}"
+on_text = "${wait_element}"
 ```
 
 ```toml
