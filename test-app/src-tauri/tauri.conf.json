@@ -1,6 +1,6 @@
 {
   "productName": "Test Tauri (Golem)",
-  "version": "0.14.2",
+  "version": "0.15.0",
   "identifier": "fail.golem.test",
   "build": {
     "frontendDist": "../dist",
