@@ -81,6 +81,7 @@ pub mod interp;
 pub mod parallel;
 pub mod perf;
 pub mod policy;
+pub mod probe;
 pub mod recovery;
 pub mod resolution;
 pub mod scroll;

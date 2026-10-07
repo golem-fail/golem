@@ -143,14 +143,8 @@ pub async fn resolve_element(
             }
             Err(e) => return Err(e),
         };
-        // Reduce viewport by keyboard height — elements behind the keyboard
-        // are not visible to the user.
-        let mut viewport = Viewport::from_root(&root);
-        if meta.keyboard_height > 0 {
-            viewport.height -= meta.keyboard_height;
-        }
-        let visible_root = filter_viewport(&root, &viewport);
-        let results = find_elements(&visible_root, &selector);
+        let (viewport, visible_root, results) =
+            visible_matches(&root, meta.keyboard_height, &selector);
 
         if !results.is_empty() {
             let first = &results[0];
@@ -430,6 +424,28 @@ pub async fn resolve_element(
         selector.text,
         selector.accessibility_label,
     );
+}
+
+/// The viewport a step judges against, the visible tree inside it, and the
+/// selector's matches in that tree. [`resolve_element`] acts on the first
+/// match; `probe` reports all of them, so the two cannot disagree.
+pub fn visible_matches(
+    root: &golem_element::Element,
+    keyboard_height: i32,
+    selector: &golem_element::selector::Selector,
+) -> (
+    Viewport,
+    golem_element::Element,
+    Vec<golem_element::FindResult>,
+) {
+    // Elements behind the keyboard are not visible to the user.
+    let mut viewport = Viewport::from_root(root);
+    if keyboard_height > 0 {
+        viewport.height -= keyboard_height;
+    }
+    let visible_root = filter_viewport(root, &viewport);
+    let results = find_elements(&visible_root, selector);
+    (viewport, visible_root, results)
 }
 
 /// Resolve an element from the **full** hierarchy (not viewport-filtered).
