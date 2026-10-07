@@ -1,4 +1,8 @@
-# golem as an MCP server
+# MCP Server
+
+*Another mind speaks the words; the golem does the work.*
+
+← [Back to README](../README.md) · See also [CLI Reference](cli-reference.md#golem-mcp) · [Actions Reference](actions-reference.md)
 
 `golem mcp` is an [MCP](https://modelcontextprotocol.io) server. An LLM client, such as Claude Code, Codex, OpenCode, Gemini CLI or Claude Desktop, uses it to drive an iOS or Android device one step at a time. Use it for two tasks:
 
@@ -7,9 +11,28 @@
 
 The tool list and each tool's arguments are in the [CLI reference](cli-reference.md#golem-mcp). This page tells you how to set up a client and how a session works.
 
+## Contents
+
+- [Setup](#setup)
+  - [Claude Code](#claude-code)
+  - [Codex CLI](#codex-cli)
+  - [OpenCode](#opencode)
+  - [Gemini CLI](#gemini-cli)
+  - [Claude Desktop and other GUI clients](#claude-desktop-and-other-gui-clients)
+  - [Install channels](#install-channels)
+  - [Timeouts](#timeouts)
+- [The step notation](#the-step-notation)
+- [The visible tree decides](#the-visible-tree-decides)
+- [Sessions](#sessions)
+  - [A session from a flow](#a-session-from-a-flow)
+  - [Long operations](#long-operations)
+- [Example: write a new flow](#example-write-a-new-flow)
+- [Example: debug an app issue](#example-debug-an-app-issue)
+- [Upgrades and troubleshooting](#upgrades-and-troubleshooting)
+
 ## Setup
 
-The server talks over stdio. Each client starts the command `golem` with the argument `mcp`. Before you start, run `golem doctor`.
+Before you start, run `golem doctor`.
 
 `golem mcp --print-config <client>` prints a config block for `claude`, `codex`, `opencode`, `gemini` or `desktop`. The block holds the absolute path of the `golem` that you ran.
 
@@ -79,7 +102,7 @@ The block has the same form as the Claude Code block:
 { "mcpServers": { "golem": { "command": "golem", "args": ["mcp"] } } }
 ```
 
-Check the server with `/mcp` in a Gemini CLI session, or with `gemini mcp list`. `gemini mcp list` tests a stdio server only in a trusted folder.
+Check the server with `/mcp` in a Gemini CLI session, or with `gemini mcp list`. `gemini mcp list` shows the server as connected only in a trusted folder.
 
 ### Claude Desktop and other GUI clients
 
@@ -118,7 +141,7 @@ A client stops waiting for one tool call after a limit. golem answers every call
 - **Codex:** `tool_timeout_sec` defaults to 60. Keep it above the soft timeout. `startup_timeout_sec` defaults to 10. The server starts in well under that time.
 - **Claude Code:** `MCP_TOOL_TIMEOUT` (milliseconds) sets the limit for every server, and `"timeout"` on one server in `.mcp.json` sets it for that server. The defaults are much longer than the soft timeout.
 - **Gemini CLI:** `"timeout"` on the server (milliseconds) defaults to 600000, which is longer than the soft timeout.
-- **OpenCode:** `"timeout"` on the server (milliseconds, default 5000) applies to the tool list that the client gets when the server starts. The server sends the list in well under that time.
+- **OpenCode:** `"timeout"` on the server (milliseconds, default 5000) applies only while the server starts. golem starts in well under that time.
 - **Other clients:** if a client's limit is under 45 s, start the server with `--soft-timeout` below that limit.
 
 ## The step notation
@@ -139,9 +162,9 @@ golem tests as a person does. A step finds its element only in the visible tree:
 
 ## Sessions
 
-A session holds one device, one app, the app's companion, the variables and a flow draft. Each MCP server has one session at a time.
+A session holds one device, one app, the variables and a flow draft. Each MCP server has one session at a time.
 
-1. `session_open` picks the device and the app. It starts the companion, and it can first run a flow (see below).
+1. `session_open` picks the device and the app. It can first run a flow (see below).
 2. `act`, `probe`, `tree`, `screenshot` and `app_logs` work on that device.
 3. `session_close` ends the session and releases the device.
 
@@ -152,7 +175,7 @@ A session also ends in these cases:
 | `session_close` | yes, unless `teardown = false` |
 | The client stops the server (stdin closes, or the process is killed) | no |
 | No operation for `idle_timeout_s` (default 1800) | no |
-| The daemon stops | no |
+| golem stops, for example after an upgrade | no |
 
 Only an explicit `session_close` runs the teardown. A teardown can change the app or the device. golem does not do that when nobody asked for it.
 
@@ -222,10 +245,10 @@ session_close(teardown = false)
 
 `app_logs` reads `adb logcat` on Android and the unified log on an iOS simulator. A physical iOS device is not supported. On iOS, `print` output does not reach the log: use `NSLog`, `os_log` or `Logger`.
 
-## The daemon
+## Upgrades and troubleshooting
 
-`golem mcp` is a client of the golem daemon, the same daemon that `golem run` uses. The first tool call that needs a device starts the daemon if no daemon runs. The daemon exits 45 s after its last client leaves, and never while a session is open. It writes its log to `~/.golem/golem.log`.
-
-- **Environment.** The server sends its environment with each `session_open`. A GUI client must therefore set `PATH` and `ANDROID_HOME` in `env`.
-- **Upgrades.** A newer golem drains an older daemon: the old daemon finishes its work, then exits, and the new golem starts a new daemon. An open MCP session keeps the old daemon busy until the session ends. A `golem run` waits up to `GOLEM_DAEMON_WAIT` seconds (default 300) for that. After an upgrade, restart the MCP server in your client. When the old `golem mcp` connects to the new daemon, it fails with an "is older than the running daemon" error.
-- **Mixed versions.** An npm project version and a global brew version can differ. Align the two versions, or set `GOLEM_SOCKET` so that each one uses its own daemon.
+- **After an upgrade,** restart the golem MCP server in your client. Until you do, the client uses the old golem, and its tools can fail with an "is older than the running daemon" error.
+- **An open session delays `golem run` after an upgrade.** The new `golem run` waits for the sessions of the old golem to end, up to `GOLEM_DAEMON_WAIT` seconds (default 300). Close the session, or stop the MCP server, to continue.
+- **Two golem versions,** such as an npm project version and a global brew version, interfere with each other. Use the same version for both, or set `GOLEM_SOCKET` to a different path for each one.
+- **`adb` or `xcrun` not found:** the client did not give golem your shell `PATH`. Set `PATH` and `ANDROID_HOME` in the server's `env`, as in the [Claude Desktop](#claude-desktop-and-other-gui-clients) example.
+- **The log** of the golem background process is `~/.golem/golem.log`. See [The daemon](cli-reference.md#the-daemon).
