@@ -46,6 +46,50 @@ pub struct CommandOpts {
     pub base_env: Option<Vec<(String, String)>>,
 }
 
+/// Kills a child's whole process group if dropped before the child exits.
+///
+/// A cancelled run aborts the task waiting on a child. Killing only the
+/// child would leave what it started (an install script's gradle or
+/// xcodebuild, a `bash` step's pipeline) running and racing the next run.
+/// The child must lead its own group (`process_group(0)`). After a normal
+/// exit the killer is disarmed: a step may start a background process on
+/// purpose.
+pub struct GroupKiller {
+    pgid: Option<i32>,
+}
+
+impl GroupKiller {
+    /// Arm for `child`, which leads its own process group.
+    pub fn new(child: &tokio::process::Child) -> Self {
+        GroupKiller {
+            pgid: child.id().and_then(|id| i32::try_from(id).ok()),
+        }
+    }
+
+    /// The child exited: leave its group alone.
+    pub fn disarm(&mut self) {
+        self.pgid = None;
+    }
+
+    /// Kill the group now.
+    pub fn kill(&mut self) {
+        if let Some(pgid) = self.pgid.take() {
+            // SAFETY: `killpg` only sends a signal. The leader is not yet
+            // reaped (armed means it has not been waited for), so the
+            // group id cannot have been reused.
+            unsafe {
+                libc::killpg(pgid, libc::SIGKILL);
+            }
+        }
+    }
+}
+
+impl Drop for GroupKiller {
+    fn drop(&mut self) {
+        self.kill();
+    }
+}
+
 /// The environment and working directory of the client a daemon runs work
 /// for. A long-lived daemon's own environment is that of whichever client
 /// started it, so the processes it starts for a client's flows (install
@@ -269,7 +313,9 @@ impl CommandRunner for SystemCommandRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
+            .process_group(0)
             .spawn()?;
+        let killer = GroupKiller::new(&child);
 
         let stderr = child
             .stderr
@@ -288,19 +334,21 @@ impl CommandRunner for SystemCommandRunner {
 
         Ok(StreamingProcess {
             stderr: rx,
-            child: Box::new(SystemStreamingChild { child }),
+            child: Box::new(SystemStreamingChild { child, killer }),
         })
     }
 }
 
 struct SystemStreamingChild {
     child: tokio::process::Child,
+    killer: GroupKiller,
 }
 
 #[async_trait]
 impl StreamingChild for SystemStreamingChild {
     async fn wait(&mut self) -> std::io::Result<ExitOutcome> {
         let status = self.child.wait().await?;
+        self.killer.disarm();
         Ok(ExitOutcome {
             success: status.success(),
             code: status.code(),
@@ -308,6 +356,7 @@ impl StreamingChild for SystemStreamingChild {
     }
 
     async fn kill(&mut self) {
+        self.killer.kill();
         let _ = self.child.kill().await;
     }
 }
@@ -663,6 +712,86 @@ impl CommandRunner for FakeCommandRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Running, as opposed to gone or a zombie.
+    fn alive(pid: &str) -> bool {
+        std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", pid])
+            .output()
+            .map(|o| {
+                let stat = String::from_utf8_lossy(&o.stdout);
+                let stat = stat.trim();
+                !stat.is_empty() && !stat.starts_with('Z')
+            })
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn dropping_a_streamed_child_kills_what_it_started() {
+        let dir = std::env::temp_dir().join(format!("golem-group-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let pid_file = dir.join("grandchild.pid");
+        let script = format!("sleep 30 & echo $! > {}; wait", pid_file.display());
+        let child = SystemCommandRunner
+            .spawn_streaming("sh", &argv(&["-c", &script]), &CommandOpts::default())
+            .await
+            .expect("spawn");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let pid = loop {
+            if let Some(pid) = std::fs::read_to_string(&pid_file)
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                break pid;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the script SHALL start"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        };
+        assert!(alive(&pid));
+
+        drop(child);
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while alive(&pid) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the script's own child SHALL die with it"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_streamed_child_that_exits_leaves_its_background_children_running() {
+        let dir = std::env::temp_dir().join(format!("golem-group-bg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let pid_file = dir.join("bg.pid");
+        let script = format!(
+            "sleep 30 >/dev/null 2>&1 & echo $! > {}",
+            pid_file.display()
+        );
+        let mut child = SystemCommandRunner
+            .spawn_streaming("sh", &argv(&["-c", &script]), &CommandOpts::default())
+            .await
+            .expect("spawn");
+        assert!(child.child.wait().await.expect("wait").success);
+        drop(child);
+        let pid = std::fs::read_to_string(&pid_file)
+            .expect("pid")
+            .trim()
+            .to_string();
+        assert!(
+            alive(&pid),
+            "a background process started on purpose SHALL survive"
+        );
+        let _ = std::process::Command::new("kill").arg(&pid).status();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[tokio::test]
     async fn a_base_env_replaces_this_process_environment() {

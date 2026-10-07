@@ -29,16 +29,14 @@ use golem_orchestrator::{ipc, project};
 pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
     match cli.command {
         Commands::Run(args) => {
-            // Restore any device keyboards golem swapped for its invisible
-            // Unicode IME if the user interrupts mid-run. Normal completion
-            // restores them via suite teardown; a Ctrl-C skips that, leaving
-            // golem's IME active until the next run self-heals. In the default
-            // in-process topology the driver's activation registry lives in
-            // this process, so we can restore it directly. (A daemon owns its
-            // own teardown — interrupting the client doesn't stop the daemon.)
+            // Ctrl-C ends this client, which closes its socket: the daemon
+            // cancels the run, releases its devices and restores the device
+            // keyboards it swapped for golem's Unicode IME. The restore here
+            // covers an in-process daemon (`GOLEM_DAEMON_IN_PROCESS`), whose
+            // IME registry lives in this process and dies with it.
             tokio::spawn(async {
                 if tokio::signal::ctrl_c().await.is_ok() {
-                    eprintln!("\n  [ime] interrupted — restoring device keyboards...");
+                    eprintln!("\n  interrupted — cancelling the run");
                     golem_driver::ime::restore_all().await;
                     std::process::exit(130);
                 }
