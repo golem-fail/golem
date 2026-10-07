@@ -114,7 +114,7 @@ fi
 # build's embedded companion artifacts (a fully-cached build emits nothing, and
 # stale build-<hash> dirs make globbing ambiguous). Companions themselves stay
 # content-hash cached, so this stays cheap.
-touch "$ROOT/golem-cli/build.rs"
+touch "$ROOT/golem-orchestrator/build.rs"
 
 BUILD_JSON="$(mktemp)"
 trap 'rm -f "$BUILD_JSON" ${NOTES_FILE:+"$NOTES_FILE"}' EXIT
@@ -126,7 +126,7 @@ cargo build --release -p golem-cli --bin golem \
 
 # ── Preflight: both companions must have embedded (non-empty) ──────────────────
 OUT_DIR="$(grep '"reason":"build-script-executed"' "$BUILD_JSON" \
-    | grep -o '"out_dir":"[^"]*golem-cli-[^"]*"' \
+    | grep -o '"out_dir":"[^"]*golem-orchestrator-[^"]*"' \
     | tail -1 | sed -E 's/.*"out_dir":"(.*)"/\1/')"
 if [ -z "$OUT_DIR" ] || [ ! -d "$OUT_DIR" ]; then
     echo "error: could not resolve the build-script out_dir; cannot verify embeds." >&2

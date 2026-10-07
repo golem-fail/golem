@@ -9,7 +9,7 @@
 //!   flow, keyed by (platform, app_name). Apps in `golem.toml [[apps]]` that
 //!   no flow references are dropped entirely.
 //!
-//! The Execute phase (in `golem-cli::suite`) consumes a `ParsedSuite`,
+//! The Execute phase (in `suite`) consumes a `ParsedSuite`,
 //! allocates devices per `FlowRun`, runs scoped pre-install from the
 //! `install_matrix`, ensures a companion, and executes the flow.
 //!
@@ -24,9 +24,16 @@
 //! - Cross-process install cache dedup → `InstallCache` trait in
 //!   `golem-runner::installer` can grow a persistent backend
 
+pub mod companion_paths;
+pub mod companions;
 pub mod coverage;
+pub mod install_cache;
 pub mod install_matrix;
+pub mod ipc;
 pub mod plan;
+pub mod project;
+pub mod registration;
+pub mod suite;
 
 pub use coverage::{pick_best_covering, set_cover_greedy, CoverageStrategy};
 pub use install_matrix::{build_install_matrix, InstallEntry};

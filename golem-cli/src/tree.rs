@@ -35,7 +35,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     });
 
     // Scan for running companions first
-    let mut companions = crate::suite::scan_companions_public().await;
+    let mut companions = golem_orchestrator::suite::scan_companions_public().await;
 
     // Filter by platform
     if let Some(pf) = platform_filter {
@@ -53,7 +53,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     // If no companions found, discover devices and start them
     if companions.is_empty() {
         eprintln!("  No running companions found. Starting...");
-        let started = crate::suite::start_companions_public(platform_filter).await?;
+        let started = golem_orchestrator::suite::start_companions_public(platform_filter).await?;
         companions = started;
 
         if let Some(pf) = platform_filter {

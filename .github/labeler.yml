@@ -5,7 +5,7 @@
 # `lang:` never matches them and `framework:` matches them by design.
 #
 # Each dir lists both `<dir>/*.ext` and `<dir>/**/*.ext` so a file at the dir
-# root (e.g. golem-cli/build.rs, npm/install.js) matches regardless of how the
+# root (e.g. golem-orchestrator/build.rs, npm/install.js) matches regardless of how the
 # globstar treats zero path segments.
 
 # ── documentation (pure-docs PRs only) ───────────────────────────────────

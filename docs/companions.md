@@ -68,8 +68,8 @@ carries layout context the driver needs: `keyboard_height`, `safe_area_top`/`bot
 `device_model`. HTML inside a `WKWebView` shows up through WebKit's accessibility properties (see
 [WebView handling](#webview-handling)).
 
-**Build & install.** The companion is compiled during `cargo build` of `golem-cli`
-(`golem-cli/build.rs`): it hashes the iOS sources (plus the crate version) and, on change, runs
+**Build & install.** The companion is compiled during `cargo build` of `golem-orchestrator`
+(`golem-orchestrator/build.rs`): it hashes the iOS sources (plus the crate version) and, on change, runs
 `xcodebuild build-for-testing` for the simulator, then packages the products + `.xctestrun` into
 a cached `companion-ios.tar.gz` that the CLI installs onto the simulator at run time.
 

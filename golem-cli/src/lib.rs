@@ -1,19 +1,12 @@
 pub mod a11y_extract;
 pub mod cache;
 pub mod cli;
-pub mod companion_paths;
-pub mod companions;
 pub mod dev_server;
 pub mod devices;
 pub mod discovery;
 pub mod doctor;
-pub mod install_cache;
 pub mod install_script_cmd;
-pub mod orchestrator;
-pub mod project;
-pub mod registration;
 pub mod scaffold;
-pub mod suite;
 pub mod tree;
 
 use std::path::{Path, PathBuf};
@@ -22,7 +15,8 @@ use anyhow::Context;
 
 use cli::{Cli, Commands};
 use discovery::TagFilter;
-use suite::SuiteConfig;
+use golem_orchestrator::suite::SuiteConfig;
+use golem_orchestrator::{ipc, project};
 
 /// Run the CLI to completion, returning the process exit code (`0` = ok,
 /// `1` = a flow failed or setup errored). Split out of `main` so
@@ -282,18 +276,18 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // in-process case — that's the marker for "I own the
             // device pool, I must clean it up afterwards." External
             // daemons own their own device lifecycle.
-            let (stream, local_server) = match orchestrator::try_connect().await {
+            let (stream, local_server) = match ipc::try_connect().await {
                 Ok(s) => (s, None),
                 Err(_) => {
-                    let server = orchestrator::start_server().await?;
-                    let s = orchestrator::try_connect()
+                    let server = ipc::start_server().await?;
+                    let s = ipc::try_connect()
                         .await
                         .context("failed to connect to in-process orchestrator")?;
                     (s, Some(server))
                 }
             };
 
-            let outcome = orchestrator::submit_and_wait(
+            let outcome = ipc::submit_and_wait(
                 stream,
                 &flow_paths,
                 &config_json,

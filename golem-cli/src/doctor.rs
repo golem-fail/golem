@@ -636,10 +636,10 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
         } else {
             0
         };
-        f.ios_companion =
-            crate::companions::has_ios_companion().then(crate::companions::ios_companion_size);
-        f.android_companion = crate::companions::has_android_companion()
-            .then(crate::companions::android_companion_size);
+        f.ios_companion = golem_orchestrator::companions::has_ios_companion()
+            .then(golem_orchestrator::companions::ios_companion_size);
+        f.android_companion = golem_orchestrator::companions::has_android_companion()
+            .then(golem_orchestrator::companions::android_companion_size);
         f.golem_writable = Some(probe_golem_writable());
     }
 
