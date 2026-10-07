@@ -339,6 +339,7 @@ pub async fn run_as(socket: &Path, idle_grace: Duration, identity: &ipc::Identit
         }
         server.stop_accepting();
         server.wait_for_clients().await;
+        golem_driver::ime::restore_all().await;
         for warning in server
             .resource_mgr()
             .shutdown_golem_booted(server.keep_devices())

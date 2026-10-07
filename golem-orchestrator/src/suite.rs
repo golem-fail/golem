@@ -796,6 +796,7 @@ impl SuiteRunner {
         let max_concurrency = self.config.max_concurrency.filter(|n| *n > 0);
         let run_gate = max_concurrency.map(|n| Arc::new(tokio::sync::Semaphore::new(n)));
         let mut handles = Vec::new();
+        let used_devices: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
         for run in parsed.flow_runs.iter() {
             let Some(pf) = parsed.flows.get(run.flow_idx) else {
                 continue;
@@ -807,6 +808,7 @@ impl SuiteRunner {
             let rm = resource_mgr.clone();
             let install_cache = self.install_cache.clone();
             let install_matrix = self.install_matrix.clone();
+            let used_devices = used_devices.clone();
             let tx = suite_tx.clone();
             let reg_state = reg_state.clone();
             let seed = self.config.seed;
@@ -882,6 +884,7 @@ impl SuiteRunner {
                         resource_mgr: rm,
                         install_cache,
                         install_matrix,
+                        used_devices,
                     },
                     FlowRunChannels {
                         event_tx: tx,
@@ -1040,10 +1043,12 @@ impl SuiteRunner {
             let _ = h.await;
         }
 
-        // Restore the original keyboard on any device whose IME we
-        // switched to golem's Unicode IME this run (primary in-session
-        // restore; self-heal at next init is the crash fallback).
-        golem_driver::ime::restore_all().await;
+        // Restore the original keyboard on this suite's devices where golem
+        // switched to its Unicode IME (primary in-session restore; self-heal
+        // at next init is the crash fallback). Only this suite's: another
+        // client of the daemon may be typing on its own device right now.
+        let used: Vec<String> = used_devices.lock().map(|u| u.clone()).unwrap_or_default();
+        golem_driver::ime::restore(&used).await;
 
         // Ask each Android companion to exit cleanly so its `am instrument`
         // parent tears down with it. A companion left running after golem
@@ -1345,6 +1350,8 @@ struct FlowRunProvisioning {
     resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
     install_cache: golem_runner::installer::InstallCache,
     install_matrix: Arc<Vec<InstallEntry>>,
+    /// Every device this suite has set up, for the end-of-suite cleanup.
+    used_devices: Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 /// Event stream + companion registration handles shared across slots.
@@ -1376,6 +1383,7 @@ async fn execute_flow_run(
         resource_mgr,
         install_cache,
         install_matrix,
+        used_devices,
     } = provisioning;
     let FlowRunChannels {
         event_tx,
@@ -1465,6 +1473,9 @@ async fn execute_flow_run(
         .await
         {
             Ok((device, port, lease)) => {
+                if let Ok(mut used) = used_devices.lock() {
+                    used.push(device.udid.clone());
+                }
                 device_setups.push((device, port));
                 leases.extend(lease);
             }

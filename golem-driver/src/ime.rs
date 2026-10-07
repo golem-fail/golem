@@ -9,9 +9,11 @@
 //!
 //! Restore is layered so the user's keyboard is always put back:
 //!   1. **In-session (primary):** every activated device is tracked in a
-//!      process-global registry; [`restore_all`] runs at suite teardown.
+//!      process-global registry. Each suite restores the devices it used
+//!      with [`restore`] when it ends; [`restore_all`] runs when the
+//!      process that switched them exits.
 //!   2. **Next-run self-heal:** the original IME is also persisted to
-//!      `.golem/`. [`self_heal`] runs at device init — if the current
+//!      `~/.golem/ime/`. [`self_heal`] runs at device init — if the current
 //!      default IME is golem's and a record exists, it restores; if the
 //!      record is missing, it falls back to `ime reset` (system default).
 //!   3. **Backstop:** whenever the original is unknown, `ime reset`
@@ -33,8 +35,8 @@ pub fn golem_ime_id() -> &'static str {
 const ACTION_INPUT: &str = "fail.golem.companion.INPUT_TEXT";
 
 /// Process-global map of `device serial → original default IME` for
-/// every device whose keyboard we switched this run. Drained by
-/// [`restore_all`] at suite teardown.
+/// every device whose keyboard this process switched and has not yet
+/// restored.
 fn activations() -> &'static Mutex<HashMap<String, String>> {
     static MAP: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     MAP.get_or_init(|| Mutex::new(HashMap::new()))
@@ -58,8 +60,9 @@ async fn adb(serial: &str, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Path to the persisted original-IME record for a device, under the
-/// project-local `.golem/` dir (CWD-relative, like the install cache).
+/// Path to the persisted original-IME record for a device, under
+/// `~/.golem/ime/`. Not under the working directory: the daemon that
+/// switches keyboards runs from `/`.
 fn record_path(serial: &str) -> PathBuf {
     let safe: String = serial
         .chars()
@@ -71,7 +74,10 @@ fn record_path(serial: &str) -> PathBuf {
             }
         })
         .collect();
-    PathBuf::from(".golem").join(format!("ime-original-{safe}"))
+    let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
+    home.join(".golem")
+        .join("ime")
+        .join(format!("original-{safe}"))
 }
 
 /// Parse the `settings get secure default_input_method` output into a
@@ -276,8 +282,27 @@ async fn restore_device(serial: &str, original: &str) {
     let _ = tokio::fs::remove_file(record_path(serial)).await;
 }
 
-/// Restore every device whose IME this process switched. Called at suite
-/// teardown — the primary in-session restore.
+/// Restore the keyboard on each of `serials` that this process switched.
+/// A suite calls it for its own devices when it ends: one daemon serves
+/// many suites and sessions, and a device another of them is typing on
+/// must keep golem's IME.
+pub async fn restore(serials: &[String]) {
+    let entries: Vec<(String, String)> = {
+        let mut map = activations()
+            .lock()
+            .expect("ime activations mutex poisoned");
+        serials
+            .iter()
+            .filter_map(|s| map.remove(s).map(|original| (s.clone(), original)))
+            .collect()
+    };
+    for (serial, original) in entries {
+        restore_device(&serial, &original).await;
+    }
+}
+
+/// Restore every device whose IME this process switched. Called when the
+/// process that switched them exits.
 pub async fn restore_all() {
     let entries: Vec<(String, String)> = {
         let mut map = activations()
@@ -328,6 +353,37 @@ pub async fn self_heal(serial: &str) {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn restore_takes_only_the_named_devices() {
+        {
+            let mut map = activations().lock().expect("lock");
+            map.insert("restore-test-a".into(), "kbd/.A".into());
+            map.insert("restore-test-b".into(), "kbd/.B".into());
+        }
+        // adb fails for these serials; the registry is what this checks.
+        restore(&["restore-test-a".to_string(), "not-switched".to_string()]).await;
+        let map = activations().lock().expect("lock");
+        assert!(!map.contains_key("restore-test-a"), "a SHALL be restored");
+        assert_eq!(
+            map.get("restore-test-b").map(String::as_str),
+            Some("kbd/.B"),
+            "b SHALL keep golem's IME"
+        );
+    }
+
+    #[test]
+    fn the_record_lives_under_the_home_directory() {
+        let path = record_path("emulator-5554");
+        assert!(
+            path.is_absolute() || std::env::var_os("HOME").is_none(),
+            "{path:?}"
+        );
+        assert!(
+            path.ends_with(".golem/ime/original-emulator-5554"),
+            "{path:?}"
+        );
+    }
+
     #[test]
     fn base64_matches_known_vectors() {
         assert_eq!(base64_encode(b""), "");
@@ -377,15 +433,8 @@ mod tests {
 
     #[test]
     fn record_path_sanitises_serial() {
-        assert_eq!(
-            record_path("emulator-5554"),
-            PathBuf::from(".golem/ime-original-emulator-5554")
-        );
         // Network serials carry a colon — must not escape the dir.
-        assert_eq!(
-            record_path("192.168.1.5:5555"),
-            PathBuf::from(".golem/ime-original-192_168_1_5_5555")
-        );
+        assert!(record_path("192.168.1.5:5555").ends_with(".golem/ime/original-192_168_1_5_5555"));
     }
 
     #[test]
