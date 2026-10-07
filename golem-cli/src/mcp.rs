@@ -216,6 +216,15 @@ pub struct WaitParams {
     pub timeout_s: Option<u64>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExportParams {
+    /// Where to write the .test.toml, relative to the project directory or absolute.
+    pub path: String,
+    /// Replace a file the session did not open from.
+    #[serde(default)]
+    pub overwrite: bool,
+}
+
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct HelpParams {
     /// One action to describe. Without it, every action is listed.
@@ -361,11 +370,10 @@ impl GolemMcp {
         description = "Run one step and return its result. The step is a TOML inline table, the same text as a step in a flow file: { action = \"tap\", on_text = \"Sign in\" }. Call actions_help for the actions."
     )]
     async fn act(&self, Parameters(p): Parameters<ActParams>) -> Result<CallToolResult, ErrorData> {
-        let _ = &p.comment;
         let reply = self
             .op(
                 "session_act",
-                serde_json::json!({ "step": p.step, "tree": p.tree }),
+                serde_json::json!({ "step": p.step, "tree": p.tree, "comment": p.comment }),
             )
             .await?;
         self.render(&reply, json_format(p.format.as_deref()))
@@ -471,6 +479,33 @@ impl GolemMcp {
     }
 
     #[tool(
+        description = "The flow draft: every step that passed in act, at its insertion point, as .test.toml text."
+    )]
+    async fn draft_show(
+        &self,
+        Parameters(_): Parameters<NoParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let reply = self.op("session_draft_show", serde_json::json!({})).await?;
+        self.render(&reply, false)
+    }
+
+    #[tool(
+        description = "Check the flow draft as golem run would, then write it to path. A file the session did not open from needs overwrite = true."
+    )]
+    async fn export_flow(
+        &self,
+        Parameters(p): Parameters<ExportParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let reply = self
+            .op(
+                "session_export",
+                serde_json::json!({ "path": p.path, "overwrite": p.overwrite }),
+            )
+            .await?;
+        self.render(&reply, false)
+    }
+
+    #[tool(
         description = "How to write steps. Without an action: the notation and every action. With an action: its description and examples."
     )]
     async fn actions_help(
@@ -525,6 +560,19 @@ impl GolemMcp {
                 reply["op_id"],
                 reply["op"].as_str().unwrap_or_default()
             ));
+        }
+        if let Some(text) = r["draft"].as_str() {
+            return self::text(text.to_string());
+        }
+        if let Some(path) = r["exported"].as_str() {
+            let mut out = format!("exported {path} · {} steps · valid\n", r["steps"]);
+            if let Some(list) = r["unverified"].as_array().filter(|l| !l.is_empty()) {
+                out.push_str("unverified (recorded with record_only, never run):\n");
+                for step in list {
+                    out.push_str(&format!("  {}\n", step.as_str().unwrap_or_default()));
+                }
+            }
+            return self::text(out);
         }
         if r["opened"] == true {
             let mut out = format!(

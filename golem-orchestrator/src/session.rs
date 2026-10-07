@@ -66,8 +66,13 @@ pub struct FlowOpen {
 #[derive(Debug, Clone)]
 pub enum Op {
     /// Run a step, given in the canonical notation; with `tree`, also read
-    /// the visible tree after it.
-    Act { step: String, tree: bool },
+    /// the visible tree after it. A step that passes goes into the draft,
+    /// with `comment` above it.
+    Act {
+        step: String,
+        tree: bool,
+        comment: Option<String>,
+    },
     /// Read the tree: the visible one, or the full one as a hint; as TOON,
     /// or with `json` as the element tree.
     Tree { full: bool, json: bool },
@@ -75,6 +80,10 @@ pub enum Op {
     Probe { selector: String, timeout_ms: u64 },
     /// Capture the screen as PNG.
     Screenshot,
+    /// The flow draft as TOML.
+    DraftShow,
+    /// Check the draft and write it to `path`.
+    Export { path: PathBuf, overwrite: bool },
 }
 
 impl Op {
@@ -84,6 +93,8 @@ impl Op {
             Op::Tree { .. } => "tree",
             Op::Probe { .. } => "probe",
             Op::Screenshot => "screenshot",
+            Op::DraftShow => "draft_show",
+            Op::Export { .. } => "export_flow",
         }
     }
 }
@@ -106,6 +117,12 @@ pub enum OpResult {
     },
     Screenshot {
         png: Vec<u8>,
+    },
+    Draft(String),
+    Exported {
+        path: PathBuf,
+        steps: usize,
+        unverified: Vec<String>,
     },
     /// The session holds its device now.
     Opened {
@@ -185,6 +202,8 @@ struct Work {
     leases: Vec<DeviceLease>,
     /// The flow the session opened from: its teardown runs on close.
     flow: Option<golem_parser::FlowFile>,
+    /// The `.test.toml` being written from the steps that pass.
+    draft: crate::draft::Draft,
     base_timeout_ms: u64,
     teardown_on_close: bool,
     project_root: PathBuf,
@@ -456,12 +475,14 @@ impl Work {
     fn from_parts(parts: Parts) -> Work {
         let mut vars = golem_vars::VariableStore::new();
         vars.push_scope(golem_vars::Scope::new(golem_vars::ScopeLevel::Flow));
+        let draft = new_draft(&parts.device, &parts.apps);
         Work {
             capture: capture_for(&parts.project_root),
             device: parts.device,
             driver: parts.driver,
             leases: parts.lease.into_iter().collect(),
             flow: None,
+            draft,
             base_timeout_ms: golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS,
             teardown_on_close: false,
             project_root: parts.project_root,
@@ -474,6 +495,15 @@ impl Work {
             log: Vec::new(),
         }
     }
+}
+
+/// A new draft for a session on `device`, with the session's first app.
+fn new_draft(device: &DeviceInfo, apps: &[golem_parser::AppConfig]) -> crate::draft::Draft {
+    let os = format!("{}:latest", device.platform);
+    let app = apps
+        .first()
+        .and_then(|a| a.bundle.as_deref().map(|b| (a.name.as_str(), b)));
+    crate::draft::Draft::new("New flow", app.map(|(n, b)| (n, b, os.as_str())))
 }
 
 fn capture_for(project_root: &std::path::Path) -> golem_runner::capture::CaptureConfig {
@@ -749,6 +779,16 @@ async fn open_flow(
     work.base_timeout_ms = h.base_timeout_ms;
     work.teardown_on_close = !f.no_teardown;
     work.flow = Some(h.flow);
+    work.draft = crate::draft::Draft::from_file(&path)?;
+    match h.stopped_at.as_ref().or(h.failed_at.as_ref()) {
+        // Blocks a mixin added are not in the file; record at the end then.
+        Some(at) => {
+            if work.draft.insert_at(&at.block, Some(at.step)).is_err() {
+                work.draft.insert_at_end();
+            }
+        }
+        None => work.draft.insert_at_end(),
+    }
     Ok((work, Some(summary)))
 }
 
@@ -871,6 +911,8 @@ fn phase_of(op: &Op) -> String {
         Op::Tree { full, .. } => format!("tree{}", if *full { " (full)" } else { "" }),
         Op::Probe { selector, .. } => format!("probe {selector}"),
         Op::Screenshot => "screenshot".to_string(),
+        Op::DraftShow => "draft_show".to_string(),
+        Op::Export { path, .. } => format!("export_flow {}", path.display()),
     }
 }
 
@@ -885,7 +927,31 @@ fn summary_of(op: &Op, result: &OpResult) -> String {
 
 async fn run_op(work: &mut Work, op: &Op) -> OpResult {
     match op {
-        Op::Act { step, tree } => act(work, step, *tree).await,
+        Op::Act {
+            step,
+            tree,
+            comment,
+        } => act(work, step, *tree, comment.as_deref()).await,
+        Op::DraftShow => OpResult::Draft(work.draft.text()),
+        Op::Export { path, overwrite } => {
+            let path = if path.is_absolute() {
+                path.clone()
+            } else {
+                work.child_env
+                    .as_ref()
+                    .and_then(|e| e.cwd.clone())
+                    .unwrap_or_else(|| work.project_root.clone())
+                    .join(path)
+            };
+            match work.draft.export(&path, *overwrite) {
+                Ok(done) => OpResult::Exported {
+                    path: done.path,
+                    steps: done.steps,
+                    unverified: done.unverified,
+                },
+                Err(e) => OpResult::Failed(format!("{e:#}")),
+            }
+        }
         Op::Tree { full, json } => match read_tree(work.driver.as_ref(), *full, *json).await {
             Ok(text) => OpResult::Tree(text),
             Err(e) => OpResult::Failed(format!("{e:#}")),
@@ -920,9 +986,9 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
     }
 }
 
-async fn act(work: &mut Work, step: &str, tree: bool) -> OpResult {
-    let step = match golem_parser::inline::parse_step_inline(step) {
-        Ok(parsed) => parsed.step,
+async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> OpResult {
+    let (step, line) = match golem_parser::inline::parse_step_inline(step) {
+        Ok(parsed) => (parsed.step, parsed.line),
         Err(e) => return OpResult::Failed(format!("{e:#}")),
     };
     let Work {
@@ -972,8 +1038,16 @@ async fn act(work: &mut Work, step: &str, tree: bool) -> OpResult {
     } else {
         None
     };
+    let passed = !matches!(report.outcome, golem_report::StepOutcome::Failed { .. });
+    // Only a step that passed belongs in the flow; it goes in as written,
+    // so a `${var}` stays a reference.
+    if passed {
+        if let Err(e) = work.draft.record(&line, comment) {
+            return OpResult::Failed(format!("the step passed, but the draft refused it: {e:#}"));
+        }
+    }
     OpResult::Act {
-        passed: !matches!(report.outcome, golem_report::StepOutcome::Failed { .. }),
+        passed,
         toon: golem_report::toon::format_step_toon(&report)
             .trim_start()
             .to_string(),
@@ -1096,6 +1170,7 @@ mod tests {
         Op::Act {
             step: step.into(),
             tree: false,
+            comment: None,
         }
     }
 
@@ -1423,5 +1498,86 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 other => panic!("{stop} SHALL fail: {other:?}"),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn a_passing_step_goes_into_the_draft_and_a_failing_one_does_not() {
+        let s = session_on(
+            Arc::new(MockPlatformDriver::new(screen())),
+            None,
+            DEFAULT_IDLE_TIMEOUT,
+        );
+        let tap = run(
+            &s,
+            Op::Act {
+                step: r#"action="tap",on_text="Pay*""#.into(),
+                tree: false,
+                comment: Some("Pay now".into()),
+            },
+        )
+        .await;
+        assert!(
+            matches!(tap.result, OpResult::Act { passed: true, .. }),
+            "{tap:?}"
+        );
+        let _ = run(&s, act(r#"{ action = "fail", message = "no" }"#)).await;
+        match run(&s, Op::DraftShow).await.result {
+            OpResult::Draft(text) => {
+                assert!(
+                    text.contains("  # Pay now\n  { action = \"tap\", on_text = \"Pay*\" },\n"),
+                    "{text}"
+                );
+                assert!(
+                    !text.contains("fail"),
+                    "a failed step SHALL NOT be recorded: {text}"
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_export_adds_to_the_flow_file_at_the_stop_point() {
+        let (dir, _) = flow_dir();
+        let path = dir.path().join("s.test.toml");
+        let before = std::fs::read_to_string(&path).expect("read");
+        let s = open_flow(dir.path(), Some("two:2"), false);
+        let _ = opened(&s).await;
+        let added = run(
+            &s,
+            Op::Act {
+                step: r#"{ action = "assert_visible", on_text = "${target}" }"#.into(),
+                tree: false,
+                comment: Some("Still here".into()),
+            },
+        )
+        .await;
+        assert!(
+            matches!(added.result, OpResult::Act { passed: true, .. }),
+            "{added:?}"
+        );
+        match run(
+            &s,
+            Op::Export {
+                path: path.clone(),
+                overwrite: false,
+            },
+        )
+        .await
+        .result
+        {
+            OpResult::Exported { steps, .. } => assert_eq!(steps, 4),
+            other => panic!("{other:?}"),
+        }
+        let after = std::fs::read_to_string(&path).expect("read");
+        let want = before.replace(
+            "  {{ action = \"fail\"".replace("{{", "{").as_str(),
+            "  # Still here\n  { action = \"assert_visible\", on_text = \"${target}\" },\n  { action = \"fail\"",
+        );
+        assert_eq!(
+            after, want,
+            "the export SHALL add the step before the stop and change nothing else"
+        );
+        s.close("closed", false).await;
     }
 }

@@ -22,7 +22,10 @@ async fn call(
     if let serde_json::Value::Object(map) = args {
         params = params.with_arguments(map);
     }
-    let result = client.call_tool(params).await.expect("call_tool");
+    let result = client
+        .call_tool(params)
+        .await
+        .unwrap_or_else(|e| panic!("{tool}: {e:?}"));
     let v = serde_json::to_value(&result).expect("json");
     let is_error = v["isError"].as_bool().unwrap_or(false);
     (v["content"].clone(), is_error)
@@ -79,6 +82,8 @@ async fn every_tool_works_against_a_stub_session() {
         "status",
         "cancel",
         "actions_help",
+        "draft_show",
+        "export_flow",
     ] {
         assert!(
             tools.iter().any(|t| t == name),
@@ -166,6 +171,34 @@ async fn every_tool_works_against_a_stub_session() {
     .await;
     assert!(!err);
     assert!(text_of(&c).contains(r#"{ action = "type""#), "{c}");
+
+    let (c, err) = call(&client, "draft_show", serde_json::json!({})).await;
+    assert!(!err, "{c}");
+    assert!(
+        text_of(&c).contains(r#"{ action = "tap", on_text = "Submit" },"#),
+        "the passing tap SHALL be in the draft: {c}"
+    );
+    assert!(!text_of(&c).contains("tapp"), "{c}");
+
+    let out = dir.path().join("flows/new.test.toml");
+    let (c, err) = call(
+        &client,
+        "export_flow",
+        serde_json::json!({ "path": out.display().to_string() }),
+    )
+    .await;
+    assert!(!err, "{c}");
+    assert!(text_of(&c).starts_with("exported "), "{c}");
+    let flow = golem_parser::parse_flow(&std::fs::read_to_string(&out).expect("exported file"))
+        .expect("the export SHALL parse");
+    assert_eq!(flow.block[0].steps[0].action, "tap");
+    let (c, err) = call(
+        &client,
+        "export_flow",
+        serde_json::json!({ "path": dir.path().join("golem.toml").display().to_string() }),
+    )
+    .await;
+    assert!(err, "an export over another file SHALL need overwrite: {c}");
 
     let (c, err) = call(&client, "session_close", serde_json::json!({})).await;
     assert!(!err, "{c}");

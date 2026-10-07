@@ -28,6 +28,7 @@ pub mod companion_paths;
 pub mod companions;
 pub mod coverage;
 pub mod daemon;
+pub mod draft;
 pub mod install_cache;
 pub mod install_matrix;
 pub mod interactive;

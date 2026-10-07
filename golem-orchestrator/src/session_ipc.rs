@@ -81,6 +81,12 @@ async fn handle(
         "session_act" => Some(Op::Act {
             step: msg["step"].as_str().unwrap_or_default().to_string(),
             tree: msg["tree"].as_bool().unwrap_or(false),
+            comment: msg["comment"].as_str().map(str::to_string),
+        }),
+        "session_draft_show" => Some(Op::DraftShow),
+        "session_export" => Some(Op::Export {
+            path: std::path::PathBuf::from(msg["path"].as_str().unwrap_or_default()),
+            overwrite: msg["overwrite"].as_bool().unwrap_or(false),
         }),
         "session_tree" => Some(Op::Tree {
             full: msg["full"].as_bool().unwrap_or(false),
@@ -385,6 +391,16 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
             "udid": udid,
             "bundle": bundle,
             "flow": flow,
+        }),
+        OpResult::Draft(text) => serde_json::json!({ "draft": text }),
+        OpResult::Exported {
+            path,
+            steps,
+            unverified,
+        } => serde_json::json!({
+            "exported": path.display().to_string(),
+            "steps": steps,
+            "unverified": unverified,
         }),
         OpResult::Failed(message) => serde_json::json!({ "error": message }),
         OpResult::Cancelled => serde_json::json!({ "cancelled": true }),
