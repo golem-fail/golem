@@ -271,7 +271,7 @@ async fn open(
         Ok(r) => r,
         Err(e) => return error(&format!("{e:#}")),
     };
-    let flow = match parse_flow_open(msg) {
+    let flow = match parse_flow_open(msg, &req.project_root) {
         Ok(f) => f,
         Err(e) => return error(&format!("{e:#}")),
     };
@@ -318,13 +318,15 @@ async fn open(
     }
     forget_failed_open(session.clone(), home.clone());
     let waited = session.wait(wait).await;
-    // An open that failed leaves nothing to keep.
+    // An open that failed leaves nothing to keep. `forget_failed_open` can
+    // close it first, so this wait may see only the end: the end reason
+    // carries the error too.
     if let Waited::Done(Outcome {
-        result: OpResult::Failed(_),
+        result: OpResult::Failed(e),
         ..
     }) = &waited
     {
-        session.close("the open failed", false).await;
+        session.close(&format!("the open failed: {e}"), false).await;
         home.forget(&session).await;
     }
     waited_json(waited)
@@ -332,7 +334,11 @@ async fn open(
 
 /// The flow part of a `session_open`: `flow`, `stop_at`,
 /// `break_on_failure`, `teardown` and `vars`.
-fn parse_flow_open(msg: &serde_json::Value) -> anyhow::Result<Option<crate::session::FlowOpen>> {
+/// A relative flow path is in the project, as `export_flow`'s is.
+fn parse_flow_open(
+    msg: &serde_json::Value,
+    project_root: &std::path::Path,
+) -> anyhow::Result<Option<crate::session::FlowOpen>> {
     let Some(path) = msg["flow"].as_str() else {
         if !msg["stop_at"].is_null() {
             anyhow::bail!("stop_at needs a flow");
@@ -357,7 +363,7 @@ fn parse_flow_open(msg: &serde_json::Value) -> anyhow::Result<Option<crate::sess
         })
         .unwrap_or_default();
     Ok(Some(crate::session::FlowOpen {
-        path: std::path::PathBuf::from(path),
+        path: project_root.join(path),
         stop_at,
         break_on_failure: msg["break_on_failure"].as_bool().unwrap_or(false),
         no_teardown: msg["teardown"].as_bool() == Some(false),
@@ -426,10 +432,10 @@ fn forget_failed_open(session: Arc<Session>, home: Home) {
                 Waited::Pending(_) => continue,
                 Waited::Done(Outcome {
                     op: "session_open",
-                    result: OpResult::Failed(_),
+                    result: OpResult::Failed(e),
                     ..
                 }) => {
-                    session.close("the open failed", false).await;
+                    session.close(&format!("the open failed: {e}"), false).await;
                     home.forget(&session).await;
                 }
                 _ => {}
@@ -829,6 +835,51 @@ mod tests {
                 .is_some_and(|m| m.contains("already open")),
             "{again}"
         );
+    }
+
+    #[test]
+    fn a_relative_flow_is_in_the_project_and_an_absolute_one_stays() {
+        let root = std::path::Path::new("/work/app");
+        let open = |flow: &str| {
+            parse_flow_open(&serde_json::json!({ "flow": flow }), root)
+                .expect("parse")
+                .expect("flow")
+                .path
+        };
+        assert_eq!(
+            open("e2e/tap.test.toml"),
+            std::path::Path::new("/work/app/e2e/tap.test.toml")
+        );
+        assert_eq!(
+            open("/elsewhere/x.test.toml"),
+            std::path::Path::new("/elsewhere/x.test.toml")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_open_answers_with_its_error_however_it_races_the_cleanup() {
+        let d = daemon().await;
+        // Each open lists the host's devices: two keep the test fast.
+        for _ in 0..2 {
+            let reply = d
+                .call(
+                    "session_open",
+                    serde_json::json!({
+                        "wait_ms": 5000,
+                        "project_root": d.dir.path().join("no-project").display().to_string(),
+                    }),
+                )
+                .await;
+            let why = reply["result"]["error"]
+                .as_str()
+                .or(reply["reason"].as_str())
+                .unwrap_or_default();
+            let error = why.strip_prefix("the open failed: ").unwrap_or(why);
+            assert!(
+                !error.is_empty() && error != "the open failed",
+                "the reply SHALL carry the open's error: {reply}"
+            );
+        }
     }
 
     #[tokio::test]
