@@ -87,6 +87,15 @@ pub enum CacheCommands {
     Clear,
 }
 
+/// `golem tree` output formats.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TreeOutput {
+    /// One line per selectable element, indexed
+    Toon,
+    /// The element tree as JSON
+    Json,
+}
+
 #[derive(clap::Args, Debug)]
 pub struct TreeArgs {
     /// Filter by platform (ios or android)
@@ -97,12 +106,17 @@ pub struct TreeArgs {
     #[arg(long)]
     pub device: Option<String>,
 
-    /// Show full tree (no viewport filtering)
+    /// Show the full tree, not only what is on screen. A hint only: not
+    /// what the user sees
     #[arg(long)]
     pub full: bool,
 
-    /// Output as JSON
-    #[arg(long)]
+    /// Output format
+    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
+    pub output: TreeOutput,
+
+    /// Same as `--output json`
+    #[arg(long, conflicts_with = "output")]
     pub json: bool,
 
     /// App bundle ID to read

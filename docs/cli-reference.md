@@ -97,9 +97,10 @@ golem tree [OPTIONS]
 | `--device <ID\|NAME>` | The device: a UDID or serial, a name, or part of either (case-insensitive) |
 | `--bundle <ID>` | The bundle ID of the app to read |
 | `--app <NAME>` | The app to read, by its name in the `golem.toml` `[[apps]]` registry |
-| `--full` | Show full tree without viewport filtering |
-| `--json` | Output as JSON |
-| `--verbose` | Show metadata: CDP status, enrichment, keyboard, safe area |
+| `--full` | Show the full tree, not only what is on screen. The output says it is a hint only: a step targets and asserts against the visible tree |
+| `--output <toon\|json>` | `toon` (default): one indexed line per selectable element, see [TOON tree](output-formats.md#toon-tree). `json`: the element tree |
+| `--json` | Same as `--output json` |
+| `--verbose` | Show metadata (CDP status, enrichment, keyboard, safe area) and the debug element tree |
 
 **Device.** Without `--device`, golem reads the only booted device (a booted simulator or emulator, or a connected physical device). With `--device`, an exact UDID or serial wins, then an exact name, then part of either. If more than one device matches, or no `--device` is given and more than one device is booted, the command fails and lists the candidates. golem reuses the device's running companion, or starts one.
 

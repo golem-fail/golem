@@ -87,3 +87,26 @@ R:PASS 2/0/0
 A skipped step is `-action:target`, gaining the failure code of whatever was ignored when there is one — ` -accept_alert F408`. The code only: TOON is a scan format, and the prose is in the other outputs.
 
 The closing `total:` line reads `total:N×pass,N×fail,N×skip d:duration`, gaining a `,N×blocked` token — a subset of `fail` — when flows failed because their app never installed.
+
+## TOON tree
+
+`golem tree` prints the UI tree in a TOON format by default (`--output toon`). There is one line for each selectable element: an element with text, a label or an id, an element that takes a tap, or a button. Pure layout containers get no line.
+
+```text
+tree visible 1344x2992 kb:840 n:34
+[1] LinearLayout id=action_bar_root 0,0 1344x2992 @672,1496  ·no_text·tall·
+  [2] div label=app 87,48 1170x2943 @672,1519  ·no_text·tall·
+    [3] nav "section-navigation" 87,48 1170x324 @672,210  ·has_text·wide·
+      [4] button "Menu" label=menu-toggle 123,213 183x132 @214,279  ·button·has_text·short_text·
+```
+
+- **Header:** `visible` or `full`, the screen size, `kb:` with the keyboard height when the keyboard is up, and `n:` with the line count. A `full` header ends with `hint only: not what the user sees`.
+- **`[n]`:** the index of the element. `golem probe` and the MCP tools use the same indexes.
+- **Type:** the element type, without a Java package (`android.widget.Button` shows as `Button`).
+- **Text:** in quotes. A newline shows as `\n`, so each element stays on one line.
+- **`label=` and `id=`:** shown when they differ from the text.
+- **Bounds:** `x,y wxh`, then `@x,y` for the center.
+- **Traits:** between `·` marks, then the state: `[disabled]`, `[checked]`, `[focused]`.
+
+A line is indented under the earlier line whose bounds enclose it and are larger. That is the relation that the `contains` and `inside` selectors use. On the test app, the TOON tree is about 5% of the size of `--output json`.
+

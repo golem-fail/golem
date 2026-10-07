@@ -54,6 +54,8 @@ cargo run -- run e2e/<flow>.test.toml --platform android|ios
 ```
 Versions never go backwards; final commit may skip numbers.
 
+Parallel worktrees: give each its own daemon with `export GOLEM_SOCKET=$PWD/.golem/d.sock`. Each worktree's build differs, so on a shared socket each one drains the other's daemon and waits for its runs.
+
 ## E2E failure
 Spawn subagent → report cause/summary → check [GitHub Issues](https://github.com/golem-fail/golem/issues) + `docs/roadmap.md` (known?).
 Regression = fix before commit unless user says track it. When done, close the issue (or delete the roadmap entry).

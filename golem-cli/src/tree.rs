@@ -6,22 +6,6 @@ use golem_driver::PlatformDriver;
 use golem_element::selector::element_has_trait;
 use golem_element::{filter_viewport, Element, Viewport};
 
-/// Traits surfaced in tree output. Order = render order: content type →
-/// text → shape → size. `text` is an alias of `has_text` and is omitted to
-/// avoid duplicate rendering.
-const RENDERED_TRAITS: &[&str] = &[
-    "button",
-    "has_text",
-    "no_text",
-    "short_text",
-    "long_text",
-    "square",
-    "wide",
-    "tall",
-    "small",
-    "large",
-];
-
 use crate::cli::TreeArgs;
 
 /// Run the `golem tree` command: fetch and display the UI hierarchy.
@@ -153,18 +137,18 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         filter_viewport(&root, &vp)
     };
 
-    if args.json {
+    if args.json || args.output == crate::cli::TreeOutput::Json {
         if let Ok(json) = serde_json::to_string_pretty(&display) {
             println!("{json}");
         }
-    } else if args.full || args.verbose {
-        if args.verbose {
-            print_tree_debug(&display, 0);
-        } else {
-            print_tree(&display, 0);
-        }
+    } else if args.verbose {
+        print_tree_debug(&display, 0);
     } else {
-        print_selectable_list(&display);
+        let header = golem_element::toon::TreeHeader {
+            full: args.full,
+            keyboard_height: meta.keyboard_height,
+        };
+        print!("{}", golem_element::toon::encode_tree(&display, &header));
     }
     println!();
 
@@ -178,10 +162,6 @@ fn has_webview_element(root: &Element) -> bool {
         return true;
     }
     root.children.iter().any(has_webview_element)
-}
-
-fn print_tree(element: &Element, depth: usize) {
-    print_tree_inner(element, depth, false);
 }
 
 fn print_tree_debug(element: &Element, depth: usize) {
@@ -270,30 +250,9 @@ fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
     }
 }
 
-/// True if this element is worth surfacing in the default `golem tree`
-/// output. Filters out pure layout containers that have no selector
-/// affordance.
-fn is_selectable(e: &Element) -> bool {
-    let has_text = e.text.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-    let has_label = [&e.accessibility_label, &e.accessibility_id]
-        .into_iter()
-        .flatten()
-        .any(|s| !s.is_empty());
-    has_text || has_label || e.clickable || element_has_trait(e, "button")
-}
-
-fn collect_selectable<'a>(e: &'a Element, out: &mut Vec<&'a Element>) {
-    if is_selectable(e) {
-        out.push(e);
-    }
-    for child in &e.children {
-        collect_selectable(child, out);
-    }
-}
-
 /// Render trait list as `·a·b·c·`, or empty string if none match.
 fn format_traits(e: &Element) -> String {
-    let matched: Vec<&str> = RENDERED_TRAITS
+    let matched: Vec<&str> = golem_element::toon::RENDERED_TRAITS
         .iter()
         .copied()
         .filter(|t| element_has_trait(e, t))
@@ -302,69 +261,6 @@ fn format_traits(e: &Element) -> String {
         String::new()
     } else {
         format!("·{}·", matched.join("·"))
-    }
-}
-
-/// Render a single selectable-list entry. `idx` is the 1-based display index.
-fn format_selectable_line(idx: usize, e: &Element) -> String {
-    let b = e.effective_bounds();
-    let bounds = format!("({},{} {}x{})", b.x, b.y, b.width, b.height);
-
-    let text = e.text.as_deref().unwrap_or("");
-    let text_part = if text.is_empty() {
-        String::new()
-    } else {
-        format!(" \"{text}\"")
-    };
-
-    let label_part = label_and_id_part(e);
-
-    let traits = format_traits(e);
-    let traits_part = if traits.is_empty() {
-        String::new()
-    } else {
-        format!("  {traits}")
-    };
-
-    let mut state_parts = Vec::new();
-    if !e.enabled {
-        state_parts.push("disabled");
-    }
-    if e.checked {
-        state_parts.push("checked");
-    }
-    if e.focused {
-        state_parts.push("focused");
-    }
-    let state = if state_parts.is_empty() {
-        String::new()
-    } else {
-        format!(" [{}]", state_parts.join(", "))
-    };
-
-    format!("[{idx}] {bounds}{text_part}{label_part}{traits_part}{state}")
-}
-
-/// Render the full selectable list for a tree as lines. Returns a single
-/// `(no selectable elements — try --full)` line when nothing is selectable.
-fn render_selectable_list(root: &Element) -> Vec<String> {
-    let mut nodes: Vec<&Element> = Vec::new();
-    collect_selectable(root, &mut nodes);
-
-    if nodes.is_empty() {
-        return vec!["(no selectable elements — try --full)".to_string()];
-    }
-
-    nodes
-        .iter()
-        .enumerate()
-        .map(|(i, e)| format_selectable_line(i + 1, e))
-        .collect()
-}
-
-fn print_selectable_list(root: &Element) {
-    for line in render_selectable_list(root) {
-        println!("{line}");
     }
 }
 
@@ -447,154 +343,6 @@ mod tests {
         );
     }
 
-    // ── is_selectable ─────────────────────────────────────────────────
-
-    // 5. Plain layout container with no text/label/click/trait is not selectable.
-    #[test]
-    fn plain_container_not_selectable() {
-        let e = elem("View");
-        assert!(
-            !is_selectable(&e),
-            "layout container with no affordance SHALL NOT be selectable"
-        );
-    }
-
-    // 6. Non-empty text makes an element selectable.
-    #[test]
-    fn element_with_text_is_selectable() {
-        let e = elem_with_text("Label", "Hello");
-        assert!(is_selectable(&e), "element with text SHALL be selectable");
-    }
-
-    // 7. Empty-string text does NOT make an element selectable.
-    #[test]
-    fn element_with_empty_text_not_selectable() {
-        let mut e = elem("Label");
-        e.text = Some(String::new());
-        assert!(
-            !is_selectable(&e),
-            "element with empty text SHALL NOT be selectable"
-        );
-    }
-
-    // 8. Non-empty accessibility_label makes an element selectable.
-    #[test]
-    fn element_with_label_is_selectable() {
-        let mut e = elem("View");
-        e.accessibility_label = Some("Submit".to_string());
-        assert!(
-            is_selectable(&e),
-            "element with accessibility label SHALL be selectable"
-        );
-    }
-
-    // 8a. Non-empty accessibility_id makes an element selectable.
-    #[test]
-    fn element_with_accessibility_id_is_selectable() {
-        let mut e = elem("View");
-        e.accessibility_id = Some("tagged-text".to_string());
-        assert!(
-            is_selectable(&e),
-            "element with an accessibility id SHALL be selectable"
-        );
-    }
-
-    // 9. Empty accessibility_label does NOT make an element selectable.
-    #[test]
-    fn element_with_empty_label_not_selectable() {
-        let mut e = elem("View");
-        e.accessibility_label = Some(String::new());
-        assert!(
-            !is_selectable(&e),
-            "element with empty label SHALL NOT be selectable"
-        );
-    }
-
-    // 10. clickable flag alone makes an element selectable.
-    #[test]
-    fn clickable_element_is_selectable() {
-        let mut e = elem("View");
-        e.clickable = true;
-        assert!(is_selectable(&e), "clickable element SHALL be selectable");
-    }
-
-    // 11. A button-type element (via the "button" trait) is selectable even
-    //     with no text/label/click.
-    #[test]
-    fn button_trait_is_selectable() {
-        let e = elem("Button");
-        assert!(
-            is_selectable(&e),
-            "button-trait element SHALL be selectable"
-        );
-    }
-
-    // ── collect_selectable ────────────────────────────────────────────
-
-    // 14. Collects selectable nodes in pre-order (parent before children),
-    //     skipping non-selectable containers but still descending into them.
-    #[test]
-    fn collect_selectable_preorder_skips_containers() {
-        let mut root = elem("View"); // not selectable
-        let mut wrapper = elem("Group"); // not selectable
-        wrapper.children.push(elem_with_text("Label", "Deep"));
-        root.children.push(elem_with_text("Button", "Top"));
-        root.children.push(wrapper);
-
-        let mut out: Vec<&Element> = Vec::new();
-        collect_selectable(&root, &mut out);
-
-        assert_eq!(
-            out.len(),
-            2,
-            "two selectable descendants SHALL be collected"
-        );
-        assert_eq!(
-            out[0].text.as_deref(),
-            Some("Top"),
-            "pre-order SHALL visit the earlier sibling first"
-        );
-        assert_eq!(
-            out[1].text.as_deref(),
-            Some("Deep"),
-            "recursion SHALL descend into non-selectable containers"
-        );
-    }
-
-    // 15. A selectable root includes itself before its children.
-    #[test]
-    fn collect_selectable_includes_selectable_root() {
-        let mut root = elem_with_text("Button", "Root");
-        root.children.push(elem_with_text("Label", "Child"));
-
-        let mut out: Vec<&Element> = Vec::new();
-        collect_selectable(&root, &mut out);
-
-        assert_eq!(
-            out.len(),
-            2,
-            "selectable root and child SHALL both be collected"
-        );
-        assert_eq!(
-            out[0].text.as_deref(),
-            Some("Root"),
-            "selectable root SHALL be collected before its children"
-        );
-    }
-
-    // 16. A tree of only non-selectable containers yields an empty list.
-    #[test]
-    fn collect_selectable_empty_for_pure_containers() {
-        let mut root = elem("View");
-        root.children.push(elem("Group"));
-        root.children.push(elem("Stack"));
-
-        let mut out: Vec<&Element> = Vec::new();
-        collect_selectable(&root, &mut out);
-
-        assert!(out.is_empty(), "pure-container tree SHALL collect nothing");
-    }
-
     // ── format_traits ─────────────────────────────────────────────────
 
     // 17. A text-less element with zero-area bounds matches only `no_text`
@@ -645,8 +393,8 @@ mod tests {
 
     // ── print smoke (no panic) ────────────────────────────────────────
 
-    // 20. The print/render helpers SHALL not panic on a representative tree,
-    //     including the empty-selectable branch and verbose/debug bounds-extra.
+    // 20. The debug tree printer SHALL not panic on a representative tree,
+    //     including the verbose bounds-extra.
     #[test]
     fn print_helpers_do_not_panic() {
         let mut root = elem("View");
@@ -658,13 +406,7 @@ mod tests {
         titled.visible_bounds = Some(Bounds::new(5, 5, 10, 10)); // differs from bounds
         root.children.push(titled);
 
-        print_tree(&root, 0);
         print_tree_debug(&root, 0);
-        print_selectable_list(&root);
-
-        // Empty-selectable branch.
-        let empty = elem("View");
-        print_selectable_list(&empty);
     }
 
     // ── format_tree_line ──────────────────────────────────────────────
@@ -728,49 +470,6 @@ mod tests {
         assert!(
             !plain.contains("full:"),
             "non-debug mode SHALL NOT show full bounds extra"
-        );
-    }
-
-    // ── format_selectable_line / render_selectable_list ───────────────
-
-    // 27. A selectable line renders the 1-based index, bounds and quoted text.
-    #[test]
-    fn format_selectable_line_renders_index_and_text() {
-        let mut e = elem_with_text("button", "Tap");
-        e.bounds = Bounds::new(3, 4, 100, 40);
-        let line = format_selectable_line(1, &e);
-        assert_eq!(
-            line, "[1] (3,4 100x40) \"Tap\"  ·button·has_text·short_text·wide·",
-            "selectable line SHALL render index, bounds, text and traits"
-        );
-    }
-
-    // 28. render_selectable_list numbers entries 1..N in pre-order.
-    #[test]
-    fn render_selectable_list_numbers_in_preorder() {
-        let mut root = elem("View"); // not selectable
-        root.children.push(elem_with_text("button", "First"));
-        root.children.push(elem_with_text("button", "Second"));
-        let lines = render_selectable_list(&root);
-        assert_eq!(lines.len(), 2, "two selectable entries SHALL be rendered");
-        assert!(
-            lines[0].starts_with("[1] ") && lines[0].contains("\"First\""),
-            "first entry SHALL be index 1 in pre-order"
-        );
-        assert!(
-            lines[1].starts_with("[2] ") && lines[1].contains("\"Second\""),
-            "second entry SHALL be index 2"
-        );
-    }
-
-    // 29. An empty tree renders the single guidance line.
-    #[test]
-    fn render_selectable_list_empty_guidance() {
-        let lines = render_selectable_list(&elem("View"));
-        assert_eq!(
-            lines,
-            vec!["(no selectable elements — try --full)".to_string()],
-            "empty tree SHALL render the guidance line"
         );
     }
 }
