@@ -262,7 +262,26 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
                     Some("submit") => {
-                        handle_submit(&json, shared, &writer).await;
+                        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+                        let submit = handle_submit(&json, shared, &writer, cancel_rx);
+                        tokio::pin!(submit);
+                        // The client sends nothing while its suite runs, so
+                        // end-of-stream means it is gone (Ctrl-C, killed):
+                        // cancel the suite rather than run it for nobody.
+                        let mut rest = String::new();
+                        loop {
+                            tokio::select! {
+                                () = &mut submit => break,
+                                read = reader.read_line(&mut rest) => match read {
+                                    Ok(0) | Err(_) => {
+                                        let _ = cancel_tx.send(true);
+                                        submit.await;
+                                        return;
+                                    }
+                                    Ok(_) => rest.clear(),
+                                },
+                            }
+                        }
                     }
                     Some(other) => {
                         let resp = serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")});
@@ -465,6 +484,7 @@ async fn handle_submit(
     json: &serde_json::Value,
     shared: &ServerShared,
     writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
+    cancel: tokio::sync::watch::Receiver<bool>,
 ) {
     let paths: Vec<PathBuf> = json["flow_paths"]
         .as_array()
@@ -602,6 +622,7 @@ async fn handle_submit(
         shared.install_cache.clone(),
     );
     runner.event_forwarder = Some(fwd_tx);
+    runner.cancel = Some(cancel);
 
     // `no_results` is already in scope (consumed by SuiteConfig
     // above). Re-read from cfg avoids ordering coupling with the

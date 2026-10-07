@@ -5,7 +5,7 @@
 //! are handled by the CLI layer (which has HTTP access via golem-driver).
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 
@@ -16,6 +16,25 @@ use crate::DeviceInfo;
 /// Wide range to support 100+ devices on high-end machines.
 pub const PORT_RANGE_START: u16 = 8222;
 pub const PORT_RANGE_END: u16 = 8999;
+
+/// A device allocation, released when dropped.
+pub struct DeviceLease {
+    manager: Arc<ResourceManager>,
+    udid: String,
+}
+
+impl DeviceLease {
+    /// The leased device's UDID.
+    pub fn udid(&self) -> &str {
+        &self.udid
+    }
+}
+
+impl Drop for DeviceLease {
+    fn drop(&mut self) {
+        self.manager.release(&self.udid);
+    }
+}
 
 /// An allocated device with its companion port.
 #[derive(Debug, Clone)]
@@ -137,6 +156,17 @@ impl ResourceManager {
 
         allocations.insert(device.udid.clone(), port);
         Ok(())
+    }
+
+    /// [`try_allocate`](Self::try_allocate), returning a lease that
+    /// releases the device when dropped — including when the task holding
+    /// it is aborted.
+    pub fn try_lease(self: &Arc<Self>, device: &DeviceInfo, port: u16) -> Result<DeviceLease> {
+        self.try_allocate(device, port)?;
+        Ok(DeviceLease {
+            manager: Arc::clone(self),
+            udid: device.udid.clone(),
+        })
     }
 
     /// Release a device and its port.
@@ -561,6 +591,24 @@ mod tests {
     }
 
     // 9. release of a device that was never allocated is a no-op.
+    #[test]
+    fn a_lease_releases_its_device_when_dropped() {
+        let rm = Arc::new(ResourceManager::new(ConcurrencyConfig::default()));
+        let device = test_device("Lease", "uid-lease", Platform::Android);
+        let lease = rm.try_lease(&device, 0).expect("lease");
+        assert_eq!(lease.udid(), "uid-lease");
+        assert!(
+            rm.try_allocate(&device, 0).is_err(),
+            "a leased device SHALL be busy"
+        );
+        drop(lease);
+        assert_eq!(
+            rm.active_count(),
+            0,
+            "dropping the lease SHALL release the device"
+        );
+    }
+
     #[test]
     fn release_unknown_device_is_noop() {
         let rm = ResourceManager::with_ram_provider(

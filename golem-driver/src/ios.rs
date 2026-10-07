@@ -983,6 +983,9 @@ impl PlatformDriver for IosDriver {
             .args(["simctl", "io", &self.device_id, "recordVideo", &host_path])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
+            // A flow aborted mid-recording (its client disconnected) drops
+            // the driver without stopping the recording.
+            .kill_on_drop(true)
             .spawn()
             .with_context(|| format!("spawning simctl recordVideo for {host_path}"))?;
         *guard = Some(IosRecordingState { host_path, child });

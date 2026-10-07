@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 tokio = { workspace = true }
 async-trait = { workspace = true }
+libc = "0.2"
 
 [dev-dependencies]
 # `test-util` enables `tokio::test(start_paused = true)` so host_queue's

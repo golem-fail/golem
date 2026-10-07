@@ -384,6 +384,40 @@ impl Default for SuiteConfig {
     }
 }
 
+/// A spawned task that is aborted when this handle is dropped. A task that
+/// is itself aborted drops its locals, so its children go with it: an
+/// aborted FlowRun never leaves a device task running on a device whose
+/// lease it has released.
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+impl<T> std::future::Future for AbortOnDrop<T> {
+    type Output = Result<T, tokio::task::JoinError>;
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::pin::Pin::new(&mut self.0).poll(cx)
+    }
+}
+
+/// Resolves once `cancel` reads `true`; never, without a receiver.
+async fn cancelled(cancel: &mut Option<tokio::sync::watch::Receiver<bool>>) {
+    match cancel {
+        Some(rx) => {
+            if rx.wait_for(|c| *c).await.is_err() {
+                std::future::pending::<()>().await;
+            }
+        }
+        None => std::future::pending::<()>().await,
+    }
+}
+
 /// Orchestrates the execution of a suite of test flows.
 pub struct SuiteRunner {
     pub config: SuiteConfig,
@@ -425,6 +459,10 @@ pub struct SuiteRunner {
     /// `SuiteLint` event right before `plan_event` so renderers can
     /// surface them before the `Starting N flows…` header.
     pub lint_event: Option<golem_events::EventKind>,
+    /// Set to `true` to cancel the suite: its flow tasks are aborted, their
+    /// devices released, and the end-of-suite cleanup still runs. A daemon
+    /// sets it when the client that submitted the suite disconnects.
+    pub cancel: Option<tokio::sync::watch::Receiver<bool>>,
 }
 
 /// Resolve how long a FlowRun may wait for a device: `--max-device-wait`,
@@ -467,6 +505,7 @@ impl SuiteRunner {
             flow_runs: Arc::new(Vec::new()),
             plan_event: None,
             lint_event: None,
+            cancel: None,
         }
     }
 
@@ -491,6 +530,7 @@ impl SuiteRunner {
             flow_runs: Arc::new(Vec::new()),
             plan_event: None,
             lint_event: None,
+            cancel: None,
         }
     }
 
@@ -831,7 +871,7 @@ impl SuiteRunner {
                 .map(|cap| (run.slots.len() as u32).clamp(1, cap as u32))
                 .unwrap_or(0);
 
-            handles.push(tokio::spawn(async move {
+            handles.push(AbortOnDrop(tokio::spawn(async move {
                 let _permit = match gate {
                     Some(sem) => sem.acquire_many_owned(gate_permits).await.ok(),
                     None => None,
@@ -886,15 +926,26 @@ impl SuiteRunner {
                 )
                 .await;
                 (reports, coverage_group_idx)
-            }));
+            })));
         }
 
         // Collect per-FlowRun reports alongside their coverage-group idx so
         // the post-pass below can reclassify failed peers in `one`-strategy
         // groups whose goal was already met by another member.
         let mut reports_with_group: Vec<(FlowReport, Option<usize>)> = Vec::new();
-        for handle in handles {
-            match handle.await {
+        let mut cancel = self.cancel.clone();
+        let mut handles = handles.into_iter();
+        while let Some(mut handle) = handles.next() {
+            let joined = tokio::select! {
+                joined = &mut handle => joined,
+                () = cancelled(&mut cancel) => {
+                    // Dropping the handles aborts every FlowRun still going.
+                    drop(handle);
+                    drop(handles);
+                    break;
+                }
+            };
+            match joined {
                 Ok((reports, group_idx)) => {
                     for r in reports {
                         reports_with_group.push((r, group_idx));
@@ -1380,6 +1431,9 @@ async fn execute_flow_run(
     // slots on different platforms so sequential setup is fine
     // (installs serialize on `project_lock` anyway).
     let mut device_setups: Vec<(DeviceInfo, u16)> = Vec::new();
+    // Held until the flow is done with its devices: dropping a lease, or
+    // aborting this task, releases the device.
+    let mut leases: Vec<golem_devices::resource_manager::DeviceLease> = Vec::new();
     for slot in &slots {
         match setup_slot(
             slot,
@@ -1410,7 +1464,10 @@ async fn execute_flow_run(
         )
         .await
         {
-            Ok((device, port)) => device_setups.push((device, port)),
+            Ok((device, port, lease)) => {
+                device_setups.push((device, port));
+                leases.extend(lease);
+            }
             Err(e) => {
                 event_tx.emit(
                     golem_events::DeviceId("suite".into()),
@@ -1446,16 +1503,12 @@ async fn execute_flow_run(
         }];
     }
 
-    let allocated_udids: Vec<String> = device_setups.iter().map(|(d, _)| d.udid.clone()).collect();
-
     // Post-setup coverage gate: a concurrent group member may have
     // succeeded while we were booting / installing. Release our devices
     // and emit a SKIP — the setup work is wasted, but the flow itself
     // didn't run and the user sees why.
     if coverage_group_done(&coverage).await {
-        for udid in &allocated_udids {
-            resource_mgr.release(udid);
-        }
+        drop(leases);
         let reason = "coverage group satisfied by peer run".to_string();
         event_tx.emit(
             golem_events::DeviceId("suite".into()),
@@ -1513,7 +1566,7 @@ async fn execute_flow_run(
         let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
         let child_env_c = cfg.child_env.clone();
         let reg_state_c = reg_state.clone();
-        handles.push(tokio::spawn(async move {
+        handles.push(AbortOnDrop(tokio::spawn(async move {
             run_flow_on_device(
                 FlowDeviceRun {
                     flow: flow_c,
@@ -1556,7 +1609,7 @@ async fn execute_flow_run(
                 },
             )
             .await
-        }));
+        })));
     }
 
     let mut reports = Vec::new();
@@ -1745,9 +1798,7 @@ async fn execute_flow_run(
         });
     }
 
-    for udid in &allocated_udids {
-        resource_mgr.release(udid);
-    }
+    drop(leases);
 
     // If this run belongs to a coverage group and produced at least one
     // success, update the shared tracker: record the pre-declared
@@ -1837,7 +1888,11 @@ async fn setup_slot(
     build: &SlotBuildConfig<'_>,
     stub: bool,
     stub_suffix: u32,
-) -> Result<(DeviceInfo, u16)> {
+) -> Result<(
+    DeviceInfo,
+    u16,
+    Option<golem_devices::resource_manager::DeviceLease>,
+)> {
     let SlotHandles {
         resource_mgr,
         install_cache,
@@ -1875,6 +1930,7 @@ async fn setup_slot(
                 stub_suffix,
             ),
             0,
+            None,
         ));
     }
     // Atomic pick-and-allocate: re-find on race so two FlowRuns can't
@@ -1886,7 +1942,7 @@ async fn setup_slot(
     // try_allocate happens way later (after preinstall + companion
     // ensure) — leaving a huge race window where every FlowRun "picks"
     // the same device and only one actually allocates.
-    let device = loop {
+    let (device, lease) = loop {
         let candidate = find_available_device(
             slot.platform,
             Some(slot),
@@ -1907,8 +1963,8 @@ async fn setup_slot(
         // later would require a release+re-allocate which races with
         // the next FlowRun. Cheaper to keep port=0 and treat the map
         // as a presence index.
-        match resource_mgr.try_allocate(&candidate, 0) {
-            Ok(()) => break candidate,
+        match resource_mgr.try_lease(&candidate, 0) {
+            Ok(lease) => break (candidate, lease),
             Err(_) => {
                 // Lost the race — re-discover. The just-allocated
                 // device is now filtered out by port_for, so the
@@ -2085,11 +2141,10 @@ async fn setup_slot(
                         os_version: health.os_version.clone(),
                     },
                 );
-                return Ok((device, current_port));
+                return Ok((device, current_port, Some(lease)));
             }
             Err(e) => {
                 if restarts >= MAX_COMPANION_RESTARTS {
-                    resource_mgr.release(&device.udid);
                     anyhow::bail!(
                         "companion health check failed after {restarts} restart(s): {e:#}"
                     );
@@ -2122,10 +2177,7 @@ async fn setup_slot(
                 .await
                 {
                     Ok(p) => current_port = p,
-                    Err(re) => {
-                        resource_mgr.release(&device.udid);
-                        anyhow::bail!("companion restart failed: {re:#}");
-                    }
+                    Err(re) => anyhow::bail!("companion restart failed: {re:#}"),
                 }
             }
         }

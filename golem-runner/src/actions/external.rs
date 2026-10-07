@@ -44,6 +44,23 @@ pub(crate) async fn handle_push_notification(
     driver.push_notification(title, body, payload).await
 }
 
+/// `cmd.output()`, with the child leading its own process group, which is
+/// killed if a cancelled run drops this future before the child exits.
+async fn output_killing_group_on_cancel(
+    mut cmd: tokio::process::Command,
+) -> std::io::Result<std::process::Output> {
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .process_group(0)
+        .spawn()?;
+    let mut killer = golem_common::command::GroupKiller::new(&child);
+    let output = child.wait_with_output().await?;
+    killer.disarm();
+    Ok(output)
+}
+
 /// Execute a shell command on the host via `sh -c`, optionally saving the output.
 ///
 /// The command is read from the `run` param.
@@ -68,7 +85,7 @@ pub(crate) async fn handle_bash(
     if let Some(env) = ctx.child_env {
         env.apply(&mut cmd);
     }
-    let output = cmd.output().await?;
+    let output = output_killing_group_on_cancel(cmd).await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -145,14 +162,12 @@ pub(crate) async fn handle_run(
         .unwrap_or_default();
 
     let mut cmd = tokio::process::Command::new(&script_path);
-    for arg in &args {
-        cmd.arg(arg);
-    }
+    cmd.args(&args);
     if let Some(env) = ctx.child_env {
         env.apply(&mut cmd);
     }
 
-    let output = cmd.output().await?;
+    let output = output_killing_group_on_cancel(cmd).await?;
 
     let exit_code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();

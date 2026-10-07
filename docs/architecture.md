@@ -165,6 +165,8 @@ The start lock (`golem.lock` next to the socket) closes both races. Two clients 
 
 The daemon runs from `/` with its stdio on `golem.log`. Its environment is that of whichever client started it, so the processes it starts for a run (install scripts, `bash`, `run`) take that run's environment and working directory from the `submit` instead. The client sends absolute paths and shows the paths it gets back relative to its own working directory again. Process-global state the summary reads, such as the host-queue wait stats, comes back in the `done` message.
 
+A client that disconnects before its `done` (Ctrl-C, killed) cancels its suite: the daemon aborts the suite's flow tasks, each held device lease is released as its task drops it, and the processes those tasks started (`bash`, `run`, screen recordings) are killed with them. The end-of-suite cleanup still runs: keyboards restored, Android companions shut down. Teardown blocks do not run, as with a Ctrl-C before the daemon existed.
+
 `GOLEM_DAEMON_IN_PROCESS=1` runs the daemon as a task inside the client and ends it with the client. The in-process integration tests use it, so they never spawn a copy of the test binary.
 
 ## Visibility model — the visible tree decides coverage, the full tree only hints
