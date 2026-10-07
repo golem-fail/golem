@@ -141,19 +141,27 @@ pub fn parse_os_log(ndjson: &str) -> Vec<LogLine> {
         .collect()
 }
 
-/// A Fault is common and not a crash; these are what the Swift runtime and
-/// an uncaught Objective-C exception log as the app dies.
+/// A Fault is common and not a crash. These are what the Swift runtime and
+/// an uncaught Objective-C exception log as the app dies, and SpringBoard's
+/// line when a signal kills it. SIGKILL is left out: it is how the system
+/// stops an app, not how an app crashes.
 fn os_log_crash(message: &str) -> bool {
     message.contains("Fatal error:")
         || message.contains("Terminating app due to uncaught exception")
         || message.starts_with("*** Terminating app")
+        || (message.starts_with("Process exited: ")
+            && message.contains("domain:signal")
+            && !message.contains("SIGKILL"))
 }
 
 /// The lines to show, after `filter` and `limit`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Selection {
-    /// Every crash line, however old: finding the crash is the point.
+    /// The head of each crash, newest crashes up to the limit, however old
+    /// the other lines shown: finding the crash is the point.
     pub crashes: Vec<LogLine>,
+    /// Crash lines left out.
+    pub crashes_cut: usize,
     /// The newest other lines, up to the limit, oldest first.
     pub lines: Vec<LogLine>,
     /// The lines that matched the filter.
@@ -161,7 +169,10 @@ pub struct Selection {
 }
 
 /// Keep the lines whose tag or message contains `filter` (any case), then
-/// every crash line and the newest `limit` other lines.
+/// the newest `limit` crash lines and the newest `limit` other lines. A
+/// native tombstone writes hundreds of crash lines, and their tail is the
+/// least useful part, so only the first [`CRASH_HEAD`] lines of each crash
+/// count.
 pub fn select(lines: Vec<LogLine>, filter: Option<&str>, limit: usize) -> Selection {
     let needle = filter.map(str::to_lowercase);
     let matching: Vec<LogLine> = lines
@@ -174,12 +185,47 @@ pub fn select(lines: Vec<LogLine>, filter: Option<&str>, limit: usize) -> Select
         .collect();
     let matched = matching.len();
     let (crashes, rest): (Vec<_>, Vec<_>) = matching.into_iter().partition(|l| l.crash);
-    let skip = rest.len().saturating_sub(limit);
+    let newest = |lines: Vec<LogLine>| {
+        let skip = lines.len().saturating_sub(limit);
+        (skip, lines.into_iter().skip(skip).map(cut).collect())
+    };
+    let total = crashes.len();
+    let crashes: Vec<LogLine> = crash_heads(crashes, limit).into_iter().map(cut).collect();
+    let (_, lines) = newest(rest);
     Selection {
-        crashes: crashes.into_iter().map(cut).collect(),
-        lines: rest.into_iter().skip(skip).map(cut).collect(),
+        crashes_cut: total - crashes.len(),
+        crashes,
+        lines,
         matched,
     }
+}
+
+/// The lines of one crash kept: the signal or exception, the abort message
+/// and the top frames.
+pub const CRASH_HEAD: usize = 12;
+
+/// The first [`CRASH_HEAD`] lines of each crash, where one crash is a row of
+/// crash lines from the same process and tag. The newest crashes come first
+/// within `limit`, and each keeps its first lines when the limit cuts it.
+fn crash_heads(crashes: Vec<LogLine>, limit: usize) -> Vec<LogLine> {
+    let mut runs: Vec<Vec<LogLine>> = Vec::new();
+    for line in crashes {
+        match runs.last_mut() {
+            Some(run) if run[0].pid == line.pid && run[0].tag == line.tag => run.push(line),
+            _ => runs.push(vec![line]),
+        }
+    }
+    let mut room = limit;
+    let mut kept: Vec<Vec<LogLine>> = Vec::new();
+    for mut run in runs.into_iter().rev() {
+        if room == 0 {
+            break;
+        }
+        run.truncate(CRASH_HEAD.min(room));
+        room -= run.len();
+        kept.push(run);
+    }
+    kept.into_iter().rev().flatten().collect()
 }
 
 fn cut(mut line: LogLine) -> LogLine {
@@ -213,7 +259,11 @@ where
     let shown = sel.crashes.len() + sel.lines.len();
     let mut out = format!("app_logs {bundle} · {shown} of {} lines", sel.matched);
     if !sel.crashes.is_empty() {
-        out.push_str(&format!("\ncrash[{}]:", sel.crashes.len()));
+        out.push_str(&format!("\ncrash[{}]", sel.crashes.len()));
+        if sel.crashes_cut > 0 {
+            out.push_str(&format!(" (+{} cut)", sel.crashes_cut));
+        }
+        out.push(':');
         for l in &sel.crashes {
             out.push('\n');
             out.push_str(&row(l));
@@ -336,7 +386,7 @@ mod tests {
     #[test]
     fn os_log_reads_events_and_skips_the_summary() {
         let lines = parse_os_log(OS_LOG);
-        assert_eq!(lines.len(), 5, "{lines:#?}");
+        assert_eq!(lines.len(), 7, "{lines:#?}");
         assert_eq!(lines[1].message, "Initializing connection");
         assert_eq!(lines[1].pid, 72271);
         assert_eq!(lines[1].level, 'I');
@@ -349,6 +399,23 @@ mod tests {
         let t =
             chrono::DateTime::parse_from_rfc3339("2026-10-07T16:16:51.703261+09:00").expect("time");
         assert_eq!(lines[1].time, t.timestamp_micros() as f64 / 1e6);
+    }
+
+    #[test]
+    fn os_log_marks_a_signal_exit_as_a_crash_but_not_a_stop() {
+        let lines = parse_os_log(OS_LOG);
+        let (abort, stop) = (&lines[5], &lines[6]);
+        assert!(abort.message.contains("code:SIGABRT(6)"), "{abort:?}");
+        assert!(abort.crash, "{abort:?}");
+        assert_eq!(abort.tag, "com.apple.SpringBoard/Workspace");
+        assert!(stop.message.contains("force-quit"), "{stop:?}");
+        assert!(
+            !stop.crash,
+            "a normal stop SHALL not count as a crash: {stop:?}"
+        );
+        assert!(!os_log_crash(
+            "Process exited: <app<a.b>:1> -> <RBSProcessExitStatus| domain:signal(2) code:SIGKILL(9)>>"
+        ));
     }
 
     #[test]
@@ -371,6 +438,48 @@ mod tests {
         let shown: Vec<&str> = sel.lines.iter().map(|l| l.message.as_str()).collect();
         assert_eq!(shown, ["line 7", "line 8", "line 9"]);
         assert_eq!(sel.matched, 11);
+    }
+
+    #[test]
+    fn select_limits_crash_lines_by_the_newest_crashes() {
+        let crash = |pid: u32, n: usize| -> Vec<LogLine> {
+            (0..n)
+                .map(|i| {
+                    let mut l = line(&format!("crash {pid} line {i}"), true);
+                    l.pid = pid;
+                    l
+                })
+                .collect()
+        };
+        let lines = [crash(1, 3), crash(2, 3), crash(3, 3)].concat();
+        let sel = select(lines, None, 5);
+        let shown: Vec<&str> = sel.crashes.iter().map(|l| l.message.as_str()).collect();
+        assert_eq!(
+            shown,
+            [
+                "crash 2 line 0",
+                "crash 2 line 1",
+                "crash 3 line 0",
+                "crash 3 line 1",
+                "crash 3 line 2"
+            ],
+            "an older crash cut by the limit SHALL keep its first lines"
+        );
+        assert_eq!(sel.crashes_cut, 4);
+        assert!(render(BUNDLE, &sel, &chrono::Utc).contains("\ncrash[5] (+4 cut):\n"));
+    }
+
+    #[test]
+    fn select_keeps_the_head_of_each_crash() {
+        let mut lines: Vec<LogLine> = (0..300).map(|i| line(&format!("#{i} pc"), true)).collect();
+        let mut signal = line("Fatal signal 6 (SIGABRT)", true);
+        signal.tag = "libc".into();
+        lines.insert(0, signal);
+        let sel = select(lines, None, 200);
+        assert_eq!(sel.crashes.len(), 1 + CRASH_HEAD);
+        assert_eq!(sel.crashes[0].message, "Fatal signal 6 (SIGABRT)");
+        assert_eq!(sel.crashes[1].message, "#0 pc");
+        assert_eq!(sel.crashes_cut, 300 - CRASH_HEAD);
     }
 
     #[test]

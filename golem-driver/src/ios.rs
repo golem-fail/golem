@@ -746,12 +746,17 @@ impl PlatformDriver for IosDriver {
                     .map(str::to_string)
             })
             .with_context(|| format!("no CFBundleExecutable in {}", info.display()))?;
+        let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
         // XCUITest logs every accessibility snapshot the companion takes
         // under the app's process: thousands of lines that are golem's, not
-        // the app's.
+        // the app's. A process killed by a signal logs nothing itself;
+        // SpringBoard's exit line is where its crash shows.
         let predicate = format!(
-            "process == \"{}\" AND subsystem != \"com.apple.dt.xctest\"",
-            exe.replace('\\', "\\\\").replace('"', "\\\"")
+            "(process == \"{}\" AND subsystem != \"com.apple.dt.xctest\") OR \
+             (process == \"SpringBoard\" AND eventMessage BEGINSWITH \"Process exited: \" \
+             AND eventMessage CONTAINS \"app<{}>:\")",
+            quote(&exe),
+            quote(bundle_id)
         );
         // Without `--start`, `log show` reads the whole log store.
         let start = format!(
@@ -761,21 +766,33 @@ impl PlatformDriver for IosDriver {
                 .unwrap_or_default()
                 .as_secs()
         );
-        let text = self
-            .simctl(&[
-                "spawn",
-                &self.device_id,
-                "log",
-                "show",
-                "--style",
-                "ndjson",
-                "--info",
-                "--start",
-                &start,
-                "--predicate",
-                &predicate,
-            ])
-            .await?;
+        // Not through `simctl()`'s host-wide queue: `log show` only reads,
+        // and queueing it would hold app_logs behind the stuck simctl call
+        // it is meant to explain.
+        let argv = [
+            "simctl",
+            "spawn",
+            &self.device_id,
+            "log",
+            "show",
+            "--style",
+            "ndjson",
+            "--info",
+            "--start",
+            &start,
+            "--predicate",
+            &predicate,
+        ];
+        let output = golem_common::command::output_argv("xcrun", &argv)
+            .await
+            .context("failed to spawn xcrun simctl")?;
+        if !output.status.success() {
+            bail!(
+                "xcrun simctl spawn log show failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
         Ok(crate::logs::parse_os_log(&text))
     }
 

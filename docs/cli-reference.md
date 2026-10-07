@@ -194,7 +194,7 @@ The server starts without device work. The session runs in the daemon and belong
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |
 | `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
-| `app_logs(since?, filter?, limit?, app?)` | The app's device log, see below. It runs while another operation is still running |
+| `app_logs(since?, filter?, limit?, app?)` | The app's device log, see below. It does not wait for a running operation |
 | `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
 | `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, listing any `record_only` steps |
 | `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
@@ -219,9 +219,10 @@ The server starts without device work. The session runs in the daemon and belong
 
 - `since` is seconds back from now. Without it, the lines start when the session opened.
 - `filter` keeps the lines whose tag or message contains the text, in any case.
-- Crash lines come first and are always shown: a fatal error, an uncaught exception, an ANR. Then come the newest other lines, up to `limit` (default 200).
+- Crash lines come first: a fatal error, an uncaught exception, an ANR, a signal that killed the app. Then come the other lines. Each part has its own `limit` (default 200), so an old crash still shows when many other lines follow it.
+- Each crash shows its first 12 lines: the signal or exception, the abort message and the top frames. When the limit cuts the crash lines, the newest crashes stay.
 - On Android, golem keeps the lines that the app's uid logged, so the lines before a restart stay. Lines from other processes are kept when they name the app's package, such as the line where ActivityManager restarts it. A process that runs under another uid, such as the sandboxed WebView renderer, is not shown unless its line names the package.
-- On iOS, the lines come from the app's process. The app's `print` output does not reach the unified log; `NSLog`, `os_log` and `Logger` do.
+- On iOS, the lines come from the app's process. The app's `print` output does not reach the unified log; `NSLog`, `os_log` and `Logger` do. A process that a signal kills logs nothing itself, so golem adds SpringBoard's `Process exited` line for the app, which names the signal.
 
 **The flow draft.** Each step that passes in `act` goes into the session's draft, as written (a `${var}` stays a reference), with `comment` on its own line above it. A step that fails does not. A session opened from a flow drafts that file: steps go in where the flow stopped (before `stop_at`, or before the failed step), else at the end of the last block, and the file's comments, key order and whitespace stay as they were. A step takes the form its block already uses, `steps = [ … ]` or `[[block.steps]]`; a one-line `steps = [{ … }]` becomes one step per line. A new session drafts a new flow with its app and a `main` block. `export_flow` refuses a draft that does not validate, and refuses to replace a file the session did not open from unless `overwrite = true`.
 

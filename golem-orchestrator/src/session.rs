@@ -596,7 +596,9 @@ impl Session {
         .filter(|b| !b.is_empty())
         .ok_or_else(|| anyhow::anyhow!("the session targets no app; pass `app`"))?;
         let since = match req.since_secs {
-            Some(secs) => SystemTime::now() - Duration::from_secs(secs),
+            Some(secs) => SystemTime::now()
+                .checked_sub(Duration::from_secs(secs))
+                .unwrap_or(SystemTime::UNIX_EPOCH),
             None => source.opened,
         };
         let lines = source.driver.app_logs(&bundle, since).await?;

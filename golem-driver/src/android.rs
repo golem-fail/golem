@@ -909,7 +909,7 @@ impl PlatformDriver for AndroidDriver {
             .parse()
             .context("reading the device clock")?;
         let back = since.elapsed().unwrap_or_default().as_secs_f64();
-        let start = format!("{:.3}", device_now - back - 1.0);
+        let start = format!("{:.3}", (device_now - back - 1.0).max(0.0));
         let text = self
             .adb(&[
                 "shell",
