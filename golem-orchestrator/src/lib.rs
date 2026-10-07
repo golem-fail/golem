@@ -34,6 +34,7 @@ pub mod plan;
 pub mod project;
 pub mod registration;
 pub mod suite;
+pub mod target;
 
 pub use coverage::{pick_best_covering, set_cover_greedy, CoverageStrategy};
 pub use install_matrix::{build_install_matrix, InstallEntry};

@@ -26,233 +26,149 @@ use crate::cli::TreeArgs;
 
 /// Run the `golem tree` command: fetch and display the UI hierarchy.
 pub async fn run(args: &TreeArgs) -> Result<()> {
-    let platform_filter = args.platform.as_deref().map(|p| match p {
-        "ios" => "ios",
-        "android" => "android",
-        _ => {
-            eprintln!("Unknown platform: {p}. Use 'ios' or 'android'.");
-            std::process::exit(1);
-        }
-    });
-
-    // Scan for running companions first
-    let mut companions = golem_orchestrator::suite::scan_companions_public().await;
-
-    // Filter by platform
-    if let Some(pf) = platform_filter {
-        companions.retain(|(_, h)| h.platform == pf);
-    }
-
-    // Filter by device name/UDID
-    if let Some(ref filter) = args.device {
-        let f = filter.to_lowercase();
-        companions.retain(|(_, h)| {
-            h.device_name.to_lowercase().contains(&f) || h.device_id.to_lowercase().contains(&f)
-        });
-    }
-
-    // If no companions found, discover devices and start them
-    if companions.is_empty() {
-        eprintln!("  No running companions found. Starting...");
-        let started = golem_orchestrator::suite::start_companions_public(platform_filter).await?;
-        companions = started;
-
-        if let Some(pf) = platform_filter {
-            companions.retain(|(_, h)| h.platform == pf);
-        }
-        if let Some(ref filter) = args.device {
-            let f = filter.to_lowercase();
-            companions.retain(|(_, h)| {
-                h.device_name.to_lowercase().contains(&f) || h.device_id.to_lowercase().contains(&f)
-            });
-        }
-    }
-
-    if companions.is_empty() {
-        // Auto-invoke doctor: explain *why* nothing was found (missing CLI, no
-        // booted device, absent companion) rather than a bare error.
-        crate::doctor::hint_no_device().await;
-        bail!("No devices found. Start a simulator or emulator first.");
-    }
-
-    for (port, health) in &companions {
-        let platform = &health.platform;
-        let name = &health.device_name;
-        let bundle = args.bundle.as_deref().unwrap_or("fail.golem.test");
-
-        // Create the appropriate driver — same code path as test execution,
-        // including CDP enrichment for Android WebViews.
-        let device_id = find_device_id(platform, name).await;
-        // `golem tree` only reads the accessibility hierarchy — it
-        // never calls actions that branch on the `physical` flag, so
-        // passing `false` here is correct regardless of the target's
-        // actual kind. If a future tree feature needs phys/sim info,
-        // plumb `DeviceInfo` through `find_device_id` instead.
-        let driver: Box<dyn PlatformDriver> = match platform.as_str() {
-            "android" => Box::new(AndroidDriver::new(
-                device_id.clone(),
-                bundle.to_string(),
-                *port,
-                false,
-            )),
-            _ => Box::new(IosDriver::new(
-                device_id.clone(),
-                bundle.to_string(),
-                *port,
-                false,
-            )),
-        };
-
-        // First call triggers async CDP setup for Android WebViews.
-        // Second call (after a brief wait) gets the CDP-enriched tree.
-        let (root, meta) = match driver.get_hierarchy().await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("  {name} ({platform}, port {port}): failed to fetch hierarchy: {e}");
-                continue;
+    let platform = match args.platform.as_deref() {
+        None => None,
+        Some("ios") => Some(golem_devices::Platform::Ios),
+        Some("android") => Some(golem_devices::Platform::Android),
+        Some(p) => bail!("unknown platform: {p}. Use 'ios' or 'android'."),
+    };
+    let query = golem_orchestrator::target::TargetQuery {
+        platform,
+        device: args.device.clone(),
+        bundle: args.bundle.clone(),
+        app: args.app.clone(),
+    };
+    let cwd = std::env::current_dir()?;
+    let (project, _) = golem_orchestrator::project::ProjectConfig::load_from(&cwd)?;
+    let target = match golem_orchestrator::target::resolve(&query, &project.apps).await {
+        Ok(target) => target,
+        Err(e) => {
+            if e.to_string().contains("start a simulator or emulator") {
+                // Auto-invoke doctor: explain *why* nothing was found (missing
+                // CLI, no booted device, absent companion) rather than a bare
+                // error.
+                crate::doctor::hint_no_device().await;
             }
-        };
+            return Err(e);
+        }
+    };
 
-        // If the tree contains a WebView, wait for background inspector setup
-        // (CDP on Android, WebKit Inspector on iOS) and fetch again with enrichment.
-        let has_webview = has_webview_element(&root);
-        let root = if has_webview {
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            driver.get_hierarchy().await.map(|(r, _)| r).unwrap_or(root)
+    let port = target.port;
+    let platform = target.device.platform.to_string();
+    let name = &target.device.name;
+    let device_id = &target.device.udid;
+    let bundle = target.bundle.as_str();
+    let driver: Box<dyn PlatformDriver> = match target.device.platform {
+        golem_devices::Platform::Android => Box::new(AndroidDriver::new(
+            device_id.clone(),
+            bundle.to_string(),
+            port,
+            target.device.physical,
+        )),
+        golem_devices::Platform::Ios => Box::new(IosDriver::new(
+            device_id.clone(),
+            bundle.to_string(),
+            port,
+            target.device.physical,
+        )),
+    };
+
+    // First call triggers async CDP setup for Android WebViews.
+    // Second call (after a brief wait) gets the CDP-enriched tree.
+    let (root, meta) = match driver.get_hierarchy().await {
+        Ok(r) => r,
+        Err(e) => bail!("{name} ({platform}, port {port}): failed to fetch hierarchy: {e}"),
+    };
+
+    // If the tree contains a WebView, wait for background inspector setup
+    // (CDP on Android, WebKit Inspector on iOS) and fetch again with enrichment.
+    let has_webview = has_webview_element(&root);
+    let root = if has_webview {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        driver.get_hierarchy().await.map(|(r, _)| r).unwrap_or(root)
+    } else {
+        root
+    };
+
+    println!("── {name} ({platform}, port {port}) ──");
+
+    if args.verbose {
+        println!("  device_id: {device_id}");
+        println!(
+            "  bundle: {}",
+            if bundle.is_empty() { "(none)" } else { bundle }
+        );
+        if meta.keyboard_height > 0 {
+            println!("  keyboard: open ({}px)", meta.keyboard_height);
         } else {
-            root
-        };
+            println!("  keyboard: closed");
+        }
+        if meta.safe_area_top > 0 || meta.safe_area_bottom > 0 {
+            println!(
+                "  safe_area: top={} bottom={}",
+                meta.safe_area_top, meta.safe_area_bottom
+            );
+        }
+        if !meta.cutouts.is_empty() {
+            let rects: Vec<String> = meta
+                .cutouts
+                .iter()
+                .map(|c| format!("Rect({},{} {}x{})", c.x, c.y, c.width, c.height))
+                .collect();
+            println!("  cutouts: {}", rects.join(", "));
+        }
+        if !meta.rounded_corners.is_empty() {
+            let corners: Vec<String> = meta
+                .rounded_corners
+                .iter()
+                .map(|c| {
+                    let pos = match c.position {
+                        golem_driver::common::CornerPosition::TopLeft => "TL",
+                        golem_driver::common::CornerPosition::TopRight => "TR",
+                        golem_driver::common::CornerPosition::BottomRight => "BR",
+                        golem_driver::common::CornerPosition::BottomLeft => "BL",
+                    };
+                    format!("{}={}", pos, c.radius)
+                })
+                .collect();
+            println!("  corners: {}", corners.join(" "));
+        }
+        if platform == "android" {
+            let has_webview = has_webview_element(&root);
+            if has_webview {
+                println!("  webview: detected, CDP enrichment active");
+            } else {
+                println!("  webview: not detected");
+            }
+        }
+    }
 
-        println!("── {name} ({platform}, port {port}) ──");
+    let display = if args.full {
+        root
+    } else {
+        let mut vp = Viewport::from_root(&root);
+        if meta.keyboard_height > 0 {
+            vp.height -= meta.keyboard_height;
+        }
+        filter_viewport(&root, &vp)
+    };
 
+    if args.json {
+        if let Ok(json) = serde_json::to_string_pretty(&display) {
+            println!("{json}");
+        }
+    } else if args.full || args.verbose {
         if args.verbose {
-            println!("  device_id: {device_id}");
-            println!("  bundle: {bundle}");
-            if meta.keyboard_height > 0 {
-                println!("  keyboard: open ({}px)", meta.keyboard_height);
-            } else {
-                println!("  keyboard: closed");
-            }
-            if meta.safe_area_top > 0 || meta.safe_area_bottom > 0 {
-                println!(
-                    "  safe_area: top={} bottom={}",
-                    meta.safe_area_top, meta.safe_area_bottom
-                );
-            }
-            if !meta.cutouts.is_empty() {
-                let rects: Vec<String> = meta
-                    .cutouts
-                    .iter()
-                    .map(|c| format!("Rect({},{} {}x{})", c.x, c.y, c.width, c.height))
-                    .collect();
-                println!("  cutouts: {}", rects.join(", "));
-            }
-            if !meta.rounded_corners.is_empty() {
-                let corners: Vec<String> = meta
-                    .rounded_corners
-                    .iter()
-                    .map(|c| {
-                        let pos = match c.position {
-                            golem_driver::common::CornerPosition::TopLeft => "TL",
-                            golem_driver::common::CornerPosition::TopRight => "TR",
-                            golem_driver::common::CornerPosition::BottomRight => "BR",
-                            golem_driver::common::CornerPosition::BottomLeft => "BL",
-                        };
-                        format!("{}={}", pos, c.radius)
-                    })
-                    .collect();
-                println!("  corners: {}", corners.join(" "));
-            }
-            if platform == "android" {
-                let has_webview = has_webview_element(&root);
-                if has_webview {
-                    println!("  webview: detected, CDP enrichment active");
-                } else {
-                    println!("  webview: not detected");
-                }
-            }
-        }
-
-        let display = if args.full {
-            root
+            print_tree_debug(&display, 0);
         } else {
-            let mut vp = Viewport::from_root(&root);
-            if meta.keyboard_height > 0 {
-                vp.height -= meta.keyboard_height;
-            }
-            filter_viewport(&root, &vp)
-        };
-
-        if args.json {
-            if let Ok(json) = serde_json::to_string_pretty(&display) {
-                println!("{json}");
-            }
-        } else if args.full || args.verbose {
-            if args.verbose {
-                print_tree_debug(&display, 0);
-            } else {
-                print_tree(&display, 0);
-            }
-        } else {
-            print_selectable_list(&display);
+            print_tree(&display, 0);
         }
-        println!();
+    } else {
+        print_selectable_list(&display);
     }
+    println!();
 
     Ok(())
-}
-
-/// Find the device serial/UDID for a platform and device name.
-/// For Android, queries `adb devices`. For iOS, queries `xcrun simctl`.
-async fn find_device_id(platform: &str, device_name: &str) -> String {
-    match platform {
-        "android" => {
-            // Get first connected Android device serial
-            if let Ok(output) = tokio::process::Command::new("adb")
-                .args(["devices"])
-                .output()
-                .await
-            {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                if let Some(serial) = first_online_android_serial(&stdout) {
-                    return serial;
-                }
-            }
-            "emulator-5554".to_string() // fallback
-        }
-        "ios" => {
-            // Get UDID by matching device name
-            if let Ok(devices) = golem_devices::ios::discover_ios_devices().await {
-                if let Some(d) = devices.iter().find(|d| {
-                    d.name == device_name && d.state == golem_devices::DeviceState::Booted
-                }) {
-                    return d.udid.clone();
-                }
-                // Fallback: first booted device
-                if let Some(d) = devices
-                    .iter()
-                    .find(|d| d.state == golem_devices::DeviceState::Booted)
-                {
-                    return d.udid.clone();
-                }
-            }
-            String::new()
-        }
-        _ => String::new(),
-    }
-}
-
-/// Parse `adb devices` stdout and return the serial of the first device whose
-/// state column is exactly `device` (online). The leading header line is
-/// skipped. Returns `None` if no online device line is present.
-fn first_online_android_serial(stdout: &str) -> Option<String> {
-    for line in stdout.lines().skip(1) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 && parts[1] == "device" {
-            return Some(parts[0].to_string());
-        }
-    }
-    None
 }
 
 fn has_webview_element(root: &Element) -> bool {
@@ -749,45 +665,6 @@ mod tests {
         // Empty-selectable branch.
         let empty = elem("View");
         print_selectable_list(&empty);
-    }
-
-    // ── first_online_android_serial ───────────────────────────────────
-
-    // 21. The first line with state column `device` is returned, header skipped.
-    #[test]
-    fn first_online_serial_returns_first_device() {
-        let stdout = "List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n";
-        assert_eq!(
-            first_online_android_serial(stdout).as_deref(),
-            Some("emulator-5554"),
-            "first online device serial SHALL be returned"
-        );
-    }
-
-    // 22. Lines whose state is not exactly `device` (e.g. offline, unauthorized)
-    //     are skipped; the first true `device` line wins.
-    #[test]
-    fn first_online_serial_skips_non_device_states() {
-        let stdout =
-            "List of devices attached\nABCD1234\toffline\nEFGH5678\tunauthorized\nPHONE99\tdevice\n";
-        assert_eq!(
-            first_online_android_serial(stdout).as_deref(),
-            Some("PHONE99"),
-            "non-`device` states SHALL be skipped"
-        );
-    }
-
-    // 23. Empty / header-only output yields None (caller applies its fallback).
-    #[test]
-    fn first_online_serial_none_when_no_devices() {
-        assert!(
-            first_online_android_serial("List of devices attached\n\n").is_none(),
-            "header-only output SHALL yield None"
-        );
-        assert!(
-            first_online_android_serial("").is_none(),
-            "empty output SHALL yield None"
-        );
     }
 
     // ── format_tree_line ──────────────────────────────────────────────
