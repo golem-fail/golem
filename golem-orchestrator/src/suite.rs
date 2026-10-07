@@ -384,6 +384,20 @@ impl Default for SuiteConfig {
     }
 }
 
+/// The Android companions a suite asks to exit when it ends: those of its
+/// devices that no other run or session holds now. Every flow of this suite
+/// has released its devices by then, so a device still leased belongs to
+/// another client, which is using its companion.
+fn companions_to_shut_down(
+    registered: Vec<crate::registration::RegisteredCompanion>,
+    resource_mgr: &golem_devices::resource_manager::ResourceManager,
+) -> Vec<crate::registration::RegisteredCompanion> {
+    registered
+        .into_iter()
+        .filter(|c| c.platform == "android" && resource_mgr.port_for(&c.device_id).is_none())
+        .collect()
+}
+
 /// A spawned task that is aborted when this handle is dropped. A task that
 /// is itself aborted drops its locals, so its children go with it: an
 /// aborted FlowRun never leaves a device task running on a device whose
@@ -1058,10 +1072,7 @@ impl SuiteRunner {
         // `/shutdown` endpoint is Android-only (iOS is XCUITest-hosted, no
         // such handler); best-effort with a short timeout so a
         // already-wedged companion can't stall teardown.
-        for comp in reg_state.all() {
-            if comp.platform != "android" {
-                continue;
-            }
+        for comp in companions_to_shut_down(reg_state.all(), &self.resource_mgr) {
             let client = golem_driver::common::CompanionClient::new(comp.port);
             client.set_request_timeout(std::time::Duration::from_secs(2));
             let _ = client.post_json("/shutdown", "{}").await;
@@ -4483,6 +4494,38 @@ pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_suite_leaves_the_companion_of_a_device_another_client_holds() {
+        use golem_devices::resource_manager::ResourceManager;
+        let rm = std::sync::Arc::new(ResourceManager::new(
+            golem_devices::concurrency::ConcurrencyConfig::default(),
+        ));
+        let comp = |id: &str, platform: &str| crate::registration::RegisteredCompanion {
+            platform: platform.into(),
+            device_id: id.into(),
+            device_name: id.into(),
+            version: "0".into(),
+            port: 8300,
+        };
+        let held = DeviceInfo {
+            udid: "emulator-5556".into(),
+            ..stub_device(Platform::Android, golem_devices::DeviceType::Phone, 0)
+        };
+        let _session = rm.try_lease(&held, 0).expect("lease");
+        let ids: Vec<String> = companions_to_shut_down(
+            vec![
+                comp("emulator-5554", "android"),
+                comp("emulator-5556", "android"),
+                comp("SIM", "ios"),
+            ],
+            &rm,
+        )
+        .into_iter()
+        .map(|c| c.device_id)
+        .collect();
+        assert_eq!(ids, ["emulator-5554"]);
+    }
 
     // --- device-wait precedence -------------------------------------------
     mod device_wait {

@@ -35,6 +35,8 @@ pub mod ipc;
 pub mod plan;
 pub mod project;
 pub mod registration;
+pub mod session;
+pub mod session_ipc;
 pub mod suite;
 pub mod target;
 
