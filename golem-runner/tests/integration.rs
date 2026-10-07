@@ -33,29 +33,8 @@ static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig
 
 fn test_ctx() -> ExecutionContext<'static> {
     ExecutionContext {
-        flow_dir: Path::new("."),
-        project_root: Path::new("."),
-        capture_config: &DEFAULT_CAPTURE,
-        flow_name: "test",
-        block_name: None,
-        step_index: 0,
-        global_step_index: 0,
-        block_iteration: 0,
-        device: None,
-        perf_collector: None,
-        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
-        emitter: None,
-        a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-        last_settled_tree: std::sync::Mutex::new(None),
-        trace_pair: std::sync::Mutex::new(None),
         rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
-        inherited_record_default: false,
-        extend_next_settle: std::sync::atomic::AtomicBool::new(false),
-        browser: Default::default(),
-        dev: false,
-        recovery: None,
+        ..ExecutionContext::new(Path::new("."), Path::new("."), &DEFAULT_CAPTURE, "test")
     }
 }
 
