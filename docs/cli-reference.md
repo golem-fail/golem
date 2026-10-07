@@ -9,6 +9,7 @@
 - [`golem run`](#golem-run)
 - [`golem tree`](#golem-tree)
 - [`golem do`](#golem-do)
+- [`golem probe`](#golem-probe)
 - [`golem devices`](#golem-devices)
 - [`golem init`](#golem-init)
 - [`golem create <name>`](#golem-create-name)
@@ -131,6 +132,40 @@ The step runs in the daemon and leases its device for that step, so it never act
 ```text
 $ golem do '{ action = "tap", on_text = "+" }' --app app
 android/Pixel 8 Pro API 36 +tap:on_text="+" d:1515 @243,732 b180,666,126,132 t:4/357
+```
+
+## `golem probe`
+
+Show what a selector matches on one device, without acting.
+
+```bash
+golem probe '{ on_text = "Sign in" }' [OPTIONS]
+```
+
+The selector uses the same notation as `golem do`. You can paste the step you plan to run: `probe` ignores its `action`. `probe` never fails: it always exits 0.
+
+| Flag | Description |
+|------|-------------|
+| `--timeout <MS>` | Poll for up to this long while nothing visible matches (default 0: check the screen once) |
+| `--platform`, `--device`, `--bundle`, `--app` | As for `golem do` |
+| `--output <toon\|json>` | `toon` (default) or `json` |
+
+The output shows:
+
+- the visible matches, with their `[n]` from the [TOON tree](output-formats.md#toon-tree), in the order a step picks from
+- the match a step would act on (the first), and a warning when more than one element matches
+- the element that each relational anchor (`below`, `contains` and the others) resolved to
+- on a miss, the matches left after each clause, so the output shows which clause removed them
+- matches in the full tree that are off-screen, as a hint only, with the direction `auto_scroll` would scroll
+
+`probe` and a step use the same visible-tree matching, so `probe` reports the element that the step acts on. `probe` only reads the screen, so it also works on a device that a run is using.
+
+```text
+$ golem probe '{ on_text = "Action" }' --app app
+android/Pixel 8 Pro API 36 probe { on_text = "Action" } · 2 visible matches · act picks [15]
+ [15] Button "Action" 714,1098 225x132 @826,1164  ·button·has_text·short_text·
+ [16] Button "Action" 969,1098 225x132 @1081,1164  ·button·has_text·short_text·
+warn: more than one element matches, and act picks the first. Add index, or a tighter selector
 ```
 
 ## `golem devices`

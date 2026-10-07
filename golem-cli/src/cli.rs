@@ -22,6 +22,9 @@ pub enum Commands {
     Tree(TreeArgs),
     /// Run one step on a device: `golem do '{ action = "tap", on_text = "OK" }'`
     Do(DoArgs),
+    /// Show what a selector matches on a device, without acting:
+    /// `golem probe '{ on_text = "OK" }'`
+    Probe(ProbeArgs),
     /// List available devices
     Devices,
     /// Initialize a new project
@@ -113,6 +116,37 @@ pub struct DoArgs {
     /// Also print the visible tree after the step
     #[arg(long)]
     pub tree: bool,
+
+    /// Output format
+    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
+    pub output: TreeOutput,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ProbeArgs {
+    /// The selector, as one TOML inline table: `{ on_text = "OK" }`. A whole
+    /// step works too; its `action` is ignored
+    pub selector: String,
+
+    /// Poll for up to this many milliseconds while nothing visible matches
+    #[arg(long, default_value_t = 0)]
+    pub timeout: u64,
+
+    /// Consider only devices on this platform (ios or android)
+    #[arg(long)]
+    pub platform: Option<String>,
+
+    /// The device: a UDID or serial, a name, or part of either
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// The bundle ID of the app
+    #[arg(long, conflicts_with = "app")]
+    pub bundle: Option<String>,
+
+    /// The app, by its name in the golem.toml [[apps]] registry
+    #[arg(long)]
+    pub app: Option<String>,
 
     /// Output format
     #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]

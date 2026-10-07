@@ -149,7 +149,7 @@ pub fn resolve_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindRes
 /// elements at all, so when `visible_bounds` is `None` we trust the
 /// anchor's presence — its `bounds` reflect a currently rendered
 /// element.
-fn resolve_visible_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
+pub fn resolve_visible_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
     let found = resolve_anchor(root, anchor)?;
     if anchor_on_screen(&found.element) {
         Some(found)

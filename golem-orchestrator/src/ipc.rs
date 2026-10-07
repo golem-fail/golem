@@ -561,6 +561,28 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                         let mut w = writer.lock().await;
                         let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
                     }
+                    Some("probe") if greeted => {
+                        let resp = match crate::interactive::parse_probe_request(&json) {
+                            Ok(req) => match crate::interactive::run_probe(&req).await {
+                                Ok((report, device)) => serde_json::json!({
+                                    "type": "probe_result",
+                                    "device": device,
+                                    "toon": golem_runner::probe::render_toon(&report),
+                                    "report": golem_runner::probe::render_json(&report),
+                                }),
+                                Err(e) => serde_json::json!({
+                                    "type": "error",
+                                    "message": format!("{e:#}"),
+                                }),
+                            },
+                            Err(e) => serde_json::json!({
+                                "type": "error",
+                                "message": format!("{e:#}"),
+                            }),
+                        };
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                    }
                     Some("submit")
                         if shared.draining.load(std::sync::atomic::Ordering::Acquire) =>
                     {

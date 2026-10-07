@@ -407,6 +407,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             return do_cmd::run(&args).await;
         }
 
+        Commands::Probe(args) => {
+            return do_cmd::probe(&args).await;
+        }
+
         Commands::Daemon(args) => {
             let idle_secs = args.idle_secs.or_else(|| {
                 std::env::var("GOLEM_DAEMON_IDLE_SECS")

@@ -1,5 +1,6 @@
 //! One-off commands the daemon runs for a client outside any suite:
-//! `golem do` runs one step on one device.
+//! `golem do` runs one step on one device, and `golem probe` reports what
+//! a selector matches there.
 //!
 //! They run in the daemon, not in the client, so that a step takes its
 //! device from the same `ResourceManager` as the suite runs: a `golem do`
@@ -92,6 +93,66 @@ pub async fn run_do(req: &DoRequest, resource_mgr: &Arc<ResourceManager>) -> Res
         tree,
         device: format!("{}/{}", target.device.platform, target.device.name),
     })
+}
+
+/// A `golem probe` request.
+#[derive(Debug, Clone)]
+pub struct ProbeRequest {
+    /// The selector, in the canonical step notation; `action` is ignored.
+    pub selector: String,
+    pub query: TargetQuery,
+    pub project_root: PathBuf,
+    /// Poll for up to this long while nothing visible matches.
+    pub timeout_ms: u64,
+}
+
+/// Probe a selector on the device and app `req` names. It only reads the
+/// screen, so it takes no lease: it can look at a device a run is using.
+pub async fn run_probe(req: &ProbeRequest) -> Result<(golem_runner::probe::ProbeReport, String)> {
+    let parsed = golem_parser::inline::parse_selector_inline(&req.selector)?;
+    let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
+    let target = target::resolve(&req.query, &project.apps).await?;
+    let driver = target.driver();
+    let report =
+        golem_runner::probe::probe(driver.as_ref(), &parsed.step, &parsed.line, req.timeout_ms)
+            .await?;
+    Ok((
+        report,
+        format!("{}/{}", target.device.platform, target.device.name),
+    ))
+}
+
+/// Read a `probe` request.
+pub fn parse_probe_request(msg: &serde_json::Value) -> Result<ProbeRequest> {
+    let selector = msg["selector"]
+        .as_str()
+        .context("a probe request needs a `selector`")?
+        .to_string();
+    let as_do = parse_do_request(&serde_json::json!({
+        "step": "",
+        "query": msg["query"],
+        "project_root": msg["project_root"],
+    }))?;
+    Ok(ProbeRequest {
+        selector,
+        query: as_do.query,
+        project_root: as_do.project_root,
+        timeout_ms: msg["timeout_ms"].as_u64().unwrap_or(0),
+    })
+}
+
+/// The `probe` request message.
+pub fn probe_request_json(
+    selector: &str,
+    query: &TargetQuery,
+    project_root: &Path,
+    timeout_ms: u64,
+) -> serde_json::Value {
+    let mut msg = do_request_json("", query, project_root, false);
+    msg["type"] = serde_json::json!("probe");
+    msg["selector"] = serde_json::json!(selector);
+    msg["timeout_ms"] = serde_json::json!(timeout_ms);
+    msg
 }
 
 /// The visible tree on `driver`'s screen, as TOON.
@@ -208,6 +269,20 @@ mod tests {
         let env = req.child_env.expect("env");
         assert_eq!(env.cwd.as_deref(), Some(Path::new("/proj/sub")));
         assert_eq!(env.vars, vec![("A".to_string(), "1".to_string())]);
+    }
+
+    #[test]
+    fn a_probe_request_round_trips() {
+        let query = TargetQuery {
+            platform: Some(golem_devices::Platform::Android),
+            ..TargetQuery::default()
+        };
+        let msg = probe_request_json(r#"{ on_text = "OK" }"#, &query, Path::new("/proj"), 750);
+        let req = parse_probe_request(&msg).expect("parse");
+        assert_eq!(req.selector, r#"{ on_text = "OK" }"#);
+        assert_eq!(req.query.platform, Some(golem_devices::Platform::Android));
+        assert_eq!(req.project_root, Path::new("/proj"));
+        assert_eq!(req.timeout_ms, 750);
     }
 
     #[test]
