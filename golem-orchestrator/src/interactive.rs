@@ -44,15 +44,10 @@ pub struct DoResult {
 pub async fn run_do(req: &DoRequest, resource_mgr: &Arc<ResourceManager>) -> Result<DoResult> {
     let step = golem_parser::inline::parse_step_inline(&req.step)?.step;
     let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
-    let target = target::resolve(&req.query, &project.apps).await?;
-    let _lease = resource_mgr
-        .try_lease(&target.device, target.port)
-        .with_context(|| {
-            format!(
-                "{} ({}) is in use by a run; wait for it, or pick another device",
-                target.device.name, target.device.udid
-            )
-        })?;
+    let selection = target::select(&req.query, &project.apps).await?;
+    // Lease before any companion work: see `target::connect`.
+    let _lease = lease(resource_mgr, &selection.device)?;
+    let target = target::connect(selection).await?;
     let driver = target.driver();
     let apps = app_configs(&project.apps);
     let capture = golem_runner::capture::CaptureConfig {
@@ -155,6 +150,19 @@ pub fn probe_request_json(
     msg
 }
 
+/// Lease `device` for an interactive command, or say who holds it.
+pub fn lease(
+    resource_mgr: &Arc<ResourceManager>,
+    device: &golem_devices::DeviceInfo,
+) -> Result<golem_devices::resource_manager::DeviceLease> {
+    resource_mgr.try_lease(device, 0).with_context(|| {
+        format!(
+            "{} ({}) is in use by a run or a session; wait for it, or pick another device",
+            device.name, device.udid
+        )
+    })
+}
+
 /// The visible tree on `driver`'s screen, as TOON.
 pub async fn visible_tree(driver: &dyn golem_driver::PlatformDriver) -> Result<String> {
     let (root, meta) = driver.get_hierarchy().await?;
@@ -169,7 +177,7 @@ pub async fn visible_tree(driver: &dyn golem_driver::PlatformDriver) -> Result<S
 
 /// The project's app registry as the flow-level app list a step resolves
 /// `app = "…"` against.
-fn app_configs(apps: &[golem_parser::ProjectAppConfig]) -> Vec<golem_parser::AppConfig> {
+pub(crate) fn app_configs(apps: &[golem_parser::ProjectAppConfig]) -> Vec<golem_parser::AppConfig> {
     apps.iter()
         .map(|a| golem_parser::AppConfig {
             name: a.name.clone(),

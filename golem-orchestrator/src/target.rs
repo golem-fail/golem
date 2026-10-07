@@ -238,12 +238,29 @@ pub async fn discover_devices(platform: Option<Platform>) -> Vec<DeviceInfo> {
     devices
 }
 
-/// Resolve `query` to one device and app, reusing the device's live
-/// companion or starting one.
-pub async fn resolve(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<Target> {
+/// The device and app a query names, before any companion work.
+#[derive(Debug, Clone)]
+pub struct Selection {
+    pub device: DeviceInfo,
+    pub bundle: String,
+}
+
+/// Pick the device and app `query` names. Touches no companion: a caller
+/// that leases the device does so between this and [`connect`].
+pub async fn select(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<Selection> {
     let bundle = resolve_bundle(query, apps)?;
     let devices = discover_devices(query.platform).await;
     let device = select_device(&devices, query)?.clone();
+    Ok(Selection { device, bundle })
+}
+
+/// Reuse the selected device's live companion, or start one.
+///
+/// Starting an iOS companion kills any other companion on that device, so
+/// a caller that acts on the device takes its lease first: otherwise it
+/// could kill the companion of a run still setting the device up.
+pub async fn connect(selection: Selection) -> Result<Target> {
+    let Selection { device, bundle } = selection;
     let (port, health) = match companion_on(&device, crate::suite::scan_companions().await) {
         Some(live) => live,
         None => {
@@ -257,6 +274,12 @@ pub async fn resolve(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<T
         port,
         health,
     })
+}
+
+/// [`select`] then [`connect`], for a caller that only reads the screen
+/// (`golem tree`, `golem probe`) and takes no lease.
+pub async fn resolve(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<Target> {
+    connect(select(query, apps).await?).await
 }
 
 /// Every device, with the port of its live companion where one runs.
