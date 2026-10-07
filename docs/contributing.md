@@ -56,6 +56,25 @@ cargo run -- run e2e/<flow>.test.toml --platform android|ios
 
 Versions only ever go forward — a final commit may skip numbers. See [Versioning](versioning.md) for which files carry a version and why a companion change requires a bump (it invalidates the install cache so the new companion actually ships to the device).
 
+### The MCP server
+
+`golem-cli/tests/mcp_live.rs` drives the real `golem mcp` binary with a scripted MCP client against `test-app`. The tests are ignored by default, because they need a booted device with the test app and its companion installed. Run one platform at a time:
+
+```bash
+GOLEM_E2E_PLATFORM=android cargo nextest run -p golem-cli --test mcp_live --run-ignored only
+GOLEM_E2E_PLATFORM=ios GOLEM_E2E_DEVICE=<udid> cargo nextest run -p golem-cli --test mcp_live --run-ignored only
+```
+
+`GOLEM_E2E_DEVICE` picks the device when more than one is booted. The tests cover these scenarios:
+
+- Write a flow, export it, then pass it with `golem run`.
+- Add a step to an e2e flow, and keep its comments and format.
+- Read the launch line and a crash with `app_logs`.
+- Get `pending`, `busy`, `wait` and `status` with `--soft-timeout 5`.
+- Kill the MCP client while `golem run` runs on the other platform. The run passes, and the device is free. This test needs a booted device of each platform.
+
+Run them when you change `golem mcp`, the session code in `golem-orchestrator`, or the daemon.
+
 ## When an e2e fails
 
 Investigate one thing at a time. Identify the cause, summarise it, and check whether it's a known issue. A regression must be fixed before commit unless it's explicitly deferred. Don't add test workarounds that hide an engine bug — fix the engine.

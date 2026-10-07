@@ -926,12 +926,17 @@ pub enum Client {
     Codex,
     /// Claude Desktop and other GUI clients: `claude_desktop_config.json`.
     Desktop,
+    /// OpenCode: `opencode.json` at the project root.
+    Opencode,
+    /// Gemini CLI: `.gemini/settings.json` in the project.
+    Gemini,
 }
 
 /// The config block that starts `exe mcp` from `client`.
 ///
-/// Claude Code starts a project server in the project directory, so its
-/// block needs no `--project`. Codex and a GUI client can start the server
+/// Claude Code, OpenCode and Gemini CLI read these blocks from a project
+/// file and start the server in the project directory, so their blocks
+/// need no `--project`. Codex and a GUI client can start the server
 /// anywhere. A GUI client also does not get the shell `PATH`, so its block
 /// carries `env`: without it the daemon cannot find `adb` or `xcrun`.
 pub fn client_config(
@@ -943,7 +948,7 @@ pub fn client_config(
     let exe = exe.display().to_string();
     let project = project_root.display().to_string();
     match client {
-        Client::Claude => {
+        Client::Claude | Client::Gemini => {
             let v = serde_json::json!({
                 "mcpServers": { "golem": { "command": exe, "args": ["mcp"] } }
             });
@@ -963,6 +968,13 @@ pub fn client_config(
             let mut doc = toml_edit::DocumentMut::new();
             doc.insert("mcp_servers", toml_edit::Item::Table(servers));
             doc.to_string()
+        }
+        Client::Opencode => {
+            let v = serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": { "golem": { "type": "local", "command": [exe, "mcp"], "enabled": true } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
         }
         Client::Desktop => {
             let env: serde_json::Map<String, serde_json::Value> = env
@@ -1014,6 +1026,17 @@ mod tests {
             claude,
             serde_json::json!({ "mcpServers": { "golem": {
                 "command": "/opt/golem/bin/golem", "args": ["mcp"] } } })
+        );
+
+        let gemini: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Gemini, exe, root, &env)).expect("json");
+        assert_eq!(gemini, claude, "Gemini CLI reads the same mcpServers block");
+
+        let opencode: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Opencode, exe, root, &env)).expect("json");
+        assert_eq!(
+            opencode["mcp"]["golem"],
+            serde_json::json!({ "type": "local", "command": ["/opt/golem/bin/golem", "mcp"], "enabled": true })
         );
 
         let codex: toml::Value =

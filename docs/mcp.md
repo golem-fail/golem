@@ -1,6 +1,6 @@
 # golem as an MCP server
 
-`golem mcp` is an [MCP](https://modelcontextprotocol.io) server. An LLM client, such as Claude Code, Codex or Claude Desktop, uses it to drive an iOS or Android device one step at a time. Use it for two tasks:
+`golem mcp` is an [MCP](https://modelcontextprotocol.io) server. An LLM client, such as Claude Code, Codex, OpenCode, Gemini CLI or Claude Desktop, uses it to drive an iOS or Android device one step at a time. Use it for two tasks:
 
 - **Write a flow.** The LLM runs steps on a live device. Each step that passes goes into a flow draft. The LLM then exports the draft as a `.test.toml` file that `golem run` runs.
 - **Debug an app.** The LLM taps through the app, reads the screen, takes screenshots and reads the app's device log, then reports what it found.
@@ -9,9 +9,11 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
 
 ## Setup
 
-The server talks over stdio. Each client starts the command `golem` with the argument `mcp`. Before you start, run `golem doctor`, and make sure that a simulator or emulator is booted.
+The server talks over stdio. Each client starts the command `golem` with the argument `mcp`. Before you start, run `golem doctor`.
 
-`golem mcp --print-config <client>` prints a config block for `claude`, `codex` or `desktop`. The block holds the absolute path of the `golem` that you ran.
+`golem mcp --print-config <client>` prints a config block for `claude`, `codex`, `opencode`, `gemini` or `desktop`. The block holds the absolute path of the `golem` that you ran.
+
+**Boot a device first.** `session_open` uses a simulator, an emulator or a connected device that is already booted. It does not boot a device, as `golem run` does. `devices` lists each device and its state.
 
 ### Claude Code
 
@@ -46,6 +48,38 @@ args = ["mcp", "--project", "/path/to/your/project"]
 ```
 
 Codex can start the server from any directory, so give `--project`. A trusted project can also hold the block in `.codex/config.toml`. Check the server with `codex mcp list`.
+
+### OpenCode
+
+OpenCode has no command that adds a server. Add the server to `opencode.json` at the project root, or to `~/.config/opencode/opencode.json` for all your projects:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "golem": { "type": "local", "command": ["golem", "mcp"], "enabled": true }
+  }
+}
+```
+
+In the global file, add `"--project", "/path/to/your/project"` to `command`. Check the server with `opencode mcp list`.
+
+### Gemini CLI
+
+```bash
+gemini mcp add golem golem mcp
+```
+
+- The default scope is `project`: the command writes `.gemini/settings.json` in the project. Commit that file to share the server with your team.
+- `--scope user` writes `~/.gemini/settings.json`. Then add `--project /path/to/your/project` to the server's arguments.
+
+The block has the same form as the Claude Code block:
+
+```json
+{ "mcpServers": { "golem": { "command": "golem", "args": ["mcp"] } } }
+```
+
+Check the server with `/mcp` in a Gemini CLI session, or with `gemini mcp list`. `gemini mcp list` tests a stdio server only in a trusted folder.
 
 ### Claude Desktop and other GUI clients
 
@@ -83,6 +117,8 @@ A client stops waiting for one tool call after a limit. golem answers every call
 
 - **Codex:** `tool_timeout_sec` defaults to 60. Keep it above the soft timeout. `startup_timeout_sec` defaults to 10. The server starts in well under that time.
 - **Claude Code:** `MCP_TOOL_TIMEOUT` (milliseconds) sets the limit for every server, and `"timeout"` on one server in `.mcp.json` sets it for that server. The defaults are much longer than the soft timeout.
+- **Gemini CLI:** `"timeout"` on the server (milliseconds) defaults to 600000, which is longer than the soft timeout.
+- **OpenCode:** `"timeout"` on the server (milliseconds, default 5000) applies to the tool list that the client gets when the server starts. The server sends the list in well under that time.
 - **Other clients:** if a client's limit is under 45 s, start the server with `--soft-timeout` below that limit.
 
 ## The step notation
@@ -193,20 +229,3 @@ session_close(teardown = false)
 - **Environment.** The server sends its environment with each `session_open`. A GUI client must therefore set `PATH` and `ANDROID_HOME` in `env`.
 - **Upgrades.** A newer golem drains an older daemon: the old daemon finishes its work, then exits, and the new golem starts a new daemon. An open MCP session keeps the old daemon busy until the session ends. A `golem run` waits up to `GOLEM_DAEMON_WAIT` seconds (default 300) for that. After an upgrade, restart the MCP server in your client. When the old `golem mcp` connects to the new daemon, it fails with an "is older than the running daemon" error.
 - **Mixed versions.** An npm project version and a global brew version can differ. Align the two versions, or set `GOLEM_SOCKET` so that each one uses its own daemon.
-
-## Testing the server
-
-`golem-cli/tests/mcp_live.rs` drives the real `golem mcp` binary with a scripted MCP client against `test-app`. The tests are ignored by default, because they need a booted device with the test app and its companion installed. Run one platform at a time:
-
-```bash
-GOLEM_E2E_PLATFORM=android cargo nextest run -p golem-cli --test mcp_live --run-ignored only
-GOLEM_E2E_PLATFORM=ios GOLEM_E2E_DEVICE=<udid> cargo nextest run -p golem-cli --test mcp_live --run-ignored only
-```
-
-The tests cover these scenarios:
-
-- Write a flow, export it, then pass it with `golem run`.
-- Add a step to an e2e flow, and keep its comments and format.
-- Read the launch line and a crash with `app_logs`.
-- Get `pending`, `busy`, `wait` and `status` with `--soft-timeout 5`.
-- Kill the MCP client while `golem run` runs on the other platform. The run passes, and the device is free. This test needs a device of each platform.
