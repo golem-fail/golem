@@ -1,8 +1,5 @@
 #![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
 use anyhow::{bail, Result};
-use golem_driver::android::AndroidDriver;
-use golem_driver::ios::IosDriver;
-use golem_driver::PlatformDriver;
 use golem_element::selector::element_has_trait;
 use golem_element::{filter_viewport, Element, Viewport};
 
@@ -42,20 +39,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     let name = &target.device.name;
     let device_id = &target.device.udid;
     let bundle = target.bundle.as_str();
-    let driver: Box<dyn PlatformDriver> = match target.device.platform {
-        golem_devices::Platform::Android => Box::new(AndroidDriver::new(
-            device_id.clone(),
-            bundle.to_string(),
-            port,
-            target.device.physical,
-        )),
-        golem_devices::Platform::Ios => Box::new(IosDriver::new(
-            device_id.clone(),
-            bundle.to_string(),
-            port,
-            target.device.physical,
-        )),
-    };
+    let driver = target.driver();
 
     // First call triggers async CDP setup for Android WebViews.
     // Second call (after a brief wait) gets the CDP-enriched tree.

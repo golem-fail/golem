@@ -185,6 +185,11 @@ struct JsonFlakeEntry {
 
 // ── Conversion helpers ──────────────────────────────────────────────
 
+/// One step as the JSON object `results.json` holds for it.
+pub fn step_json(step: &StepReport) -> serde_json::Value {
+    serde_json::to_value(step_to_json(step)).unwrap_or(serde_json::Value::Null)
+}
+
 fn step_to_json(step: &StepReport) -> JsonStep {
     let (outcome, code, error, warning) = match &step.outcome {
         StepOutcome::Success => ("success".to_string(), None, None, None),

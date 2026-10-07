@@ -4,6 +4,7 @@ pub mod cli;
 pub mod dev_server;
 pub mod devices;
 pub mod discovery;
+pub mod do_cmd;
 pub mod doctor;
 pub mod install_script_cmd;
 pub mod scaffold;
@@ -236,7 +237,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 max_device_wait_ms,
                 include_junit,
             );
-            add_client_context(&mut config_json);
+            ipc::add_client_context(&mut config_json);
 
             // `--dev` preflight. Probed here rather than server-side so the
             // H503 tag survives: a suite error crossing the daemon socket is
@@ -402,6 +403,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             return doctor::run(&args).await;
         }
 
+        Commands::Do(args) => {
+            return do_cmd::run(&args).await;
+        }
+
         Commands::Daemon(args) => {
             let idle_secs = args.idle_secs.or_else(|| {
                 std::env::var("GOLEM_DAEMON_IDLE_SECS")
@@ -422,7 +427,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
 /// How this process brings up a daemon when none answers: a detached
 /// `golem daemon`, or with `GOLEM_DAEMON_IN_PROCESS=1` a daemon that runs
 /// inside this process and ends with it.
-fn daemon_starter() -> Box<dyn golem_orchestrator::daemon::DaemonStarter> {
+pub(crate) fn daemon_starter() -> Box<dyn golem_orchestrator::daemon::DaemonStarter> {
     if std::env::var_os("GOLEM_DAEMON_IN_PROCESS").is_some_and(|v| v == "1") {
         Box::new(golem_orchestrator::daemon::InProcessStarter {
             idle_grace: golem_orchestrator::daemon::DEFAULT_IDLE_GRACE,
@@ -649,18 +654,6 @@ fn absolute(path: &Path) -> PathBuf {
         return path.to_path_buf();
     }
     std::env::current_dir().map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
-}
-
-/// Add this process's environment and working directory to a submit's
-/// config. The daemon starts the processes a run needs (install scripts,
-/// `bash`, `run`) with them, so a run sees its own shell's variables and
-/// directory rather than those of whichever client started the daemon.
-fn add_client_context(config_json: &mut serde_json::Value) {
-    let env: Vec<(String, String)> = std::env::vars().collect();
-    config_json["client_env"] = serde_json::json!(env);
-    if let Ok(cwd) = std::env::current_dir() {
-        config_json["client_cwd"] = serde_json::json!(cwd.display().to_string());
-    }
 }
 
 use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};
