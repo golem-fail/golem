@@ -27,6 +27,8 @@ pub enum Commands {
     Probe(ProbeArgs),
     /// Run an MCP server over stdio, so an LLM client can drive a device
     Mcp(McpArgs),
+    /// A device session that stays open between commands, held by the daemon
+    Session(SessionArgs),
     /// List available devices
     Devices,
     /// Initialize a new project
@@ -169,6 +171,198 @@ pub struct McpArgs {
     /// Open sessions on the device-free stub driver (debug builds; tests)
     #[arg(long, hide = true)]
     pub stub_session: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionArgs {
+    #[command(subcommand)]
+    pub command: SessionCommands,
+}
+
+/// The session's name, shared by every `golem session` command.
+#[derive(clap::Args, Debug, Clone)]
+pub struct SessionName {
+    /// The session's name
+    #[arg(long, default_value = "default")]
+    pub name: String,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SessionCommands {
+    /// Open a session on one device and app
+    Start(SessionStartArgs),
+    /// Run one step in the session: `golem session do '{ action = "tap", on_text = "OK" }'`
+    Do(SessionDoArgs),
+    /// Show what a selector matches, without acting
+    Probe(SessionProbeArgs),
+    /// Print the visible tree
+    Tree(SessionTreeArgs),
+    /// Save the screen as a PNG
+    Screenshot(SessionScreenshotArgs),
+    /// Print the app's device log, crash lines first
+    Logs(SessionLogsArgs),
+    /// Check the steps that passed as a flow, then write them to a .test.toml
+    Export(SessionExportArgs),
+    /// Close the session and release its device
+    Stop(SessionStopArgs),
+    /// List the open sessions
+    List,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionStartArgs {
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// Consider only devices on this platform (ios or android)
+    #[arg(long)]
+    pub platform: Option<String>,
+
+    /// The device: a UDID or serial, a name, or part of either
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// The bundle ID of the app
+    #[arg(long, conflicts_with = "app")]
+    pub bundle: Option<String>,
+
+    /// The app, by its name in the golem.toml [[apps]] registry
+    #[arg(long)]
+    pub app: Option<String>,
+
+    /// Run this flow first, as `golem run` would, and open the session where it stops
+    #[arg(long)]
+    pub flow: Option<std::path::PathBuf>,
+
+    /// With --flow: stop before this step, as `block` or `block:step`
+    #[arg(long, requires = "flow")]
+    pub stop_at: Option<String>,
+
+    /// With --flow: open the session at a failed step instead of ending
+    #[arg(long, requires = "flow")]
+    pub break_on_failure: bool,
+
+    /// With --flow: never run the flow's [[teardown]]
+    #[arg(long, requires = "flow")]
+    pub no_teardown: bool,
+
+    /// With --flow: a flow variable, as KEY=VALUE (repeatable)
+    #[arg(long = "var", value_name = "KEY=VALUE", requires = "flow")]
+    pub vars: Vec<String>,
+
+    /// Close the session after this many seconds with no command
+    #[arg(long, default_value_t = 1800)]
+    pub idle_timeout: u64,
+
+    /// Open the session on the device-free stub driver (debug builds; tests)
+    #[arg(long, hide = true)]
+    pub stub: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionDoArgs {
+    /// The step, as one TOML inline table
+    pub step: String,
+
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// A comment to write above the step in the exported flow
+    #[arg(long)]
+    pub comment: Option<String>,
+
+    /// Also print the visible tree after the step
+    #[arg(long)]
+    pub tree: bool,
+
+    /// Output format
+    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
+    pub output: TreeOutput,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionProbeArgs {
+    /// The selector, as one TOML inline table: `{ on_text = "OK" }`
+    pub selector: String,
+
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// Poll for up to this many milliseconds while nothing visible matches
+    #[arg(long, default_value_t = 0)]
+    pub timeout: u64,
+
+    /// Output format
+    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
+    pub output: TreeOutput,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionTreeArgs {
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// The full tree, off-screen elements included: a hint, never what a step judges
+    #[arg(long)]
+    pub full: bool,
+
+    /// Output format
+    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
+    pub output: TreeOutput,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionScreenshotArgs {
+    /// Where to write the PNG
+    pub path: std::path::PathBuf,
+
+    #[command(flatten)]
+    pub name: SessionName,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionLogsArgs {
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// Seconds back from now (default: since the session opened)
+    #[arg(long)]
+    pub since: Option<u64>,
+
+    /// Only lines whose tag or message contains this text, in any case
+    #[arg(long)]
+    pub filter: Option<String>,
+
+    /// The most lines to show, besides crash lines
+    #[arg(long)]
+    pub limit: Option<usize>,
+
+    /// The app's name in the flow, or its bundle ID (default: the session's app)
+    #[arg(long)]
+    pub app: Option<String>,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionExportArgs {
+    /// Where to write the .test.toml
+    pub path: std::path::PathBuf,
+
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// Replace a file the session did not open from
+    #[arg(long)]
+    pub overwrite: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SessionStopArgs {
+    #[command(flatten)]
+    pub name: SessionName,
+
+    /// Skip the flow's [[teardown]] for a session started with --flow
+    #[arg(long)]
+    pub no_teardown: bool,
 }
 
 /// `golem tree` output formats.
