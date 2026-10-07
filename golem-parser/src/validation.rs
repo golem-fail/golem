@@ -32,6 +32,9 @@ pub enum ValidationErrorKind {
     /// A `permissions` map entry has an invalid mode for its permission
     /// (e.g. `camera = "limited"`) or uses the removed `location-always` key.
     InvalidPermission,
+    /// An action is missing a parameter it cannot run without (e.g.
+    /// `open_link` with no `url`).
+    MissingParam,
 }
 
 /// Every action a step may name.
@@ -113,6 +116,126 @@ const KNOWN_ACTIONS: &[&str] = &[
 ];
 
 const VALID_ON_FAIL: &[&str] = &["error", "warn", "ignore"];
+
+/// Parameters an action cannot run without, keyed by action.
+///
+/// Presence only: the runner checks each value's type when the step runs,
+/// after `${var}` interpolation. Kept in sync with the runner's
+/// "`<action>` action requires '`<param>`'" errors by
+/// `golem_runner::actions::tests::required_params_match_the_runner`.
+pub const REQUIRED_PARAMS: &[(&str, &[&str])] = &[
+    ("add_media", &["path"]),
+    ("await_email", &["inbox"]),
+    ("bash", &["run"]),
+    ("create_inbox", &["provider", "save_to"]),
+    ("delete_http", &["url"]),
+    ("get_http", &["url"]),
+    ("load_fixture", &["fixture", "as"]),
+    ("open_link", &["url"]),
+    ("patch_http", &["url"]),
+    ("post_http", &["url"]),
+    ("press", &["button"]),
+    ("put_http", &["url"]),
+    ("run", &["script"]),
+    ("set_dark_mode", &["enabled"]),
+    ("set_location", &["latitude", "longitude"]),
+];
+
+/// Whether `action` is one a step may name.
+pub(crate) fn is_known_action(action: &str) -> bool {
+    KNOWN_ACTIONS.contains(&action)
+}
+
+/// Every action a step may name, alphabetical within each group.
+#[cfg(test)]
+pub(crate) fn known_actions() -> &'static [&'static str] {
+    KNOWN_ACTIONS
+}
+
+/// The known action within one edit of `action`, when exactly one is.
+pub(crate) fn nearest_action(action: &str) -> Option<&'static str> {
+    let near: Vec<&str> = KNOWN_ACTIONS
+        .iter()
+        .copied()
+        .filter(|a| within_one_edit(a, action))
+        .collect();
+    match near.as_slice() {
+        [only] => Some(only),
+        _ => None,
+    }
+}
+
+/// The parameters `action` cannot run without. Empty for an action with
+/// none, or one golem does not know.
+pub fn required_params(action: &str) -> &'static [&'static str] {
+    REQUIRED_PARAMS
+        .iter()
+        .find(|(a, _)| *a == action)
+        .map_or(&[], |(_, params)| params)
+}
+
+/// The required parameters of `step`'s action that `step` does not set.
+pub(crate) fn missing_params(step: &Step) -> Vec<&'static str> {
+    required_params(&step.action)
+        .iter()
+        .copied()
+        .filter(|p| match *p {
+            // A named field, so serde consumed it before `params`.
+            "save_to" => step.save_to.is_none(),
+            _ => !step.params.contains_key(*p),
+        })
+        .collect()
+}
+
+/// The checks `validate_flow` runs on each step, except unknown keys,
+/// which a flow reports as warnings through [`lint_unknown_step_fields`].
+pub(crate) fn validate_step(step: &Step) -> Vec<ValidationError> {
+    let mut errors = Vec::new();
+
+    // 2. Unknown action
+    if !is_known_action(&step.action) {
+        errors.push(ValidationError {
+            message: format!("Unknown action '{}'", step.action),
+            kind: ValidationErrorKind::UnknownAction,
+        });
+    }
+
+    // 6. Invalid if_fail
+    if let Some(ref if_fail) = step.if_fail {
+        if !VALID_ON_FAIL.contains(&if_fail.as_str()) {
+            errors.push(ValidationError {
+                message: format!(
+                    "Invalid if_fail value '{if_fail}', expected one of: error, warn, ignore"
+                ),
+                kind: ValidationErrorKind::InvalidOnFail,
+            });
+        }
+    }
+
+    // 11. `backspace` operates on the focused field — a selector
+    //     can't be honored reliably (a tap-to-focus mis-places the
+    //     caret; there's no cross-platform move-to-end), so reject it.
+    if matches!(step.action.as_str(), "backspace" | "clear_text") && step.has_element_selector() {
+        errors.push(ValidationError {
+            message: format!(
+                "{} does not take a selector — it deletes from the \
+                 currently focused field; type or tap the field first",
+                step.action
+            ),
+            kind: ValidationErrorKind::SelectorNotAllowed,
+        });
+    }
+
+    // 12. A required parameter is missing.
+    for param in missing_params(step) {
+        errors.push(ValidationError {
+            message: format!("{} requires '{param}'", step.action),
+            kind: ValidationErrorKind::MissingParam,
+        });
+    }
+
+    errors
+}
 
 /// A `within = { ... }` setting that won't actually constrain the step.
 /// Returned by `lint_within_no_op` for both runtime warnings and a
@@ -290,43 +413,53 @@ fn within_one_edit(a: &str, b: &str) -> bool {
 /// 2. Any other key within one edit of a field name, when exactly one
 ///    field is that close. Ties are left alone rather than guessed at.
 pub fn lint_unknown_step_fields(flow: &FlowFile) -> Vec<UnknownStepFieldIssue> {
-    let fields = step_field_names();
     let mut issues = Vec::new();
     for block in &flow.block {
         for (idx, step) in block.steps.iter().enumerate() {
-            // Sorted so the warnings a flow produces don't reorder between
-            // runs — params is a HashMap.
-            let mut keys: Vec<&String> = step.params.keys().collect();
-            keys.sort();
-            for key in keys {
-                let near: Vec<&str> = fields
-                    .iter()
-                    .copied()
-                    .filter(|f| within_one_edit(f, key))
-                    .collect();
-                let suggestion = match near.as_slice() {
-                    [only] => Some((*only).to_string()),
-                    _ => None,
-                };
-                // A correctly spelled flat selector is a named field, so
-                // serde consumed it and it is not in `params` at all — the
-                // bare prefix is enough, and an exemption list here would be
-                // a condition that can never be false.
-                let is_stray_on = key.starts_with("on_");
-                if !is_stray_on && suggestion.is_none() {
-                    continue;
-                }
+            for (key, suggestion) in unknown_step_keys(step) {
                 issues.push(UnknownStepFieldIssue {
                     block_name: block.name.clone(),
                     step_index: idx,
                     action: step.action.clone(),
-                    key: key.clone(),
+                    key,
                     suggestion,
                 });
             }
         }
     }
     issues
+}
+
+/// The keys of `step` that [`lint_unknown_step_fields`] flags, sorted,
+/// each with its suggested field when there is one.
+pub(crate) fn unknown_step_keys(step: &Step) -> Vec<(String, Option<String>)> {
+    let fields = step_field_names();
+    // Sorted so the warnings a flow produces don't reorder between
+    // runs — params is a HashMap.
+    let mut keys: Vec<&String> = step.params.keys().collect();
+    keys.sort();
+    let mut found = Vec::new();
+    for key in keys {
+        let near: Vec<&str> = fields
+            .iter()
+            .copied()
+            .filter(|f| within_one_edit(f, key))
+            .collect();
+        let suggestion = match near.as_slice() {
+            [only] => Some((*only).to_string()),
+            _ => None,
+        };
+        // A correctly spelled flat selector is a named field, so
+        // serde consumed it and it is not in `params` at all — the
+        // bare prefix is enough, and an exemption list here would be
+        // a condition that can never be false.
+        let is_stray_on = key.starts_with("on_");
+        if !is_stray_on && suggestion.is_none() {
+            continue;
+        }
+        found.push((key.clone(), suggestion));
+    }
+    found
 }
 
 /// `push_notification` is sim/emu-only on both platforms. Flag any flow
@@ -484,40 +617,8 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
 
     // Iterate blocks for step and branch validation
     for block in &flow.block {
-        // 2. Unknown action
         for step in &block.steps {
-            if !KNOWN_ACTIONS.contains(&step.action.as_str()) {
-                errors.push(ValidationError {
-                    message: format!("Unknown action '{}'", step.action),
-                    kind: ValidationErrorKind::UnknownAction,
-                });
-            }
-
-            // 6. Invalid if_fail
-            if let Some(ref if_fail) = step.if_fail {
-                if !VALID_ON_FAIL.contains(&if_fail.as_str()) {
-                    errors.push(ValidationError {
-                        message: format!("Invalid if_fail value '{if_fail}', expected one of: error, warn, ignore"),
-                        kind: ValidationErrorKind::InvalidOnFail,
-                    });
-                }
-            }
-
-            // 11. `backspace` operates on the focused field — a selector
-            //     can't be honored reliably (a tap-to-focus mis-places the
-            //     caret; there's no cross-platform move-to-end), so reject it.
-            if matches!(step.action.as_str(), "backspace" | "clear_text")
-                && step.has_element_selector()
-            {
-                errors.push(ValidationError {
-                    message: format!(
-                        "{} does not take a selector — it deletes from the \
-                         currently focused field; type or tap the field first",
-                        step.action
-                    ),
-                    kind: ValidationErrorKind::SelectorNotAllowed,
-                });
-            }
+            errors.extend(validate_step(step));
         }
 
         // Branch validation
@@ -630,6 +731,35 @@ bundle = "com.example.app"
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].kind, ValidationErrorKind::MissingDevices);
         assert!(errors[0].message.contains("myapp"));
+    }
+
+    // 12. A required parameter is missing
+    #[test]
+    fn missing_required_param() {
+        let toml_str = r#"
+[flow]
+name = "missing param"
+
+[[block]]
+steps = [
+  { action = "open_link" },
+  { action = "open_link", url = "golem://x" },
+  { action = "create_inbox", provider = "mailpit" },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let messages: Vec<String> = validate_flow(&flow)
+            .into_iter()
+            .inspect(|e| assert_eq!(e.kind, ValidationErrorKind::MissingParam))
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "open_link requires 'url'",
+                "create_inbox requires 'save_to'"
+            ]
+        );
     }
 
     // 3. Unknown action "explode"

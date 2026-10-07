@@ -316,6 +316,66 @@ mod tests {
         );
     }
 
+    /// golem-parser rejects a step that lacks a required parameter before
+    /// the run starts. Its table SHALL list exactly the parameters the
+    /// handlers here fail on, read from their "`<action>` action requires
+    /// '`<param>`'" errors.
+    #[test]
+    fn required_params_match_the_runner() {
+        use std::collections::BTreeSet;
+
+        // The arms that share `handle_http`, whose error names the action
+        // through `{}`.
+        let http = include_str!("actions.rs")
+            .lines()
+            .filter(|l| l.contains("=> handle_http("))
+            .filter_map(|l| l.trim().strip_prefix('"')?.split('"').next())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert_eq!(http.len(), 5, "the five *_http arms: {http:?}");
+
+        let mut dirs = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/actions")];
+        let mut sources = Vec::new();
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(&dir).expect("src/actions SHALL be readable") {
+                let path = entry.expect("dir entry").path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    sources.push(path);
+                }
+            }
+        }
+        let mut in_runner = BTreeSet::new();
+        for path in sources {
+            let src = std::fs::read_to_string(&path).expect("action source SHALL be readable");
+            for (head, tail) in src
+                .split(" action requires '")
+                .zip(src.split(" action requires '").skip(1))
+            {
+                let action = head.rsplit('"').next().unwrap_or_default();
+                let param = tail.split('\'').next().unwrap_or_default();
+                if action == "{}" {
+                    for a in &http {
+                        in_runner.insert((a.clone(), param.to_string()));
+                    }
+                } else {
+                    in_runner.insert((action.to_string(), param.to_string()));
+                }
+            }
+        }
+        assert!(in_runner.len() >= 15, "found {in_runner:?}");
+
+        let in_parser: BTreeSet<(String, String)> = golem_parser::validation::REQUIRED_PARAMS
+            .iter()
+            .flat_map(|(a, params)| params.iter().map(|p| ((*a).to_string(), (*p).to_string())))
+            .collect();
+        assert_eq!(
+            in_parser, in_runner,
+            "golem-parser's REQUIRED_PARAMS SHALL match the runner's \"requires\" errors"
+        );
+    }
+
     // ── unknown action returns error ──────────────────────────────
 
     #[tokio::test]

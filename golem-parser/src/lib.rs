@@ -18,6 +18,7 @@
 
 pub mod config;
 pub mod fixture;
+pub mod inline;
 pub mod mixin;
 pub mod permissions;
 pub mod validation;
