@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_macros)] // cargo reads build-script directives from stdout
+
 use std::path::Path;
 
 fn main() {

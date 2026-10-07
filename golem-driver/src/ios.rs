@@ -1002,6 +1002,7 @@ impl PlatformDriver for IosDriver {
         if let Some(pid) = state.child.id() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-INT", &pid.to_string()])
+                .stdout(std::process::Stdio::null())
                 .status()
                 .await;
         }

@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
 use anyhow::{bail, Result};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;

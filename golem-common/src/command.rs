@@ -640,6 +640,8 @@ mod tests {
 
     /// The child half of `spawned_children_get_an_empty_stdin`. It does
     /// nothing unless that test re-runs this binary with data on stdin.
+    /// Its `RESULT` lines go to stdout, which the parent test reads.
+    #[allow(clippy::disallowed_macros)]
     #[tokio::test]
     async fn stdin_probe_child() {
         if std::env::var_os(STDIN_PROBE_ENV).is_none() {

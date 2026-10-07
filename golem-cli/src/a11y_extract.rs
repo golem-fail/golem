@@ -3,6 +3,8 @@
 //! run. The PNG carries everything (see `golem_runner::accessibility`'s iTXt
 //! metadata); we refuse any image not stamped `Software = Golem`.
 
+#![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
