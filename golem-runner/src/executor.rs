@@ -44,7 +44,7 @@ const DEFAULT_MAX_RUNTIME_SECS: u64 = 3600;
 
 /// Build a target label for a step (excludes action name).
 /// E.g. `on_text="Submit"` or `app="app"`.
-fn step_target(step: &golem_parser::Step) -> String {
+pub(crate) fn step_target(step: &golem_parser::Step) -> String {
     let mut parts = Vec::new();
     if let Some(ref t) = step.on_text {
         parts.push(format!("on_text=\"{t}\""));
@@ -265,6 +265,33 @@ async fn run_step_recovery(
             }
         }
     }
+}
+
+/// Resolve `${…}` variable references and inline `${fake:…}` generators in
+/// `step`'s fields (selectors, input, params) before it runs. `primary_app`
+/// names the app `${_app}` resolves to when the step sets no `app=`.
+/// Errors — undefined var, object-in-string, malformed generator — carry a
+/// ParseVariable code.
+pub(crate) fn interpolate_for_run(
+    step: &golem_parser::Step,
+    vars: &VariableStore,
+    ctx: &ExecutionContext<'_>,
+    primary_app: Option<&str>,
+    each_vars: Option<&VariableStore>,
+) -> Result<golem_parser::Step> {
+    let rng = &ctx.rng;
+    let generator = |def: &str| {
+        golem_vars::evaluate::generate_fake(def, &mut rng.lock().expect("flow rng mutex poisoned"))
+    };
+    // Single-device builtins (`${_device}` / `${_os}` / …). The step's own
+    // `app=` wins over the flow's primary app so `_app` names the app the
+    // step acts on.
+    let builtins = crate::interp::step_builtins(ctx.device, step.app.as_deref().or(primary_app));
+    let mut ictx = golem_vars::interpolation::InterpolationContext::new(vars);
+    ictx.generator = Some(&generator);
+    ictx.builtins = Some(&builtins);
+    ictx.each_vars = each_vars;
+    crate::interp::interpolate_step(step, &ictx)
 }
 
 /// Execute a parsed FlowFile by traversing blocks in order.
@@ -563,23 +590,11 @@ pub async fn execute_flow<'a>(
             // has one "now" shared by every (sub-)flow.
             let child_rng = ctx.rng.lock().expect("parent rng mutex poisoned").child();
             let mut child_ctx = ExecutionContext {
-                flow_dir: child_flow_dir,
-                project_root: ctx.project_root,
-                capture_config: ctx.capture_config,
-                flow_name: &child_flow.flow.name,
-                block_name: None,
-                step_index: 0,
                 global_step_index: ctx.global_step_index,
-                block_iteration: 0,
                 device: ctx.device,
                 perf_collector: ctx.perf_collector,
-                last_launch_ms: std::sync::atomic::AtomicU64::new(0),
                 emitter: ctx.emitter,
-                a11y_level: crate::accessibility::A11yLevel::Off,
                 a11y_min_confidence: ctx.a11y_min_confidence,
-                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-                last_settled_tree: std::sync::Mutex::new(None),
-                trace_pair: std::sync::Mutex::new(None),
                 rng: std::sync::Mutex::new(child_rng),
                 // Same flowrun, same browser: a sub-flow inherits whatever the
                 // parent logged into, exactly as if its steps were inline.
@@ -588,11 +603,16 @@ pub async fn execute_flow<'a>(
                 // starting point — `execute_flow` will refine it from
                 // the child's own `[flow.options].record` if set.
                 inherited_record_default: ctx.inherited_record_default,
-                extend_next_settle: std::sync::atomic::AtomicBool::new(false),
                 dev: ctx.dev,
                 // Sub-flows share the parent's recovery hook so a companion
                 // death inside a run_flow child recovers the same way.
                 recovery: ctx.recovery,
+                ..ExecutionContext::new(
+                    child_flow_dir,
+                    ctx.project_root,
+                    ctx.capture_config,
+                    &child_flow.flow.name,
+                )
             };
 
             let child_result = Box::pin(execute_flow(
@@ -820,29 +840,13 @@ pub async fn execute_flow<'a>(
             // generators in this step's fields (selectors, input, params)
             // before it runs. Errors — undefined var, object-in-string,
             // malformed generator — fail the flow with a ParseVariable code.
-            let step_owned = {
-                let rng = &ctx.rng;
-                let generator = |def: &str| {
-                    golem_vars::evaluate::generate_fake(
-                        def,
-                        &mut rng.lock().expect("flow rng mutex poisoned"),
-                    )
-                };
-                // Single-device builtins (`${_device}` / `${_os}` / …). The
-                // step's own `app=` wins over the flow's primary app so `_app`
-                // names the app the step acts on.
-                let builtins = crate::interp::step_builtins(
-                    ctx.device,
-                    step.app
-                        .as_deref()
-                        .or_else(|| flow.flow.apps.first().map(|a| a.name.as_str())),
-                );
-                let mut ictx = golem_vars::interpolation::InterpolationContext::new(&*vars);
-                ictx.generator = Some(&generator);
-                ictx.builtins = Some(&builtins);
-                ictx.each_vars = each_store.as_ref();
-                crate::interp::interpolate_step(step, &ictx)?
-            };
+            let step_owned = interpolate_for_run(
+                step,
+                vars,
+                ctx,
+                flow.flow.apps.first().map(|a| a.name.as_str()),
+                each_store.as_ref(),
+            )?;
             let step = &step_owned;
 
             let block_name_str = block.name.clone().unwrap_or_default();
@@ -4444,29 +4448,8 @@ action = "screenshot"
 
         let capture = crate::capture::CaptureConfig::default();
         let mut ctx = ExecutionContext {
-            flow_dir: &tmp,
-            project_root: &tmp,
-            capture_config: &capture,
-            flow_name: "test",
-            block_name: None,
-            step_index: 0,
-            global_step_index: 0,
-            block_iteration: 0,
             device: Some(&ios_device),
-            perf_collector: None,
-            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
-            emitter: None,
-            a11y_level: crate::accessibility::A11yLevel::Off,
-            a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-            last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
-            inherited_record_default: false,
-            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
-            browser: Default::default(),
-            dev: false,
-            recovery: None,
+            ..ExecutionContext::new(&tmp, &tmp, &capture, "test")
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -4518,29 +4501,8 @@ action = "screenshot"
 
         let capture = crate::capture::CaptureConfig::default();
         let mut ctx = ExecutionContext {
-            flow_dir: &tmp,
-            project_root: &tmp,
-            capture_config: &capture,
-            flow_name: "test",
-            block_name: None,
-            step_index: 0,
-            global_step_index: 0,
-            block_iteration: 0,
             device: Some(&android_device),
-            perf_collector: None,
-            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
-            emitter: None,
-            a11y_level: crate::accessibility::A11yLevel::Off,
-            a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-            last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
-            inherited_record_default: false,
-            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
-            browser: Default::default(),
-            dev: false,
-            recovery: None,
+            ..ExecutionContext::new(&tmp, &tmp, &capture, "test")
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -4601,29 +4563,8 @@ action = "screenshot"
 
         let capture = crate::capture::CaptureConfig::default();
         let mut ctx = ExecutionContext {
-            flow_dir: &tmp,
-            project_root: &tmp,
-            capture_config: &capture,
-            flow_name: "test",
-            block_name: None,
-            step_index: 0,
-            global_step_index: 0,
-            block_iteration: 0,
             device: Some(&ios_device),
-            perf_collector: None,
-            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
-            emitter: None,
-            a11y_level: crate::accessibility::A11yLevel::Off,
-            a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-            last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
-            inherited_record_default: false,
-            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
-            browser: Default::default(),
-            dev: false,
-            recovery: None,
+            ..ExecutionContext::new(&tmp, &tmp, &capture, "test")
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)

@@ -88,6 +88,50 @@ pub struct ExecutionContext<'a> {
     /// `None` (tests, stub, non-recoverable platforms) keeps the current
     /// behavior — a death fails the step as usual.
     pub recovery: Option<&'a dyn crate::recovery::CompanionRecovery>,
+    /// Substep events kept while `Some`, in addition to being emitted.
+    /// [`crate::single_step::execute_single_step`] reads a step's substeps
+    /// from here: a caller with no event stream still gets them.
+    pub substep_log: Mutex<Option<Vec<SubstepEvent>>>,
+}
+
+impl<'a> ExecutionContext<'a> {
+    /// A context with nothing optional wired in: no device, emitter, perf
+    /// collector or recovery hook, the a11y audit off, an unseeded RNG and
+    /// a fresh browser slot. Callers set the fields they need, usually
+    /// through struct update syntax.
+    pub fn new(
+        flow_dir: &'a Path,
+        project_root: &'a Path,
+        capture_config: &'a CaptureConfig,
+        flow_name: &'a str,
+    ) -> Self {
+        ExecutionContext {
+            flow_dir,
+            project_root,
+            capture_config,
+            flow_name,
+            block_name: None,
+            step_index: 0,
+            global_step_index: 0,
+            block_iteration: 0,
+            device: None,
+            perf_collector: None,
+            last_launch_ms: AtomicU64::new(0),
+            emitter: None,
+            a11y_level: crate::accessibility::A11yLevel::Off,
+            a11y_min_confidence: None,
+            step_tree_stats: Mutex::new(TreeStats::default()),
+            last_settled_tree: Mutex::new(None),
+            trace_pair: Mutex::new(None),
+            rng: Mutex::new(FakeRng::from_optional_seed(None)),
+            inherited_record_default: false,
+            extend_next_settle: AtomicBool::new(false),
+            browser: Default::default(),
+            dev: false,
+            recovery: None,
+            substep_log: Mutex::new(None),
+        }
+    }
 }
 
 impl ExecutionContext<'_> {
@@ -115,6 +159,11 @@ impl ExecutionContext<'_> {
 
     /// Emit a substep detail event.
     pub fn substep(&self, event: SubstepEvent) {
+        if let Ok(mut log) = self.substep_log.lock() {
+            if let Some(log) = log.as_mut() {
+                log.push(event.clone());
+            }
+        }
         if let Some(e) = self.emitter {
             e.substep(event);
         }
@@ -200,31 +249,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         screenshot_on_failure: false,
         ..CaptureConfig::default()
     });
-    ExecutionContext {
-        flow_dir: tmp,
-        project_root: tmp,
-        capture_config: &DEFAULT_CAPTURE,
-        flow_name: "test",
-        block_name: None,
-        step_index: 0,
-        global_step_index: 0,
-        block_iteration: 0,
-        device: None,
-        perf_collector: None,
-        last_launch_ms: AtomicU64::new(0),
-        emitter: None,
-        a11y_level: crate::accessibility::A11yLevel::Off,
-        a11y_min_confidence: None,
-        step_tree_stats: Mutex::new(TreeStats::default()),
-        last_settled_tree: Mutex::new(None),
-        trace_pair: Mutex::new(None),
-        rng: Mutex::new(FakeRng::from_optional_seed(None)),
-        inherited_record_default: false,
-        extend_next_settle: AtomicBool::new(false),
-        browser: Default::default(),
-        dev: false,
-        recovery: None,
-    }
+    ExecutionContext::new(tmp, tmp, &DEFAULT_CAPTURE, "test")
 }
 
 /// Test-only harness owning the values an [`ExecutionContext`] borrows, so
@@ -275,29 +300,9 @@ impl TestHarness {
     /// the injected perf collector and capturing emitter wired in.
     pub fn ctx(&self) -> ExecutionContext<'_> {
         ExecutionContext {
-            flow_dir: &self.tmp,
-            project_root: &self.tmp,
-            capture_config: &self.capture_config,
-            flow_name: "test",
-            block_name: None,
-            step_index: 0,
-            global_step_index: 0,
-            block_iteration: 0,
-            device: None,
             perf_collector: Some(&self.perf),
-            last_launch_ms: AtomicU64::new(0),
             emitter: Some(&self.emitter),
-            a11y_level: crate::accessibility::A11yLevel::Off,
-            a11y_min_confidence: None,
-            step_tree_stats: Mutex::new(TreeStats::default()),
-            last_settled_tree: Mutex::new(None),
-            trace_pair: Mutex::new(None),
-            rng: Mutex::new(FakeRng::from_optional_seed(None)),
-            inherited_record_default: false,
-            extend_next_settle: AtomicBool::new(false),
-            browser: Default::default(),
-            dev: false,
-            recovery: None,
+            ..ExecutionContext::new(&self.tmp, &self.tmp, &self.capture_config, "test")
         }
     }
 

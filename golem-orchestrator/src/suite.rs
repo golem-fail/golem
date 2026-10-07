@@ -3703,21 +3703,9 @@ async fn run_flow_on_device(
         webmcp: golem_browser::flow_uses_webmcp(&flow),
     };
     let mut ctx = ExecutionContext {
-        flow_dir: &flow_dir,
-        project_root: &project_root,
-        capture_config: &capture_config,
-        flow_name: &flow_name,
-        block_name: None,
-        step_index: 0,
-        global_step_index: 0,
-        block_iteration: 0,
         device: Some(&device),
         perf_collector: collector.as_ref(),
-        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: device_emitter.as_ref(),
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-        last_settled_tree: std::sync::Mutex::new(None),
-        trace_pair: std::sync::Mutex::new(None),
         a11y_level,
         a11y_min_confidence: a11y_min_confidence_override,
         rng: std::sync::Mutex::new(rng),
@@ -3725,7 +3713,6 @@ async fn run_flow_on_device(
         // the top-level flow's own `[flow.options].record`. Subflows
         // refine again from their own options.
         inherited_record_default: project_record.unwrap_or(false),
-        extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         browser: std::sync::Arc::new(tokio::sync::Mutex::new(
             golem_runner::browser::BrowserSlot::new(browser_options),
         )),
@@ -3733,6 +3720,7 @@ async fn run_flow_on_device(
         recovery: recovery_impl
             .as_ref()
             .map(|r| r as &dyn golem_runner::recovery::CompanionRecovery),
+        ..ExecutionContext::new(&flow_dir, &project_root, &capture_config, &flow_name)
     };
 
     // Run install scripts for all apps in this flow on this device (unless
