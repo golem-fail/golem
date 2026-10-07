@@ -17,6 +17,7 @@ pub mod glob;
 /// Resolving `.test.toml` element selectors — including relational anchors
 /// (`below`, `contains`, ...) and observable traits — against an [`Element`] tree.
 pub mod selector;
+pub mod toon;
 
 use serde::{Deserialize, Serialize};
 
