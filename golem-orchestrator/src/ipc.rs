@@ -35,6 +35,210 @@ pub fn socket_path() -> PathBuf {
     socket_path_in(Path::new(&home))
 }
 
+/// Which golem a daemon or client is. A client and its daemon must match
+/// exactly: the daemon installs the companion of its own version, and a
+/// daemon left running by an earlier build of the same version would run
+/// a client's flows with old code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identity {
+    pub version: String,
+    /// The executable's path, size and modification time, hashed: it
+    /// changes with every build, even at an unchanged version.
+    pub build: String,
+    pub binary: String,
+}
+
+impl Identity {
+    /// This process's identity.
+    pub fn current() -> Self {
+        let exe = std::env::current_exe().ok();
+        let binary = exe
+            .as_ref()
+            .map_or_else(|| "unknown".to_string(), |p| p.display().to_string());
+        let build = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            binary.hash(&mut h);
+            if let Some(meta) = exe.as_ref().and_then(|p| std::fs::metadata(p).ok()) {
+                meta.len().hash(&mut h);
+                if let Ok(modified) = meta.modified() {
+                    modified.hash(&mut h);
+                }
+            }
+            format!("{:016x}", h.finish())
+        };
+        Identity {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            build,
+            binary,
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "version": self.version,
+            "build": self.build,
+            "binary": self.binary,
+        })
+    }
+
+    fn from_json(v: &serde_json::Value) -> Self {
+        let field = |k: &str| v[k].as_str().unwrap_or_default().to_string();
+        Identity {
+            version: field("version"),
+            build: field("build"),
+            binary: field("binary"),
+        }
+    }
+}
+
+/// Whether version `a` is older than `b`, comparing dotted numeric parts.
+pub(crate) fn version_older(a: &str, b: &str) -> bool {
+    let parts = |v: &str| -> Vec<u64> {
+        v.split(|c: char| !c.is_ascii_digit())
+            .filter(|p| !p.is_empty())
+            .map(|p| p.parse().unwrap_or(0))
+            .collect()
+    };
+    parts(a) < parts(b)
+}
+
+/// What a daemon answered to `hello`.
+pub enum Hello {
+    /// Same golem: the stream is ready for a `submit`.
+    Ready(UnixStream),
+    /// The daemon is finishing its work before it exits.
+    Draining { daemon: Identity, runs: u64 },
+    /// The daemon is an older version, or another build of this version.
+    Stale {
+        stream: UnixStream,
+        daemon: Identity,
+    },
+    /// The daemon is a newer version than this client.
+    Newer { daemon: Identity },
+}
+
+/// Why `hello` got no answer.
+#[derive(Debug)]
+pub enum HelloFailure {
+    /// Nothing listens on the socket: no file, or a file nothing accepts on.
+    Absent,
+    /// Something accepted the connection but did not answer properly. It may
+    /// be a daemon under load, so its socket is not stale.
+    Unresponsive(anyhow::Error),
+}
+
+/// How long a daemon has to answer `hello` before it counts as
+/// unresponsive.
+pub const HELLO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Introduce `me` to the daemon on `path`, which has `timeout` to answer.
+pub async fn hello(
+    path: &Path,
+    me: &Identity,
+    timeout: std::time::Duration,
+) -> std::result::Result<Hello, HelloFailure> {
+    let stream = match UnixStream::connect(path).await {
+        Ok(stream) => stream,
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+            ) =>
+        {
+            return Err(HelloFailure::Absent)
+        }
+        Err(e) => return Err(HelloFailure::Unresponsive(e.into())),
+    };
+    exchange_hello(stream, me, timeout)
+        .await
+        .map_err(HelloFailure::Unresponsive)
+}
+
+async fn exchange_hello(
+    mut stream: UnixStream,
+    me: &Identity,
+    timeout: std::time::Duration,
+) -> Result<Hello> {
+    let mut msg = me.to_json();
+    msg["type"] = serde_json::json!("hello");
+    stream
+        .write_all(format!("{msg}\n").as_bytes())
+        .await
+        .context("failed to send hello")?;
+    let line = read_reply_line(&mut stream, timeout)
+        .await
+        .context("no answer to hello")?;
+    let reply: serde_json::Value =
+        serde_json::from_str(line.trim()).context("invalid hello reply")?;
+    if reply["type"] == "error"
+        && reply["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("unknown message type"))
+    {
+        // A golem from before the handshake. It cannot drain, but it exits
+        // once its own run is done; until then it holds devices.
+        return Ok(Hello::Draining {
+            daemon: Identity {
+                version: "older".into(),
+                build: String::new(),
+                binary: "unknown".into(),
+            },
+            runs: 1,
+        });
+    }
+    if reply["type"] != "hello" {
+        anyhow::bail!("unexpected reply to hello: {line}");
+    }
+    let daemon = Identity::from_json(&reply);
+    if reply["draining"].as_bool() == Some(true) {
+        let runs = reply["runs"].as_u64().unwrap_or(0);
+        return Ok(Hello::Draining { daemon, runs });
+    }
+    if daemon.version == me.version && daemon.build == me.build {
+        return Ok(Hello::Ready(stream));
+    }
+    if version_older(&me.version, &daemon.version) {
+        return Ok(Hello::Newer { daemon });
+    }
+    Ok(Hello::Stale { stream, daemon })
+}
+
+/// Ask the daemon on `stream` to finish its work and exit.
+pub async fn drain(mut stream: UnixStream) -> Result<()> {
+    stream
+        .write_all(b"{\"type\":\"drain\"}\n")
+        .await
+        .context("failed to send drain")?;
+    read_reply_line(&mut stream, HELLO_TIMEOUT)
+        .await
+        .context("no answer to drain")?;
+    Ok(())
+}
+
+/// Read one newline-terminated line byte by byte, so nothing past it is
+/// consumed from a stream the caller goes on using.
+async fn read_reply_line(stream: &mut UnixStream, timeout: std::time::Duration) -> Result<String> {
+    use tokio::io::AsyncReadExt;
+    let mut line = Vec::new();
+    let read = async {
+        loop {
+            let mut byte = [0u8; 1];
+            if stream.read(&mut byte).await? == 0 {
+                anyhow::bail!("connection closed");
+            }
+            if byte[0] == b'\n' {
+                return Ok(());
+            }
+            line.push(byte[0]);
+        }
+    };
+    tokio::time::timeout(timeout, read)
+        .await
+        .context("timed out")??;
+    Ok(String::from_utf8_lossy(&line).into_owned())
+}
+
 /// Try to connect to the orchestrator listening on `path`.
 ///
 /// Returns the connected stream if successful, or an error if no server
@@ -102,6 +306,22 @@ pub struct OrchestratorServer {
     idle_since: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>>,
 }
 
+/// Counts a run while it lives.
+pub(crate) struct RunGuard(std::sync::Arc<std::sync::atomic::AtomicU64>);
+
+impl RunGuard {
+    fn new(counter: &std::sync::Arc<std::sync::atomic::AtomicU64>) -> Self {
+        counter.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        RunGuard(counter.clone())
+    }
+}
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
 /// State every client handler shares.
 #[derive(Clone)]
 struct ServerShared {
@@ -110,6 +330,12 @@ struct ServerShared {
     /// Set once any submit asks for `--keep-devices`: the daemon then leaves
     /// the devices it booted running when it exits.
     keep_devices: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    identity: std::sync::Arc<Identity>,
+    /// Set by a newer client's `drain`: refuse new work, exit when the
+    /// running work is done.
+    draining: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Submits in progress.
+    active_runs: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl OrchestratorServer {
@@ -125,6 +351,20 @@ impl OrchestratorServer {
         self.shared
             .keep_devices
             .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Whether a newer client asked this daemon to drain and no run is
+    /// left: time to exit.
+    pub fn drained(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        self.shared.draining.load(Ordering::Acquire)
+            && self.shared.active_runs.load(Ordering::Acquire) == 0
+    }
+
+    /// Hold a run open, as a submit in progress does. For tests.
+    #[cfg(test)]
+    pub(crate) fn begin_run(&self) -> RunGuard {
+        RunGuard::new(&self.shared.active_runs)
     }
 
     /// How long no client has been connected; zero while one is.
@@ -170,7 +410,7 @@ impl Drop for OrchestratorServer {
 /// handles their messages. Binding fails when a socket file already exists
 /// at `path`: [`crate::daemon`] decides, under its lock, whether a leftover
 /// socket is stale.
-pub async fn start_server(path: &Path) -> Result<OrchestratorServer> {
+pub async fn start_server(path: &Path, identity: &Identity) -> Result<OrchestratorServer> {
     let listener = UnixListener::bind(path)
         .with_context(|| format!("failed to bind socket at {}", path.display()))?;
 
@@ -180,6 +420,9 @@ pub async fn start_server(path: &Path) -> Result<OrchestratorServer> {
         )),
         install_cache: golem_runner::installer::InstallCache::new(),
         keep_devices: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        identity: std::sync::Arc::new(identity.clone()),
+        draining: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        active_runs: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
     };
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let idle_since = std::sync::Arc::new(std::sync::Mutex::new(Some(std::time::Instant::now())));
@@ -231,6 +474,9 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
     let mut reader = BufReader::new(reader);
     let writer = std::sync::Arc::new(tokio::sync::Mutex::new(writer));
     let mut line = String::new();
+    // A client from before the handshake would submit relative paths and
+    // no environment, which this daemon would resolve against its own.
+    let mut greeted = false;
 
     loop {
         line.clear();
@@ -248,6 +494,28 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                 };
 
                 match json["type"].as_str() {
+                    Some("hello") => {
+                        greeted = true;
+                        let mut resp = shared.identity.to_json();
+                        resp["type"] = serde_json::json!("hello");
+                        resp["pid"] = serde_json::json!(std::process::id());
+                        resp["draining"] = serde_json::json!(shared
+                            .draining
+                            .load(std::sync::atomic::Ordering::Acquire));
+                        resp["runs"] = serde_json::json!(shared
+                            .active_runs
+                            .load(std::sync::atomic::Ordering::Acquire));
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                    }
+                    Some("drain") => {
+                        shared
+                            .draining
+                            .store(true, std::sync::atomic::Ordering::Release);
+                        eprintln!("  [orchestrator] draining for a newer golem");
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(b"{\"type\":\"draining\"}\n").await;
+                    }
                     Some("ping") => {
                         let mut w = writer.lock().await;
                         let _ = w.write_all(b"{\"type\":\"pong\"}\n").await;
@@ -261,7 +529,30 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                         let mut w = writer.lock().await;
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
+                    Some("submit") if !greeted => {
+                        let resp = serde_json::json!({
+                            "type": "error",
+                            "message": format!(
+                                "this golem is older than the running daemon {} ({}); \
+                                 upgrade it, or set GOLEM_SOCKET to use a separate daemon",
+                                shared.identity.version, shared.identity.binary
+                            ),
+                        });
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                    }
+                    Some("submit")
+                        if shared.draining.load(std::sync::atomic::Ordering::Acquire) =>
+                    {
+                        let resp = serde_json::json!({
+                            "type": "error",
+                            "message": "the golem daemon is draining for a newer golem; run again",
+                        });
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                    }
                     Some("submit") => {
+                        let _run = RunGuard::new(&shared.active_runs);
                         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
                         let submit = handle_submit(&json, shared, &writer, cancel_rx);
                         tokio::pin!(submit);
@@ -1188,6 +1479,34 @@ mod tests {
             PathBuf::from("/tmp/proj"),
             "explicit project_root SHALL be used verbatim"
         );
+    }
+
+    #[tokio::test]
+    async fn a_submit_without_hello_is_refused() {
+        let dir = tempfile::Builder::new()
+            .prefix("gis")
+            .tempdir_in("/tmp")
+            .expect("tempdir");
+        let socket = dir.path().join("d.sock");
+        let me = Identity {
+            version: "1.2.3".into(),
+            build: "b".into(),
+            binary: "/opt/golem".into(),
+        };
+        let _server = start_server(&socket, &me).await.expect("server");
+        let mut stream = UnixStream::connect(&socket).await.expect("connect");
+        stream
+            .write_all(b"{\"type\":\"submit\",\"flow_paths\":[\"x\"],\"config\":{}}\n")
+            .await
+            .expect("write");
+        let reply = read_reply_line(&mut stream, HELLO_TIMEOUT)
+            .await
+            .expect("reply");
+        assert!(
+            reply.contains("older than the running daemon 1.2.3 (/opt/golem)"),
+            "{reply}"
+        );
+        assert!(reply.contains("GOLEM_SOCKET"), "{reply}");
     }
 
     #[test]

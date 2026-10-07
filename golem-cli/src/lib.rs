@@ -283,6 +283,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             let stream = golem_orchestrator::daemon::connect_or_start(
                 &ipc::socket_path(),
                 daemon_starter().as_ref(),
+                &golem_orchestrator::daemon::ClientOptions::current(),
             )
             .await?;
 

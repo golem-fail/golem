@@ -182,6 +182,8 @@ One background process, the daemon, owns the devices. Every `golem run` is a cli
 
 - **Start.** The first command that finds no daemon starts `golem daemon` as a detached process and connects to it. Concurrent commands start exactly one daemon.
 - **Exit.** The daemon exits after 45 seconds with no client connected. Before it exits, it shuts down the simulators and emulators that golem booted. If any run during the daemon's life passed `--keep-devices`, it leaves them running.
+- **Versions.** A command uses the daemon only if both are the same golem: the same version and the same build. A daemon left running by an older version, or by an earlier build of this version, finishes its runs and exits, and the command then starts its own; meanwhile the command prints a wait line. A command older than the running daemon fails at once and names both versions and binaries.
+- **Cancel.** A run whose command ends early (Ctrl-C, killed) is cancelled in the daemon: its devices are released at once and the processes it started are stopped.
 - **Environment.** Each run sends its environment variables and working directory. The processes golem starts for that run (install scripts, `bash`, `run`) get those, not the daemon's.
 - **Log.** The daemon writes its own output to `golem.log` next to its socket (`~/.golem/golem.log`). Host diagnostics that are not run events, such as a failed WebView inspector setup, appear there and not in the run's output.
 
@@ -189,3 +191,4 @@ One background process, the daemon, owns the devices. Every `golem run` is a cli
 |----------------------|-------------|
 | `GOLEM_SOCKET` | The daemon's socket (default `~/.golem/golem.sock`). A different socket gives a separate daemon with its own devices; its lock and log sit next to it. |
 | `GOLEM_DAEMON_IDLE_SECS` | Seconds with no client before the daemon exits (default 45). |
+| `GOLEM_DAEMON_WAIT` | Seconds a command waits for an outdated daemon to finish its runs and exit (default 300). |
