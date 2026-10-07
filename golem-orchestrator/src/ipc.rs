@@ -1,12 +1,11 @@
-//! Single-instance orchestrator for coordinating multiple golem processes.
+//! The orchestrator's socket protocol: one daemon per socket owns every
+//! device lease, and each `golem` command is a client that submits its work
+//! and waits for that work only. [`crate::daemon`] starts and stops the
+//! daemon; this module is the server it runs and the client side of the
+//! protocol.
 //!
-//! The first `golem run` becomes the server, listening on a unix socket.
-//! Subsequent `golem run` calls detect the server and submit work to it
-//! instead of starting a new process. This prevents device/companion races
-//! and enables shared resource management.
-//!
-//! Protocol: JSON objects terminated by newline over unix domain socket
-//! at `~/.golem/golem.sock`.
+//! Protocol: JSON objects terminated by newline over a unix domain socket,
+//! `~/.golem/golem.sock` unless `GOLEM_SOCKET` names another.
 
 use std::path::{Path, PathBuf};
 
@@ -27,18 +26,20 @@ fn socket_path_in(base: &Path) -> PathBuf {
     dir.join("golem.sock")
 }
 
-/// Path to the orchestrator socket (`~/.golem/golem.sock`).
-fn socket_path() -> PathBuf {
+/// The orchestrator socket: `GOLEM_SOCKET`, else `~/.golem/golem.sock`.
+pub fn socket_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("GOLEM_SOCKET").filter(|p| !p.is_empty()) {
+        return PathBuf::from(path);
+    }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     socket_path_in(Path::new(&home))
 }
 
-/// Try to connect to an existing orchestrator server.
+/// Try to connect to the orchestrator listening on `path`.
 ///
 /// Returns the connected stream if successful, or an error if no server
 /// is running (socket doesn't exist or connection refused).
-pub async fn try_connect() -> Result<UnixStream> {
-    let path = socket_path();
+pub async fn try_connect(path: &Path) -> Result<UnixStream> {
     if !path.exists() {
         return Err(golem_events::coded(
             golem_events::FailureCode::HostOrchestratorIpc,
@@ -46,7 +47,7 @@ pub async fn try_connect() -> Result<UnixStream> {
         ));
     }
 
-    let stream = UnixStream::connect(&path)
+    let stream = UnixStream::connect(path)
         .await
         .with_context(|| format!("failed to connect to {}", path.display()))?;
 
@@ -76,132 +77,134 @@ pub async fn try_connect() -> Result<UnixStream> {
     }
 
     // Reconnect since we consumed the stream in the ping check
-    let stream = UnixStream::connect(&path).await?;
+    let stream = UnixStream::connect(path).await?;
     Ok(stream)
 }
 
 /// The orchestrator server.
 ///
-/// Listens on a unix socket and handles client connections.
-/// Runs in the background via `tokio::spawn`. Shares a ResourceManager
-/// AND an InstallCache with the main suite runner so client and server
-/// flows coordinate device allocation *and* avoid re-running install
-/// scripts on devices where a previous submit already installed. Cache
-/// lifetime = server process lifetime; the cache naturally drains when
-/// the server exits.
+/// Listens on a unix socket and handles client connections in a background
+/// task. Every submit shares one ResourceManager AND one InstallCache, so
+/// concurrent runs coordinate device allocation *and* skip install scripts
+/// on devices where a previous submit already installed. Cache lifetime =
+/// server lifetime.
 pub struct OrchestratorServer {
-    _handle: tokio::task::JoinHandle<()>,
-    /// Shared resource manager for all flows (server + client).
-    pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    /// Shared install cache. All submits — server's own run and every
-    /// client submit — see the same `(udid, bundle) → Succeeded` entries,
-    /// so a device installed by submit N skips install for submit N+1.
-    pub install_cache: golem_runner::installer::InstallCache,
-    /// Count of active client handlers. Server waits for this to reach 0 before exiting.
+    accept: tokio::task::JoinHandle<()>,
+    path: PathBuf,
+    /// False once [`stop_accepting`](Self::stop_accepting) has unlinked the
+    /// socket: by then a new daemon may own a socket at the same path.
+    owns_socket: std::sync::atomic::AtomicBool,
+    shared: ServerShared,
+    /// Count of connected clients.
     active_clients: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    /// When the last client disconnected, or when the server started; `None`
+    /// while a client is connected.
+    idle_since: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>>,
+}
+
+/// State every client handler shares.
+#[derive(Clone)]
+struct ServerShared {
+    resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
+    /// Set once any submit asks for `--keep-devices`: the daemon then leaves
+    /// the devices it booted running when it exits.
+    keep_devices: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl OrchestratorServer {
-    /// Wait for all active client handlers to complete, then clean up.
-    ///
-    /// In-process callers (own server + own submit-and-wait) typically
-    /// see a count of 1 for ~hundreds of ms while the kernel finalises
-    /// the unix-socket peer close. Stay quiet until either the count
-    /// stays >1 for a while (real concurrent clients), or `--debug` is
-    /// set — the historical "waiting for 1 active client(s)..." noise
-    /// on every successful run was just the self-loopback.
+    /// The resource manager every submit allocates devices from.
+    pub fn resource_mgr(
+        &self,
+    ) -> &std::sync::Arc<golem_devices::resource_manager::ResourceManager> {
+        &self.shared.resource_mgr
+    }
+
+    /// Whether any submit so far asked to keep the devices golem booted.
+    pub fn keep_devices(&self) -> bool {
+        self.shared
+            .keep_devices
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// How long no client has been connected; zero while one is.
+    pub fn idle_for(&self) -> std::time::Duration {
+        self.idle_since
+            .lock()
+            .ok()
+            .and_then(|since| *since)
+            .map_or(std::time::Duration::ZERO, |since| since.elapsed())
+    }
+
+    /// Stop accepting connections and unlink the socket, so a client that
+    /// connects from now on finds no daemon. Clients already connected keep
+    /// their handlers.
+    pub fn stop_accepting(&self) {
+        self.accept.abort();
+        if self
+            .owns_socket
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    /// Wait until every connected client has disconnected.
     pub async fn wait_for_clients(&self) {
         use std::sync::atomic::Ordering;
-        let mut last_logged_count = 0u32;
-        let mut ticks_with_count = 0u32;
-        loop {
-            let count = self.active_clients.load(Ordering::Acquire);
-            if count == 0 {
-                break;
-            }
-            // Only emit if (a) genuinely multi-client (>=2) on first
-            // observation, or (b) --debug, or (c) count stays >=1 for
-            // more than ~3s (kernel close not finalising — actual hang).
-            ticks_with_count += 1;
-            let noisy_enough = count >= 2 || golem_common::is_debug() || ticks_with_count > 3;
-            if noisy_enough && count != last_logged_count {
-                eprintln!("  [orchestrator] waiting for {count} active client(s)...");
-                last_logged_count = count;
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        while self.active_clients.load(Ordering::Acquire) > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
-    }
-
-    /// Test-only constructor: build a server with a caller-supplied
-    /// `active_clients` counter and a no-op background handle, so tests
-    /// can exercise `wait_for_clients` without binding a real socket or
-    /// spawning the accept loop. Reads only the supplied counter; adds
-    /// no behaviour beyond what `start_server` already wires up.
-    #[cfg(test)]
-    fn for_test(active_clients: std::sync::Arc<std::sync::atomic::AtomicU32>) -> Self {
-        OrchestratorServer {
-            _handle: tokio::spawn(async {}),
-            resource_mgr: std::sync::Arc::new(
-                golem_devices::resource_manager::ResourceManager::new(
-                    golem_devices::concurrency::ConcurrencyConfig::default(),
-                ),
-            ),
-            install_cache: golem_runner::installer::InstallCache::new(),
-            active_clients,
-        }
-    }
-
-    /// Clean up the socket file.
-    fn cleanup() {
-        let path = socket_path();
-        let _ = std::fs::remove_file(&path);
     }
 }
 
 impl Drop for OrchestratorServer {
     fn drop(&mut self) {
-        Self::cleanup();
+        self.stop_accepting();
     }
 }
 
-/// Start the orchestrator server in the background.
+/// Start the orchestrator server on `path`.
 ///
-/// Creates the unix socket, spawns a task to accept connections and
-/// handle messages. Returns the server handle.
-pub async fn start_server() -> Result<OrchestratorServer> {
-    let path = socket_path();
-
-    // Remove stale socket if it exists
-    if path.exists() {
-        let _ = std::fs::remove_file(&path);
-    }
-
-    let listener = UnixListener::bind(&path)
+/// Binds the unix socket and spawns a task that accepts connections and
+/// handles their messages. Binding fails when a socket file already exists
+/// at `path`: [`crate::daemon`] decides, under its lock, whether a leftover
+/// socket is stale.
+pub async fn start_server(path: &Path) -> Result<OrchestratorServer> {
+    let listener = UnixListener::bind(path)
         .with_context(|| format!("failed to bind socket at {}", path.display()))?;
 
-    eprintln!("  [orchestrator] server — listening on {}", path.display());
-
-    let resource_mgr = std::sync::Arc::new(golem_devices::resource_manager::ResourceManager::new(
-        golem_devices::concurrency::ConcurrencyConfig::default(),
-    ));
-    let install_cache = golem_runner::installer::InstallCache::new();
-
+    let shared = ServerShared {
+        resource_mgr: std::sync::Arc::new(golem_devices::resource_manager::ResourceManager::new(
+            golem_devices::concurrency::ConcurrencyConfig::default(),
+        )),
+        install_cache: golem_runner::installer::InstallCache::new(),
+        keep_devices: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let idle_since = std::sync::Arc::new(std::sync::Mutex::new(Some(std::time::Instant::now())));
 
-    let rm = resource_mgr.clone();
-    let ic = install_cache.clone();
+    let sh = shared.clone();
     let ac = active_clients.clone();
-    let handle = tokio::spawn(async move {
+    let idle = idle_since.clone();
+    let accept = tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    let rm = rm.clone();
-                    let ic = ic.clone();
+                    let sh = sh.clone();
                     let ac = ac.clone();
-                    ac.fetch_add(1, std::sync::atomic::Ordering::Release);
+                    let idle = idle.clone();
+                    ac.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    if let Ok(mut since) = idle.lock() {
+                        *since = None;
+                    }
                     tokio::spawn(async move {
-                        handle_client(stream, rm, ic).await;
-                        ac.fetch_sub(1, std::sync::atomic::Ordering::Release);
+                        handle_client(stream, &sh).await;
+                        if ac.fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1 {
+                            if let Ok(mut since) = idle.lock() {
+                                *since = Some(std::time::Instant::now());
+                            }
+                        }
                     });
                 }
                 Err(e) => {
@@ -213,19 +216,17 @@ pub async fn start_server() -> Result<OrchestratorServer> {
     });
 
     Ok(OrchestratorServer {
-        _handle: handle,
-        resource_mgr,
-        install_cache,
+        accept,
+        path: path.to_path_buf(),
+        owns_socket: std::sync::atomic::AtomicBool::new(true),
+        shared,
         active_clients,
+        idle_since,
     })
 }
 
 /// Handle a single client connection.
-async fn handle_client(
-    stream: UnixStream,
-    resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: golem_runner::installer::InstallCache,
-) {
+async fn handle_client(stream: UnixStream, shared: &ServerShared) {
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let writer = std::sync::Arc::new(tokio::sync::Mutex::new(writer));
@@ -261,7 +262,7 @@ async fn handle_client(
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
                     Some("submit") => {
-                        handle_submit(&json, &resource_mgr, &install_cache, &writer).await;
+                        handle_submit(&json, shared, &writer).await;
                     }
                     Some(other) => {
                         let resp = serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")});
@@ -438,11 +439,31 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     }
 }
 
+/// The client's environment and working directory from a submit's
+/// `config`: `client_env` as `[[key, value], …]` and `client_cwd`. `None`
+/// when the client sent no environment.
+fn parse_child_env(cfg: &serde_json::Value) -> Option<golem_common::command::ChildEnv> {
+    let vars = cfg["client_env"]
+        .as_array()?
+        .iter()
+        .filter_map(|pair| {
+            let pair = pair.as_array()?;
+            Some((
+                pair.first()?.as_str()?.to_string(),
+                pair.get(1)?.as_str()?.to_string(),
+            ))
+        })
+        .collect();
+    Some(golem_common::command::ChildEnv {
+        cwd: cfg["client_cwd"].as_str().map(PathBuf::from),
+        vars,
+    })
+}
+
 /// Handle a "submit" message: run the suite and stream events to the client.
 async fn handle_submit(
     json: &serde_json::Value,
-    resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
+    shared: &ServerShared,
     writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
 ) {
     let paths: Vec<PathBuf> = json["flow_paths"]
@@ -493,6 +514,11 @@ async fn handle_submit(
         stub_fail_on_runs,
         profile,
     } = parse_submit_config(cfg);
+    if keep_devices {
+        shared
+            .keep_devices
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -567,10 +593,14 @@ async fn handle_submit(
         profile,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
+        child_env: parse_child_env(cfg).map(std::sync::Arc::new),
     };
 
-    let mut runner =
-        SuiteRunner::with_resource_manager(config, resource_mgr.clone(), install_cache.clone());
+    let mut runner = SuiteRunner::with_resource_manager(
+        config,
+        shared.resource_mgr.clone(),
+        shared.install_cache.clone(),
+    );
     runner.event_forwarder = Some(fwd_tx);
 
     // `no_results` is already in scope (consumed by SuiteConfig
@@ -621,7 +651,8 @@ async fn handle_submit(
                     }).collect::<Vec<_>>(),
                     "output_dir": server_output_dir.display().to_string(),
                     "include_junit": include_junit,
-                }
+                },
+                "queue_wait": queue_wait_json(&golem_common::host_queue::queue_wait_stats()),
             })
         }
         Err(e) => {
@@ -643,6 +674,48 @@ async fn handle_submit(
 pub struct SubmitOutcome {
     pub report: golem_report::SuiteReport,
     pub all_passed: bool,
+    /// The daemon's host-queue congestion over the run.
+    pub queue_wait: golem_common::host_queue::QueueWaitStats,
+}
+
+/// The host-queue stats for the `done` message. They are process-global,
+/// so they live in the daemon, not in the client that renders them.
+fn queue_wait_json(stats: &golem_common::host_queue::QueueWaitStats) -> serde_json::Value {
+    serde_json::json!({
+        "total_us": stats.total.as_micros() as u64,
+        "per_class": stats.per_class.iter().map(|c| serde_json::json!({
+            "class": c.class.label(),
+            "waited_us": c.waited.as_micros() as u64,
+            "count": c.count,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+/// The inverse of [`queue_wait_json`]. Classes this build does not know are
+/// dropped from the breakdown but still count toward the total.
+fn queue_wait_from_json(v: &serde_json::Value) -> golem_common::host_queue::QueueWaitStats {
+    use golem_common::host_queue::{ClassWait, OpClass, QueueWaitStats};
+    let per_class = v["per_class"]
+        .as_array()
+        .map(|classes| {
+            classes
+                .iter()
+                .filter_map(|c| {
+                    let label = c["class"].as_str()?;
+                    let class = OpClass::ALL.iter().copied().find(|k| k.label() == label)?;
+                    Some(ClassWait {
+                        class,
+                        waited: std::time::Duration::from_micros(c["waited_us"].as_u64()?),
+                        count: c["count"].as_u64()?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    QueueWaitStats {
+        per_class,
+        total: std::time::Duration::from_micros(v["total_us"].as_u64().unwrap_or(0)),
+    }
 }
 
 pub async fn submit_and_wait(
@@ -703,10 +776,18 @@ pub async fn submit_and_wait(
     });
     drop(local_rx);
 
+    // The client sends absolute paths, because the daemon does not run in
+    // this directory; paths under it are shown relative again, as the user
+    // gave them.
+    let cwd_prefix = std::env::current_dir()
+        .ok()
+        .map(|cwd| format!("{}/", cwd.display()));
+
     // Read streamed events and final result.
     let mut reader = BufReader::new(&mut stream);
     let mut line = String::new();
     let mut all_passed = true;
+    let queue_wait;
 
     loop {
         line.clear();
@@ -722,8 +803,11 @@ pub async fn submit_and_wait(
             ));
         }
 
-        let response: serde_json::Value =
+        let mut response: serde_json::Value =
             serde_json::from_str(line.trim()).context("invalid JSON from orchestrator")?;
+        if let Some(prefix) = &cwd_prefix {
+            relativize(&mut response, prefix);
+        }
 
         match response["type"].as_str() {
             Some("event") => {
@@ -736,6 +820,7 @@ pub async fn submit_and_wait(
                 }
             }
             Some("done") => {
+                queue_wait = queue_wait_from_json(&response["queue_wait"]);
                 // Final result — check pass/fail.
                 if let Some(flows) = response["report"]["flows"].as_array() {
                     for flow in flows {
@@ -799,7 +884,25 @@ pub async fn submit_and_wait(
         .map_err(|_| anyhow::anyhow!("accumulator still has live refs"))?
         .into_inner();
     let report = acc.into_suite_report();
-    Ok(SubmitOutcome { report, all_passed })
+    Ok(SubmitOutcome {
+        report,
+        all_passed,
+        queue_wait,
+    })
+}
+
+/// Strip `prefix` from every string in `value` that starts with it.
+fn relativize(value: &mut serde_json::Value, prefix: &str) {
+    match value {
+        serde_json::Value::String(s) => {
+            if let Some(rest) = s.strip_prefix(prefix) {
+                *s = rest.to_string();
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|v| relativize(v, prefix)),
+        serde_json::Value::Object(map) => map.values_mut().for_each(|v| relativize(v, prefix)),
+        _ => {}
+    }
 }
 
 /// Build a `file://` URI from a string path with percent-encoding so
@@ -1066,30 +1169,43 @@ mod tests {
         );
     }
 
-    // 14. for_test exposes the caller's active_clients counter, and
-    //     wait_for_clients returns once that counter reaches zero.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn for_test_wait_for_clients_returns_when_counter_drains() {
-        use std::sync::atomic::Ordering;
-        // Point HOME at a throwaway dir so the Drop-time socket cleanup
-        // can't touch a real ~/.golem/golem.sock.
-        let tmp = std::env::temp_dir().join(format!("golem-orch-test-{}", std::process::id()));
-        std::env::set_var("HOME", &tmp);
-
-        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(1));
-        let server = OrchestratorServer::for_test(counter.clone());
-
-        // With a live client the wait SHALL not complete; drain it then wait.
-        let drainer = counter.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            drainer.store(0, Ordering::Release);
+    #[test]
+    fn relativize_strips_the_prefix_from_nested_strings_only() {
+        let mut v = serde_json::json!({
+            "path": "/proj/.golem/results/a.png",
+            "list": ["/proj/x", "/other/y", "/projx/z"],
+            "n": 3,
+            "msg": "wrote /proj/a",
         });
+        relativize(&mut v, "/proj/");
+        assert_eq!(
+            v,
+            serde_json::json!({
+                "path": ".golem/results/a.png",
+                "list": ["x", "/other/y", "/projx/z"],
+                "n": 3,
+                "msg": "wrote /proj/a",
+            })
+        );
+    }
 
-        // SHALL return promptly once the counter the constructor stored hits 0.
-        tokio::time::timeout(std::time::Duration::from_secs(5), server.wait_for_clients())
-            .await
-            .expect("wait_for_clients SHALL return once active_clients reaches 0");
+    #[test]
+    fn queue_wait_stats_round_trip_the_wire() {
+        use golem_common::host_queue::{ClassWait, OpClass, QueueWaitStats};
+        let stats = QueueWaitStats {
+            per_class: vec![ClassWait {
+                class: OpClass::Install,
+                waited: std::time::Duration::from_millis(1500),
+                count: 2,
+            }],
+            total: std::time::Duration::from_millis(1500),
+        };
+        let back = queue_wait_from_json(&queue_wait_json(&stats));
+        assert_eq!(back.total, stats.total);
+        assert_eq!(back.per_class.len(), 1);
+        assert_eq!(back.per_class[0].class, OpClass::Install);
+        assert_eq!(back.per_class[0].count, 2);
+        assert!(queue_wait_from_json(&serde_json::Value::Null).is_zero());
     }
 
     // 15. socket_path_in builds `<base>/.golem/golem.sock` under the

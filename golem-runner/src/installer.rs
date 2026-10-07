@@ -354,6 +354,9 @@ pub struct InstallScriptSpec<'a> {
     /// fresh build instead of reusing a prior artifact. Scripts that ignore
     /// it are unaffected.
     pub rebuild: bool,
+    /// The environment the script starts from in place of this process's
+    /// own (a daemon passes its client's). `None` inherits.
+    pub base_env: Option<&'a [(String, String)]>,
 }
 
 /// The device + app identity the script installs onto, plus event-labelling
@@ -387,6 +390,7 @@ pub async fn run_install_script(
         install_only,
         env,
         rebuild,
+        base_env,
     } = *script;
     let InstallDeviceTarget {
         platform,
@@ -433,6 +437,7 @@ pub async fn run_install_script(
     let opts = golem_common::command::CommandOpts {
         env: script_env,
         current_dir: Some(working_dir.display().to_string()),
+        base_env: base_env.map(<[(String, String)]>::to_vec),
         ..Default::default()
     };
 
@@ -902,6 +907,7 @@ mod tests {
             install_only: false,
             env,
             rebuild: false,
+            base_env: None,
         }
     }
 
@@ -984,6 +990,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_base_env_replaces_the_inherited_environment() {
+        let script = std::path::Path::new("/does/not/need/to/exist.sh");
+        let key = stream_key(script);
+        let fake = Arc::new(golem_common::command::FakeCommandRunner::new());
+        fake.expect_stream(
+            &key.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[],
+            Some(0),
+        );
+        let _guard = golem_common::command::set_test_runner(Arc::clone(&fake) as Arc<_>);
+
+        let base = vec![("BUILD_TYPE".to_string(), "release".to_string())];
+        let spec = InstallScriptSpec {
+            base_env: Some(&base),
+            ..spec(script, &[])
+        };
+        run_install_script(&spec, &target(), 5_000, None)
+            .await
+            .expect("SHALL succeed");
+
+        assert_eq!(
+            fake.recorded_stream_opts()[0].base_env.as_deref(),
+            Some(base.as_slice()),
+            "the client's environment SHALL reach the script as its base"
+        );
+    }
+
+    #[tokio::test]
     async fn rebuild_sets_the_golem_rebuild_flag() {
         for (rebuild, want) in [(true, "1"), (false, "0")] {
             let script = std::path::Path::new("/does/not/need/to/exist.sh");
@@ -1056,6 +1090,7 @@ mod tests {
                 install_only: false,
                 env: &env,
                 rebuild: true,
+                base_env: None,
             },
             &target(),
             5_000,
@@ -1208,6 +1243,7 @@ mod tests {
                 install_only: false,
                 env: &[],
                 rebuild: false,
+                base_env: None,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1245,6 +1281,7 @@ mod tests {
                 install_only: false,
                 env: &[],
                 rebuild: false,
+                base_env: None,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1279,6 +1316,7 @@ mod tests {
                 install_only: false,
                 env: &[],
                 rebuild: false,
+                base_env: None,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1418,6 +1456,7 @@ mod tests {
                 install_only: false,
                 env: &[],
                 rebuild: false,
+                base_env: None,
             },
             &InstallDeviceTarget {
                 platform: "ios",

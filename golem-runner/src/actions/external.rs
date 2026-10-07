@@ -47,7 +47,11 @@ pub(crate) async fn handle_push_notification(
 /// Execute a shell command on the host via `sh -c`, optionally saving the output.
 ///
 /// The command is read from the `run` param.
-pub(crate) async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result<()> {
+pub(crate) async fn handle_bash(
+    step: &Step,
+    vars: &mut VariableStore,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let command = step
         .params
         .get("run")
@@ -59,11 +63,12 @@ pub(crate) async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result
             )
         })?;
 
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .await?;
+    let mut cmd = tokio::process::Command::new("sh");
+    cmd.arg("-c").arg(command);
+    if let Some(env) = ctx.child_env {
+        env.apply(&mut cmd);
+    }
+    let output = cmd.output().await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -142,6 +147,9 @@ pub(crate) async fn handle_run(
     let mut cmd = tokio::process::Command::new(&script_path);
     for arg in &args {
         cmd.arg(arg);
+    }
+    if let Some(env) = ctx.child_env {
+        env.apply(&mut cmd);
     }
 
     let output = cmd.output().await?;
@@ -790,6 +798,39 @@ mod tests {
     // ── bash/run executes command and captures output ─────────────────
 
     #[tokio::test]
+    async fn bash_takes_the_child_env_in_place_of_this_process_env() {
+        let mut vars = make_vars();
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Set here and absent from the child env: a daemon's own variable.
+        std::env::set_var("GOLEM_DAEMON_ONLY", "leak");
+        let child_env = golem_common::command::ChildEnv {
+            cwd: Some(dir.path().to_path_buf()),
+            vars: vec![
+                ("PATH".into(), std::env::var("PATH").unwrap_or_default()),
+                ("GOLEM_CLIENT".into(), "client".into()),
+            ],
+        };
+        let ctx = crate::context::ExecutionContext {
+            child_env: Some(&child_env),
+            ..crate::context::test_ctx(std::path::Path::new("."))
+        };
+        let mut step = make_step("bash");
+        step.params.insert(
+            "run".into(),
+            toml::Value::String("echo \"$GOLEM_CLIENT:${GOLEM_DAEMON_ONLY:-}:$(pwd -P)\"".into()),
+        );
+        step.save_to = Some("out".into());
+
+        handle_bash(&step, &mut vars, &ctx).await.expect("bash");
+
+        let want = format!(
+            "client::{}",
+            dir.path().canonicalize().expect("canonical").display()
+        );
+        assert_eq!(vars.get("out"), Some(&VarValue::string(&want)));
+    }
+
+    #[tokio::test]
     async fn bash_executes_command_and_captures_output() {
         let mut vars = make_vars();
 
@@ -799,9 +840,13 @@ mod tests {
             toml::Value::String("echo hello".to_string()),
         );
 
-        handle_bash(&step, &mut vars)
-            .await
-            .expect("bash should succeed");
+        handle_bash(
+            &step,
+            &mut vars,
+            &crate::context::test_ctx(std::path::Path::new(".")),
+        )
+        .await
+        .expect("bash should succeed");
 
         // No save_to, so no variable should be set
         assert!(!vars.has("output"));
@@ -820,9 +865,13 @@ mod tests {
         );
         step.save_to = Some("output".to_string());
 
-        handle_bash(&step, &mut vars)
-            .await
-            .expect("bash should succeed");
+        handle_bash(
+            &step,
+            &mut vars,
+            &crate::context::test_ctx(std::path::Path::new(".")),
+        )
+        .await
+        .expect("bash should succeed");
 
         let saved = vars.get("output").expect("output variable should exist");
         assert_eq!(saved, &VarValue::string("hello"));
@@ -1133,7 +1182,12 @@ mod tests {
         let step = make_step("bash");
         // No run param
 
-        let result = handle_bash(&step, &mut vars).await;
+        let result = handle_bash(
+            &step,
+            &mut vars,
+            &crate::context::test_ctx(std::path::Path::new(".")),
+        )
+        .await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1568,7 +1622,12 @@ mod tests {
         step.params
             .insert("run".to_string(), toml::Value::String("exit 3".to_string()));
 
-        let result = handle_bash(&step, &mut vars).await;
+        let result = handle_bash(
+            &step,
+            &mut vars,
+            &crate::context::test_ctx(std::path::Path::new(".")),
+        )
+        .await;
         assert!(result.is_err(), "bash SHALL fail on non-zero exit");
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(

@@ -43,6 +43,7 @@ pub async fn execute_action(
     ctx: &ExecutionContext<'_>,
     apps: &[AppConfig],
 ) -> Result<()> {
+    let step = &*with_client_paths(step, ctx);
     // This match is the canonical list of action keywords. When you add, remove, or
     // rename an arm here, update docs/actions-reference.md to match — the
     // `actions_reference_doc_lists_every_action` test enforces that the two stay in sync.
@@ -77,7 +78,7 @@ pub async fn execute_action(
         "add_media" => handle_add_media(step, driver).await,
         "open_link" => handle_open_link(step, driver).await,
         "push_notification" => handle_push_notification(step, driver).await,
-        "bash" => handle_bash(step, vars).await,
+        "bash" => handle_bash(step, vars, ctx).await,
         "run" => handle_run(step, vars, ctx).await,
         "await_email" => handle_await_email(step, vars).await,
         "create_inbox" => handle_create_inbox(step, vars).await,
@@ -104,6 +105,32 @@ pub async fn execute_action(
             "Unknown action: {}",
             action
         ),
+    }
+}
+
+/// The actions whose `path` param names a file on the host.
+const HOST_PATH_ACTIONS: &[&str] = &["screenshot", "add_media", "browse_screenshot"];
+
+/// `step` with a relative host-file `path` joined onto the client's working
+/// directory. A relative path means "from where I ran golem", but the daemon
+/// that runs the step works from `/`.
+fn with_client_paths<'s>(step: &'s Step, ctx: &ExecutionContext<'_>) -> std::borrow::Cow<'s, Step> {
+    let Some(cwd) = ctx.child_env.and_then(|e| e.cwd.as_deref()) else {
+        return std::borrow::Cow::Borrowed(step);
+    };
+    if !HOST_PATH_ACTIONS.contains(&step.action.as_str()) {
+        return std::borrow::Cow::Borrowed(step);
+    }
+    match step.params.get("path").and_then(|v| v.as_str()) {
+        Some(path) if std::path::Path::new(path).is_relative() => {
+            let mut owned = step.clone();
+            owned.params.insert(
+                "path".into(),
+                toml::Value::String(cwd.join(path).display().to_string()),
+            );
+            std::borrow::Cow::Owned(owned)
+        }
+        _ => std::borrow::Cow::Borrowed(step),
     }
 }
 
@@ -373,6 +400,53 @@ mod tests {
         assert_eq!(
             in_parser, in_runner,
             "golem-parser's REQUIRED_PARAMS SHALL match the runner's \"requires\" errors"
+        );
+    }
+
+    #[test]
+    fn a_relative_host_path_resolves_against_the_client_directory() {
+        let env = golem_common::command::ChildEnv {
+            cwd: Some(std::path::PathBuf::from("/work/proj")),
+            vars: Vec::new(),
+        };
+        let ctx = ExecutionContext {
+            child_env: Some(&env),
+            ..test_ctx(std::path::Path::new("."))
+        };
+        let step = |action: &str, path: &str| {
+            let mut s = crate::actions::test_helpers::make_step(action);
+            s.params
+                .insert("path".into(), toml::Value::String(path.into()));
+            s
+        };
+        let path = |s: &Step| s.params["path"].as_str().map(str::to_string);
+
+        let shot = step("screenshot", "shots/a.png");
+        assert_eq!(
+            path(&with_client_paths(&shot, &ctx)).as_deref(),
+            Some("/work/proj/shots/a.png")
+        );
+        let abs = step("add_media", "/tmp/cat.jpg");
+        assert_eq!(
+            path(&with_client_paths(&abs, &ctx)).as_deref(),
+            Some("/tmp/cat.jpg")
+        );
+        let cookie = step("browse_set_cookie", "/");
+        assert_eq!(
+            path(&with_client_paths(&cookie, &ctx)).as_deref(),
+            Some("/")
+        );
+        let other = step("browse_get_cookie", "sub/dir");
+        assert_eq!(
+            path(&with_client_paths(&other, &ctx)).as_deref(),
+            Some("sub/dir"),
+            "a `path` that is not a host file SHALL be left alone"
+        );
+        let in_process = test_ctx(std::path::Path::new("."));
+        assert_eq!(
+            path(&with_client_paths(&shot, &in_process)).as_deref(),
+            Some("shots/a.png"),
+            "without a client directory the path SHALL be left alone"
         );
     }
 

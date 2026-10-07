@@ -130,10 +130,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
                 .unwrap_or(cwd);
 
-            let output_dir = args
-                .output_dir
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::path::PathBuf::from(".golem/results"));
+            // Absolute: the daemon that writes there runs from `/`, not
+            // from this directory.
+            let output_dir = absolute(
+                &args
+                    .output_dir
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| std::path::PathBuf::from(".golem/results")),
+            );
 
             // Parse stdout output formats.
             let stdout_formats: Vec<golem_report::output::OutputFormat> = args
@@ -203,6 +207,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                     .and_then(golem_runner::executor::parse_duration),
                 stub_fail_on_runs,
                 profile: args.profile.clone(),
+                // The daemon rebuilds this from the wire (`client_env`).
+                child_env: None,
             };
 
             // Parse `--max-device-wait` into milliseconds for the wire. An
@@ -224,7 +230,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // server needs to reconstruct SuiteConfig. ProjectAppConfig
             // isn't Serialize, so the server re-parses golem.toml from
             // `project_root`.
-            let config_json = build_config_json(
+            let mut config_json = build_config_json(
                 &config,
                 effective_platform.as_deref(),
                 args.coverage.as_deref(),
@@ -232,6 +238,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 max_device_wait_ms,
                 include_junit,
             );
+            add_client_context(&mut config_json);
 
             // `--dev` preflight. Probed here rather than server-side so the
             // H503 tag survives: a suite error crossing the daemon socket is
@@ -272,23 +279,16 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 .await?;
             }
 
-            // Unified submit path: connect to an existing daemon if
-            // there is one, otherwise spin up an in-process server and
-            // self-connect. `local_server` is `Some(...)` only in the
-            // in-process case — that's the marker for "I own the
-            // device pool, I must clean it up afterwards." External
-            // daemons own their own device lifecycle.
-            let (stream, local_server) = match ipc::try_connect().await {
-                Ok(s) => (s, None),
-                Err(_) => {
-                    let server = ipc::start_server().await?;
-                    let s = ipc::try_connect()
-                        .await
-                        .context("failed to connect to in-process orchestrator")?;
-                    (s, Some(server))
-                }
-            };
+            // Every run is a client of the detached daemon, which owns the
+            // device pool and shuts down the devices it booted when it goes
+            // idle. This run waits for its own flows only.
+            let stream = golem_orchestrator::daemon::connect_or_start(
+                &ipc::socket_path(),
+                daemon_starter().as_ref(),
+            )
+            .await?;
 
+            let flow_paths: Vec<PathBuf> = flow_paths.iter().map(|p| absolute(p)).collect();
             let outcome = ipc::submit_and_wait(
                 stream,
                 &flow_paths,
@@ -299,19 +299,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             )
             .await?;
             let report = outcome.report;
-
-            // Drain in-process server: wait for any other clients, then
-            // shut down sims/emulators we booted (respects --keep-devices).
-            if let Some(server) = local_server {
-                server.wait_for_clients().await;
-                let warnings = server
-                    .resource_mgr
-                    .shutdown_golem_booted(args.keep_devices)
-                    .await;
-                for w in &warnings {
-                    eprintln!("  [devices] {w}");
-                }
-            }
+            let queue_wait = outcome.queue_wait;
 
             // Stdout non-human formats from the accumulated report
             // (human formats stream live to stderr via stream renderer).
@@ -336,7 +324,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 // Host-queue congestion: only surfaces when two same-class
                 // heavy ops actually contended (multi-device). Silent at zero
                 // so single-device runs stay uncluttered.
-                let queue_wait = golem_common::host_queue::queue_wait_stats();
                 if !queue_wait.is_zero() {
                     eprint!("{}", render_queue_wait(&queue_wait));
                 }
@@ -415,9 +402,35 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // proceed) so CI can gate on it — return it directly.
             return doctor::run(&args).await;
         }
+
+        Commands::Daemon(args) => {
+            let idle_secs = args.idle_secs.or_else(|| {
+                std::env::var("GOLEM_DAEMON_IDLE_SECS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+            });
+            let grace = idle_secs.map_or(
+                golem_orchestrator::daemon::DEFAULT_IDLE_GRACE,
+                std::time::Duration::from_secs,
+            );
+            golem_orchestrator::daemon::run(&ipc::socket_path(), grace).await?;
+        }
     }
 
     Ok(0)
+}
+
+/// How this process brings up a daemon when none answers: a detached
+/// `golem daemon`, or with `GOLEM_DAEMON_IN_PROCESS=1` a daemon that runs
+/// inside this process and ends with it.
+fn daemon_starter() -> Box<dyn golem_orchestrator::daemon::DaemonStarter> {
+    if std::env::var_os("GOLEM_DAEMON_IN_PROCESS").is_some_and(|v| v == "1") {
+        Box::new(golem_orchestrator::daemon::InProcessStarter {
+            idle_grace: golem_orchestrator::daemon::DEFAULT_IDLE_GRACE,
+        })
+    } else {
+        Box::new(golem_orchestrator::daemon::ExeStarter)
+    }
 }
 
 /// Resolve the `--stub <path>` flag to the stub script's `fail_on_runs`
@@ -629,6 +642,26 @@ fn build_config_json(
         // release binary. Carried inline so the server needs no file access.
         "stub_fail_on_runs": config.stub_fail_on_runs,
     })
+}
+
+/// `path` joined onto the working directory when relative.
+fn absolute(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir().map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
+}
+
+/// Add this process's environment and working directory to a submit's
+/// config. The daemon starts the processes a run needs (install scripts,
+/// `bash`, `run`) with them, so a run sees its own shell's variables and
+/// directory rather than those of whichever client started the daemon.
+fn add_client_context(config_json: &mut serde_json::Value) {
+    let env: Vec<(String, String)> = std::env::vars().collect();
+    config_json["client_env"] = serde_json::json!(env);
+    if let Ok(cwd) = std::env::current_dir() {
+        config_json["client_cwd"] = serde_json::json!(cwd.display().to_string());
+    }
 }
 
 use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};

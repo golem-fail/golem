@@ -136,6 +136,37 @@ Plan lives in `golem-orchestrator` (`plan`, `coverage`, `install_matrix`); per-f
 
 For a concrete, step-by-step walk-through of a single flow — how a step learns what's on screen, the companion handshake, webview enrichment, recording, and the block-end a11y audit, as sequence diagrams — see [How golem sees the screen](how-golem-sees.md).
 
+### The daemon and its clients
+
+The Plan and Execute phases run in a detached daemon (`golem_orchestrator::daemon`), not in the `golem run` process. One daemon serves one socket (`~/.golem/golem.sock`, or `GOLEM_SOCKET`) and holds the only `ResourceManager`, so every device lease on the host comes from one place. Each command is a client: it sends a `submit` with absolute paths, its environment and its working directory, renders the events the daemon streams back, and exits when its own suite is done.
+
+```mermaid
+sequenceDiagram
+    participant C as golem run
+    participant L as start lock
+    participant D as golem daemon
+    C->>D: connect
+    alt no daemon answers
+        C->>L: take
+        C->>D: connect again
+        C->>D: start detached (setsid, stdio to golem.log, cwd /)
+        C->>L: release
+    end
+    C->>D: submit
+    D-->>C: events, then done
+    Note over D: no client for the idle grace
+    D->>L: take
+    D->>D: unlink socket, serve the clients still connected
+    D->>D: shut down devices golem booted
+    D->>L: release, exit
+```
+
+The start lock (`golem.lock` next to the socket) closes both races. Two clients that find no daemon start one between them, because the second checks again under the lock. A client that arrives while the daemon exits finds no socket and waits on the lock until the old daemon is gone, so two `ResourceManager`s never exist at once. Under the lock, a socket file nothing answers on is stale and is replaced.
+
+The daemon runs from `/` with its stdio on `golem.log`. Its environment is that of whichever client started it, so the processes it starts for a run (install scripts, `bash`, `run`) take that run's environment and working directory from the `submit` instead. The client sends absolute paths and shows the paths it gets back relative to its own working directory again. Process-global state the summary reads, such as the host-queue wait stats, comes back in the `done` message.
+
+`GOLEM_DAEMON_IN_PROCESS=1` runs the daemon as a task inside the client and ends it with the client. The in-process integration tests use it, so they never spawn a copy of the test binary.
+
 ## Visibility model — the visible tree decides coverage, the full tree only hints
 
 A load-bearing invariant that is easy to forget when touching scrolling, selectors, or assertions:
