@@ -14,6 +14,7 @@
 - [`golem install-script`](#golem-install-script)
 - [`golem a11y-extract <png>`](#golem-a11y-extract-png)
 - [`golem doctor`](#golem-doctor)
+- [The daemon](#the-daemon)
 
 ## `golem run`
 
@@ -174,3 +175,17 @@ device.
 - `xcodebuild` — to build the iOS companion (macOS only; *n/a* elsewhere)
 
 Exits non-zero without Rust, or when no companion is buildable.
+
+## The daemon
+
+One background process, the daemon, owns the devices. Every `golem run` is a client: it hands its flows to the daemon and waits for them only. Two runs at the same time therefore share one device pool and never take the same device.
+
+- **Start.** The first command that finds no daemon starts `golem daemon` as a detached process and connects to it. Concurrent commands start exactly one daemon.
+- **Exit.** The daemon exits after 45 seconds with no client connected. Before it exits, it shuts down the simulators and emulators that golem booted. If any run during the daemon's life passed `--keep-devices`, it leaves them running.
+- **Environment.** Each run sends its environment variables and working directory. The processes golem starts for that run (install scripts, `bash`, `run`) get those, not the daemon's.
+- **Log.** The daemon writes its own output to `golem.log` next to its socket (`~/.golem/golem.log`). Host diagnostics that are not run events, such as a failed WebView inspector setup, appear there and not in the run's output.
+
+| Environment variable | Description |
+|----------------------|-------------|
+| `GOLEM_SOCKET` | The daemon's socket (default `~/.golem/golem.sock`). A different socket gives a separate daemon with its own devices; its lock and log sit next to it. |
+| `GOLEM_DAEMON_IDLE_SECS` | Seconds with no client before the daemon exits (default 45). |

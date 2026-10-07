@@ -56,7 +56,7 @@ pub struct RunResult {
 
 /// A minimal `golem.toml` naming the stub app. The stub bypasses install,
 /// so no install script is needed.
-fn golem_toml() -> String {
+pub fn golem_toml() -> String {
     format!(
         "[[apps]]\nname = \"app\"\nbundle = \"{}\"\n",
         golem_driver::stub::STUB_BUNDLE_ID
@@ -215,9 +215,9 @@ pub fn run_stub(stub_script_toml: &str, extra_args: &[&str]) -> RunResult {
 /// to vary these.
 #[derive(Default, Clone, Copy)]
 pub struct StubOpts {
-    /// Connect to a real orchestrator daemon started in-process first, rather
-    /// than letting the CLI spin up its own server and self-connect. Both are
-    /// production paths; this is what tells them apart.
+    /// Connect to a daemon already listening when the CLI runs, rather than
+    /// letting the CLI start one itself. Both are production paths; this is
+    /// what tells them apart.
     pub daemon: bool,
 }
 
@@ -238,8 +238,13 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
     // run so the test process is left as it was found.
     let prev_cwd = std::env::current_dir().ok();
     let prev_home = std::env::var_os("HOME");
+    let prev_socket = std::env::var_os("GOLEM_SOCKET");
     std::env::set_current_dir(&root).expect("set cwd");
     std::env::set_var("HOME", &root);
+    std::env::remove_var("GOLEM_SOCKET");
+    // A daemon the run starts lives in this process, not in a spawned copy
+    // of the test binary.
+    std::env::set_var("GOLEM_DAEMON_IN_PROCESS", "1");
 
     let flow = extra_args
         .iter()
@@ -289,13 +294,13 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
         .build()
         .expect("tokio runtime");
     // With `daemon`, a server is listening before the CLI runs, so the client
-    // connects to it instead of spinning up its own — the same split a user
-    // gets from `golem serve` in another terminal. The server owns the socket
+    // connects to it; without, the client starts one itself (in-process,
+    // under `GOLEM_DAEMON_IN_PROCESS`). The server owns the socket
     // for the run and is dropped (socket cleaned up) before HOME is restored.
     let code = rt.block_on(async {
         let server = if opts.daemon {
             Some(
-                golem_orchestrator::ipc::start_server()
+                golem_orchestrator::ipc::start_server(&golem_orchestrator::ipc::socket_path())
                     .await
                     .expect("daemon SHALL start"),
             )
@@ -327,6 +332,10 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
         Some(h) => std::env::set_var("HOME", h),
         None => std::env::remove_var("HOME"),
     }
+    if let Some(s) = prev_socket {
+        std::env::set_var("GOLEM_SOCKET", s);
+    }
+    std::env::remove_var("GOLEM_DAEMON_IN_PROCESS");
 
     RunResult {
         code,

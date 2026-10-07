@@ -41,6 +41,31 @@ pub struct CommandOpts {
     /// exit leaves a diagnosable teardown reason behind. Ignored by `output`
     /// (which already captures stdout/stderr into the returned `Output`).
     pub log_file: Option<String>,
+    /// The whole inherited environment to start from, replacing this
+    /// process's own; `env` is applied on top. `None` inherits.
+    pub base_env: Option<Vec<(String, String)>>,
+}
+
+/// The environment and working directory of the client a daemon runs work
+/// for. A long-lived daemon's own environment is that of whichever client
+/// started it, so the processes it starts for a client's flows (install
+/// scripts, `bash`, `run`) take that client's instead.
+#[derive(Debug, Clone, Default)]
+pub struct ChildEnv {
+    pub cwd: Option<std::path::PathBuf>,
+    pub vars: Vec<(String, String)>,
+}
+
+impl ChildEnv {
+    /// Give `cmd` this environment, replacing the inherited one, and this
+    /// working directory.
+    pub fn apply(&self, cmd: &mut tokio::process::Command) {
+        cmd.env_clear();
+        cmd.envs(self.vars.iter().map(|(k, v)| (k, v)));
+        if let Some(cwd) = &self.cwd {
+            cmd.current_dir(cwd);
+        }
+    }
 }
 
 impl CommandOpts {
@@ -150,6 +175,10 @@ pub struct ExitOutcome {
 pub struct SystemCommandRunner;
 
 fn apply_opts(cmd: &mut tokio::process::Command, opts: &CommandOpts) {
+    if let Some(base) = &opts.base_env {
+        cmd.env_clear();
+        cmd.envs(base.iter().map(|(k, v)| (k, v)));
+    }
     for (k, v) in &opts.env {
         cmd.env(k, v);
     }
@@ -634,6 +663,29 @@ impl CommandRunner for FakeCommandRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_base_env_replaces_this_process_environment() {
+        // Set here and absent from the base: a daemon's own variable.
+        std::env::set_var("GOLEM_BASE_ENV_PROBE", "leak");
+        let opts = CommandOpts {
+            base_env: Some(vec![
+                ("PATH".into(), std::env::var("PATH").unwrap_or_default()),
+                ("K".into(), "v".into()),
+            ]),
+            env: vec![("E".into(), "e".into())],
+            ..CommandOpts::default()
+        };
+        let out = SystemCommandRunner
+            .output(
+                "sh",
+                &argv(&["-c", "echo \"${GOLEM_BASE_ENV_PROBE:-none}:$K:$E\""]),
+                &opts,
+            )
+            .await
+            .expect("sh");
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "none:v:e");
+    }
 
     const STDIN_PROBE_ENV: &str = "STDIN_PROBE_CHILD";
     const READ_STDIN: &str = "if read -r line; then echo \"got:$line\" >&2; else echo eof >&2; fi";

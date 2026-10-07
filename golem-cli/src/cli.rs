@@ -38,6 +38,17 @@ pub enum Commands {
     /// writable state dir). `--build` checks what's needed to *build* golem from
     /// source (Rust, Xcode, JDK + Android SDK). Pass both for everything.
     Doctor(DoctorArgs),
+    /// Run the orchestrator daemon. A client starts it when none answers on
+    /// the socket; it exits after a grace period with no client.
+    #[command(hide = true)]
+    Daemon(DaemonArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct DaemonArgs {
+    /// Seconds with no client connected before the daemon exits.
+    #[arg(long, hide = true)]
+    pub idle_secs: Option<u64>,
 }
 
 #[derive(clap::Args, Debug)]

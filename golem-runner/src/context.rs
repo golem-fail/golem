@@ -92,6 +92,9 @@ pub struct ExecutionContext<'a> {
     /// [`crate::single_step::execute_single_step`] reads a step's substeps
     /// from here: a caller with no event stream still gets them.
     pub substep_log: Mutex<Option<Vec<SubstepEvent>>>,
+    /// The environment and working directory `bash` and `run` start from,
+    /// in place of this process's own. `None` inherits.
+    pub child_env: Option<&'a golem_common::command::ChildEnv>,
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -130,6 +133,7 @@ impl<'a> ExecutionContext<'a> {
             dev: false,
             recovery: None,
             substep_log: Mutex::new(None),
+            child_env: None,
         }
     }
 }

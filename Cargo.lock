@@ -1059,6 +1059,7 @@ dependencies = [
  "golem-report",
  "golem-runner",
  "golem-vars",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

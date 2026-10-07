@@ -337,6 +337,10 @@ pub struct SuiteConfig {
     /// the plan picks the `(name, profile)` entry, falling back to the
     /// profile-less catch-all. `None` = catch-all only.
     pub profile: Option<String>,
+    /// The client's environment and working directory, for the processes
+    /// golem starts for this suite (install scripts, `bash`, `run`). `None`
+    /// inherits this process's own.
+    pub child_env: Option<Arc<golem_common::command::ChildEnv>>,
 }
 
 impl Default for SuiteConfig {
@@ -375,6 +379,7 @@ impl Default for SuiteConfig {
             stub_fail_on_runs: None,
             max_concurrency: None,
             profile: None,
+            child_env: None,
         }
     }
 }
@@ -783,6 +788,7 @@ impl SuiteRunner {
             let no_perf = self.config.no_perf;
             let no_teardown = self.config.no_teardown;
             let browser_headed = self.config.browser_headed;
+            let child_env = self.config.child_env.clone();
             let a11y_override = self.config.a11y_override;
             let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
@@ -868,6 +874,7 @@ impl SuiteRunner {
                         stub_fail_on_runs,
                         no_teardown,
                         browser_headed,
+                        child_env,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -1132,6 +1139,8 @@ struct FlowRunConfig {
     no_teardown: bool,
     /// CLI `--browser-headed` — show the browser window for `browse_*` steps.
     browser_headed: bool,
+    /// See [`SuiteConfig::child_env`].
+    child_env: Option<Arc<golem_common::command::ChildEnv>>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1394,6 +1403,7 @@ async fn execute_flow_run(
                 device_settings: &cfg.device_settings,
                 max_device_wait: cfg.max_device_wait,
                 cli_vars: &cfg.cli_vars,
+                child_env: cfg.child_env.as_deref(),
             },
             cfg.stub_fail_on_runs.is_some(),
             cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
@@ -1501,6 +1511,7 @@ async fn execute_flow_run(
         let a11y_override = cfg.a11y_override;
         let a11y_min_confidence_override = cfg.a11y_min_confidence_override;
         let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
+        let child_env_c = cfg.child_env.clone();
         let reg_state_c = reg_state.clone();
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
@@ -1541,6 +1552,7 @@ async fn execute_flow_run(
                     no_teardown: cfg.no_teardown,
                     browser_headed: cfg.browser_headed,
                     dev: cfg.dev,
+                    child_env: child_env_c,
                 },
             )
             .await
@@ -1805,6 +1817,7 @@ struct SlotBuildConfig<'a> {
     /// CLI `--var` overrides, for interpolating apps' `install_env` at the
     /// device site (where `_platform`/`_udid`/`_app` builtins are known).
     cli_vars: &'a [(String, String)],
+    child_env: Option<&'a golem_common::command::ChildEnv>,
 }
 
 /// Prepare one slot for flow execution:
@@ -1845,6 +1858,7 @@ async fn setup_slot(
         device_settings,
         max_device_wait,
         cli_vars,
+        child_env,
     } = *build;
     // Stub mode: no real device exists. Return a synthetic device and a
     // placeholder port, skipping discovery, allocation, boot, install, and
@@ -1938,6 +1952,7 @@ async fn setup_slot(
             no_build,
             dev,
             cli_vars,
+            child_env,
         },
     )
     .await;
@@ -2145,6 +2160,7 @@ struct PreinstallCtx<'a> {
     dev: bool,
     /// CLI `--var` overrides, for interpolating `install_env`.
     cli_vars: &'a [(String, String)],
+    child_env: Option<&'a golem_common::command::ChildEnv>,
 }
 
 /// Install every `InstallEntry` from the suite's install matrix that is
@@ -2176,6 +2192,7 @@ async fn preinstall_for_device_scoped(
         no_build,
         dev,
         cli_vars,
+        child_env,
     } = *ctx;
     let platform_str = platform.to_string();
     // Use the same device_label format as per-flow emission so
@@ -2320,6 +2337,7 @@ async fn preinstall_for_device_scoped(
                 device,
                 install_cache,
                 emitter: Some(&emitter),
+                child_env,
             },
         )
         .await;
@@ -2438,6 +2456,7 @@ struct InstallRunCtx<'a> {
     device: &'a DeviceInfo,
     install_cache: &'a golem_runner::installer::InstallCache,
     emitter: Option<&'a golem_events::emitter::DeviceEmitter>,
+    child_env: Option<&'a golem_common::command::ChildEnv>,
 }
 
 /// Run the install script for one `(device, bundle)`, using a
@@ -2467,7 +2486,9 @@ async fn run_install_with_build_coord(
         device,
         install_cache,
         emitter,
+        child_env,
     } = *ctx;
+    let base_env = child_env.map(|e| e.vars.as_slice());
 
     let target = format_install_target(device, platform_str);
     let key = (device.udid.clone(), bundle_id.to_string());
@@ -2548,6 +2569,7 @@ async fn run_install_with_build_coord(
         install_only,
         env,
         rebuild,
+        base_env,
     };
     let install_target = golem_runner::installer::InstallDeviceTarget {
         platform: platform_str,
@@ -2597,6 +2619,7 @@ async fn run_install_with_build_coord(
                         install_only: true, // reuse the already-built artifact
                         env,
                         rebuild,
+                        base_env,
                     },
                     &golem_runner::installer::InstallDeviceTarget {
                         platform: platform_str,
@@ -3441,6 +3464,7 @@ struct FlowRunPolicy {
     no_teardown: bool,
     browser_headed: bool,
     dev: bool,
+    child_env: Option<Arc<golem_common::command::ChildEnv>>,
 }
 
 /// Whether this flow's browser runs headless.
@@ -3506,6 +3530,7 @@ async fn run_flow_on_device(
         no_teardown,
         browser_headed,
         dev,
+        child_env,
     } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -3681,6 +3706,7 @@ async fn run_flow_on_device(
         recovery: recovery_impl
             .as_ref()
             .map(|r| r as &dyn golem_runner::recovery::CompanionRecovery),
+        child_env: child_env.as_deref(),
         ..ExecutionContext::new(&flow_dir, &project_root, &capture_config, &flow_name)
     };
 
@@ -3843,6 +3869,7 @@ async fn run_flow_on_device(
                             device: &device,
                             install_cache: &install_cache,
                             emitter: device_emitter.as_ref(),
+                            child_env: child_env.as_deref(),
                         },
                     )
                     .await

@@ -119,7 +119,7 @@ impl OpClass {
     }
 
     /// All classes, in `idx` order.
-    const ALL: [OpClass; N_CLASSES] = [
+    pub const ALL: [OpClass; N_CLASSES] = [
         OpClass::AdbHostIo,
         OpClass::Screenshot,
         OpClass::Dumpsys,
