@@ -1055,6 +1055,7 @@ dependencies = [
  "golem-common",
  "golem-devices",
  "golem-driver",
+ "golem-element",
  "golem-events",
  "golem-parser",
  "golem-report",

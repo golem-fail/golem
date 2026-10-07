@@ -17,6 +17,7 @@ golem-devices = { path = "../golem-devices" }
 golem-runner = { path = "../golem-runner" }
 golem-events = { path = "../golem-events" }
 golem-driver = { path = "../golem-driver" }
+golem-element = { path = "../golem-element" }
 golem-report = { path = "../golem-report" }
 golem-vars = { path = "../golem-vars" }
 golem-common = { path = "../golem-common" }

@@ -8,6 +8,7 @@
 
 - [`golem run`](#golem-run)
 - [`golem tree`](#golem-tree)
+- [`golem do`](#golem-do)
 - [`golem devices`](#golem-devices)
 - [`golem init`](#golem-init)
 - [`golem create <name>`](#golem-create-name)
@@ -105,6 +106,32 @@ golem tree [OPTIONS]
 **Device.** Without `--device`, golem reads the only booted device (a booted simulator or emulator, or a connected physical device). With `--device`, an exact UDID or serial wins, then an exact name, then part of either. If more than one device matches, or no `--device` is given and more than one device is booted, the command fails and lists the candidates. golem reuses the device's running companion, or starts one.
 
 **App.** `--bundle` is used as given. `--app` looks the bundle up in `golem.toml`. With neither, golem reads the registry's only app. If the registry has several apps or none, no bundle is set: on iOS the companion reads the app it last launched, and on Android the tree covers the whole screen.
+
+## `golem do`
+
+Run one step on one device.
+
+```bash
+golem do '{ action = "tap", on_text = "Sign in" }' [OPTIONS]
+```
+
+The step is one TOML inline table, the same text as one step in a flow file's `steps = [ … ]` array. The outer braces are optional. A malformed step fails with a corrected example.
+
+| Flag | Description |
+|------|-------------|
+| `--platform <ios\|android>` | Consider only devices on this platform |
+| `--device <ID\|NAME>` | The device, chosen as `golem tree` chooses it |
+| `--bundle <ID>` | The bundle ID of the app |
+| `--app <NAME>` | The app, by its name in the `golem.toml` `[[apps]]` registry |
+| `--tree` | Also print the visible tree after the step, in the [TOON tree](output-formats.md#toon-tree) format |
+| `--output <toon\|json>` | `toon` (default): the device, then the step's TOON line. `json`: the step as `results.json` records it |
+
+The step runs in the daemon and leases its device for that step, so it never acts on a device that a run is using. It uses the same element resolution, auto-scroll, settle and timeout as a step in a flow. `golem do` keeps no state between calls: variables, WebView inspector connections and recordings do not carry over. The exit code is 1 when the step fails.
+
+```text
+$ golem do '{ action = "tap", on_text = "+" }' --app app
+android/Pixel 8 Pro API 36 +tap:on_text="+" d:1515 @243,732 b180,666,126,132 t:4/357
+```
 
 ## `golem devices`
 

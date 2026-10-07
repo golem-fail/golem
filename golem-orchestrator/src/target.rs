@@ -37,6 +37,27 @@ pub struct Target {
     pub health: CompanionHealth,
 }
 
+impl Target {
+    /// A driver for this device and app, on the live companion.
+    pub fn driver(&self) -> Box<dyn golem_driver::PlatformDriver> {
+        let (udid, bundle) = (self.device.udid.clone(), self.bundle.clone());
+        match self.device.platform {
+            Platform::Android => Box::new(golem_driver::android::AndroidDriver::new(
+                udid,
+                bundle,
+                self.port,
+                self.device.physical,
+            )),
+            Platform::Ios => Box::new(golem_driver::ios::IosDriver::new(
+                udid,
+                bundle,
+                self.port,
+                self.device.physical,
+            )),
+        }
+    }
+}
+
 /// A device in the `devices` listing.
 #[derive(Debug, Clone)]
 pub struct DeviceEntry {
