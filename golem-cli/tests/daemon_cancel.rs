@@ -19,6 +19,20 @@ fn long_flow() -> String {
 
 /// Running, as opposed to gone or a zombie: a killed child stays a zombie
 /// until its parent reaps it, and signal 0 still finds a zombie.
+/// A stream past the handshake, ready for a submit.
+async fn connect(socket: &std::path::Path) -> tokio::net::UnixStream {
+    match golem_orchestrator::ipc::hello(
+        socket,
+        &golem_orchestrator::ipc::Identity::current(),
+        golem_orchestrator::ipc::HELLO_TIMEOUT,
+    )
+    .await
+    {
+        Ok(golem_orchestrator::ipc::Hello::Ready(stream)) => stream,
+        _ => panic!("the daemon SHALL accept this golem"),
+    }
+}
+
 fn alive(pid: i32) -> bool {
     std::process::Command::new("ps")
         .args(["-o", "stat=", "-p", &pid.to_string()])
@@ -41,9 +55,12 @@ async fn a_disconnected_client_cancels_its_run() {
     std::fs::write(root.join("golem.toml"), common::golem_toml()).expect("golem.toml");
     std::fs::write(root.join("long.test.toml"), long_flow()).expect("flow");
     let socket = root.join("d.sock");
-    let _server = golem_orchestrator::ipc::start_server(&socket)
-        .await
-        .expect("server");
+    let _server = golem_orchestrator::ipc::start_server(
+        &socket,
+        &golem_orchestrator::ipc::Identity::current(),
+    )
+    .await
+    .expect("server");
 
     let submit = |flow: &str| {
         serde_json::json!({
@@ -61,9 +78,7 @@ async fn a_disconnected_client_cancels_its_run() {
         })
     };
 
-    let mut stream = tokio::net::UnixStream::connect(&socket)
-        .await
-        .expect("connect");
+    let mut stream = connect(&socket).await;
     stream
         .write_all(format!("{}\n", submit("long.test.toml")).as_bytes())
         .await
@@ -95,9 +110,7 @@ async fn a_disconnected_client_cancels_its_run() {
 
     // The daemon still serves: a fresh client's run completes.
     std::fs::write(root.join("quick.test.toml"), common::slow_flow()).expect("flow");
-    let stream = tokio::net::UnixStream::connect(&socket)
-        .await
-        .expect("connect");
+    let stream = connect(&socket).await;
     let (read, mut write) = stream.into_split();
     write
         .write_all(format!("{}\n", submit("quick.test.toml")).as_bytes())

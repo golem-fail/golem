@@ -300,9 +300,12 @@ pub fn run_stub_opts(stub_script_toml: &str, extra_args: &[&str], opts: StubOpts
     let code = rt.block_on(async {
         let server = if opts.daemon {
             Some(
-                golem_orchestrator::ipc::start_server(&golem_orchestrator::ipc::socket_path())
-                    .await
-                    .expect("daemon SHALL start"),
+                golem_orchestrator::ipc::start_server(
+                    &golem_orchestrator::ipc::socket_path(),
+                    &golem_orchestrator::ipc::Identity::current(),
+                )
+                .await
+                .expect("daemon SHALL start"),
             )
         } else {
             None
