@@ -10,7 +10,9 @@ use std::time::Duration;
 
 use tokio::io::AsyncWriteExt;
 
-use crate::session::{Begin, Op, OpResult, OpenRequest, Outcome, Running, Session, Status, Waited};
+use crate::session::{
+    Begin, LogsRequest, Op, OpResult, OpenRequest, Outcome, Running, Session, Status, Waited,
+};
 
 /// How long a call waits for its operation before it answers `pending`.
 pub const DEFAULT_WAIT: Duration = Duration::from_secs(45);
@@ -111,6 +113,18 @@ async fn handle(
         };
     }
     match kind {
+        "session_logs" => {
+            let req = LogsRequest {
+                since_secs: msg["since_secs"].as_u64(),
+                filter: msg["filter"].as_str().map(str::to_string),
+                limit: msg["limit"].as_u64().map(|n| n as usize),
+                app: msg["app"].as_str().map(str::to_string),
+            };
+            match session.app_logs(&req).await {
+                Ok(logs) => serde_json::json!({ "status": "ok", "logs": logs }),
+                Err(e) => error(&format!("{e:#}")),
+            }
+        }
         "session_wait" => waited_json(session.wait(wait).await),
         "session_status" => status_json(&session.status()),
         "session_cancel" => {

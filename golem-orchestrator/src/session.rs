@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use golem_devices::resource_manager::{DeviceLease, ResourceManager};
@@ -294,8 +294,42 @@ pub struct Session {
     changed: Arc<tokio::sync::Notify>,
     /// `None` until the session holds a device.
     work: Arc<tokio::sync::Mutex<Option<Work>>>,
+    /// Set with `work`, apart from it: an operation holds `work` while it
+    /// runs, and a stuck operation is when the app's log matters most.
+    logs: Arc<Mutex<Option<LogSource>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     next_op: AtomicU64,
+}
+
+/// What `app_logs` reads the device log with.
+#[derive(Clone)]
+struct LogSource {
+    driver: Arc<dyn PlatformDriver>,
+    apps: Vec<golem_parser::AppConfig>,
+    opened: SystemTime,
+}
+
+impl LogSource {
+    fn of(work: &Work, opened: SystemTime) -> LogSource {
+        LogSource {
+            driver: work.driver.clone(),
+            apps: work.apps.clone(),
+            opened,
+        }
+    }
+}
+
+/// What `app_logs` shows.
+#[derive(Debug, Clone, Default)]
+pub struct LogsRequest {
+    /// Seconds back from now; by default, from when the session opened.
+    pub since_secs: Option<u64>,
+    /// Only lines whose tag or message contains this, in any case.
+    pub filter: Option<String>,
+    /// The most lines to show besides crash lines.
+    pub limit: Option<usize>,
+    /// The app's name or bundle; by default, the session's target app.
+    pub app: Option<String>,
 }
 
 impl Session {
@@ -309,6 +343,8 @@ impl Session {
     ) -> Session {
         let session = Session::empty(req.idle_timeout);
         let phase = session.status.clone();
+        let logs = session.logs.clone();
+        let opened = SystemTime::now();
         session.run(
             "session_open",
             match &req.flow {
@@ -316,7 +352,17 @@ impl Session {
                 None => "opening".to_string(),
             },
             move |slot| {
-                Box::pin(async move { open(req, resource_mgr, install_cache, slot, phase).await })
+                Box::pin(async move {
+                    open(
+                        req,
+                        resource_mgr,
+                        install_cache,
+                        slot,
+                        phase,
+                        (logs, opened),
+                    )
+                    .await
+                })
             },
         );
         session
@@ -325,11 +371,17 @@ impl Session {
     /// A session on an already-resolved device and driver.
     pub fn from_parts(parts: Parts, idle_timeout: Duration) -> Session {
         let session = Session::empty(idle_timeout);
+        let bundle = parts.bundle.clone();
+        let work = Work::from_parts(parts);
+        let mut source = LogSource::of(&work, SystemTime::now());
+        if source.apps.is_empty() && !bundle.is_empty() {
+            source.apps.push(bundle_app(&bundle));
+        }
+        *session.logs.lock().unwrap_or_else(|e| e.into_inner()) = Some(source);
         *session
             .work
             .try_lock()
-            .unwrap_or_else(|_| unreachable!("a new session's work is unlocked")) =
-            Some(Work::from_parts(parts));
+            .unwrap_or_else(|_| unreachable!("a new session's work is unlocked")) = Some(work);
         session
     }
 
@@ -342,6 +394,7 @@ impl Session {
             })),
             changed: Arc::new(tokio::sync::Notify::new()),
             work: Arc::new(tokio::sync::Mutex::new(None)),
+            logs: Arc::new(Mutex::new(None)),
             task: Mutex::new(None),
             next_op: AtomicU64::new(1),
         }
@@ -492,6 +545,7 @@ impl Session {
             }
             *status = Status::Ended(reason.to_string());
         }
+        *self.logs.lock().unwrap_or_else(|e| e.into_inner()) = None;
         self.changed.notify_waiters();
         let mut slot = self.work.lock().await;
         let mut notes = None;
@@ -515,6 +569,47 @@ impl Session {
     /// Whether the idle timeout has passed.
     pub fn expired(&self) -> bool {
         self.idle_for() >= self.idle_timeout
+    }
+
+    /// The app's device log lines as TOON, crash lines first. Runs beside
+    /// any operation: it reads the device log from the host, not through
+    /// the companion.
+    pub async fn app_logs(&self, req: &LogsRequest) -> Result<String> {
+        let source = self.logs.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let Some(source) = source else {
+            if let Status::Ended(reason) = self.status() {
+                anyhow::bail!("the session ended: {reason}");
+            }
+            anyhow::bail!("the session holds no device yet");
+        };
+        let bundle = match &req.app {
+            None => source.apps.first().and_then(|a| a.bundle.clone()),
+            Some(app) => Some(
+                source
+                    .apps
+                    .iter()
+                    .find(|a| &a.name == app)
+                    .and_then(|a| a.bundle.clone())
+                    .unwrap_or_else(|| app.clone()),
+            ),
+        }
+        .filter(|b| !b.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("the session targets no app; pass `app`"))?;
+        let since = match req.since_secs {
+            Some(secs) => SystemTime::now() - Duration::from_secs(secs),
+            None => source.opened,
+        };
+        let lines = source.driver.app_logs(&bundle, since).await?;
+        let selection = golem_driver::logs::select(
+            lines,
+            req.filter.as_deref(),
+            req.limit.unwrap_or(golem_driver::logs::DEFAULT_LIMIT),
+        );
+        Ok(golem_driver::logs::render(
+            &bundle,
+            &selection,
+            &chrono::Local,
+        ))
     }
 
     /// The operations so far, oldest first.
@@ -669,6 +764,7 @@ async fn open(
     install_cache: golem_runner::installer::InstallCache,
     mut slot: tokio::sync::OwnedMutexGuard<Option<Work>>,
     status: Arc<Mutex<Status>>,
+    (logs, opened): (Arc<Mutex<Option<LogSource>>>, SystemTime),
 ) -> OpResult {
     let result = match req.flow.clone() {
         None => open_device(&req, &resource_mgr).await,
@@ -686,6 +782,7 @@ async fn open(
                     .unwrap_or_default(),
                 flow: flow_report,
             };
+            *logs.lock().unwrap_or_else(|e| e.into_inner()) = Some(LogSource::of(&work, opened));
             *slot = Some(work);
             out
         }
@@ -1231,6 +1328,88 @@ mod tests {
             },
             idle,
         )
+    }
+
+    #[tokio::test]
+    async fn app_logs_shows_crashes_first_and_filters() {
+        let s = session_on(
+            Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+            None,
+            Duration::from_secs(60),
+        );
+        let all = s.app_logs(&LogsRequest::default()).await.expect("logs");
+        assert!(
+            all.starts_with("app_logs fail.golem.test · 3 of 3 lines"),
+            "{all}"
+        );
+        let crash = all.find("crash[1]:").expect("crash section");
+        assert!(
+            crash < all.find("lines[2]:").expect("lines section"),
+            "{all}"
+        );
+        let marker = s
+            .app_logs(&LogsRequest {
+                filter: Some("MARKER".into()),
+                ..Default::default()
+            })
+            .await
+            .expect("logs");
+        assert!(marker.contains("1 of 1 lines"), "{marker}");
+        assert!(marker.contains("golem-marker stub"), "{marker}");
+        let other = s
+            .app_logs(&LogsRequest {
+                app: Some("other.app".into()),
+                ..Default::default()
+            })
+            .await
+            .expect("logs");
+        assert!(other.starts_with("app_logs other.app"), "{other}");
+    }
+
+    #[tokio::test]
+    async fn app_logs_runs_while_an_operation_is_busy() {
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let s = session_on(
+            Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+            None,
+            Duration::from_secs(60),
+        );
+        let held = gate.clone();
+        let Begin::Started(_) = s.run_checked("act", "stuck".into(), move |slot| {
+            Box::pin(async move {
+                held.notified().await;
+                drop(slot);
+                OpResult::Cancelled
+            })
+        }) else {
+            panic!("SHALL start");
+        };
+        assert!(matches!(s.status(), Status::Busy(_)));
+        let logs =
+            tokio::time::timeout(Duration::from_secs(5), s.app_logs(&LogsRequest::default()))
+                .await
+                .expect("app_logs SHALL not wait for the busy operation")
+                .expect("logs");
+        assert!(logs.contains("FATAL EXCEPTION"), "{logs}");
+        gate.notify_one();
+    }
+
+    #[tokio::test]
+    async fn app_logs_refuses_after_close() {
+        let s = session_on(
+            Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+            None,
+            Duration::from_secs(60),
+        );
+        s.close("closed", false).await;
+        let err = s
+            .app_logs(&LogsRequest::default())
+            .await
+            .expect_err("closed");
+        assert!(
+            err.to_string().contains("the session ended: closed"),
+            "{err}"
+        );
     }
 
     async fn run(s: &Session, op: Op) -> Outcome {

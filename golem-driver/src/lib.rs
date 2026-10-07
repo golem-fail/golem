@@ -21,6 +21,7 @@ pub mod commands;
 pub mod common;
 pub mod ime;
 pub mod ios;
+pub mod logs;
 
 /// Device-free stub driver for in-process integration tests. Only built in
 /// dev/test binaries — never shipped in a release build — so the hidden
@@ -173,6 +174,17 @@ pub trait PlatformDriver: Send + Sync {
     /// to the real video end, robust to variable adb roundtrip on real devices.
     fn last_recording_end(&self) -> Option<std::time::Instant> {
         None
+    }
+
+    /// The device log lines of app `bundle_id` since `since`, oldest first.
+    /// Reads the host side of the device only, never the companion, so it
+    /// works while an action is stuck on a hung app.
+    async fn app_logs(
+        &self,
+        _bundle_id: &str,
+        _since: std::time::SystemTime,
+    ) -> anyhow::Result<Vec<logs::LogLine>> {
+        anyhow::bail!("app logs are not supported on this device")
     }
 
     /// Remove adb port forwards (Android-only; no-op on iOS)

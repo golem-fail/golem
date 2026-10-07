@@ -1033,6 +1033,7 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "futures-util",
  "golem-common",
  "golem-element",

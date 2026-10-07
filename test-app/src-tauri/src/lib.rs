@@ -76,8 +76,22 @@ fn show_yes_no(app: tauri::AppHandle) {
         });
 }
 
+/// One line in the device log under the app's own process, for golem's
+/// `app_logs` e2e. Rust's stdout reaches logcat but not the iOS unified
+/// log; `syslog` reaches both.
+fn device_log(line: &str) {
+    extern "C" {
+        fn syslog(priority: std::ffi::c_int, format: *const std::ffi::c_char, ...);
+    }
+    if let Ok(line) = std::ffi::CString::new(line) {
+        // LOG_NOTICE. "%s" keeps a '%' in the line from reading as a format.
+        unsafe { syslog(5, c"%s".as_ptr(), line.as_ptr()) }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    device_log("golem test app started");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())

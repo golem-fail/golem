@@ -290,6 +290,18 @@ pub struct HelpParams {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct NoParams {}
 
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+pub struct LogsParams {
+    /// Seconds back from now. Without it, lines since the session opened.
+    pub since: Option<u64>,
+    /// Only lines whose tag or message contains this text, in any case.
+    pub filter: Option<String>,
+    /// The most lines to show besides crash lines. Default 200, the newest.
+    pub limit: Option<usize>,
+    /// The app's name in the flow, or its bundle id. Without it, the session's app.
+    pub app: Option<String>,
+}
+
 fn text(s: impl Into<String>) -> Result<CallToolResult, ErrorData> {
     Ok(CallToolResult::success(vec![ContentBlock::text(s)]))
 }
@@ -530,6 +542,25 @@ impl GolemMcp {
         match reply["cancelled"].as_bool() {
             Some(true) => text("cancelled"),
             Some(false) => text("nothing was running"),
+            None => self.not_done(&reply),
+        }
+    }
+
+    #[tool(
+        description = "The app's device log (Android logcat, iOS simulator unified log): crash lines first, then the newest lines. Works while an act is still running, so use it when the app hangs or crashes."
+    )]
+    async fn app_logs(
+        &self,
+        Parameters(p): Parameters<LogsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let reply = self
+            .call(
+                "session_logs",
+                serde_json::json!({ "since_secs": p.since, "filter": p.filter, "limit": p.limit, "app": p.app }),
+            )
+            .await?;
+        match reply["logs"].as_str() {
+            Some(logs) => text(logs),
             None => self.not_done(&reply),
         }
     }

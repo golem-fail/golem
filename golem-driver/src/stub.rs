@@ -282,6 +282,32 @@ impl PlatformDriver for StubDriver {
         })
     }
 
+    async fn app_logs(
+        &self,
+        bundle_id: &str,
+        since: std::time::SystemTime,
+    ) -> anyhow::Result<Vec<crate::logs::LogLine>> {
+        self.record("app_logs", vec![bundle_id.to_string()]);
+        let t = since
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+        let line =
+            |dt: f64, level: char, tag: &str, message: &str, crash: bool| crate::logs::LogLine {
+                time: t + dt,
+                level,
+                tag: tag.into(),
+                pid: 4242,
+                message: message.into(),
+                crash,
+            };
+        Ok(vec![
+            line(0.1, 'I', bundle_id, "stub app started", false),
+            line(0.2, 'E', "AndroidRuntime", "FATAL EXCEPTION: main", true),
+            line(0.3, 'I', bundle_id, "golem-marker stub", false),
+        ])
+    }
+
     async fn hide_keyboard(&self) -> anyhow::Result<()> {
         self.record("hide_keyboard", vec![]);
         Ok(())
