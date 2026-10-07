@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use golem_runner::installer::PersistedInstall;

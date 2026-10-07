@@ -8,7 +8,7 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 ## Gate before every commit (after coding)
 - Unit: `cargo t` (nextest; NOT `cargo test --release`). Output shows only fail/retry/slow by default (no tailing needed); `--status-level pass` for full output.
 - iOS companion Swift logic changed (`companions/ios`): `./scripts/test-ios-companion.sh` (Swift Testing on a sim; `cargo t` does NOT cover Swift — not part of nextest).
-- Lint: `cargo clippy --workspace --all-targets` (workspace denies `unwrap_used`).
+- Lint: `cargo clippy --workspace --all-targets` (workspace denies `unwrap_used`, and `print!`/`println!`/`stdout()` outside the command renderers — stdout carries command output and `golem mcp`'s JSON-RPC; see `clippy.toml`). A child process golem spawns gets a piped or null stdout, never an inherited one.
 - Format: `cargo fmt --all -- --check` (uses the pinned toolchain; matches CI). Opt-in pre-push hook: `git config core.hooksPath .githooks`.
 - E2E per matrix, live on sim/emu.
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.

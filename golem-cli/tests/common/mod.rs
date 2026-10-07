@@ -376,6 +376,7 @@ impl FdCapture {
     fn finish(self) -> String {
         // Flush Rust's own buffers before restoring the fd so buffered
         // stdout writes land in the capture file, not post-restore.
+        #[allow(clippy::disallowed_methods)] // flushes the renderers' output
         let _ = std::io::stdout().flush();
         let _ = std::io::stderr().flush();
         // SAFETY: restore the original fd and drop our saved copy.

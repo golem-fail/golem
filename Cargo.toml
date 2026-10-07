@@ -27,6 +27,9 @@ license-file = "LICENSE"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
+# See clippy.toml.
+disallowed_macros = "deny"
+disallowed_methods = "deny"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

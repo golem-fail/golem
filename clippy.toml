@@ -1,0 +1,12 @@
+# stdout carries command output, and `golem mcp` speaks JSON-RPC over it: one
+# stray line from library code corrupts the protocol stream. Diagnostics go
+# to stderr or to an event. The command renderers in golem-cli opt in with
+# `#[allow]`.
+disallowed-macros = [
+    { path = "std::print", reason = "stdout belongs to the command renderers; use eprintln! or an event" },
+    { path = "std::println", reason = "stdout belongs to the command renderers; use eprintln! or an event" },
+]
+disallowed-methods = [
+    { path = "std::io::stdout", reason = "stdout belongs to the command renderers; use stderr or an event" },
+    { path = "tokio::io::stdout", reason = "stdout belongs to the command renderers; use stderr or an event" },
+]

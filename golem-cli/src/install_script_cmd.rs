@@ -4,6 +4,8 @@
 //! Uses `dialoguer` for arrow-key selection, default-valued text input,
 //! and y/n confirmation prompts. Non-TTY stdin falls back to line reader.
 
+#![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

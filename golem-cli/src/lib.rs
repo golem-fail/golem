@@ -24,6 +24,8 @@ use golem_orchestrator::{ipc, project};
 /// (real orchestrator + renderer + result files) against the stub driver,
 /// without spawning a subprocess. `main` is a thin wrapper that parses
 /// argv, calls this, and exits with the returned code.
+// The command dispatcher: stdout is each command's output.
+#[allow(clippy::disallowed_macros)]
 pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
     match cli.command {
         Commands::Run(args) => {
