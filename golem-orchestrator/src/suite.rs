@@ -2940,111 +2940,72 @@ fn device_matches_entry_constraints(device: &DeviceInfo, entry: &InstallEntry) -
     })
 }
 
-/// Discover booted devices and start companions for all platforms.
-/// Used by `golem tree` and potentially other commands that need companions.
-pub async fn start_companions_public(
-    platform_filter: Option<&str>,
-) -> Result<Vec<(u16, golem_driver::CompanionHealth)>> {
-    let mut platforms = Vec::new();
-    if platform_filter.is_none() || platform_filter == Some("ios") {
-        platforms.push(Platform::Ios);
-    }
-    if platform_filter.is_none() || platform_filter == Some("android") {
-        platforms.push(Platform::Android);
-    }
-
+/// Install and start a companion on `device`, then wait for it to answer
+/// `/health`. Used by the interactive commands (`golem tree`), which bring
+/// a companion up outside a suite run.
+pub(crate) async fn start_companion_for_device(
+    device: &golem_devices::DeviceInfo,
+) -> Result<(u16, golem_driver::CompanionHealth)> {
+    let platform = device.platform;
     let (reg_state, _rx) = crate::registration::RegistrationState::new();
-    // `golem tree` renders its own output via direct stderr, not the event
+    // The interactive commands render their own output, not the event
     // stream — no subscriber consumes registration narrative here, so a
     // detached sender is correct (the events are simply not displayed).
-    let (tree_tx, _tree_subs) = golem_events::channel::event_channel();
+    let (tx, _subs) = golem_events::channel::event_channel();
     let (reg_port, _reg_task) =
-        crate::registration::start_registration_server(reg_state.clone(), tree_tx).await?;
+        crate::registration::start_registration_server(reg_state.clone(), tx).await?;
 
-    let mut results = Vec::new();
-
-    for platform in platforms {
-        let devices = match platform {
-            Platform::Ios => golem_devices::ios::discover_ios_devices()
-                .await
-                .unwrap_or_default(),
-            Platform::Android => golem_devices::android::discover_android_devices()
-                .await
-                .unwrap_or_default(),
-        };
-
-        let booted: Vec<_> = devices
-            .into_iter()
-            .filter(|d| d.state == golem_devices::DeviceState::Booted)
-            .collect();
-
-        if booted.is_empty() {
-            continue;
+    let companion_path = find_companion_path(platform)?;
+    if platform == Platform::Android {
+        if let Ok(apk) = find_android_apk() {
+            let cmd = golem_devices::lifecycle::install_companion_command(device, &apk);
+            let _ = golem_devices::lifecycle::run_command_public(&cmd, "install test APK").await;
         }
-
-        let device = &booted[0];
-        let companion_path = match find_companion_path(platform) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-
-        if platform == Platform::Android {
-            if let Ok(apk) = find_android_apk() {
-                let cmd = golem_devices::lifecycle::install_companion_command(device, &apk);
-                let _ =
-                    golem_devices::lifecycle::run_command_public(&cmd, "install test APK").await;
-            }
-            if let Some(main) = find_android_main_apk() {
-                let cmd = golem_devices::lifecycle::install_companion_command(device, &main);
-                let _ =
-                    golem_devices::lifecycle::run_command_public(&cmd, "install main APK").await;
-            }
-        } else {
-            let _ = golem_devices::lifecycle::build_companion(device, &companion_path).await;
+        if let Some(main) = find_android_main_apk() {
+            let cmd = golem_devices::lifecycle::install_companion_command(device, &main);
+            let _ = golem_devices::lifecycle::run_command_public(&cmd, "install main APK").await;
         }
+    } else {
+        let _ = golem_devices::lifecycle::build_companion(device, &companion_path).await;
+    }
 
-        if let Ok(()) = golem_devices::lifecycle::spawn_companion_with_reg(
-            device,
-            &companion_path,
-            0,
-            Some(reg_port),
-        )
-        .await
-        {
-            let mut rx = reg_state.subscribe();
-            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-            loop {
-                tokio::select! {
-                    msg = rx.recv() => {
-                        if let Ok(id) = msg {
-                            if let Some(comp) = reg_state.get(&id) {
-                                if platform == Platform::Android {
-                                    let fwd = golem_devices::lifecycle::port_forward_command(device, comp.port);
-                                    let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
-                                }
-                                let client = golem_driver::common::CompanionClient::new(comp.port);
-                                if let Ok(health) = client.wait_for_health(std::time::Duration::from_secs(15)).await {
-                                    results.push((comp.port, health));
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    _ = tokio::time::sleep_until(deadline) => {
-                        eprintln!("  [companion] startup timed out for {platform}");
-                        break;
-                    }
+    let mut rx = reg_state.subscribe();
+    golem_devices::lifecycle::spawn_companion_with_reg(device, &companion_path, 0, Some(reg_port))
+        .await?;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        tokio::select! {
+            msg = rx.recv() => {
+                let Ok(id) = msg else { continue };
+                let Some(comp) = reg_state.get(&id) else { continue };
+                if comp.device_id != device.udid {
+                    continue;
                 }
+                if platform == Platform::Android {
+                    let fwd = golem_devices::lifecycle::port_forward_command(device, comp.port);
+                    let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
+                }
+                let client = golem_driver::common::CompanionClient::new(comp.port);
+                let health = client
+                    .wait_for_health(std::time::Duration::from_secs(15))
+                    .await?;
+                if health.device_id != device.udid {
+                    anyhow::bail!(
+                        "port {} answers for {} ({}), not {} ({})",
+                        comp.port,
+                        health.device_name,
+                        health.device_id,
+                        device.name,
+                        device.udid
+                    );
+                }
+                return Ok((comp.port, health));
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                anyhow::bail!("companion startup timed out on {} ({})", device.name, device.udid);
             }
         }
     }
-
-    Ok(results)
-}
-
-/// Public wrapper for scan_companions (used by `golem tree`).
-pub async fn scan_companions_public() -> Vec<(u16, golem_driver::CompanionHealth)> {
-    scan_companions().await
 }
 
 /// Scan ports for running companion servers.
@@ -3052,7 +3013,7 @@ pub async fn scan_companions_public() -> Vec<(u16, golem_driver::CompanionHealth
 /// Checks ports in the companion range concurrently for a responding
 /// /health endpoint. Returns a list of (port, health) for all found.
 /// Fast — unused ports return "connection refused" instantly.
-async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
+pub(crate) async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
     use golem_devices::resource_manager::{PORT_RANGE_END, PORT_RANGE_START};
     use golem_driver::common::CompanionClient;
 

@@ -94,9 +94,13 @@ pub struct TreeArgs {
     #[arg(long)]
     pub json: bool,
 
-    /// App bundle ID for iOS (needed to target the right app)
-    #[arg(long)]
+    /// App bundle ID to read
+    #[arg(long, conflicts_with = "app")]
     pub bundle: Option<String>,
+
+    /// App name from the golem.toml [[apps]] registry
+    #[arg(long)]
+    pub app: Option<String>,
 
     /// Show verbose metadata (CDP status, enrichment source, etc.)
     #[arg(long)]

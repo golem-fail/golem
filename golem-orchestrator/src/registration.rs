@@ -139,8 +139,8 @@ impl RegistrationState {
         let mut port = inner.next_port;
         let start = port;
         loop {
-            if TcpListener::bind(format!("127.0.0.1:{port}")).is_ok() {
-                break; // Port is free
+            if port_is_free(port) {
+                break;
             }
             port += 1;
             if port > COMPANION_PORT_END {
@@ -333,6 +333,15 @@ async fn handle_connection(
     }
 
     Ok(())
+}
+
+/// Whether no socket on this host listens on `port`, on loopback or on
+/// every interface. An iOS simulator companion listens on `*:port` and an
+/// `adb forward` on `127.0.0.1:port`. A loopback bind alone does not see
+/// the first: std sets `SO_REUSEADDR`, which lets it share a port with a
+/// wildcard listener in another process.
+fn port_is_free(port: u16) -> bool {
+    TcpListener::bind(("127.0.0.1", port)).is_ok() && TcpListener::bind(("0.0.0.0", port)).is_ok()
 }
 
 /// Find a free port in a range by trying to bind.
@@ -761,6 +770,31 @@ mod tests {
             (COMPANION_PORT_START..=COMPANION_PORT_END).contains(&port),
             "the skipped-to port SHALL stay within the companion range"
         );
+    }
+
+    // 16b'. A port another process holds on every interface (an iOS
+    //       simulator companion listens on `*:port`) is taken too, though a
+    //       loopback bind alone would succeed alongside it.
+    #[test]
+    fn allocate_port_skips_a_port_bound_on_every_interface() {
+        let (state, _rx) = RegistrationState::new();
+        // A port free on both addresses, so only the wildcard hold below
+        // makes it busy: a stray `adb forward` on loopback must not stand in.
+        let busy = (COMPANION_PORT_START..COMPANION_PORT_END)
+            .find(|p| port_is_free(*p))
+            .expect("a free port SHALL exist in the companion range");
+        let _held = TcpListener::bind(("0.0.0.0", busy)).expect("SHALL hold the port");
+        // Linux refuses the loopback bind too; macOS is where it slips by.
+        #[cfg(target_os = "macos")]
+        assert!(
+            TcpListener::bind(("127.0.0.1", busy)).is_ok(),
+            "precondition: a loopback bind alone SHALL still succeed beside the wildcard hold"
+        );
+        state.seed_next_port(busy);
+
+        let port = state.allocate_port("dev-1", "ios", "iPhone", "1");
+
+        assert_ne!(port, busy, "a port held on 0.0.0.0 SHALL NOT be handed out");
     }
 
     // 16c. Registration is keyed strictly by device id. `bring_up_companion`

@@ -84,7 +84,7 @@ golem run flows/scroll.test.toml --verbose
 
 ## `golem tree`
 
-Inspect the live UI element hierarchy from a running device.
+Inspect the live UI element hierarchy of one device.
 
 ```bash
 golem tree [OPTIONS]
@@ -92,12 +92,17 @@ golem tree [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--platform <ios\|android>` | Filter by platform |
-| `--device <NAME>` | Filter by device name or UDID (substring match) |
-| `--bundle <ID>` | App bundle ID (default: `fail.golem.test`) |
+| `--platform <ios\|android>` | Consider only devices on this platform |
+| `--device <ID\|NAME>` | The device: a UDID or serial, a name, or part of either (case-insensitive) |
+| `--bundle <ID>` | The bundle ID of the app to read |
+| `--app <NAME>` | The app to read, by its name in the `golem.toml` `[[apps]]` registry |
 | `--full` | Show full tree without viewport filtering |
 | `--json` | Output as JSON |
 | `--verbose` | Show metadata: CDP status, enrichment, keyboard, safe area |
+
+**Device.** Without `--device`, golem reads the only booted device (a booted simulator or emulator, or a connected physical device). With `--device`, an exact UDID or serial wins, then an exact name, then part of either. If more than one device matches, or no `--device` is given and more than one device is booted, the command fails and lists the candidates. golem reuses the device's running companion, or starts one.
+
+**App.** `--bundle` is used as given. `--app` looks the bundle up in `golem.toml`. With neither, golem reads the registry's only app. If the registry has several apps or none, no bundle is set: on iOS the companion reads the app it last launched, and on Android the tree covers the whole screen.
 
 ## `golem devices`
 
