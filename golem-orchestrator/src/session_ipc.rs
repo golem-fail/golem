@@ -74,6 +74,7 @@ async fn handle(
         }),
         "session_tree" => Some(Op::Tree {
             full: msg["full"].as_bool().unwrap_or(false),
+            json: msg["json"].as_bool().unwrap_or(false),
         }),
         "session_probe" => Some(Op::Probe {
             selector: msg["selector"].as_str().unwrap_or_default().to_string(),
@@ -129,6 +130,20 @@ async fn open(
     let idle_timeout = msg["idle_timeout_s"]
         .as_u64()
         .map_or(crate::session::DEFAULT_IDLE_TIMEOUT, Duration::from_secs);
+    #[cfg(debug_assertions)]
+    if msg["stub"].as_bool() == Some(true) {
+        let session = Arc::new(stub_session(req.project_root, idle_timeout));
+        *slot = Some(session.clone());
+        drop(slot);
+        sessions.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        watch_idle(
+            session.clone(),
+            conn.clone(),
+            sessions.clone(),
+            writer.clone(),
+        );
+        return opened_json(&session, idle_timeout);
+    }
     let session = match Session::open(
         OpenRequest {
             query: req.query,
@@ -152,6 +167,10 @@ async fn open(
         sessions.clone(),
         writer.clone(),
     );
+    opened_json(&session, idle_timeout)
+}
+
+fn opened_json(session: &Session, idle_timeout: Duration) -> serde_json::Value {
     serde_json::json!({
         "status": "open",
         "device": format!("{}/{}", session.device().platform, session.device().name),
@@ -159,6 +178,41 @@ async fn open(
         "bundle": session.bundle(),
         "idle_timeout_s": idle_timeout.as_secs(),
     })
+}
+
+/// A session on the device-free stub driver, for the integration tests of
+/// session clients. Debug builds only, like the `--stub` run path.
+#[cfg(debug_assertions)]
+fn stub_session(project_root: std::path::PathBuf, idle_timeout: Duration) -> Session {
+    let device = golem_devices::DeviceInfo {
+        name: "Stub Device".into(),
+        udid: "stub-session".into(),
+        platform: golem_devices::Platform::Android,
+        device_type: golem_devices::DeviceType::Phone,
+        os_major: 0,
+        os_version: "0".into(),
+        state: golem_devices::DeviceState::Booted,
+        physical: false,
+        playstore: false,
+        screen_width: None,
+        screen_height: None,
+        screen_scale: None,
+        last_booted: None,
+        runtime_id: None,
+        device_type_id: None,
+    };
+    Session::from_parts(
+        crate::session::Parts {
+            device,
+            bundle: golem_driver::stub::STUB_BUNDLE_ID.into(),
+            driver: Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+            lease: None,
+            project_root,
+            apps: Vec::new(),
+            child_env: None,
+        },
+        idle_timeout,
+    )
 }
 
 /// End the session when its idle timeout passes, and tell the client why.

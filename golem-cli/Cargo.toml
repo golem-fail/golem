@@ -43,6 +43,9 @@ toml_edit = "0.22"
 dialoguer = { version = "0.11", default-features = false, features = ["fuzzy-select"] }
 chrono = { workspace = true }
 dirs = "6"
+# MCP server for `golem mcp` (stdio). The official SDK.
+rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"] }
+schemars = "1"
 
 [dev-dependencies]
 tempfile = "3"
@@ -50,6 +53,7 @@ tempfile = "3"
 # (tests/common) — the streamed renderer writes from spawned tasks, so a
 # process-fd redirect captures it without threading writers through.
 libc = "0.2"
+rmcp = { version = "3.5", default-features = false, features = ["client", "server", "macros", "transport-async-rw"] }
 # `test-util` enables `start_paused` so reboot/wait timeouts advance instantly
 # in tests (also relied on by the orchestrator tests via feature unification).
 tokio = { workspace = true, features = ["test-util"] }
