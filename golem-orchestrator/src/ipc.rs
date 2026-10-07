@@ -108,7 +108,11 @@ pub enum Hello {
     /// Same golem: the stream is ready for a `submit`.
     Ready(UnixStream),
     /// The daemon is finishing its work before it exits.
-    Draining { daemon: Identity, runs: u64 },
+    Draining {
+        daemon: Identity,
+        runs: u64,
+        sessions: u64,
+    },
     /// The daemon is an older version, or another build of this version.
     Stale {
         stream: UnixStream,
@@ -185,6 +189,7 @@ async fn exchange_hello(
                 binary: "unknown".into(),
             },
             runs: 1,
+            sessions: 0,
         });
     }
     if reply["type"] != "hello" {
@@ -193,7 +198,12 @@ async fn exchange_hello(
     let daemon = Identity::from_json(&reply);
     if reply["draining"].as_bool() == Some(true) {
         let runs = reply["runs"].as_u64().unwrap_or(0);
-        return Ok(Hello::Draining { daemon, runs });
+        let sessions = reply["sessions"].as_u64().unwrap_or(0);
+        return Ok(Hello::Draining {
+            daemon,
+            runs,
+            sessions,
+        });
     }
     if daemon.version == me.version && daemon.build == me.build {
         return Ok(Hello::Ready(stream));
@@ -336,6 +346,8 @@ struct ServerShared {
     draining: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Submits in progress.
     active_runs: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// Open sessions.
+    active_sessions: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl OrchestratorServer {
@@ -359,6 +371,7 @@ impl OrchestratorServer {
         use std::sync::atomic::Ordering;
         self.shared.draining.load(Ordering::Acquire)
             && self.shared.active_runs.load(Ordering::Acquire) == 0
+            && self.shared.active_sessions.load(Ordering::Acquire) == 0
     }
 
     /// Hold a run open, as a submit in progress does. For tests.
@@ -423,6 +436,7 @@ pub async fn start_server(path: &Path, identity: &Identity) -> Result<Orchestrat
         identity: std::sync::Arc::new(identity.clone()),
         draining: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         active_runs: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        active_sessions: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
     };
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let idle_since = std::sync::Arc::new(std::sync::Mutex::new(Some(std::time::Instant::now())));
@@ -477,6 +491,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
     // A client from before the handshake would submit relative paths and
     // no environment, which this daemon would resolve against its own.
     let mut greeted = false;
+    let session = crate::session_ipc::ConnSession::default();
 
     loop {
         line.clear();
@@ -504,6 +519,9 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             .load(std::sync::atomic::Ordering::Acquire));
                         resp["runs"] = serde_json::json!(shared
                             .active_runs
+                            .load(std::sync::atomic::Ordering::Acquire));
+                        resp["sessions"] = serde_json::json!(shared
+                            .active_sessions
                             .load(std::sync::atomic::Ordering::Acquire));
                         let mut w = writer.lock().await;
                         let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
@@ -540,6 +558,15 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                         });
                         let mut w = writer.lock().await;
                         let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                    }
+                    Some(kind) if greeted && kind.starts_with("session_") => {
+                        crate::session_ipc::spawn(
+                            json,
+                            session.clone(),
+                            shared.resource_mgr.clone(),
+                            shared.active_sessions.clone(),
+                            writer.clone(),
+                        );
                     }
                     Some("do") if greeted => {
                         let _run = RunGuard::new(&shared.active_runs);
@@ -640,6 +667,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
             }
         }
     }
+    session.disconnect().await;
 }
 
 /// The subset of `SuiteConfig` fields that are decoded purely from the

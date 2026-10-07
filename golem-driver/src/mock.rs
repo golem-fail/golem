@@ -76,6 +76,9 @@ pub struct MockPlatformDriver {
     /// found and accepted. `false` by default (matches the trait default:
     /// no system-alert layer). Set via `set_system_alert_accept`.
     system_alert_accept: Mutex<bool>,
+    /// How long `get_hierarchy` sleeps before it answers, to model a busy
+    /// device. Zero by default.
+    hierarchy_delay: Mutex<std::time::Duration>,
 }
 
 /// Map a caller-supplied method name to the canonical trait method name
@@ -105,7 +108,13 @@ impl MockPlatformDriver {
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
             type_verify: Mutex::new(None),
             system_alert_accept: Mutex::new(false),
+            hierarchy_delay: Mutex::new(std::time::Duration::ZERO),
         }
+    }
+
+    /// Make `get_hierarchy` sleep for `delay` before it answers.
+    pub fn set_hierarchy_delay(&self, delay: std::time::Duration) {
+        *self.hierarchy_delay.lock().expect("lock poisoned") = delay;
     }
 
     pub fn set_hierarchy(&self, hierarchy: Element) {
@@ -266,6 +275,10 @@ impl MockPlatformDriver {
 impl PlatformDriver for MockPlatformDriver {
     async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
         self.record_call("get_hierarchy", vec![]);
+        let delay = *self.hierarchy_delay.lock().expect("lock poisoned");
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
         self.check_error("get_hierarchy")?;
         let meta = common::HierarchyMeta {
             keyboard_height: *self.keyboard_height.lock().expect("lock poisoned"),

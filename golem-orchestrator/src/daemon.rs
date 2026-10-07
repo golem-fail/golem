@@ -184,12 +184,16 @@ pub async fn connect_or_start(
                 }
                 ipc::drain(stream).await?;
             }
-            Ok(ipc::Hello::Draining { daemon, runs }) => {
+            Ok(ipc::Hello::Draining {
+                daemon,
+                runs,
+                sessions,
+            }) => {
                 if started.elapsed() >= opts.wait {
                     return Err(golem_events::coded(
                         golem_events::FailureCode::HostOrchestratorIpc,
                         anyhow::anyhow!(
-                            "the golem daemon {} is still finishing {runs} run(s) after {}s; \
+                            "the golem daemon {} is still finishing {runs} run(s) and {sessions} session(s) after {}s; \
                              set GOLEM_DAEMON_WAIT to wait longer, or GOLEM_SOCKET to use another daemon",
                             daemon.version,
                             opts.wait.as_secs()
@@ -197,14 +201,14 @@ pub async fn connect_or_start(
                     ));
                 }
                 if !announced {
-                    if runs == 0 {
+                    if runs == 0 && sessions == 0 {
                         eprintln!(
                             "  [orchestrator] waiting for golem daemon {} to exit...",
                             daemon.version
                         );
                     } else {
                         eprintln!(
-                            "  [orchestrator] waiting for golem daemon {} to finish {runs} run(s) before it exits...",
+                            "  [orchestrator] waiting for golem daemon {} to finish {runs} run(s) and {sessions} session(s) before it exits...",
                             daemon.version
                         );
                     }
