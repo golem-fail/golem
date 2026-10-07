@@ -36,6 +36,15 @@ slow-timeout = { period = "2s", terminate-after = 15 }
 # hide the contention.
 [test-groups]
 browser = { max-threads = 2 }
+devices = { max-threads = 1 }
+
+# The live MCP tests (`golem-cli/tests/mcp_live.rs`, ignored by default) share
+# one device, so they run one at a time. A test boots a session, runs flows
+# and waits for log lines: a minute is normal, and the kill comes at 5.
+[[profile.default.overrides]]
+filter = 'binary(mcp_live) & test(/^live_/)'
+test-group = 'devices'
+slow-timeout = { period = "60s", terminate-after = 5 }
 
 # `(^|::)` matters: an integration test's name has no module path, so a
 # `::live_` filter silently misses every `tests/*.rs` case — which is how the

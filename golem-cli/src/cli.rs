@@ -168,6 +168,11 @@ pub struct McpArgs {
     #[arg(long, default_value_t = 45)]
     pub soft_timeout: u64,
 
+    /// Print the config block that adds this server to an MCP client
+    /// (claude, codex or desktop), then exit
+    #[arg(long, value_enum)]
+    pub print_config: Option<crate::mcp::Client>,
+
     /// Open sessions on the device-free stub driver (debug builds; tests)
     #[arg(long, hide = true)]
     pub stub_session: bool,

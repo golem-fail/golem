@@ -176,12 +176,16 @@ Run an MCP server over stdio, so an LLM client (Claude Code, Codex, Claude Deskt
 
 ```bash
 golem mcp [--project <DIR>] [--soft-timeout <SECS>]
+golem mcp --print-config claude|codex|desktop
 ```
+
+Setup for each client, the session rules and two example sequences are in [golem as an MCP server](mcp.md).
 
 | Flag | Description |
 |------|-------------|
 | `--project <DIR>` | The project directory that holds `golem.toml`. Without it, golem searches up from the working directory. `session_open` can also name a project. |
 | `--soft-timeout <SECS>` | How long a tool waits for its operation before it answers `pending` (default 45). |
+| `--print-config <CLIENT>` | Print the config block that adds this server to `claude` (`.mcp.json`), `codex` (`config.toml`) or `desktop` (`claude_desktop_config.json`), with the absolute path of this `golem`, then exit. The `desktop` block also sets `env` to your `PATH` and `ANDROID_HOME`. |
 
 The server starts without device work. The session runs in the daemon and belongs to this server: when the client stops the server, the session ends and its device is released. Stdout carries JSON-RPC only.
 
