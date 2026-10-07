@@ -33,7 +33,8 @@ fn a_session_carries_state_across_commands() {
     std::fs::write(dir.path().join("golem.toml"), common::golem_toml()).expect("golem.toml");
     let d = dir.path();
 
-    let start = golem(d, &["session", "start", "--stub"]);
+    // A failure before `stop` leaves the daemon up until the idle timeout.
+    let start = golem(d, &["session", "start", "--stub", "--idle-timeout", "10"]);
     assert!(start.status.success(), "{start:?}");
     assert!(
         stdout(&start).starts_with("session open · android/Stub Device"),

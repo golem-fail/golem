@@ -194,7 +194,8 @@ pub async fn connect_or_start(
                         golem_events::FailureCode::HostOrchestratorIpc,
                         anyhow::anyhow!(
                             "the golem daemon {} is still finishing {runs} run(s) and {sessions} session(s) after {}s; \
-                             set GOLEM_DAEMON_WAIT to wait longer, or GOLEM_SOCKET to use another daemon",
+                             set GOLEM_DAEMON_WAIT to wait longer, or GOLEM_SOCKET to use another daemon. \
+                             `golem session list` and `golem session stop` reach its sessions",
                             daemon.version,
                             opts.wait.as_secs()
                         ),
@@ -208,7 +209,8 @@ pub async fn connect_or_start(
                         );
                     } else {
                         eprintln!(
-                            "  [orchestrator] waiting for golem daemon {} to finish {runs} run(s) and {sessions} session(s) before it exits...",
+                            "  [orchestrator] waiting for golem daemon {} to finish {runs} run(s) and {sessions} session(s) before it exits \
+                             (`golem session list` and `golem session stop` reach its sessions)...",
                             daemon.version
                         );
                     }

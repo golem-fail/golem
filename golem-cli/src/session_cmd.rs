@@ -75,6 +75,11 @@ pub async fn run(args: &SessionArgs) -> Result<i32> {
             let msg = serde_json::json!({ "path": path.display().to_string() });
             let reply = call(&a.name.name, "session_screenshot", msg, Connect::Attach).await?;
             done_text(&reply)?;
+            // Only the first reply writes the file; a later `session_wait`
+            // carries the PNG instead.
+            if reply["result"]["saved"].is_null() {
+                bail!("the screenshot took too long; run the command again");
+            }
             println!(
                 "{} · {} bytes",
                 a.path.display(),

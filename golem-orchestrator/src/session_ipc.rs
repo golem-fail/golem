@@ -316,6 +316,7 @@ async fn open(
     if stub {
         return opened_json(idle_timeout);
     }
+    forget_failed_open(session.clone(), home.clone());
     let waited = session.wait(wait).await;
     // An open that failed leaves nothing to keep.
     if let Waited::Done(Outcome {
@@ -413,6 +414,29 @@ fn stub_session(project_root: std::path::PathBuf, idle_timeout: Duration) -> Ses
         },
         idle_timeout,
     )
+}
+
+/// Close and forget a session whose open fails, however long the open
+/// takes: the client may stop waiting first, and a failed named session
+/// would hold its name and keep the daemon up.
+fn forget_failed_open(session: Arc<Session>, home: Home) {
+    tokio::spawn(async move {
+        loop {
+            match session.wait(Duration::from_secs(3600)).await {
+                Waited::Pending(_) => continue,
+                Waited::Done(Outcome {
+                    op: "session_open",
+                    result: OpResult::Failed(_),
+                    ..
+                }) => {
+                    session.close("the open failed", false).await;
+                    home.forget(&session).await;
+                }
+                _ => {}
+            }
+            break;
+        }
+    });
 }
 
 /// End the session when its idle timeout passes, and tell a connection's
@@ -769,6 +793,42 @@ mod tests {
         assert_eq!(names, ["a", "b"]);
         assert_eq!(sessions[0]["device"], "android/Stub Device");
         assert_eq!(sessions[0]["status"], "idle");
+    }
+
+    #[tokio::test]
+    async fn an_open_that_fails_after_the_client_stops_waiting_frees_its_name() {
+        let d = daemon().await;
+        let open = || {
+            d.call(
+                "session_open",
+                serde_json::json!({
+                    "session": "x",
+                    "wait_ms": 0,
+                    "project_root": d.dir.path().join("no-project").display().to_string(),
+                }),
+            )
+        };
+        let first = open().await;
+        assert_eq!(first["status"], "pending", "{first}");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let list = d.call("session_list", serde_json::json!({})).await;
+            if list["sessions"].as_array().is_some_and(|s| s.is_empty()) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the failed open SHALL leave the list: {list}"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let again = open().await;
+        assert!(
+            !again["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("already open")),
+            "{again}"
+        );
     }
 
     #[tokio::test]
