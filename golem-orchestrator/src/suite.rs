@@ -227,6 +227,38 @@ fn pool_ticks_for_device(device: &DeviceInfo, group: &CoverageGroup) -> Vec<usiz
         .collect()
 }
 
+/// A one-flow suite run that hands its device to a session instead of
+/// ending: `execute_flow` without the teardown, stopping at `stop_at`, and
+/// on a failure only when `break_on_failure` says to keep going.
+#[derive(Clone)]
+pub struct HandoffRequest {
+    /// Where the run puts what the session takes over.
+    pub slot: Arc<std::sync::Mutex<Option<Handoff>>>,
+    pub stop_at: Option<golem_runner::context::StopAt>,
+    pub break_on_failure: bool,
+    /// The only device the run may use.
+    pub pin_udid: Option<String>,
+}
+
+/// What a session takes over from a handed-off flow run.
+pub struct Handoff {
+    pub device: DeviceInfo,
+    pub driver: Arc<dyn PlatformDriver>,
+    pub leases: Vec<golem_devices::resource_manager::DeviceLease>,
+    pub vars: golem_vars::VariableStore,
+    pub rng: golem_vars::seed::FakeRng,
+    pub step_count: u64,
+    pub browser: Arc<tokio::sync::Mutex<golem_runner::browser::BrowserSlot>>,
+    /// The flow as it ran: merged with the project config, mixins expanded.
+    /// Its `teardown` runs when the session closes.
+    pub flow: golem_parser::FlowFile,
+    pub base_timeout_ms: u64,
+    pub stopped_at: Option<golem_runner::context::StopAt>,
+    /// The failed step, when the flow failed and `break_on_failure` kept
+    /// the device.
+    pub failure: Option<String>,
+}
+
 /// Configuration for a suite run.
 pub struct SuiteConfig {
     /// Skip cleaning device state between flows.
@@ -341,6 +373,8 @@ pub struct SuiteConfig {
     /// golem starts for this suite (install scripts, `bash`, `run`). `None`
     /// inherits this process's own.
     pub child_env: Option<Arc<golem_common::command::ChildEnv>>,
+    /// Hand the device of a one-flow run to a session (see [`HandoffRequest`]).
+    pub handoff: Option<HandoffRequest>,
 }
 
 impl Default for SuiteConfig {
@@ -380,6 +414,7 @@ impl Default for SuiteConfig {
             max_concurrency: None,
             profile: None,
             child_env: None,
+            handoff: None,
         }
     }
 }
@@ -845,6 +880,7 @@ impl SuiteRunner {
             let no_teardown = self.config.no_teardown;
             let browser_headed = self.config.browser_headed;
             let child_env = self.config.child_env.clone();
+            let handoff = self.config.handoff.clone();
             let a11y_override = self.config.a11y_override;
             let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
@@ -932,6 +968,7 @@ impl SuiteRunner {
                         no_teardown,
                         browser_headed,
                         child_env,
+                        handoff,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -1061,7 +1098,21 @@ impl SuiteRunner {
         // switched to its Unicode IME (primary in-session restore; self-heal
         // at next init is the crash fallback). Only this suite's: another
         // client of the daemon may be typing on its own device right now.
-        let used: Vec<String> = used_devices.lock().map(|u| u.clone()).unwrap_or_default();
+        let handed: Option<String> = self.config.handoff.as_ref().and_then(|h| {
+            h.slot
+                .lock()
+                .ok()
+                .and_then(|s| s.as_ref().map(|h| h.device.udid.clone()))
+        });
+        let used: Vec<String> = used_devices
+            .lock()
+            .map(|u| {
+                u.iter()
+                    .filter(|d| Some(*d) != handed.as_ref())
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
         golem_driver::ime::restore(&used).await;
 
         // Ask each Android companion to exit cleanly so its `am instrument`
@@ -1208,6 +1259,8 @@ struct FlowRunConfig {
     browser_headed: bool,
     /// See [`SuiteConfig::child_env`].
     child_env: Option<Arc<golem_common::command::ChildEnv>>,
+    /// See [`SuiteConfig::handoff`].
+    handoff: Option<HandoffRequest>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1477,6 +1530,7 @@ async fn execute_flow_run(
                 max_device_wait: cfg.max_device_wait,
                 cli_vars: &cfg.cli_vars,
                 child_env: cfg.child_env.as_deref(),
+                pin_udid: cfg.handoff.as_ref().and_then(|h| h.pin_udid.as_deref()),
             },
             cfg.stub_fail_on_runs.is_some(),
             cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
@@ -1587,6 +1641,7 @@ async fn execute_flow_run(
         let a11y_min_confidence_override = cfg.a11y_min_confidence_override;
         let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
         let child_env_c = cfg.child_env.clone();
+        let handoff_c = cfg.handoff.clone();
         let reg_state_c = reg_state.clone();
         handles.push(AbortOnDrop(tokio::spawn(async move {
             run_flow_on_device(
@@ -1628,6 +1683,7 @@ async fn execute_flow_run(
                     browser_headed: cfg.browser_headed,
                     dev: cfg.dev,
                     child_env: child_env_c,
+                    handoff: handoff_c,
                 },
             )
             .await
@@ -1680,7 +1736,8 @@ async fn execute_flow_run(
     // Stub runs never touch a real device: a stub failure is an assertion
     // failure by construction, so device recovery is meaningless — and the
     // probe/reboot below would build a real driver against a fake udid.
-    let recover = cfg.stub_fail_on_runs.is_none();
+    // A handed-off device belongs to a session now: no probe, no reboot.
+    let recover = cfg.stub_fail_on_runs.is_none() && cfg.handoff.is_none();
     for (idx, report) in reports.iter_mut().enumerate() {
         if report.success || !recover {
             continue;
@@ -1820,7 +1877,15 @@ async fn execute_flow_run(
         });
     }
 
-    drop(leases);
+    // A session that took the device holds its lease from now on.
+    match cfg.handoff.as_ref().map(|h| h.slot.lock()) {
+        Some(Ok(mut slot)) if slot.is_some() => {
+            if let Some(h) = slot.as_mut() {
+                h.leases.extend(leases);
+            }
+        }
+        _ => drop(leases),
+    }
 
     // If this run belongs to a coverage group and produced at least one
     // success, update the shared tracker: record the pre-declared
@@ -1891,6 +1956,8 @@ struct SlotBuildConfig<'a> {
     /// device site (where `_platform`/`_udid`/`_app` builtins are known).
     cli_vars: &'a [(String, String)],
     child_env: Option<&'a golem_common::command::ChildEnv>,
+    /// The only device this slot may use.
+    pin_udid: Option<&'a str>,
 }
 
 /// Prepare one slot for flow execution:
@@ -1936,6 +2003,7 @@ async fn setup_slot(
         max_device_wait,
         cli_vars,
         child_env,
+        pin_udid,
     } = *build;
     // Stub mode: no real device exists. Return a synthetic device and a
     // placeholder port, skipping discovery, allocation, boot, install, and
@@ -1968,6 +2036,7 @@ async fn setup_slot(
         let candidate = find_available_device(
             slot.platform,
             Some(slot),
+            pin_udid,
             create_if_missing,
             event_tx,
             &DeviceLookupCtx {
@@ -3539,6 +3608,7 @@ struct FlowRunPolicy {
     browser_headed: bool,
     dev: bool,
     child_env: Option<Arc<golem_common::command::ChildEnv>>,
+    handoff: Option<HandoffRequest>,
 }
 
 /// Whether this flow's browser runs headless.
@@ -3605,6 +3675,7 @@ async fn run_flow_on_device(
         browser_headed,
         dev,
         child_env,
+        handoff,
     } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -3998,18 +4069,86 @@ async fn run_flow_on_device(
         .as_ref()
         .and_then(|o| o.step_timeout)
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
-    let mut report = match execute_flow_with_teardown(
-        &flow,
-        driver.as_ref(),
-        &mut vars,
-        effective_start,
-        base_timeout,
-        &mut ctx,
-        Some(&barrier),
-        !no_teardown,
-    )
-    .await
-    {
+    // A handed-off run stops short of the teardown: the session that takes
+    // the device runs it when it closes. It still ends as `golem run` would
+    // when the flow fails and `break_on_failure` does not keep the device.
+    let flow_result = match handoff.as_ref() {
+        None => {
+            execute_flow_with_teardown(
+                &flow,
+                driver.as_ref(),
+                &mut vars,
+                effective_start,
+                base_timeout,
+                &mut ctx,
+                Some(&barrier),
+                !no_teardown,
+            )
+            .await
+        }
+        Some(h) => {
+            ctx.stop_at = h.stop_at.clone();
+            let mut result = golem_runner::executor::execute_flow(
+                &flow,
+                driver.as_ref(),
+                &mut vars,
+                effective_start,
+                base_timeout,
+                &mut ctx,
+                Some(&barrier),
+            )
+            .await;
+            let passed = result.as_ref().is_ok_and(|r| r.success);
+            if passed || h.break_on_failure {
+                let failure = match &result {
+                    Ok(r) if !r.success => Some(format!(
+                        "{}:{} {} {}",
+                        r.failed_block.as_deref().unwrap_or("?"),
+                        r.failed_step.map_or(0, |i| i + 1),
+                        r.failed_action.as_deref().unwrap_or("?"),
+                        r.failed_reason.as_deref().unwrap_or_default()
+                    )),
+                    Err(e) => Some(format!("{e:#}")),
+                    _ => None,
+                };
+                let rng = std::mem::replace(
+                    &mut *ctx.rng.lock().unwrap_or_else(|e| e.into_inner()),
+                    golem_vars::seed::FakeRng::from_optional_seed(None),
+                );
+                if let Ok(mut slot) = h.slot.lock() {
+                    *slot = Some(Handoff {
+                        device: device.clone(),
+                        driver: driver.clone(),
+                        leases: Vec::new(),
+                        vars: std::mem::take(&mut vars),
+                        rng,
+                        step_count: ctx.global_step_index,
+                        browser: ctx.browser.clone(),
+                        flow: flow.clone(),
+                        base_timeout_ms: base_timeout,
+                        stopped_at: ctx.stopped_at.clone(),
+                        failure,
+                    });
+                }
+            } else {
+                golem_runner::executor::finish_flow(
+                    &flow,
+                    driver.as_ref(),
+                    &mut vars,
+                    base_timeout,
+                    &ctx,
+                    !no_teardown,
+                    &mut result,
+                )
+                .await;
+            }
+            result
+        }
+    };
+    let handed_off = handoff
+        .as_ref()
+        .is_some_and(|h| h.slot.lock().is_ok_and(|s| s.is_some()));
+    let mut report = match flow_result {
         Ok(result) => {
             // Barrier-abort and warning eprintlns removed here: the
             // FlowFinished event carries success+barrier_aborted, the
@@ -4086,6 +4225,11 @@ async fn run_flow_on_device(
             }
         }
     };
+
+    // The session works on from this state.
+    if handed_off {
+        return report;
+    }
 
     // Reset device-level state between flows so the next flow starts
     // from a known baseline — dark mode off, location 0/0, no stale
@@ -4225,6 +4369,7 @@ fn prefer_virtual<'a>(free: &[&'a DeviceInfo]) -> Vec<&'a DeviceInfo> {
 async fn find_available_device(
     platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
+    pin_udid: Option<&str>,
     create_if_missing: bool,
     event_tx: &golem_events::channel::EventSender,
     lookup: &DeviceLookupCtx<'_>,
@@ -4244,6 +4389,7 @@ async fn find_available_device(
             Some(s) => device_matches_slot(d, s),
             None => true,
         })
+        .filter(|d| pin_udid.is_none_or(|u| d.udid == u))
         .collect();
 
     // Separate booted from shutdown

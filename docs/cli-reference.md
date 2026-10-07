@@ -187,14 +187,21 @@ The server starts without device work. The session runs in the daemon and belong
 | Tool | Description |
 |------|-------------|
 | `devices(platform?)` | Every device, with its state and the port of a live companion |
-| `session_open(platform?, device?, bundle?, app?, project?, idle_timeout_s?)` | Open a session on one device and app. It ends after `idle_timeout_s` (default 1800) with no operation |
-| `session_close` | Close the session and release the device |
+| `session_open(platform?, device?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
+| `session_close(teardown?)` | Close the session and release the device. For a session opened from a flow, the flow's `[[teardown]]` runs unless `teardown = false` |
 | `act(step, comment?, tree?, format?)` | Run one step, as in `golem do`. `tree = true` adds the visible tree after the step |
 | `probe(selector, timeout_ms?, format?)` | As `golem probe` |
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |
 | `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
 | `actions_help(action?)` | The step notation and every action, or one action's reference |
+
+**A session from a flow.** `session_open(flow = "e2e/checkout.test.toml")` runs the flow on the chosen device, then keeps the device, the driver and the flow's variables for the session:
+
+- `stop_at = "block"` or `"block:step"` stops before that step (steps count from 1). Without it, the session opens where the flow ends.
+- `break_on_failure = true` opens the session at a failed step. Without it, a failed flow ends as `golem run` would, teardown included, and no session opens.
+- The flow's `[[teardown]]` runs only on `session_close`. A dropped connection or the idle timeout skips it, and `teardown = false` skips it on every end.
+- The flow must run once on one device: a flow that expands to several runs or devices is refused, and so is a `stop_at` in a `for_each` block.
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 

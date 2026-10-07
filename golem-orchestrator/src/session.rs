@@ -39,6 +39,27 @@ pub struct OpenRequest {
     pub child_env: Option<golem_common::command::ChildEnv>,
     /// Ends the session after this long with no operation.
     pub idle_timeout: Duration,
+    /// Run this flow first, and open the session where it stops.
+    pub flow: Option<FlowOpen>,
+}
+
+/// A flow to run before the session takes over its device.
+#[derive(Debug, Clone)]
+pub struct FlowOpen {
+    pub path: PathBuf,
+    /// Stop before this step; without it, the session opens where the flow
+    /// ends.
+    pub stop_at: Option<golem_runner::context::StopAt>,
+    /// Keep the session open at a failed step. Without it, a failure ends
+    /// the flow as `golem run` would, teardown included, and no session
+    /// opens.
+    pub break_on_failure: bool,
+    /// Skip the flow's `[[teardown]]` on every way the session ends.
+    pub no_teardown: bool,
+    pub vars: Vec<(String, String)>,
+    /// Run the flow on the device-free stub driver. Debug builds only, for
+    /// the tests.
+    pub stub: bool,
 }
 
 /// One operation.
@@ -85,6 +106,14 @@ pub enum OpResult {
     },
     Screenshot {
         png: Vec<u8>,
+    },
+    /// The session holds its device now.
+    Opened {
+        device: String,
+        udid: String,
+        bundle: String,
+        /// For a flow open: the flow run's TOON report, and where it stopped.
+        flow: Option<String>,
     },
     /// The operation could not run, or the driver failed under it.
     Failed(String),
@@ -153,7 +182,11 @@ pub struct LogEntry {
 struct Work {
     device: DeviceInfo,
     driver: Arc<dyn PlatformDriver>,
-    lease: Option<DeviceLease>,
+    leases: Vec<DeviceLease>,
+    /// The flow the session opened from: its teardown runs on close.
+    flow: Option<golem_parser::FlowFile>,
+    base_timeout_ms: u64,
+    teardown_on_close: bool,
     project_root: PathBuf,
     capture: golem_runner::capture::CaptureConfig,
     apps: Vec<golem_parser::AppConfig>,
@@ -167,83 +200,62 @@ struct Work {
 
 /// An open session.
 pub struct Session {
-    device: DeviceInfo,
-    bundle: String,
     idle_timeout: Duration,
     status: Arc<Mutex<Status>>,
     changed: Arc<tokio::sync::Notify>,
-    work: Arc<tokio::sync::Mutex<Work>>,
+    /// `None` until the session holds a device.
+    work: Arc<tokio::sync::Mutex<Option<Work>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     next_op: AtomicU64,
 }
 
 impl Session {
-    /// Select the device and app, lease the device, then connect to its
-    /// companion: the lease comes before any companion work, as for
-    /// `golem do`.
-    pub async fn open(req: OpenRequest, resource_mgr: &Arc<ResourceManager>) -> Result<Session> {
-        let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
-        let selection = target::select(&req.query, &project.apps).await?;
-        let lease = crate::interactive::lease(resource_mgr, &selection.device)?;
-        let target = target::connect(selection).await?;
-        let driver: Arc<dyn PlatformDriver> = Arc::from(target.driver());
-        Ok(Self::from_parts(
-            Parts {
-                device: target.device,
-                bundle: target.bundle,
-                driver,
-                lease: Some(lease),
-                project_root: req.project_root,
-                apps: crate::interactive::app_configs(&project.apps),
-                child_env: req.child_env,
+    /// Start opening a session. The open is the session's first operation,
+    /// so `wait`, `status` and `cancel` work while it runs: a flow open can
+    /// build, install and boot for minutes.
+    pub fn start(
+        req: OpenRequest,
+        resource_mgr: Arc<ResourceManager>,
+        install_cache: golem_runner::installer::InstallCache,
+    ) -> Session {
+        let session = Session::empty(req.idle_timeout);
+        let phase = session.status.clone();
+        session.run(
+            "session_open",
+            match &req.flow {
+                Some(f) => format!("opening from {}", f.path.display()),
+                None => "opening".to_string(),
             },
-            req.idle_timeout,
-        ))
+            move |slot| {
+                Box::pin(async move { open(req, resource_mgr, install_cache, slot, phase).await })
+            },
+        );
+        session
     }
 
     /// A session on an already-resolved device and driver.
     pub fn from_parts(parts: Parts, idle_timeout: Duration) -> Session {
-        let capture = golem_runner::capture::CaptureConfig {
-            screenshot_on_failure: false,
-            output_dir: parts.project_root.join(".golem/results"),
-            ..Default::default()
-        };
-        let mut vars = golem_vars::VariableStore::new();
-        vars.push_scope(golem_vars::Scope::new(golem_vars::ScopeLevel::Flow));
+        let session = Session::empty(idle_timeout);
+        *session
+            .work
+            .try_lock()
+            .unwrap_or_else(|_| unreachable!("a new session's work is unlocked")) =
+            Some(Work::from_parts(parts));
+        session
+    }
+
+    fn empty(idle_timeout: Duration) -> Session {
         Session {
-            device: parts.device.clone(),
-            bundle: parts.bundle,
             idle_timeout,
             status: Arc::new(Mutex::new(Status::Idle {
                 since: Instant::now(),
                 last: None,
             })),
             changed: Arc::new(tokio::sync::Notify::new()),
-            work: Arc::new(tokio::sync::Mutex::new(Work {
-                device: parts.device,
-                driver: parts.driver,
-                lease: parts.lease,
-                project_root: parts.project_root,
-                capture,
-                apps: parts.apps,
-                child_env: parts.child_env,
-                vars,
-                step_count: 0,
-                rng: golem_vars::seed::FakeRng::from_optional_seed(None),
-                browser: Default::default(),
-                log: Vec::new(),
-            })),
+            work: Arc::new(tokio::sync::Mutex::new(None)),
             task: Mutex::new(None),
             next_op: AtomicU64::new(1),
         }
-    }
-
-    pub fn device(&self) -> &DeviceInfo {
-        &self.device
-    }
-
-    pub fn bundle(&self) -> &str {
-        &self.bundle
     }
 
     pub fn idle_timeout(&self) -> Duration {
@@ -252,6 +264,40 @@ impl Session {
 
     /// Start `op` unless another is running or the session has ended.
     pub fn begin(&self, op: Op) -> Begin {
+        let name = op.name();
+        let phase = phase_of(&op);
+        self.run_checked(name, phase, move |slot| {
+            Box::pin(async move {
+                let mut slot = slot;
+                let Some(work) = slot.as_mut() else {
+                    return OpResult::Failed("the session holds no device".into());
+                };
+                let result = run_op(work, &op).await;
+                work.log.push(LogEntry {
+                    op_id: 0,
+                    op: op.name(),
+                    summary: summary_of(&op, &result),
+                    at: std::time::SystemTime::now(),
+                });
+                result
+            })
+        })
+    }
+
+    fn run<F>(&self, name: &'static str, phase: String, body: F) -> u64
+    where
+        F: FnOnce(tokio::sync::OwnedMutexGuard<Option<Work>>) -> OpFuture + Send + 'static,
+    {
+        match self.run_checked(name, phase, body) {
+            Begin::Started(id) => id,
+            _ => unreachable!("a new session is idle"),
+        }
+    }
+
+    fn run_checked<F>(&self, name: &'static str, phase: String, body: F) -> Begin
+    where
+        F: FnOnce(tokio::sync::OwnedMutexGuard<Option<Work>>) -> OpFuture + Send + 'static,
+    {
         let op_id = {
             let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
             match &*status {
@@ -262,8 +308,8 @@ impl Session {
             let op_id = self.next_op.fetch_add(1, Ordering::Relaxed);
             *status = Status::Busy(Running {
                 op_id,
-                op: op.name(),
-                phase: phase_of(&op),
+                op: name,
+                phase,
                 started: Instant::now(),
             });
             op_id
@@ -272,16 +318,8 @@ impl Session {
         let changed = self.changed.clone();
         let work = self.work.clone();
         let task = tokio::spawn(async move {
-            let mut work = work.lock_owned().await;
-            let name = op.name();
-            let result = run_op(&mut work, &op).await;
-            work.log.push(LogEntry {
-                op_id,
-                op: name,
-                summary: summary_of(&op, &result),
-                at: std::time::SystemTime::now(),
-            });
-            drop(work);
+            let slot = work.lock_owned().await;
+            let result = body(slot).await;
             finish(
                 &status,
                 &changed,
@@ -352,21 +390,28 @@ impl Session {
         true
     }
 
-    /// End the session: stop any operation, then release the device. The
-    /// device is not shut down: the daemon does that when it exits.
-    pub async fn close(&self, reason: &str) {
+    /// End the session: stop any operation, run the flow's teardown when
+    /// `run_teardown` (an explicit close) and the session opened from a flow,
+    /// close its browser, then release the device. The device is not shut
+    /// down: the daemon does that when it exits.
+    pub async fn close(&self, reason: &str, run_teardown: bool) -> Option<String> {
         self.cancel().await;
         {
             let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
             if matches!(&*status, Status::Ended(_)) {
-                return;
+                return None;
             }
             *status = Status::Ended(reason.to_string());
         }
         self.changed.notify_waiters();
-        let mut work = self.work.lock().await;
-        golem_driver::ime::restore(std::slice::from_ref(&work.device.udid)).await;
-        work.lease = None;
+        let mut slot = self.work.lock().await;
+        let mut notes = None;
+        if let Some(work) = slot.as_mut() {
+            notes = finish_work(work, run_teardown).await;
+            golem_driver::ime::restore(std::slice::from_ref(&work.device.udid)).await;
+        }
+        *slot = None;
+        notes
     }
 
     /// How long the session has had no operation running. Zero while one
@@ -385,9 +430,16 @@ impl Session {
 
     /// The operations so far, oldest first.
     pub async fn log(&self) -> Vec<LogEntry> {
-        self.work.lock().await.log.clone()
+        self.work
+            .lock()
+            .await
+            .as_ref()
+            .map(|w| w.log.clone())
+            .unwrap_or_default()
     }
 }
+
+type OpFuture = std::pin::Pin<Box<dyn std::future::Future<Output = OpResult> + Send>>;
 
 /// What [`Session::from_parts`] takes.
 pub struct Parts {
@@ -398,6 +450,401 @@ pub struct Parts {
     pub project_root: PathBuf,
     pub apps: Vec<golem_parser::AppConfig>,
     pub child_env: Option<golem_common::command::ChildEnv>,
+}
+
+impl Work {
+    fn from_parts(parts: Parts) -> Work {
+        let mut vars = golem_vars::VariableStore::new();
+        vars.push_scope(golem_vars::Scope::new(golem_vars::ScopeLevel::Flow));
+        Work {
+            capture: capture_for(&parts.project_root),
+            device: parts.device,
+            driver: parts.driver,
+            leases: parts.lease.into_iter().collect(),
+            flow: None,
+            base_timeout_ms: golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS,
+            teardown_on_close: false,
+            project_root: parts.project_root,
+            apps: parts.apps,
+            child_env: parts.child_env,
+            vars,
+            step_count: 0,
+            rng: golem_vars::seed::FakeRng::from_optional_seed(None),
+            browser: Default::default(),
+            log: Vec::new(),
+        }
+    }
+}
+
+fn capture_for(project_root: &std::path::Path) -> golem_runner::capture::CaptureConfig {
+    golem_runner::capture::CaptureConfig {
+        screenshot_on_failure: false,
+        output_dir: project_root.join(".golem/results"),
+        ..Default::default()
+    }
+}
+
+/// Run the teardown when asked and there is one, then close the browser.
+/// Returns the teardown's notes.
+async fn finish_work(work: &mut Work, run_teardown: bool) -> Option<String> {
+    let Work {
+        device,
+        driver,
+        project_root,
+        capture,
+        child_env,
+        vars,
+        step_count,
+        browser,
+        flow,
+        base_timeout_ms,
+        teardown_on_close,
+        ..
+    } = work;
+    let empty = golem_parser::FlowFile {
+        flow: golem_parser::FlowMeta {
+            name: "session".into(),
+            start: None,
+            seed: None,
+            tags: Vec::new(),
+            explicit_only: false,
+            vars: Default::default(),
+            apps: Vec::new(),
+            options: None,
+        },
+        block: Vec::new(),
+        data: Vec::new(),
+        teardown: Vec::new(),
+    };
+    let flow = flow.as_ref().unwrap_or(&empty);
+    let ctx = golem_runner::context::ExecutionContext {
+        device: Some(device),
+        child_env: child_env.as_ref(),
+        global_step_index: *step_count,
+        browser: browser.clone(),
+        ..golem_runner::context::ExecutionContext::new(
+            project_root,
+            project_root,
+            capture,
+            "session",
+        )
+    };
+    let mut result = Ok(golem_runner::executor::FlowResult {
+        success: true,
+        warnings: Vec::new(),
+        failed_step: None,
+        failed_block: None,
+        failed_action: None,
+        failed_reason: None,
+        failed_code: None,
+        barrier_aborted: false,
+        perf_snapshots: Vec::new(),
+        recordings: Vec::new(),
+        a11y_audits: Vec::new(),
+    });
+    let teardown = run_teardown && *teardown_on_close && !flow.teardown.is_empty();
+    golem_runner::executor::finish_flow(
+        flow,
+        driver.as_ref(),
+        vars,
+        *base_timeout_ms,
+        &ctx,
+        teardown,
+        &mut result,
+    )
+    .await;
+    let warnings = result.map(|r| r.warnings).unwrap_or_default();
+    match (teardown, warnings.is_empty()) {
+        (false, _) => None,
+        (true, true) => Some("teardown ran".into()),
+        (true, false) => Some(format!("teardown ran: {}", warnings.join("; "))),
+    }
+}
+
+/// The session open: select, lease, connect; or for a flow, run it as a
+/// one-flow suite that hands its device over.
+async fn open(
+    req: OpenRequest,
+    resource_mgr: Arc<ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
+    mut slot: tokio::sync::OwnedMutexGuard<Option<Work>>,
+    status: Arc<Mutex<Status>>,
+) -> OpResult {
+    let result = match req.flow.clone() {
+        None => open_device(&req, &resource_mgr).await,
+        Some(f) => open_flow(&req, f, resource_mgr, install_cache, &status).await,
+    };
+    match result {
+        Ok((work, flow_report)) => {
+            let out = OpResult::Opened {
+                device: format!("{}/{}", work.device.platform, work.device.name),
+                udid: work.device.udid.clone(),
+                bundle: work
+                    .apps
+                    .first()
+                    .and_then(|a| a.bundle.clone())
+                    .unwrap_or_default(),
+                flow: flow_report,
+            };
+            *slot = Some(work);
+            out
+        }
+        Err(e) => OpResult::Failed(format!("{e:#}")),
+    }
+}
+
+async fn open_device(
+    req: &OpenRequest,
+    resource_mgr: &Arc<ResourceManager>,
+) -> Result<(Work, Option<String>)> {
+    let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
+    let selection = target::select(&req.query, &project.apps).await?;
+    let lease = crate::interactive::lease(resource_mgr, &selection.device)?;
+    let target = target::connect(selection).await?;
+    let mut apps = crate::interactive::app_configs(&project.apps);
+    // The app the session targets first, so its bundle is the one reported.
+    if let Some(i) = apps
+        .iter()
+        .position(|a| a.bundle.as_deref() == Some(target.bundle.as_str()))
+    {
+        apps.swap(0, i);
+    } else if !target.bundle.is_empty() {
+        apps.insert(0, bundle_app(&target.bundle));
+    }
+    let driver: Arc<dyn PlatformDriver> = Arc::from(target.driver());
+    Ok((
+        Work::from_parts(Parts {
+            device: target.device,
+            bundle: target.bundle,
+            driver,
+            lease: Some(lease),
+            project_root: req.project_root.clone(),
+            apps,
+            child_env: req.child_env.clone(),
+        }),
+        None,
+    ))
+}
+
+fn bundle_app(bundle: &str) -> golem_parser::AppConfig {
+    golem_parser::AppConfig {
+        name: bundle.into(),
+        bundle: Some(bundle.into()),
+        devices: Vec::new(),
+        install_script: None,
+        install_timeout_ms: None,
+        install_env: None,
+        profile: None,
+        permissions: Default::default(),
+    }
+}
+
+async fn open_flow(
+    req: &OpenRequest,
+    f: FlowOpen,
+    resource_mgr: Arc<ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
+    status: &Arc<Mutex<Status>>,
+) -> Result<(Work, Option<String>)> {
+    let path = if f.path.is_absolute() {
+        f.path.clone()
+    } else {
+        req.child_env
+            .as_ref()
+            .and_then(|e| e.cwd.clone())
+            .unwrap_or_else(|| req.project_root.clone())
+            .join(&f.path)
+    };
+    let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
+    let stub = cfg!(debug_assertions) && f.stub;
+    let (platform, pin_udid) = if stub {
+        (
+            req.query
+                .platform
+                .unwrap_or(golem_devices::Platform::Android),
+            None,
+        )
+    } else {
+        let selection = target::select(&req.query, &project.apps).await?;
+        (selection.device.platform, Some(selection.device.udid))
+    };
+    check_flow(
+        &path,
+        &project.apps,
+        &req.project_root,
+        platform,
+        f.stop_at.as_ref(),
+    )
+    .await?;
+
+    let slot: Arc<std::sync::Mutex<Option<crate::suite::Handoff>>> = Arc::default();
+    let config = crate::suite::SuiteConfig {
+        platform: Some(platform),
+        stub_fail_on_runs: stub.then(Vec::new),
+        vars: f.vars.clone(),
+        output_dir: req.project_root.join(".golem/results"),
+        project_root: req.project_root.clone(),
+        project_apps: project.apps.clone(),
+        device_settings: project.device_settings.clone(),
+        no_teardown: f.no_teardown,
+        record: false,
+        no_record: true,
+        trace: false,
+        no_results: true,
+        stream_human: false,
+        child_env: req.child_env.clone().map(Arc::new),
+        handoff: Some(crate::suite::HandoffRequest {
+            slot: slot.clone(),
+            stop_at: f.stop_at.clone(),
+            break_on_failure: f.break_on_failure,
+            pin_udid,
+        }),
+        ..crate::suite::SuiteConfig::default()
+    };
+    let (events, subs) = golem_events::channel::event_channel();
+    let mut runner =
+        crate::suite::SuiteRunner::with_resource_manager(config, resource_mgr, install_cache);
+    runner.event_forwarder = Some(events);
+    let phase = tokio::spawn(follow_phase(subs.subscribe(), status.clone()));
+    drop(subs);
+    let report = runner.run_suite(std::slice::from_ref(&path)).await;
+    drop(runner);
+    phase.abort();
+    let report = report?;
+    // The legend lines (`# …`) explain TOON to a first-time reader; a
+    // session client reads many of these.
+    let toon = golem_report::output::render(&report, &golem_report::output::OutputFormat::Toon)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.starts_with("# "))
+        .map(|l| format!("{l}\n"))
+        .collect::<String>();
+    let handoff = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let Some(h) = handoff else {
+        anyhow::bail!("the flow did not reach the session, so no session opened:\n{toon}");
+    };
+    let mut summary = toon;
+    match (&h.failure, &h.stopped_at) {
+        (Some(failure), _) => {
+            summary.push_str(&format!("session open at the failed step: {failure}\n"))
+        }
+        (None, Some(stop)) => summary.push_str(&format!("session open before {stop}\n")),
+        (None, None) => summary.push_str("session open at the end of the flow\n"),
+    }
+    let apps = h.flow.flow.apps.clone();
+    let mut work = Work::from_parts(Parts {
+        device: h.device,
+        bundle: String::new(),
+        driver: h.driver,
+        lease: None,
+        project_root: req.project_root.clone(),
+        apps,
+        child_env: req.child_env.clone(),
+    });
+    work.leases = h.leases;
+    work.vars = h.vars;
+    work.rng = h.rng;
+    work.step_count = h.step_count;
+    work.browser = h.browser;
+    work.base_timeout_ms = h.base_timeout_ms;
+    work.teardown_on_close = !f.no_teardown;
+    work.flow = Some(h.flow);
+    Ok((work, Some(summary)))
+}
+
+/// Refuse a flow that would not run as one session on `device`, and a
+/// `stop_at` it does not have, before any device work.
+async fn check_flow(
+    path: &std::path::Path,
+    apps: &[golem_parser::ProjectAppConfig],
+    project_root: &std::path::Path,
+    platform: golem_devices::Platform,
+    stop_at: Option<&golem_runner::context::StopAt>,
+) -> Result<()> {
+    let planned = crate::plan::plan(
+        &[path.to_path_buf()],
+        apps,
+        project_root,
+        Some(platform),
+        None,
+        1,
+        None,
+        false,
+    )
+    .await?;
+    if let Some(failure) = planned.parse_failures.first() {
+        anyhow::bail!("{}: {}", failure.path.display(), failure.error);
+    }
+    match planned.flow_runs.as_slice() {
+        [run] if run.slots.len() == 1 => {}
+        [run] => anyhow::bail!(
+            "the flow drives {} devices at once; a session holds one",
+            run.slots.len()
+        ),
+        runs => anyhow::bail!(
+            "the flow expands to {} runs on {}; a session runs it once on one device",
+            runs.len(),
+            platform
+        ),
+    }
+    let Some(stop) = stop_at else { return Ok(()) };
+    let flow = &planned.flows[0].flow;
+    let Some(block) = flow
+        .block
+        .iter()
+        .find(|b| b.name.as_deref() == Some(stop.block.as_str()))
+    else {
+        let names: Vec<&str> = flow
+            .block
+            .iter()
+            .filter_map(|b| b.name.as_deref())
+            .collect();
+        anyhow::bail!(
+            "stop_at {stop}: no block named {:?}; blocks: {}",
+            stop.block,
+            names.join(", ")
+        );
+    };
+    if block.for_each.is_some() {
+        anyhow::bail!("stop_at {stop}: {:?} is a for_each block, whose row values would not reach the session", stop.block);
+    }
+    if stop.step > block.steps.len() {
+        anyhow::bail!(
+            "stop_at {stop}: block {:?} has {} step(s)",
+            stop.block,
+            block.steps.len()
+        );
+    }
+    Ok(())
+}
+
+/// Keep the open's phase current from the flow run's events.
+async fn follow_phase(
+    mut events: tokio::sync::broadcast::Receiver<golem_events::Event>,
+    status: Arc<Mutex<Status>>,
+) {
+    while let Ok(event) = events.recv().await {
+        let phase = match &event.kind {
+            golem_events::EventKind::InstallStarted { app_name, .. } => {
+                format!("installing {app_name}")
+            }
+            golem_events::EventKind::StepStarted {
+                block_name,
+                step_index_in_block,
+                action,
+                ..
+            } => format!(
+                "running flow, {block_name}:{} {action}",
+                step_index_in_block + 1
+            ),
+            _ => continue,
+        };
+        if let Ok(mut s) = status.lock() {
+            if let Status::Busy(r) = &mut *s {
+                r.phase = phase;
+            }
+        }
+    }
 }
 
 fn finish(status: &Mutex<Status>, changed: &tokio::sync::Notify, outcome: Outcome) {
@@ -683,7 +1130,7 @@ mod tests {
         assert_eq!(tap.op_id, 2, "op ids count up");
         let log = s.log().await;
         assert_eq!(log.len(), 2);
-        s.close("closed").await;
+        s.close("closed", false).await;
         assert!(matches!(s.status(), Status::Ended(_)));
     }
 
@@ -826,12 +1273,155 @@ mod tests {
             rm.try_allocate(&device(), 0).is_err(),
             "the session SHALL hold the device"
         );
-        s.close("client disconnected").await;
+        s.close("client disconnected", false).await;
         assert_eq!(rm.active_count(), 0, "closing SHALL release the device");
         match s.begin(Op::Screenshot) {
             Begin::Ended(reason) => assert_eq!(reason, "client disconnected"),
             other => panic!("{other:?}"),
         }
         assert!(matches!(s.wait(Duration::ZERO).await, Waited::Ended(_)));
+    }
+
+    fn flow_dir() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let marker = dir.path().join("teardown.marker");
+        let flow = format!(
+            r#"[flow]
+name = "Session flow"
+[flow.vars]
+target = "Submit"
+[flow.options]
+a11y = "off"
+perf = false
+
+[[flow.apps]]
+name = "app"
+bundle = "{bundle}"
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "one"
+steps = [ {{ action = "assert_visible", on_text = "${{target}}" }} ]
+
+[[block]]
+name = "two"
+steps = [
+  {{ action = "assert_visible", on_text = "Submit" }},
+  {{ action = "fail", message = "the second step of two" }},
+]
+
+[[teardown]]
+steps = [ {{ action = "bash", run = "touch {marker}" }} ]
+"#,
+            bundle = golem_driver::stub::STUB_BUNDLE_ID,
+            marker = marker.display(),
+        );
+        std::fs::write(dir.path().join("s.test.toml"), flow).expect("flow");
+        (dir, marker)
+    }
+
+    fn open_flow(dir: &std::path::Path, stop_at: Option<&str>, break_on_failure: bool) -> Session {
+        Session::start(
+            OpenRequest {
+                query: TargetQuery::default(),
+                project_root: dir.to_path_buf(),
+                child_env: None,
+                idle_timeout: DEFAULT_IDLE_TIMEOUT,
+                flow: Some(FlowOpen {
+                    path: dir.join("s.test.toml"),
+                    stop_at: stop_at
+                        .map(|s| golem_runner::context::StopAt::parse(s).expect("stop")),
+                    break_on_failure,
+                    no_teardown: false,
+                    vars: Vec::new(),
+                    stub: true,
+                }),
+            },
+            Arc::new(ResourceManager::new(
+                golem_devices::concurrency::ConcurrencyConfig::default(),
+            )),
+            golem_runner::installer::InstallCache::new(),
+        )
+    }
+
+    async fn opened(s: &Session) -> String {
+        match s.wait(Duration::from_secs(30)).await {
+            Waited::Done(Outcome {
+                result: OpResult::Opened { flow: Some(f), .. },
+                ..
+            }) => f,
+            other => panic!("SHALL open: {other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_flow_open_stops_at_the_step_and_keeps_the_flow_vars() {
+        let (dir, marker) = flow_dir();
+        let s = open_flow(dir.path(), Some("two:2"), false);
+        let summary = opened(&s).await;
+        assert!(summary.contains("session open before two:2"), "{summary}");
+        let next = run(
+            &s,
+            act(r#"{ action = "assert_visible", on_text = "${target}" }"#),
+        )
+        .await;
+        assert!(
+            matches!(next.result, OpResult::Act { passed: true, .. }),
+            "{next:?}"
+        );
+        assert!(!marker.exists(), "no teardown while the session is open");
+        let notes = s.close("closed", true).await;
+        assert_eq!(notes.as_deref(), Some("teardown ran"));
+        assert!(marker.exists(), "an explicit close SHALL run the teardown");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn break_on_failure_opens_at_the_failed_step_and_a_disconnect_skips_teardown() {
+        let (dir, marker) = flow_dir();
+        let s = open_flow(dir.path(), None, true);
+        let summary = opened(&s).await;
+        assert!(
+            summary.contains("session open at the failed step: two:2 fail"),
+            "{summary}"
+        );
+        s.close("client disconnected", false).await;
+        assert!(!marker.exists(), "a disconnect SHALL skip the teardown");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn without_break_on_failure_a_failed_flow_opens_nothing_and_tears_down() {
+        let (dir, marker) = flow_dir();
+        let s = open_flow(dir.path(), None, false);
+        match s.wait(Duration::from_secs(30)).await {
+            Waited::Done(Outcome {
+                result: OpResult::Failed(e),
+                ..
+            }) => assert!(e.contains("no session opened"), "{e}"),
+            other => panic!("SHALL fail: {other:?}"),
+        }
+        assert!(
+            marker.exists(),
+            "the flow SHALL end as golem run would, teardown included"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_stop_at_the_flow_does_not_have_is_refused_before_device_work() {
+        let (dir, _) = flow_dir();
+        for (stop, want) in [
+            ("three", "no block named \"three\""),
+            ("two:5", "has 2 step(s)"),
+        ] {
+            let s = open_flow(dir.path(), Some(stop), false);
+            match s.wait(Duration::from_secs(30)).await {
+                Waited::Done(Outcome {
+                    result: OpResult::Failed(e),
+                    ..
+                }) => assert!(e.contains(want), "{stop}: {e}"),
+                other => panic!("{stop} SHALL fail: {other:?}"),
+            }
+        }
     }
 }

@@ -95,6 +95,52 @@ pub struct ExecutionContext<'a> {
     /// The environment and working directory `bash` and `run` start from,
     /// in place of this process's own. `None` inherits.
     pub child_env: Option<&'a golem_common::command::ChildEnv>,
+    /// Stop the flow before this step, the first time it is reached: a
+    /// session opened from a flow takes over the device there.
+    pub stop_at: Option<StopAt>,
+    /// Where the flow stopped for `stop_at`, once it has.
+    pub stopped_at: Option<StopAt>,
+}
+
+/// A step to stop before: `block` and its 1-based `step`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StopAt {
+    pub block: String,
+    pub step: usize,
+}
+
+impl StopAt {
+    /// Parse `block` or `block:step` (steps count from 1; `block` alone is
+    /// its first step).
+    pub fn parse(s: &str) -> anyhow::Result<Self> {
+        let (block, step) = match s.rsplit_once(':') {
+            Some((b, n)) => (
+                b,
+                n.parse::<usize>().ok().filter(|n| *n >= 1).ok_or_else(|| {
+                    anyhow::anyhow!("stop_at {s:?}: the step after ':' counts from 1")
+                })?,
+            ),
+            None => (s, 1),
+        };
+        if block.is_empty() {
+            anyhow::bail!("stop_at {s:?} names no block");
+        }
+        Ok(StopAt {
+            block: block.to_string(),
+            step,
+        })
+    }
+
+    /// Whether the step at 0-based `index` in `block` is this one.
+    pub fn matches(&self, block: Option<&str>, index: usize) -> bool {
+        block == Some(self.block.as_str()) && index + 1 == self.step
+    }
+}
+
+impl std::fmt::Display for StopAt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.block, self.step)
+    }
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -134,6 +180,8 @@ impl<'a> ExecutionContext<'a> {
             recovery: None,
             substep_log: Mutex::new(None),
             child_env: None,
+            stop_at: None,
+            stopped_at: None,
         }
     }
 }
