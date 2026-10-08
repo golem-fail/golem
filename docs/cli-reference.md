@@ -213,6 +213,11 @@ The server starts without device work.
 | `data_add(row)` | Add a `[[data]]` row |
 | `comment_add(text)` | Add a comment line where the next step goes |
 | `record_only(step, comment?)` | Record a step without running it, marked `# unverified`, for a path the session does not take |
+| `step_edit(at, step?, comment?)` | Change a draft step without running it. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified |
+| `step_delete(at)` | Remove a draft step and its comment. The next active step becomes unverified |
+| `step_move(from, to)` | Move a draft step so that it becomes step `to`. Where it left counts as a delete; the step is unverified where it lands |
+| `block_rename(name, to)` | Rename a draft block, and each `next`, `goto` and `[flow] start` that names it |
+| `block_delete(name)` | Remove a draft block and its steps. Refused while a `next`, `goto` or `[flow] start` names it |
 | `mixins_list` | The project's mixins and the vars each expects; run one with `act` and `action = "load_mixin"` |
 | `actions_help(action?)` | The step notation and every action, or one action's reference |
 

@@ -274,6 +274,42 @@ pub struct StepNoteParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct StepEditParams {
+    /// The step, as block:step (steps count from 1).
+    pub at: String,
+    /// The new step, as a TOML inline table. It does not run.
+    pub step: Option<String>,
+    /// The new comment above the step; "" removes it.
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct StepAtParams {
+    /// The step, as block:step (steps count from 1).
+    pub at: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct StepMoveParams {
+    /// The step to move, as block:step.
+    pub from: String,
+    /// Its address after the move, as block:step; one past a block's last step appends.
+    pub to: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockRenameParams {
+    pub name: String,
+    /// The new name.
+    pub to: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockNameParams {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct DataAddParams {
     /// One [[data]] row: { "email": "a@b.test", "name": "Ada" }.
     pub row: serde_json::Map<String, serde_json::Value>,
@@ -728,6 +764,61 @@ impl GolemMcp {
             serde_json::json!({ "edit": "record_only", "step": p.step, "comment": p.comment }),
         )
         .await
+    }
+
+    #[tool(
+        description = "Change a draft step without running it: the step, its comment, or both. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified."
+    )]
+    async fn step_edit(
+        &self,
+        Parameters(p): Parameters<StepEditParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "step_edit", "at": p.at, "step": p.step, "comment": p.comment }))
+            .await
+    }
+
+    #[tool(
+        description = "Remove a draft step and its comment. The next active step becomes unverified."
+    )]
+    async fn step_delete(
+        &self,
+        Parameters(p): Parameters<StepAtParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "step_delete", "at": p.at }))
+            .await
+    }
+
+    #[tool(
+        description = "Move a draft step. Where it left counts as a delete; the step is unverified where it lands."
+    )]
+    async fn step_move(
+        &self,
+        Parameters(p): Parameters<StepMoveParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "step_move", "from": p.from, "to": p.to }))
+            .await
+    }
+
+    #[tool(
+        description = "Rename a draft block, and each next, goto and [flow] start that names it."
+    )]
+    async fn block_rename(
+        &self,
+        Parameters(p): Parameters<BlockRenameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "block_rename", "name": p.name, "to": p.to }))
+            .await
+    }
+
+    #[tool(
+        description = "Remove a draft block and its steps. Refused while a next, goto or [flow] start names it."
+    )]
+    async fn block_delete(
+        &self,
+        Parameters(p): Parameters<BlockNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "block_delete", "name": p.name }))
+            .await
     }
 
     #[tool(

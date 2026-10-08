@@ -93,6 +93,11 @@ async fn every_tool_works_against_a_stub_session() {
         "data_add",
         "comment_add",
         "record_only",
+        "step_edit",
+        "step_delete",
+        "step_move",
+        "block_rename",
+        "block_delete",
         "mixins_list",
         "app_logs",
     ] {
@@ -297,6 +302,43 @@ async fn every_tool_works_against_a_stub_session() {
     assert_eq!(flow.block[0].next.as_deref(), Some("second"));
     assert_eq!(flow.teardown[0].steps.len(), 1);
     assert_eq!(flow.data.len(), 1);
+
+    for (tool, args, shows) in [
+        (
+            "step_edit",
+            serde_json::json!({ "at": "main:1", "comment": "Submit the form" }),
+            "main:1 ✓",
+        ),
+        (
+            "step_move",
+            serde_json::json!({ "from": "second:1", "to": "main:2" }),
+            "main:2 ?",
+        ),
+        (
+            "step_delete",
+            serde_json::json!({ "at": "main:2" }),
+            "main:1 ✓",
+        ),
+        (
+            "block_rename",
+            serde_json::json!({ "name": "second", "to": "third" }),
+            "[third]",
+        ),
+    ] {
+        let (c, err) = call(&client, tool, args).await;
+        assert!(!err, "{tool}: {c}");
+        let t = text_of(&c);
+        assert!(t.starts_with("draft updated\n"), "{tool}: {t}");
+        assert!(t.contains(shows), "{tool} SHALL show {shows}: {t}");
+    }
+    let (c, err) = call(
+        &client,
+        "block_delete",
+        serde_json::json!({ "name": "third" }),
+    )
+    .await;
+    assert!(err, "a block that next names SHALL stay: {c}");
+    assert!(text_of(&c).contains("block \"main\" next"), "{c}");
 
     let (c, err) = call(
         &client,

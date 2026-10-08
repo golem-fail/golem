@@ -244,6 +244,27 @@ pub enum DraftEdit {
         step: String,
         comment: Option<String>,
     },
+    /// Replace the step at `at` (`block:step`), its comment, or both.
+    StepEdit {
+        at: String,
+        step: Option<String>,
+        comment: Option<String>,
+    },
+    StepDelete {
+        at: String,
+    },
+    /// Move the step at `from` so that it becomes step `to`.
+    StepMove {
+        from: String,
+        to: String,
+    },
+    BlockRename {
+        name: String,
+        to: String,
+    },
+    BlockDelete {
+        name: String,
+    },
 }
 
 impl DraftEdit {
@@ -257,10 +278,47 @@ impl DraftEdit {
             DraftEdit::DataAdd(_) => "data_add",
             DraftEdit::CommentAdd(_) => "comment_add",
             DraftEdit::RecordOnly { .. } => "record_only",
+            DraftEdit::StepEdit { .. } => "step_edit",
+            DraftEdit::StepDelete { .. } => "step_delete",
+            DraftEdit::StepMove { .. } => "step_move",
+            DraftEdit::BlockRename { .. } => "block_rename",
+            DraftEdit::BlockDelete { .. } => "block_delete",
         }
     }
 
-    fn apply(&self, draft: &mut crate::draft::Draft) -> Result<()> {
+    /// Apply the edit. An edit to a step returns the listing around it.
+    fn apply(&self, draft: &mut crate::draft::Draft) -> Result<Option<String>> {
+        let near =
+            |draft: &crate::draft::Draft, (b, i): (usize, usize)| Some(draft.listing_near(b, i));
+        let line = |step: &str| golem_parser::inline::parse_step_inline(step).map(|p| p.line);
+        match self {
+            DraftEdit::StepEdit { at, step, comment } => {
+                let step = step.as_deref().map(line).transpose()?;
+                let place = draft.step_edit(at, step.as_deref(), comment.as_deref())?;
+                return Ok(near(draft, place));
+            }
+            DraftEdit::StepDelete { at } => {
+                let place = draft.step_delete(at)?;
+                return Ok(near(draft, place));
+            }
+            DraftEdit::StepMove { from, to } => {
+                let place = draft.step_move(from, to)?;
+                return Ok(near(draft, place));
+            }
+            DraftEdit::BlockRename { name, to } => {
+                let b = draft.block_rename(name, to)?;
+                return Ok(near(draft, (b, 0)));
+            }
+            DraftEdit::BlockDelete { name } => {
+                draft.block_delete(name)?;
+                return Ok(None);
+            }
+            _ => {}
+        }
+        self.apply_add(draft).map(|()| None)
+    }
+
+    fn apply_add(&self, draft: &mut crate::draft::Draft) -> Result<()> {
         // A step that will not run is still checked as one.
         let line = |step: &str| golem_parser::inline::parse_step_inline(step).map(|p| p.line);
         match self {
@@ -280,6 +338,11 @@ impl DraftEdit {
             DraftEdit::RecordOnly { step, comment } => {
                 draft.record_unverified(&line(step)?, comment.as_deref())
             }
+            DraftEdit::StepEdit { .. }
+            | DraftEdit::StepDelete { .. }
+            | DraftEdit::StepMove { .. }
+            | DraftEdit::BlockRename { .. }
+            | DraftEdit::BlockDelete { .. } => Ok(()),
         }
     }
 }
@@ -1435,10 +1498,11 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
         Op::Edit(edit) => match edit.apply(&mut work.draft) {
-            Ok(()) => OpResult::Edited(format!(
+            Ok(None) => OpResult::Edited(format!(
                 "draft updated · next step goes at {}",
                 work.draft.describe_insertion()
             )),
+            Ok(Some(listing)) => OpResult::Edited(format!("draft updated\n{listing}")),
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
         Op::Export { path, overwrite } => {
