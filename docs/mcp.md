@@ -27,6 +27,8 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
   - [A session from a flow](#a-session-from-a-flow)
   - [Long operations](#long-operations)
 - [The draft and step status](#the-draft-and-step-status)
+  - [Edit the draft](#edit-the-draft)
+  - [Blocks](#blocks)
 - [Example: write a new flow](#example-write-a-new-flow)
 - [Example: debug an app issue](#example-debug-an-app-issue)
 - [Upgrades and troubleshooting](#upgrades-and-troubleshooting)
@@ -430,6 +432,37 @@ Only `?` goes into the file, as a `# unverified` line above the step. A step tha
 - `limit`: show at most this many steps.
 
 Each block's header line is always in the list, with its `next` and its branches.
+
+### Edit the draft
+
+These tools change a step that is already in the draft. They do not run the step. Each tool takes a step address, and each returns the steps around the change, because the addresses after the change can shift.
+
+| Tool | What it does |
+|------|--------------|
+| `step_edit(at, step?, comment?)` | Replaces the step, its comment, or both. `comment = ""` removes the comment. |
+| `step_delete(at)` | Removes the step and its comment. |
+| `step_move(from, to)` | Moves the step so that its address becomes `to`. To add the step at the end of a block, give the address one past the block's last step. |
+
+The status rules are the same as for a new step:
+
+- `step_edit` keeps the status when only the comment changes, or when only the timeout gets larger. A step that passed with less time also passes with more. Any other change makes the step `?`, the next active step `?`, and the later steps `~`.
+- `step_delete` makes the next active step `?`, and the later steps `~`.
+- `step_move` counts as a delete where the step was, and the step is `?` where it lands. The step keeps its comments.
+
+The cursor does not move. `act` still records at the cursor, which is where the device is in the flow.
+
+### Blocks
+
+A flow is a list of blocks. After a block's last step, the flow goes to the first `branch` whose condition is true, else to `next`, else to the next block in the file.
+
+| Tool | What it does |
+|------|--------------|
+| `block_begin(name, next?)` | Moves the cursor to the end of block `name`. If the draft has no block with that name, the tool creates it at the end of the draft. |
+| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`) and a `goto`. |
+| `block_rename(name, to)` | Renames the block, and each `next`, `goto` and `[flow] start` that names it. |
+| `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
+
+A step that `act` records in a new block passed on the device. But the session does not run the other ways through a branch. Use `record_only` for the steps of a way that the session does not take.
 
 ## Example: write a new flow
 

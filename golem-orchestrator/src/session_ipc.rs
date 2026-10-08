@@ -456,6 +456,23 @@ fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEd
             step: need("step")?,
             comment: text("comment"),
         },
+        "step_edit" => DraftEdit::StepEdit {
+            at: need("at")?,
+            step: text("step"),
+            comment: text("comment"),
+        },
+        "step_delete" => DraftEdit::StepDelete { at: need("at")? },
+        "step_move" => DraftEdit::StepMove {
+            from: need("from")?,
+            to: need("to")?,
+        },
+        "block_rename" => DraftEdit::BlockRename {
+            name: need("name")?,
+            to: need("to")?,
+        },
+        "block_delete" => DraftEdit::BlockDelete {
+            name: need("name")?,
+        },
         other => anyhow::bail!("unknown draft edit: {other:?}"),
     })
 }

@@ -85,7 +85,7 @@ pub struct StepsQuery {
     pub limit: Option<usize>,
 }
 
-const MARKER: &str = "unverified";
+pub(super) const MARKER: &str = "unverified";
 const DEFAULT_CONTEXT: usize = 5;
 
 /// Parse a step address: `block` (its first step) or `block:step`, steps
@@ -112,11 +112,11 @@ impl Draft {
         self.blocks().map_or(0, |b| b.len())
     }
 
-    fn block_table(&self, b: usize) -> Option<&Table> {
+    pub(super) fn block_table(&self, b: usize) -> Option<&Table> {
         self.blocks()?.get(b)
     }
 
-    fn block_table_mut(&mut self, b: usize) -> Option<&mut Table> {
+    pub(super) fn block_table_mut(&mut self, b: usize) -> Option<&mut Table> {
         self.doc
             .get_mut("block")
             .and_then(Item::as_array_of_tables_mut)
@@ -180,7 +180,7 @@ impl Draft {
 
     /// The step's leading text: its comment lines and indent. In an inline
     /// array the text before the first newline ends the step before it.
-    fn step_prefix(&self, b: usize, i: usize) -> Option<(String, bool)> {
+    pub(super) fn step_prefix(&self, b: usize, i: usize) -> Option<(String, bool)> {
         match self.block_table(b)?.get("steps")? {
             Item::Value(Value::Array(a)) => {
                 let p = a.get(i)?.decor().prefix().and_then(|p| p.as_str());
@@ -195,7 +195,7 @@ impl Draft {
     }
 
     /// Change the step's leading text with `f(prefix, inline)`.
-    fn edit_step_prefix(
+    pub(super) fn edit_step_prefix(
         &mut self,
         b: usize,
         i: usize,
@@ -226,7 +226,7 @@ impl Draft {
             .is_some_and(|(p, inline)| own_lines(&p, inline).any(|l| is_marker(l).is_some()))
     }
 
-    fn step_value(&self, b: usize, i: usize) -> Option<InlineTable> {
+    pub(super) fn step_value(&self, b: usize, i: usize) -> Option<InlineTable> {
         match self.block_table(b)?.get("steps")? {
             Item::Value(Value::Array(a)) => a.get(i)?.as_inline_table().cloned(),
             Item::ArrayOfTables(a) => {
@@ -317,7 +317,7 @@ impl Draft {
     /// The blocks that can run right after block `b`, as the runner picks
     /// them: each `branch` target and the next block, else `next`, else
     /// the next block.
-    fn successors(&self, b: usize) -> Vec<usize> {
+    pub(super) fn successors(&self, b: usize) -> Vec<usize> {
         let Some(table) = self.block_table(b) else {
             return Vec::new();
         };
@@ -669,7 +669,7 @@ fn ran_block_len(ran: &golem_parser::FlowFile, label: &str) -> Option<usize> {
 
 /// The lines of a step's leading text that belong to it: in an inline
 /// array the first line ends the step before, and the last is the indent.
-fn own_lines(prefix: &str, inline: bool) -> impl Iterator<Item = &str> {
+pub(super) fn own_lines(prefix: &str, inline: bool) -> impl Iterator<Item = &str> {
     let lines: Vec<&str> = prefix.split('\n').collect();
     let end = lines.len().saturating_sub(1);
     let start = usize::from(inline).min(end);
@@ -678,7 +678,7 @@ fn own_lines(prefix: &str, inline: bool) -> impl Iterator<Item = &str> {
 
 /// `Some(None)` for a `# unverified` line, `Some(Some(rest))` for
 /// `# unverified: rest`, `None` for any other line.
-fn is_marker(line: &str) -> Option<Option<&str>> {
+pub(super) fn is_marker(line: &str) -> Option<Option<&str>> {
     let text = line.trim().strip_prefix('#')?.trim();
     if text == MARKER {
         return Some(None);
