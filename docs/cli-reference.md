@@ -11,6 +11,7 @@
 - [`golem do`](#golem-do)
 - [`golem probe`](#golem-probe)
 - [`golem mcp`](#golem-mcp)
+- [`golem session`](#golem-session)
 - [`golem devices`](#golem-devices)
 - [`golem init`](#golem-init)
 - [`golem create <name>`](#golem-create-name)
@@ -228,6 +229,49 @@ The server starts without device work. The session runs in the daemon and belong
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 
+## `golem session`
+
+Keep a device session open between shell commands. `golem do` keeps no state; a session keeps the device, the app's companion, the variables and a flow draft until it stops. The daemon holds the session, so each command is a new process.
+
+```bash
+golem session start [--name <NAME>] [--platform …] [--device …] [--app …] [--flow <FILE> …]
+golem session do '{ action = "tap", on_text = "Sign in" }' [--comment <TEXT>] [--tree]
+golem session probe '{ on_text = "Sign in" }' [--timeout <MS>]
+golem session tree [--full]
+golem session screenshot <PATH>
+golem session logs [--since <SECS>] [--filter <TEXT>] [--limit <N>] [--app <APP>]
+golem session export <PATH> [--overwrite]
+golem session stop [--no-teardown]
+golem session list
+```
+
+| Command | Description |
+|---------|-------------|
+| `start` | Open a session. It takes the device flags of `golem do`, and `--idle-timeout <SECS>` (default 1800). With `--flow`, golem first runs that flow as `golem run` would and opens the session where it stops; `--stop-at`, `--break-on-failure`, `--no-teardown` and `--var KEY=VALUE` work as in the MCP `session_open` |
+| `do` | Run one step, as `golem do` does, with the session's variables. A step that passes goes into the draft, with `--comment` above it. The exit code is 1 when the step fails |
+| `probe`, `tree` | As `golem probe` and `golem tree`, on the session's device |
+| `screenshot` | Write the screen to a PNG file |
+| `logs` | The app's device log, as the MCP `app_logs` tool returns it |
+| `export` | Check the draft as `golem run` would, then write it as a `.test.toml` |
+| `stop` | Close the session and release the device. For a session started with `--flow`, the flow's `[[teardown]]` runs unless `--no-teardown` |
+| `list` | Each open session: its name, device and state |
+
+- **Names.** Every command takes `--name` (default `default`). Each name is one session, so two sessions can hold two devices.
+- **Idle timeout.** A session that runs no command for `--idle-timeout` seconds stops, without the teardown. While a session is open, the daemon does not exit.
+- **One command at a time.** A second command while one runs in the same session fails as busy. A command that runs longer than 10 seconds prints what it is doing on stderr while it waits.
+- **Upgrades.** `start` replaces a daemon from another golem build, as `golem run` does: that daemon waits for its sessions to stop first. The other commands use the daemon that is running, whatever its build, because the session lives in it.
+
+```text
+$ golem session start --app app
+session open · android/Pixel 8 Pro API 36 (emulator-5554) · app fail.golem.test
+$ golem session do '{ action = "read", on_below = "Counter", save_to = "count" }'
++read:on_below="Counter" d:89 t:1/357
+$ golem session do '{ action = "assert_visible", on_text = "${count}", on_below = "Counter" }'
++assert_visible:on_text="+" on_below="Counter" d:93 t:1/357
+$ golem session stop
+session default stopped
+```
+
 ## `golem devices`
 
 List all connected simulators, emulators, and physical devices.
@@ -304,7 +348,7 @@ Exits non-zero without Rust, or when no companion is buildable.
 One background process, the daemon, owns the devices. Every `golem run` is a client: it hands its flows to the daemon and waits for them only. Two runs at the same time therefore share one device pool and never take the same device.
 
 - **Start.** The first command that finds no daemon starts `golem daemon` as a detached process and connects to it. Concurrent commands start exactly one daemon.
-- **Exit.** The daemon exits after 45 seconds with no client connected. Before it exits, it shuts down the simulators and emulators that golem booted. If any run during the daemon's life passed `--keep-devices`, it leaves them running.
+- **Exit.** The daemon exits after 45 seconds with no client connected and no session open. Before it exits, it shuts down the simulators and emulators that golem booted. If any run during the daemon's life passed `--keep-devices`, it leaves them running.
 - **Versions.** A command uses the daemon only if both are the same golem: the same version and the same build. A daemon left running by an older version, or by an earlier build of this version, finishes its runs and exits, and the command then starts its own; meanwhile the command prints a wait line. A command older than the running daemon fails at once and names both versions and binaries.
 - **Cancel.** A run whose command ends early (Ctrl-C, killed) is cancelled in the daemon: its devices are released at once and the processes it started are stopped.
 - **Environment.** Each run sends its environment variables and working directory. The processes golem starts for that run (install scripts, `bash`, `run`) get those, not the daemon's.

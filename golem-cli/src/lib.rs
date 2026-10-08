@@ -9,6 +9,7 @@ pub mod doctor;
 pub mod install_script_cmd;
 pub mod mcp;
 pub mod scaffold;
+pub mod session_cmd;
 pub mod tree;
 
 use std::path::{Path, PathBuf};
@@ -426,6 +427,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
 
         Commands::Probe(args) => {
             return do_cmd::probe(&args).await;
+        }
+
+        Commands::Session(args) => {
+            return session_cmd::run(&args).await;
         }
 
         Commands::Daemon(args) => {

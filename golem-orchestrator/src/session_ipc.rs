@@ -1,10 +1,14 @@
 //! The `session_*` messages on a daemon connection.
 //!
-//! A connection holds at most one session, and the session ends with the
-//! connection. Each message carries an `id` that its reply echoes, and
-//! each runs in its own task: `wait`, `status` and `cancel` must answer
-//! while an operation runs, and a client may send several calls at once.
+//! A message without a `session` name uses the connection's session: a connection
+//! holds at most one, and it ends with the connection. A message with a
+//! `name` uses the daemon's session of that name, which outlives each
+//! connection, so a shell can use it across commands. Each message carries
+//! an `id` that its reply echoes, and each runs in its own task: `wait`,
+//! `status` and `cancel` must answer while an operation runs, and a client
+//! may send several calls at once.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,6 +38,69 @@ impl ConnSession {
     }
 }
 
+/// The daemon's sessions opened by name.
+#[derive(Default, Clone)]
+pub(crate) struct Named {
+    map: Arc<tokio::sync::Mutex<BTreeMap<String, Arc<Session>>>>,
+}
+
+/// Where a session lives: on its connection, or under a name.
+#[derive(Clone)]
+enum Home {
+    Conn(ConnSession, Writer),
+    Named(Named, String),
+}
+
+impl Home {
+    fn of(msg: &serde_json::Value, conn: &ConnSession, named: &Named, writer: &Writer) -> Home {
+        match msg["session"].as_str() {
+            Some(name) => Home::Named(named.clone(), name.to_string()),
+            None => Home::Conn(conn.clone(), writer.clone()),
+        }
+    }
+
+    async fn get(&self) -> Option<Arc<Session>> {
+        match self {
+            Home::Conn(conn, _) => conn.slot.lock().await.clone(),
+            Home::Named(named, name) => named.map.lock().await.get(name).cloned(),
+        }
+    }
+
+    /// Forget `session` if it is still the one here.
+    async fn forget(&self, session: &Arc<Session>) {
+        match self {
+            Home::Conn(conn, _) => {
+                let mut slot = conn.slot.lock().await;
+                if slot.as_ref().is_some_and(|s| Arc::ptr_eq(s, session)) {
+                    *slot = None;
+                }
+            }
+            Home::Named(named, name) => {
+                let mut map = named.map.lock().await;
+                if map.get(name).is_some_and(|s| Arc::ptr_eq(s, session)) {
+                    map.remove(name);
+                }
+            }
+        }
+    }
+
+    fn missing(&self) -> String {
+        match self {
+            Home::Conn(..) => {
+                "no session is open on this connection; call session_open first".into()
+            }
+            Home::Named(_, name) => format!(
+                "no session named {name:?} is open; start one with `golem session start{}`",
+                if name == "default" {
+                    String::new()
+                } else {
+                    format!(" --name {name}")
+                }
+            ),
+        }
+    }
+}
+
 /// Answer one `session_*` message in its own task.
 pub(crate) fn spawn(
     msg: serde_json::Value,
@@ -41,6 +108,7 @@ pub(crate) fn spawn(
     resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
     install_cache: golem_runner::installer::InstallCache,
     sessions: Arc<std::sync::atomic::AtomicU64>,
+    named: Named,
     writer: Writer,
 ) {
     tokio::spawn(async move {
@@ -51,6 +119,7 @@ pub(crate) fn spawn(
             &resource_mgr,
             &install_cache,
             &sessions,
+            &named,
             &writer,
         )
         .await;
@@ -67,14 +136,19 @@ async fn handle(
     resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
     install_cache: &golem_runner::installer::InstallCache,
     sessions: &Arc<std::sync::atomic::AtomicU64>,
+    named: &Named,
     writer: &Writer,
 ) -> serde_json::Value {
     let kind = msg["type"].as_str().unwrap_or_default();
-    if kind == "session_open" {
-        return open(msg, conn, resource_mgr, install_cache, sessions, writer).await;
+    if kind == "session_list" {
+        return list_json(named).await;
     }
-    let Some(session) = conn.slot.lock().await.clone() else {
-        return error("no session is open on this connection; call session_open first");
+    let home = Home::of(msg, conn, named, writer);
+    if kind == "session_open" {
+        return open(msg, &home, resource_mgr, install_cache, sessions).await;
+    }
+    let Some(session) = home.get().await else {
+        return error(&home.missing());
     };
     let wait = msg["wait_ms"]
         .as_u64()
@@ -107,7 +181,25 @@ async fn handle(
     };
     if let Some(op) = op {
         return match session.begin(op) {
-            Begin::Started(_) => waited_json(session.wait(wait).await),
+            Begin::Started(_) => match (session.wait(wait).await, msg["path"].as_str()) {
+                (
+                    Waited::Done(Outcome {
+                        op_id,
+                        result: OpResult::Screenshot { png },
+                        ..
+                    }),
+                    Some(path),
+                ) => match std::fs::write(path, &png) {
+                    Ok(()) => serde_json::json!({
+                        "status": "done",
+                        "op_id": op_id,
+                        "op": "screenshot",
+                        "result": { "saved": path, "bytes": png.len() },
+                    }),
+                    Err(e) => error(&format!("could not write {path}: {e}")),
+                },
+                (waited, _) => waited_json(waited),
+            },
             Begin::Busy(running) => running_json("busy", &running),
             Begin::Ended(reason) => ended_json(&reason),
         };
@@ -134,7 +226,7 @@ async fn handle(
         "session_close" => {
             let teardown = msg["teardown"].as_bool().unwrap_or(true);
             let notes = session.close("closed", teardown).await;
-            *conn.slot.lock().await = None;
+            home.forget(&session).await;
             serde_json::json!({ "status": "closed", "teardown": notes })
         }
         other => error(&format!("unknown session message: {other}")),
@@ -143,15 +235,31 @@ async fn handle(
 
 async fn open(
     msg: &serde_json::Value,
-    conn: &ConnSession,
+    home: &Home,
     resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
     install_cache: &golem_runner::installer::InstallCache,
     sessions: &Arc<std::sync::atomic::AtomicU64>,
-    writer: &Writer,
 ) -> serde_json::Value {
-    let mut slot = conn.slot.lock().await;
-    if slot.is_some() {
-        return error("a session is already open on this connection; close it first");
+    // Held until the new session is in place, so two opens cannot race.
+    let mut conn_slot = None;
+    let mut named_map = None;
+    match home {
+        Home::Conn(conn, _) => {
+            let slot = conn.slot.clone().lock_owned().await;
+            if slot.is_some() {
+                return error("a session is already open on this connection; close it first");
+            }
+            conn_slot = Some(slot);
+        }
+        Home::Named(named, name) => {
+            let map = named.map.clone().lock_owned().await;
+            if map.contains_key(name) {
+                return error(&format!(
+                    "a session named {name:?} is already open; stop it first, or pass another --name"
+                ));
+            }
+            named_map = Some(map);
+        }
     }
     let req = match crate::interactive::parse_do_request(&serde_json::json!({
         "step": "",
@@ -197,18 +305,18 @@ async fn open(
             install_cache.clone(),
         )
     });
-    *slot = Some(session.clone());
-    drop(slot);
+    if let Some(mut slot) = conn_slot {
+        *slot = Some(session.clone());
+    }
+    if let (Some(mut map), Home::Named(_, name)) = (named_map, home) {
+        map.insert(name.clone(), session.clone());
+    }
     sessions.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-    watch_idle(
-        session.clone(),
-        conn.clone(),
-        sessions.clone(),
-        writer.clone(),
-    );
+    watch_idle(session.clone(), home.clone(), sessions.clone());
     if stub {
         return opened_json(idle_timeout);
     }
+    forget_failed_open(session.clone(), home.clone());
     let waited = session.wait(wait).await;
     // An open that failed leaves nothing to keep.
     if let Waited::Done(Outcome {
@@ -217,10 +325,7 @@ async fn open(
     }) = &waited
     {
         session.close("the open failed", false).await;
-        let mut slot = conn.slot.lock().await;
-        if slot.as_ref().is_some_and(|s| Arc::ptr_eq(s, &session)) {
-            *slot = None;
-        }
+        home.forget(&session).await;
     }
     waited_json(waited)
 }
@@ -311,14 +416,33 @@ fn stub_session(project_root: std::path::PathBuf, idle_timeout: Duration) -> Ses
     )
 }
 
-/// End the session when its idle timeout passes, and tell the client why.
-/// Also drops the session count when the session ends for any reason.
-fn watch_idle(
-    session: Arc<Session>,
-    conn: ConnSession,
-    sessions: Arc<std::sync::atomic::AtomicU64>,
-    writer: Writer,
-) {
+/// Close and forget a session whose open fails, however long the open
+/// takes: the client may stop waiting first, and a failed named session
+/// would hold its name and keep the daemon up.
+fn forget_failed_open(session: Arc<Session>, home: Home) {
+    tokio::spawn(async move {
+        loop {
+            match session.wait(Duration::from_secs(3600)).await {
+                Waited::Pending(_) => continue,
+                Waited::Done(Outcome {
+                    op: "session_open",
+                    result: OpResult::Failed(_),
+                    ..
+                }) => {
+                    session.close("the open failed", false).await;
+                    home.forget(&session).await;
+                }
+                _ => {}
+            }
+            break;
+        }
+    });
+}
+
+/// End the session when its idle timeout passes, and tell a connection's
+/// client why. Also drops the session count when the session ends for any
+/// reason.
+fn watch_idle(session: Arc<Session>, home: Home, sessions: Arc<std::sync::atomic::AtomicU64>) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -331,17 +455,16 @@ fn watch_idle(
                     session.idle_timeout().as_secs() / 60
                 );
                 session.close(&reason, false).await;
-                let mut slot = conn.slot.lock().await;
-                if slot.as_ref().is_some_and(|s| Arc::ptr_eq(s, &session)) {
-                    *slot = None;
+                home.forget(&session).await;
+                if let Home::Conn(_, writer) = &home {
+                    let notice = serde_json::json!({ "type": "session_ended", "reason": reason });
+                    let mut w = writer.lock().await;
+                    let _ = w.write_all(format!("{notice}\n").as_bytes()).await;
                 }
-                drop(slot);
-                let notice = serde_json::json!({ "type": "session_ended", "reason": reason });
-                let mut w = writer.lock().await;
-                let _ = w.write_all(format!("{notice}\n").as_bytes()).await;
                 break;
             }
         }
+        home.forget(&session).await;
         sessions.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
     });
 }
@@ -419,6 +542,21 @@ fn waited_json(w: Waited) -> serde_json::Value {
     }
 }
 
+/// The named sessions: each one's name, device and state.
+async fn list_json(named: &Named) -> serde_json::Value {
+    let map = named.map.lock().await;
+    let sessions: Vec<serde_json::Value> = map
+        .iter()
+        .map(|(name, session)| {
+            let mut entry = status_json(&session.status());
+            entry["name"] = serde_json::json!(name);
+            entry["device"] = serde_json::json!(session.device());
+            entry
+        })
+        .collect();
+    serde_json::json!({ "status": "ok", "sessions": sessions })
+}
+
 fn status_json(s: &Status) -> serde_json::Value {
     match s {
         Status::Idle { since, last } => serde_json::json!({
@@ -476,4 +614,242 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
         "op": o.op,
         "result": result,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    struct Daemon {
+        server: crate::ipc::OrchestratorServer,
+        socket: std::path::PathBuf,
+        dir: tempfile::TempDir,
+    }
+
+    async fn daemon() -> Daemon {
+        let dir = tempfile::Builder::new()
+            .prefix("gsess")
+            .tempdir_in("/tmp")
+            .expect("tempdir");
+        let socket = dir.path().join("d.sock");
+        let server = crate::ipc::start_server(&socket, &crate::ipc::Identity::current())
+            .await
+            .expect("daemon");
+        Daemon {
+            server,
+            socket,
+            dir,
+        }
+    }
+
+    impl Daemon {
+        /// One message on a connection of its own, as each `golem session`
+        /// command sends.
+        async fn call(&self, kind: &str, mut msg: serde_json::Value) -> serde_json::Value {
+            let mut stream = crate::ipc::attach(
+                &self.socket,
+                &crate::ipc::Identity::current(),
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("attach");
+            msg["type"] = serde_json::json!(kind);
+            msg["id"] = serde_json::json!(1);
+            stream
+                .write_all(format!("{msg}\n").as_bytes())
+                .await
+                .expect("send");
+            let mut line = String::new();
+            BufReader::new(&mut stream)
+                .read_line(&mut line)
+                .await
+                .expect("reply");
+            serde_json::from_str(&line).expect("json reply")
+        }
+
+        async fn open(&self, name: &str) -> serde_json::Value {
+            self.call(
+                "session_open",
+                serde_json::json!({
+                    "session": name,
+                    "stub": true,
+                    "project_root": self.dir.path().display().to_string(),
+                }),
+            )
+            .await
+        }
+    }
+
+    #[tokio::test]
+    async fn a_named_session_outlives_each_connection() {
+        let d = daemon().await;
+        assert_eq!(d.open("a").await["result"]["opened"], true);
+        let read = d
+            .call(
+                "session_act",
+                serde_json::json!({ "session": "a", "step": r#"{ action = "read", on_text = "Submit", save_to = "label" }"# }),
+            )
+            .await;
+        assert_eq!(read["result"]["passed"], true, "{read}");
+        let assert = d
+            .call(
+                "session_act",
+                serde_json::json!({ "session": "a", "step": r#"{ action = "assert_visible", on_text = "${label}" }"# }),
+            )
+            .await;
+        assert_eq!(
+            assert["result"]["passed"], true,
+            "a var SHALL carry over between connections: {assert}"
+        );
+        let closed = d
+            .call("session_close", serde_json::json!({ "session": "a" }))
+            .await;
+        assert_eq!(closed["status"], "closed", "{closed}");
+        let gone = d
+            .call("session_tree", serde_json::json!({ "session": "a" }))
+            .await;
+        assert!(
+            gone["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("no session named \"a\"")),
+            "{gone}"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_session_message_works_by_name() {
+        let d = daemon().await;
+        d.open("default").await;
+        let named = |extra: serde_json::Value| {
+            let mut msg = serde_json::json!({ "session": "default" });
+            if let (Some(m), serde_json::Value::Object(e)) = (msg.as_object_mut(), extra) {
+                m.extend(e);
+            }
+            msg
+        };
+        let tree = d.call("session_tree", named(serde_json::json!({}))).await;
+        assert!(
+            tree["result"]["tree"]
+                .as_str()
+                .is_some_and(|t| t.starts_with("tree visible")),
+            "{tree}"
+        );
+        let probe = d
+            .call(
+                "session_probe",
+                named(serde_json::json!({ "selector": r#"{ on_text = "Submit" }"# })),
+            )
+            .await;
+        assert!(probe["result"]["toon"].is_string(), "{probe}");
+        let shot = d
+            .call("session_screenshot", named(serde_json::json!({})))
+            .await;
+        assert!(shot["result"]["png_base64"].is_string(), "{shot}");
+        let png = d.dir.path().join("shot.png");
+        let saved = d
+            .call(
+                "session_screenshot",
+                named(serde_json::json!({ "path": png.display().to_string() })),
+            )
+            .await;
+        assert_eq!(saved["result"]["bytes"], 4, "{saved}");
+        assert_eq!(std::fs::read(&png).expect("png"), [0x89, 0x50, 0x4E, 0x47]);
+        let status = d.call("session_status", named(serde_json::json!({}))).await;
+        assert_eq!(status["status"], "idle", "{status}");
+        let logs = d.call("session_logs", named(serde_json::json!({}))).await;
+        assert!(logs["logs"].is_string(), "{logs}");
+        let draft = d
+            .call("session_draft_show", named(serde_json::json!({})))
+            .await;
+        assert!(draft["result"]["draft"].is_string(), "{draft}");
+        let edit = d
+            .call(
+                "session_edit",
+                named(serde_json::json!({ "edit": "flow_set", "name": "Renamed" })),
+            )
+            .await;
+        assert!(
+            edit["result"]["edited"].is_string(),
+            "a draft edit's own `name` SHALL not pick the session: {edit}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_name_is_open_once_and_the_list_shows_each() {
+        let d = daemon().await;
+        d.open("a").await;
+        let again = d.open("a").await;
+        assert!(
+            again["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("already open")),
+            "{again}"
+        );
+        assert_eq!(d.open("b").await["result"]["opened"], true);
+        let list = d.call("session_list", serde_json::json!({})).await;
+        let sessions = list["sessions"].as_array().expect("sessions");
+        let names: Vec<&str> = sessions.iter().filter_map(|s| s["name"].as_str()).collect();
+        assert_eq!(names, ["a", "b"]);
+        assert_eq!(sessions[0]["device"], "android/Stub Device");
+        assert_eq!(sessions[0]["status"], "idle");
+    }
+
+    #[tokio::test]
+    async fn an_open_that_fails_after_the_client_stops_waiting_frees_its_name() {
+        let d = daemon().await;
+        let open = || {
+            d.call(
+                "session_open",
+                serde_json::json!({
+                    "session": "x",
+                    "wait_ms": 0,
+                    "project_root": d.dir.path().join("no-project").display().to_string(),
+                }),
+            )
+        };
+        let first = open().await;
+        assert_eq!(first["status"], "pending", "{first}");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let list = d.call("session_list", serde_json::json!({})).await;
+            if list["sessions"].as_array().is_some_and(|s| s.is_empty()) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the failed open SHALL leave the list: {list}"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let again = open().await;
+        assert!(
+            !again["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("already open")),
+            "{again}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_daemon_is_not_idle_while_a_named_session_is_open() {
+        let d = daemon().await;
+        d.open("a").await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(
+            d.server.idle_for(),
+            Duration::ZERO,
+            "an open named session SHALL keep the daemon up with no client connected"
+        );
+        d.call("session_close", serde_json::json!({ "session": "a" }))
+            .await;
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while d.server.idle_for() == Duration::ZERO {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the daemon SHALL go idle once the session closes"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
 }

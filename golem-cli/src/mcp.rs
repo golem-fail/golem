@@ -769,40 +769,8 @@ impl GolemMcp {
         if let Some(err) = r["error"].as_str() {
             return tool_error(err.to_string());
         }
-        if r["cancelled"] == true {
-            return text(format!(
-                "op {} {} was cancelled",
-                reply["op_id"],
-                reply["op"].as_str().unwrap_or_default()
-            ));
-        }
-        if let Some(edited) = r["edited"].as_str() {
-            return self::text(edited.to_string());
-        }
-        if let Some(text) = r["draft"].as_str() {
-            return self::text(text.to_string());
-        }
-        if let Some(path) = r["exported"].as_str() {
-            let mut out = format!("exported {path} · {} steps · valid\n", r["steps"]);
-            if let Some(list) = r["unverified"].as_array().filter(|l| !l.is_empty()) {
-                out.push_str("unverified (recorded with record_only, never run):\n");
-                for step in list {
-                    out.push_str(&format!("  {}\n", step.as_str().unwrap_or_default()));
-                }
-            }
-            return self::text(out);
-        }
-        if r["opened"] == true {
-            let mut out = format!(
-                "session open · {} ({}) · app {}\n",
-                r["device"].as_str().unwrap_or_default(),
-                r["udid"].as_str().unwrap_or_default(),
-                non_empty(r["bundle"].as_str()).unwrap_or("(last launched)"),
-            );
-            if let Some(flow) = r["flow"].as_str() {
-                out.push_str(flow);
-            }
-            return text(out);
+        if let Some(note) = crate::session_cmd::note_text(reply) {
+            return text(note);
         }
         if let Some(png) = r["png_base64"].as_str() {
             return Ok(CallToolResult::success(vec![ContentBlock::image(
@@ -820,16 +788,7 @@ impl GolemMcp {
                 .unwrap_or_else(|| serde_json::json!({ "op_id": reply["op_id"], "tree": r["tree"] }));
             return text(serde_json::to_string_pretty(&body).unwrap_or_default());
         }
-        let mut out = String::new();
-        for key in ["toon", "tree"] {
-            if let Some(s) = r[key].as_str() {
-                out.push_str(s);
-                if !out.ends_with('\n') {
-                    out.push('\n');
-                }
-            }
-        }
-        text(out)
+        text(crate::session_cmd::toon_text(r))
     }
 
     /// A reply that is not a finished operation.
@@ -873,10 +832,6 @@ fn running_line(status: &str, r: &serde_json::Value) -> String {
         r["phase"].as_str().unwrap_or_default(),
         r["elapsed_ms"].as_u64().unwrap_or(0) / 1000
     )
-}
-
-fn non_empty(s: Option<&str>) -> Option<&str> {
-    s.filter(|s| !s.is_empty())
 }
 
 const ACTIONS_REFERENCE: &str = include_str!("../../docs/actions-reference.md");

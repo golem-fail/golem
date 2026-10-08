@@ -159,6 +159,42 @@ pub async fn hello(
         .map_err(HelloFailure::Unresponsive)
 }
 
+/// Connect to the daemon that is running, whatever its build, without
+/// replacing or starting one: a named session lives in that daemon.
+pub async fn attach(
+    path: &Path,
+    me: &Identity,
+    timeout: std::time::Duration,
+) -> Result<UnixStream> {
+    let mut stream = match UnixStream::connect(path).await {
+        Ok(stream) => stream,
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+            ) =>
+        {
+            anyhow::bail!("no golem daemon is running, so no session is open; start one with `golem session start`")
+        }
+        Err(e) => return Err(e).context("failed to connect to the golem daemon"),
+    };
+    let mut msg = me.to_json();
+    msg["type"] = serde_json::json!("hello");
+    stream
+        .write_all(format!("{msg}\n").as_bytes())
+        .await
+        .context("failed to send hello")?;
+    let line = read_reply_line(&mut stream, timeout)
+        .await
+        .context("no answer to hello")?;
+    let reply: serde_json::Value =
+        serde_json::from_str(line.trim()).context("invalid hello reply")?;
+    if reply["type"] != "hello" {
+        anyhow::bail!("the running golem daemon is too old for sessions: {line}");
+    }
+    Ok(stream)
+}
+
 async fn exchange_hello(
     mut stream: UnixStream,
     me: &Identity,
@@ -348,6 +384,8 @@ struct ServerShared {
     active_runs: std::sync::Arc<std::sync::atomic::AtomicU64>,
     /// Open sessions.
     active_sessions: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// The sessions opened by name, which outlive their connection.
+    named: crate::session_ipc::Named,
 }
 
 impl OrchestratorServer {
@@ -380,13 +418,25 @@ impl OrchestratorServer {
         RunGuard::new(&self.shared.active_runs)
     }
 
-    /// How long no client has been connected; zero while one is.
+    /// How long no client has been connected and no session has been
+    /// open; zero while either holds.
     pub fn idle_for(&self) -> std::time::Duration {
-        self.idle_since
-            .lock()
-            .ok()
-            .and_then(|since| *since)
-            .map_or(std::time::Duration::ZERO, |since| since.elapsed())
+        let Ok(mut since) = self.idle_since.lock() else {
+            return std::time::Duration::ZERO;
+        };
+        // A named session has no connection between its calls.
+        if self
+            .shared
+            .active_sessions
+            .load(std::sync::atomic::Ordering::Acquire)
+            > 0
+        {
+            if since.is_some() {
+                *since = Some(std::time::Instant::now());
+            }
+            return std::time::Duration::ZERO;
+        }
+        since.map_or(std::time::Duration::ZERO, |since| since.elapsed())
     }
 
     /// Stop accepting connections and unlink the socket, so a client that
@@ -437,6 +487,7 @@ pub async fn start_server(path: &Path, identity: &Identity) -> Result<Orchestrat
         draining: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         active_runs: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         active_sessions: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        named: crate::session_ipc::Named::default(),
     };
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let idle_since = std::sync::Arc::new(std::sync::Mutex::new(Some(std::time::Instant::now())));
@@ -566,6 +617,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             shared.resource_mgr.clone(),
                             shared.install_cache.clone(),
                             shared.active_sessions.clone(),
+                            shared.named.clone(),
                             writer.clone(),
                         );
                     }

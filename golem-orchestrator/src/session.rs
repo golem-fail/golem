@@ -301,12 +301,13 @@ pub struct Session {
     next_op: AtomicU64,
 }
 
-/// What `app_logs` reads the device log with.
+/// What `app_logs` reads the device log with, and what `device` reports.
 #[derive(Clone)]
 struct LogSource {
     driver: Arc<dyn PlatformDriver>,
     apps: Vec<golem_parser::AppConfig>,
     opened: SystemTime,
+    device: String,
 }
 
 impl LogSource {
@@ -315,6 +316,7 @@ impl LogSource {
             driver: work.driver.clone(),
             apps: work.apps.clone(),
             opened,
+            device: format!("{}/{}", work.device.platform, work.device.name),
         }
     }
 }
@@ -569,6 +571,16 @@ impl Session {
     /// Whether the idle timeout has passed.
     pub fn expired(&self) -> bool {
         self.idle_for() >= self.idle_timeout
+    }
+
+    /// The device the session holds, as `platform/name`; `None` while it
+    /// opens and after it ends.
+    pub fn device(&self) -> Option<String> {
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|s| s.device.clone())
     }
 
     /// The app's device log lines as TOON, crash lines first. Runs beside
