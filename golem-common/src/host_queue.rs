@@ -239,12 +239,12 @@ where
     // that permit-wait — not slow work — is the risk (see the deliberately
     // unbuilt step-timeout exclusion). Always emitted; slow waits are rare.
     if should_warn_slow_wait(waited) {
-        eprintln!(
-            "  [host-queue] slow permit wait: {} blocked {:.1}s behind other \
+        crate::diag::warn(format!(
+            "[host-queue] slow permit wait: {} blocked {:.1}s behind other \
              devices (host-wide serialization under heavy load)",
             class.label(),
             waited.as_secs_f64()
-        );
+        ));
     }
     let result = fut.await;
     drop(permit);

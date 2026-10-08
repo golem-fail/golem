@@ -207,14 +207,12 @@ pub async fn resolve_element(
         // timeout) before continuing.
         if may_hide_keyboard && !tried_hide_keyboard && meta.keyboard_height > 0 {
             let unfiltered_count = find_elements(&root, &selector).len();
-            if golem_common::is_debug() {
-                eprintln!(
-                    "  [resolver] kb={} filtered=0 unfiltered={} for {:?}",
-                    meta.keyboard_height,
-                    unfiltered_count,
-                    selector_label(&selector)
-                );
-            }
+            golem_common::diag::debug(format!(
+                "[resolver] kb={} filtered=0 unfiltered={} for {:?}",
+                meta.keyboard_height,
+                unfiltered_count,
+                selector_label(&selector)
+            ));
             if unfiltered_count > 0 {
                 tried_hide_keyboard = true;
                 let _ = driver.hide_keyboard().await;

@@ -277,7 +277,7 @@ async fn restore_device(serial: &str, original: &str) {
         adb(serial, &["shell", "ime", "set", original]).await
     };
     if let Err(e) = result {
-        eprintln!("  [ime] restore on {serial} failed: {e}");
+        golem_common::diag::warn(format!("[ime] restore on {serial} failed: {e}"));
     }
     let _ = tokio::fs::remove_file(record_path(serial)).await;
 }
@@ -339,11 +339,15 @@ pub async fn self_heal(serial: &str) {
         .filter(|s| !s.is_empty());
     match original {
         Some(orig) => {
-            eprintln!("  [ime] self-heal on {serial}: restoring original keyboard");
+            golem_common::diag::info(format!(
+                "[ime] self-heal on {serial}: restoring original keyboard"
+            ));
             restore_device(serial, &orig).await;
         }
         None => {
-            eprintln!("  [ime] self-heal on {serial}: no record — ime reset");
+            golem_common::diag::info(format!(
+                "[ime] self-heal on {serial}: no record — ime reset"
+            ));
             restore_device(serial, "").await;
         }
     }

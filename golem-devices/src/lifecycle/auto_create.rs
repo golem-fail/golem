@@ -103,10 +103,10 @@ async fn auto_create_ios(
         device_type.name.replace(' ', "-"),
         runtime.major
     );
-    eprintln!(
-        "  Creating iOS simulator: {name} ({}, {})",
+    golem_common::diag::info(format!(
+        "[devices] Creating iOS simulator: {name} ({}, {})",
         device_type.name, runtime.name
-    );
+    ));
 
     let output = create_simulator(
         Platform::Ios,
@@ -147,7 +147,7 @@ async fn auto_create_ios(
         device_type_id: Some(device_type.identifier.clone()),
     };
 
-    eprintln!("  Booting {name}...");
+    golem_common::diag::info(format!("[devices] Booting {name}..."));
     boot_device(&device).await
 }
 
@@ -205,10 +205,10 @@ async fn auto_create_android(
     })?;
 
     let name = format!("golem-{}-api{}", profile.id, image.api_level);
-    eprintln!(
-        "  Creating Android emulator: {name} ({}, API {})",
+    golem_common::diag::info(format!(
+        "[devices] Creating Android emulator: {name} ({}, API {})",
         profile.name, image.api_level
-    );
+    ));
 
     create_simulator(Platform::Android, &name, &image.path, &profile.id).await?;
 
@@ -234,6 +234,6 @@ async fn auto_create_android(
         device_type_id: None,
     };
 
-    eprintln!("  Booting {name}...");
+    golem_common::diag::info(format!("[devices] Booting {name}..."));
     boot_device(&device).await
 }

@@ -553,7 +553,7 @@ pub async fn connect(selection: Selection) -> Result<Target> {
     let (port, health) = match companion_on(&device, crate::suite::scan_companions().await) {
         Some(live) => live,
         None => {
-            eprintln!("  starting the companion on {} ...", device.name);
+            golem_common::diag::info(format!("starting the companion on {} ...", device.name));
             crate::suite::start_companion_for_device(&device).await?
         }
     };

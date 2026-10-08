@@ -12,6 +12,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod command;
+pub mod diag;
 pub mod host_queue;
 
 static DEBUG: AtomicBool = AtomicBool::new(false);
@@ -22,9 +23,10 @@ pub fn set_debug(enabled: bool) {
     DEBUG.store(enabled, Ordering::Relaxed);
 }
 
-/// Whether debug output is currently enabled; see [`set_debug`].
+/// Whether debug output is enabled: the current run's `--debug` inside a
+/// [`diag::scope`], else the process-wide flag; see [`set_debug`].
 pub fn is_debug() -> bool {
-    DEBUG.load(Ordering::Relaxed)
+    diag::scoped_debug().unwrap_or_else(|| DEBUG.load(Ordering::Relaxed))
 }
 
 #[cfg(test)]

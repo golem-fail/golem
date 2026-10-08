@@ -677,10 +677,10 @@ impl SuiteRunner {
             golem_runner::fingerprint::Fingerprint::None
         });
         if self.config.verbose && needs_cache {
-            eprintln!(
-                "  [install] source fingerprint: {}",
+            golem_common::diag::info(format!(
+                "[install] source fingerprint: {}",
                 fingerprint.short_label()
-            );
+            ));
         }
         let device_settings = Arc::new(self.config.device_settings.clone());
 
@@ -705,7 +705,7 @@ impl SuiteRunner {
 
         let human_handle = if stream_human_enabled {
             let human_rx = suite_rx.subscribe();
-            Some(tokio::spawn(async move {
+            Some(golem_common::diag::spawn(async move {
                 golem_report::stream::stream_human(human_rx, verbose, multi_device, debug).await;
             }))
         } else {
@@ -717,7 +717,7 @@ impl SuiteRunner {
         ));
         let acc_clone = accumulator.clone();
         let acc_rx = suite_rx.subscribe();
-        let acc_handle = tokio::spawn(async move {
+        let acc_handle = golem_common::diag::spawn(async move {
             golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
         });
 
@@ -725,7 +725,7 @@ impl SuiteRunner {
         let fwd_handle = if let Some(ref fwd) = self.event_forwarder {
             let fwd_rx = suite_rx.subscribe();
             let fwd_tx = fwd.clone();
-            Some(tokio::spawn(async move {
+            Some(golem_common::diag::spawn(async move {
                 let mut rx = fwd_rx;
                 while let Ok(event) = rx.recv().await {
                     fwd_tx.emit(event.device_id.clone(), event.kind.clone());
@@ -925,7 +925,7 @@ impl SuiteRunner {
                 .map(|cap| (run.slots.len() as u32).clamp(1, cap as u32))
                 .unwrap_or(0);
 
-            handles.push(AbortOnDrop(tokio::spawn(async move {
+            handles.push(AbortOnDrop(golem_common::diag::spawn(async move {
                 let _permit = match gate {
                     Some(sem) => sem.acquire_many_owned(gate_permits).await.ok(),
                     None => None,
@@ -1645,7 +1645,7 @@ async fn execute_flow_run(
         let child_env_c = cfg.child_env.clone();
         let handoff_c = cfg.handoff.clone();
         let reg_state_c = reg_state.clone();
-        handles.push(AbortOnDrop(tokio::spawn(async move {
+        handles.push(AbortOnDrop(golem_common::diag::spawn(async move {
             run_flow_on_device(
                 FlowDeviceRun {
                     flow: flow_c,
@@ -1830,7 +1830,7 @@ async fn execute_flow_run(
         let event_tx = event_tx.clone();
         let reg_state = reg_state.clone();
         let recovery_reason = recovery_reason.to_string();
-        tokio::spawn(async move {
+        golem_common::diag::spawn(async move {
             event_tx.emit(
                 golem_events::DeviceId("suite".into()),
                 golem_events::EventKind::DeviceRecovering {
@@ -2070,7 +2070,7 @@ async fn setup_slot(
     let platform = device.platform;
 
     if debug {
-        eprintln!("  Platform: {platform}");
+        golem_common::diag::info(format!("Platform: {platform}"));
     }
 
     // `--dev` on Android: point the device's loopback at the host's bundler.
@@ -2083,7 +2083,7 @@ async fn setup_slot(
     if dev && platform == Platform::Android {
         if let Err(e) = golem_devices::lifecycle::setup_adb_reverse(&device, dev_port).await {
             if debug {
-                eprintln!("  [dev] adb reverse tcp:{dev_port} failed: {e:#}");
+                golem_common::diag::info(format!("[dev] adb reverse tcp:{dev_port} failed: {e:#}"));
             }
         }
     }
@@ -3003,17 +3003,19 @@ fn write_plan_artifact(output_dir: &std::path::Path, parsed: &crate::ParsedSuite
     });
 
     if let Err(e) = std::fs::create_dir_all(output_dir) {
-        eprintln!("  [trace] could not create output dir for plan.json: {e}");
+        golem_common::diag::warn(format!(
+            "[trace] could not create output dir for plan.json: {e}"
+        ));
         return;
     }
     let path = output_dir.join("plan.json");
     match serde_json::to_string_pretty(&payload) {
         Ok(s) => {
             if let Err(e) = std::fs::write(&path, s) {
-                eprintln!("  [trace] could not write plan.json: {e}");
+                golem_common::diag::warn(format!("[trace] could not write plan.json: {e}"));
             }
         }
-        Err(e) => eprintln!("  [trace] could not serialize plan.json: {e}"),
+        Err(e) => golem_common::diag::warn(format!("[trace] could not serialize plan.json: {e}")),
     }
 }
 
@@ -3187,7 +3189,7 @@ pub(crate) async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth
 
     let mut handles = Vec::new();
     for port in PORT_RANGE_START..=PORT_RANGE_END {
-        handles.push(tokio::spawn(async move {
+        handles.push(golem_common::diag::spawn(async move {
             let client = CompanionClient::new(port);
             match client.check_health().await {
                 Ok(health) => Some((port, health)),

@@ -1022,6 +1022,32 @@ async fn handle_submit(
         shared.resource_mgr.clone(),
         shared.install_cache.clone(),
     );
+    // Host-side code (devices, drivers) reports through the run's scope,
+    // so its lines reach this client. The slot empties when the suite is
+    // done: a task the run left behind must not hold the stream open.
+    let diag_tx = std::sync::Arc::new(std::sync::Mutex::new(Some(fwd_tx.clone())));
+    let diag_scope = golem_common::diag::Scope {
+        debug,
+        sink: {
+            let diag_tx = diag_tx.clone();
+            std::sync::Arc::new(move |level, message: &str| {
+                let tx = diag_tx.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                if let Some(tx) = tx {
+                    tx.emit(
+                        golem_events::DeviceId("suite".into()),
+                        golem_events::EventKind::HostDiagnostic {
+                            level: match level {
+                                golem_common::diag::Level::Info => golem_events::DiagLevel::Info,
+                                golem_common::diag::Level::Warn => golem_events::DiagLevel::Warn,
+                                golem_common::diag::Level::Debug => golem_events::DiagLevel::Debug,
+                            },
+                            message: message.to_string(),
+                        },
+                    );
+                }
+            })
+        },
+    };
     runner.event_forwarder = Some(fwd_tx);
     runner.cancel = Some(cancel);
 
@@ -1031,9 +1057,10 @@ async fn handle_submit(
     let no_results_for_write = cfg["no_results"].as_bool().unwrap_or(false);
     let include_junit = cfg["include_junit"].as_bool().unwrap_or(false);
 
-    let result = runner.run_suite(&paths).await;
+    let result = golem_common::diag::scope(diag_scope, runner.run_suite(&paths)).await;
     // Drop the runner (and its forwarder sender) to close the event stream.
     drop(runner);
+    diag_tx.lock().unwrap_or_else(|e| e.into_inner()).take();
     let _ = stream_handle.await;
 
     // Server-side result-file writing. The daemon owns the FS (it

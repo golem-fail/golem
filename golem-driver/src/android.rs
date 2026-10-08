@@ -395,9 +395,7 @@ impl AndroidDriver {
         match crate::cdp::evaluate_js(port, &page_id, expression, false).await {
             Ok(s) => Some(s),
             Err(e) => {
-                if golem_common::is_debug() {
-                    eprintln!("  [cdp] eval_in_webview failed: {e}");
-                }
+                golem_common::diag::debug(format!("[cdp] eval_in_webview failed: {e}"));
                 None
             }
         }
@@ -495,9 +493,7 @@ async fn setup_cdp(device_serial: &str, package_name: &str) -> Option<CdpState> 
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
         Err(e) => {
-            if golem_common::is_debug() {
-                eprintln!("  [cdp] setup failed at get_page_id: {e}");
-            }
+            golem_common::diag::debug(format!("[cdp] setup failed at get_page_id: {e}"));
             let _ = crate::cdp::remove_forward(device_serial, port).await;
             return None;
         }
@@ -582,7 +578,7 @@ impl PlatformDriver for AndroidDriver {
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let serial = self.device_serial.clone();
                         let pkg = self.package_name.clone();
-                        tokio::spawn(async move {
+                        golem_common::diag::spawn(async move {
                             let result = setup_cdp(&serial, &pkg).await;
                             let _ = tx.send(result);
                         });
@@ -618,7 +614,7 @@ impl PlatformDriver for AndroidDriver {
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let serial = self.device_serial.clone();
                         let pkg = self.package_name.clone();
-                        tokio::spawn(async move {
+                        golem_common::diag::spawn(async move {
                             let result = setup_cdp(&serial, &pkg).await;
                             let _ = tx.send(result);
                         });
