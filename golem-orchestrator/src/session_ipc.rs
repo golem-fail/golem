@@ -158,6 +158,10 @@ async fn handle(
             comment: msg["comment"].as_str().map(str::to_string),
         }),
         "session_draft_show" => Some(Op::DraftShow),
+        "session_draft_run" => Some(Op::DraftRun {
+            restart: msg["restart"].as_bool().unwrap_or(false),
+            stop_at: msg["stop_at"].as_str().map(str::to_string),
+        }),
         "session_draft_steps" => Some(Op::DraftSteps(crate::draft::StepsQuery {
             around: msg["around"].as_str().map(str::to_string),
             context: msg["context"].as_u64().map(|n| n as usize),
@@ -321,7 +325,27 @@ async fn open(msg: &serde_json::Value, home: &Home, resources: &Resources) -> se
     waited_json(waited)
 }
 
-/// The flow part of a `session_open`: `flow`, `stop_at`,
+/// The first step of the flow's start block, for `run = false`.
+fn first_step(path: &std::path::Path) -> anyhow::Result<golem_runner::context::StopAt> {
+    use anyhow::Context;
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let flow = golem_parser::parse_flow(&text)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let block = match flow.flow.start {
+        Some(start) => start,
+        None => flow
+            .block
+            .first()
+            .context("the flow has no blocks")?
+            .name
+            .clone()
+            .context("run = false needs a name on the flow's first block")?,
+    };
+    Ok(golem_runner::context::StopAt { block, step: 1 })
+}
+
+/// The flow part of a `session_open`: `flow`, `stop_at`, `run`,
 /// `break_on_failure`, `teardown` and `vars`.
 /// A relative flow path is in the project, as `export_flow`'s is.
 fn parse_flow_open(
@@ -332,12 +356,20 @@ fn parse_flow_open(
         if !msg["stop_at"].is_null() {
             anyhow::bail!("stop_at needs a flow");
         }
+        if !msg["run"].is_null() {
+            anyhow::bail!("run needs a flow");
+        }
         return Ok(None);
     };
-    let stop_at = msg["stop_at"]
-        .as_str()
-        .map(golem_runner::context::StopAt::parse)
-        .transpose()?;
+    let path = project_root.join(path);
+    let stop_at = match (msg["stop_at"].as_str(), msg["run"].as_bool()) {
+        (Some(_), Some(false)) => {
+            anyhow::bail!("run = false opens before the first step; leave out stop_at")
+        }
+        (Some(s), _) => Some(golem_runner::context::StopAt::parse(s)?),
+        (None, Some(false)) => Some(first_step(&path)?),
+        (None, _) => None,
+    };
     let vars = msg["vars"]
         .as_object()
         .map(|m| {
@@ -352,7 +384,7 @@ fn parse_flow_open(
         })
         .unwrap_or_default();
     Ok(Some(crate::session::FlowOpen {
-        path: project_root.join(path),
+        path,
         stop_at,
         break_on_failure: msg["break_on_failure"].as_bool().unwrap_or(false),
         no_teardown: msg["teardown"].as_bool() == Some(false),
@@ -821,6 +853,30 @@ mod tests {
             open("/elsewhere/x.test.toml"),
             std::path::Path::new("/elsewhere/x.test.toml")
         );
+    }
+
+    #[test]
+    fn run_false_stops_before_the_first_step_of_the_start_block() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let flow = |text: &str| {
+            std::fs::write(dir.path().join("f.test.toml"), text).expect("write");
+        };
+        let open = |msg: serde_json::Value| parse_flow_open(&msg, dir.path());
+        flow("[flow]\nname = \"F\"\n[[block]]\nname = \"main\"\nsteps = []\n");
+        let f = open(serde_json::json!({ "flow": "f.test.toml", "run": false }))
+            .expect("parse")
+            .expect("flow");
+        assert_eq!(f.stop_at.map(|s| s.to_string()).as_deref(), Some("main:1"));
+        flow("[flow]\nname = \"F\"\nstart = \"b\"\n[[block]]\nname = \"a\"\n[[block]]\nname = \"b\"\n");
+        let f = open(serde_json::json!({ "flow": "f.test.toml", "run": false }))
+            .expect("parse")
+            .expect("flow");
+        assert_eq!(f.stop_at.map(|s| s.to_string()).as_deref(), Some("b:1"));
+        let err = open(serde_json::json!({ "flow": "f.test.toml", "run": false, "stop_at": "a" }))
+            .expect_err("both");
+        assert!(err.to_string().contains("leave out stop_at"), "{err}");
+        let err = open(serde_json::json!({ "run": false })).expect_err("no flow");
+        assert!(err.to_string().contains("run needs a flow"), "{err}");
     }
 
     #[tokio::test]

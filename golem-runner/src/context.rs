@@ -100,6 +100,9 @@ pub struct ExecutionContext<'a> {
     pub stop_at: Option<StopAt>,
     /// Where the flow stopped for `stop_at`, once it has.
     pub stopped_at: Option<StopAt>,
+    /// Skip the steps before this one the first time its block runs: a
+    /// session resumes its draft there.
+    pub start_at: Option<StopAt>,
 }
 
 /// A step to stop before: `block` and its 1-based `step`.
@@ -182,6 +185,7 @@ impl<'a> ExecutionContext<'a> {
             child_env: None,
             stop_at: None,
             stopped_at: None,
+            start_at: None,
         }
     }
 }

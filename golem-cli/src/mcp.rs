@@ -173,6 +173,8 @@ pub struct OpenParams {
     pub flow: Option<String>,
     /// With flow: stop before this step, "block" or "block:step" (steps count from 1).
     pub stop_at: Option<String>,
+    /// With flow: false installs and sets up, but runs no steps; the cursor is before step 1.
+    pub run: Option<bool>,
     /// With flow: keep the session open at a failed step. Without it, a
     /// failed flow ends as golem run would, and no session opens.
     #[serde(default)]
@@ -331,6 +333,16 @@ pub struct ExportParams {
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
+pub struct DraftRunParams {
+    /// true: run from the start. false (default): resume from the cursor.
+    #[serde(default)]
+    pub restart: bool,
+    /// Stop before this step, "block" or "block:step". Without it, run to the end.
+    pub stop_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DraftStepsParams {
     /// "cursor" (default), "block" or "block:step" (steps count from 1).
     pub around: Option<String>,
@@ -445,6 +457,7 @@ impl GolemMcp {
             "boot": p.boot.unwrap_or(true),
             "flow": p.flow,
             "stop_at": p.stop_at,
+            "run": p.run,
             "break_on_failure": p.break_on_failure,
             "teardown": p.teardown,
             "vars": p.vars,
@@ -654,6 +667,22 @@ impl GolemMcp {
             .op(
                 "session_draft_steps",
                 serde_json::json!({ "around": p.around, "context": p.context, "block": p.block, "limit": p.limit }),
+            )
+            .await?;
+        self.render(&reply, false)
+    }
+
+    #[tool(
+        description = "Run the draft on the device, without setup or teardown: from the start (restart) or from the cursor. Steps that pass become ✓ and lose # unverified. Stops at stop_at or a failed step, and puts the cursor there."
+    )]
+    async fn draft_run(
+        &self,
+        Parameters(p): Parameters<DraftRunParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let reply = self
+            .op(
+                "session_draft_run",
+                serde_json::json!({ "restart": p.restart, "stop_at": p.stop_at }),
             )
             .await?;
         self.render(&reply, false)

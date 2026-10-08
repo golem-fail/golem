@@ -69,6 +69,7 @@ GOLEM_E2E_PLATFORM=ios GOLEM_E2E_DEVICE=<udid> cargo nextest run -p golem-cli --
 
 - Write a flow, export it, then pass it with `golem run`.
 - Add a step to an e2e flow, and keep its comments and format.
+- Open an e2e flow without running it, edit a step, and pass the flow again with `draft_run`.
 - Read the launch line and a crash with `app_logs`.
 - Get `pending`, `busy`, `wait` and `status` with `--soft-timeout 5`.
 - Kill the MCP client while `golem run` runs on the other platform. The run passes, and the device is free. This test needs a booted device of each platform.

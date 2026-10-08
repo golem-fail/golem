@@ -322,6 +322,68 @@ async fn live_mcp_export_of_a_flow_session_keeps_its_comments_and_format() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
+async fn live_mcp_an_edited_flow_passes_again_with_draft_run() {
+    let live = Live::new();
+    let scratch = live.scratch();
+    let original = std::fs::read_to_string(live.root.join("e2e/tap.test.toml")).expect("tap flow");
+    let copy = scratch.path().join("tap.test.toml");
+    std::fs::write(&copy, &original).expect("copy");
+    let mcp = live.mcp(&[]).await;
+
+    let opened = live
+        .open(
+            &mcp,
+            serde_json::json!({ "flow": copy.display().to_string(), "run": false }),
+        )
+        .await;
+    assert!(opened.contains("before tap_interactions:1"), "{opened}");
+    // A smaller timeout is a real change: the step and the next go `?`.
+    let edited = mcp
+        .ok(
+            "step_edit",
+            serde_json::json!({ "at": "tap_interactions:1", "step": r#"{ action = "tap", on_text = "Submit", timeout = 8000 }"# }),
+        )
+        .await;
+    assert!(
+        edited.contains("tap_interactions:1 ?") && edited.contains("tap_interactions:2 ?"),
+        "{edited}"
+    );
+    let mut ran = mcp
+        .ok("draft_run", serde_json::json!({ "restart": true }))
+        .await;
+    while ran.starts_with("pending") {
+        ran = mcp.ok("wait", serde_json::json!({ "timeout_s": 30 })).await;
+    }
+    assert!(ran.contains("ran to the end"), "{ran}");
+    let steps = mcp
+        .ok(
+            "draft_steps",
+            serde_json::json!({ "block": "tap_interactions" }),
+        )
+        .await;
+    assert!(
+        steps.contains("tap_interactions:1 ✓") && steps.contains("tap_interactions:5 ✓"),
+        "{steps}"
+    );
+    assert!(
+        !steps.contains(" ? "),
+        "no step SHALL stay unverified:\n{steps}"
+    );
+    let verify = mcp
+        .ok(
+            "draft_steps",
+            serde_json::json!({ "block": format!("verify_{}", live.platform) }),
+        )
+        .await;
+    assert!(verify.contains(":1 ✓"), "{verify}");
+    let draft = mcp.ok("draft_show", serde_json::json!({})).await;
+    assert!(!draft.contains("# unverified"), "{draft}");
+    mcp.ok("session_close", serde_json::json!({ "teardown": false }))
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
 async fn live_mcp_app_logs_show_the_launch_line_and_a_crash() {
     let live = Live::new();
     let mcp = live.mcp(&[]).await;

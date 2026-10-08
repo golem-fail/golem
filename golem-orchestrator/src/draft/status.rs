@@ -451,6 +451,24 @@ impl Draft {
         }
     }
 
+    /// The run's 0-based step for the file's step `index` of block `b`
+    /// (or one past its last), where the run's block has `ran_len` steps:
+    /// the inverse of [`Draft::file_step`].
+    pub fn run_step(&self, b: usize, index: usize, ran_len: usize) -> Option<usize> {
+        let n = self.steps_len(b);
+        let mixins: Vec<usize> = (0..n)
+            .filter(|i| self.step_action(b, *i).as_deref() == Some("load_mixin"))
+            .collect();
+        match mixins.as_slice() {
+            [p] if ran_len != n => {
+                let span = (ran_len + 1).checked_sub(n)?;
+                Some(if index <= *p { index } else { index + span - 1 })
+            }
+            _ if ran_len == n => Some(index),
+            _ => None,
+        }
+    }
+
     /// Mark the steps that passed in the flow run the session opened from:
     /// `passed` holds each as the run labels it (block, 0-based step), and
     /// `ran` is the flow as it ran.
@@ -471,6 +489,24 @@ impl Draft {
             }
         }
         self.reparse()
+    }
+
+    /// Where the cursor is: the block and the 0-based step it is before
+    /// (the block's length at its end). `None` before the first block.
+    pub fn cursor(&self) -> Option<(String, usize)> {
+        let ins = self.insertion.as_ref()?;
+        let len = self.steps_len(ins.block);
+        Some((self.block_label(ins.block), ins.at.unwrap_or(len).min(len)))
+    }
+
+    /// The index of the block named `name`.
+    pub fn block_position(&self, name: &str) -> Option<usize> {
+        self.block_index(name)
+    }
+
+    /// The directory of the flow file the draft came from.
+    pub fn source_dir(&self) -> Option<&std::path::Path> {
+        self.own.first().and_then(|p| p.parent())
     }
 
     /// Put the cursor before the run's 1-based `step` of block `label`.
