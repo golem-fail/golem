@@ -186,6 +186,13 @@ fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
                     .unwrap_or_else(|| "?".to_string());
                 parts.push(format!("bash:\"{command}\" exit={c} {duration_ms}ms"));
             }
+            SubstepDetail::CompanionRestarted {
+                attempt,
+                max,
+                reconnect_ms,
+            } => parts.push(format!(
+                "restart:companion {attempt}/{max} {reconnect_ms}ms"
+            )),
             _ => {}
         }
     }
@@ -949,6 +956,16 @@ mod tests {
     }
 
     // ── format_substeps_toon tests ─────────────────────────────────
+
+    #[test]
+    fn a_companion_restart_shows_its_attempt_and_time() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::CompanionRestarted {
+            attempt: 1,
+            max: 3,
+            reconnect_ms: 8200,
+        }]);
+        assert_eq!(out, " restart:companion 1/3 8200ms");
+    }
 
     #[test]
     fn substeps_toon_tap_with_bounds_produces_at_xy_bxywh() {

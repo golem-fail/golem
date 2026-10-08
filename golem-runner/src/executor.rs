@@ -201,7 +201,7 @@ async fn restart_and_emit(
 ///   timeout, counting the restart against `zero_progress`; once the budget is
 ///   spent, abandon with D506 (`DeviceCompanionUnrecoverable`).
 #[allow(clippy::too_many_arguments)]
-async fn run_step_recovery(
+pub(crate) async fn run_step_recovery(
     initial: Result<StepOutcome>,
     recovery: &dyn crate::recovery::CompanionRecovery,
     witness: &crate::recovery::WitnessDriver<'_>,
