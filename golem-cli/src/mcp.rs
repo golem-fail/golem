@@ -270,7 +270,7 @@ pub struct StepNoteParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepEditParams {
-    /// block:step
+    /// block:step, from 1.
     pub at: String,
     /// The whole new step.
     pub step: Option<String>,
@@ -280,13 +280,13 @@ pub struct StepEditParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepAtParams {
-    /// block:step
+    /// block:step, from 1.
     pub at: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepMoveParams {
-    /// block:step
+    /// block:step, from 1.
     pub from: String,
     /// Its block:step after the move, counted without the moved step; one
     /// past a block's last step appends.
@@ -367,28 +367,37 @@ pub struct LogsParams {
     pub app: Option<String>,
 }
 
-/// What every client keeps in context: what golem is for, and the rules
-/// that many tools share, so that no tool repeats them.
-const INSTRUCTIONS: &str = "\
-golem drives iOS and Android devices (simulators, emulators) for mobile e2e tests. Use it to \
-write or edit an e2e flow (.test.toml), or to debug an app live: reproduce a bug, read the \
-screen and the app log.
-Start: session_open. It boots a device if needed. With flow = path it runs that flow first; \
-add run = false to edit the flow without running it.
-Look: tree (the visible tree decides what is on screen; full is a hint only), probe (check a \
-selector), screenshot, app_logs (crashes).
-Act: act runs one step. A step is a one-line TOML inline table: \
-{ action = \"tap\", on_text = \"OK\" }. actions_help lists the actions and their keys.
-Draft: the session builds a flow draft: the flow file it opened, or a new one with the \
-session's app whose first step starts block main. A flow is named blocks of steps. A step that passes in act goes into the draft at the cursor; a failed step \
-does not. A ${var} stays a reference. Address a step as block:step, from 1. draft_steps \
-shows each step's status: ✓ passed here, · not run here, ? unverified (# unverified in the \
-file), ~ stale. A change (a new, edited, moved or deleted step) makes the next step ? and \
-later steps ~. Change the draft with step_edit, step_delete, step_move, the block_ tools and \
-record_only (no run). draft_run runs the draft again: steps that pass become ✓. export_flow \
-writes the file.
-A long call answers pending: call wait. busy: another operation is running; status, wait, \
-cancel, app_logs and session_close still answer.";
+/// When to consider golem: the part of the instructions that a client
+/// keeps in context in every session, used or not. How to use each tool is
+/// in its own description, which a client with tool search loads only
+/// when it picks the tool, and which a client that drops the instructions
+/// still sends.
+macro_rules! when_to_use {
+    () => {
+        "Mobile e2e testing on iOS and Android simulators and emulators. Use it when the user \
+         wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to \
+         reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs."
+    };
+}
+
+/// The server instructions: what golem is, when to use it, where to start.
+pub const INSTRUCTIONS: &str = concat!(
+    "golem (MCP server): ",
+    when_to_use!(),
+    " Start with session_open; actions_help explains the step notation."
+);
+
+/// The instructions as an Agent Skill, for a client that does not pass a
+/// server's instructions to the model: the skill's description is what
+/// makes the client consider it.
+pub fn skill() -> String {
+    format!(
+        "---\nname: golem\ndescription: \"{}\"\n---\n\n{INSTRUCTIONS}\n\nThe tools come from the \
+         golem MCP server. If they are missing, ask the user to add it: \
+         `golem mcp --print-config <client>` prints the config block.\n",
+        when_to_use!()
+    )
+}
 
 /// The tools' input schemas without what costs a client tokens and tells
 /// it nothing: the `$schema` dialect (MCP's default) and the `null` that
@@ -570,7 +579,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Run one step on the device. If it passes, it goes into the draft at the cursor, and the cursor moves after it. Examples: { action = \"tap\", on_text = \"Sign in\" } · { action = \"type\", on_text = \"Email\", input = \"a@b.test\" } · { action = \"assert_visible\", on_text = \"Welcome\" }. Warns when a step passes in half its timeout or more."
+        description = "Run one step on the device. The step is a one-line TOML inline table; actions_help lists the actions and keys. Examples: { action = \"tap\", on_text = \"Sign in\" } · { action = \"type\", on_text = \"Email\", input = \"a@b.test\" } · { action = \"assert_visible\", on_text = \"Welcome\" }. A step that passes goes into the flow draft at the cursor, as written (a ${var} stays a reference), and the cursor moves after it; a failed step does not. Warns when a step passes in half its timeout or more."
     )]
     async fn act(&self, Parameters(p): Parameters<ActParams>) -> Result<CallToolResult, ErrorData> {
         let reply = self
@@ -599,7 +608,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The screen: one indexed line per element you can target. Visible elements only, unless full. Target an element with selector keys (actions_help), not its index."
+        description = "The screen: one indexed line per element you can target. Only the visible tree decides what is on screen; full adds off-screen elements as a hint. Target an element with selector keys (actions_help), not its index."
     )]
     async fn tree(
         &self,
@@ -625,7 +634,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Wait for the running operation, and return its result: the last result when none runs. It can answer pending again."
+        description = "A tool whose operation outlasts the soft timeout answers pending. wait waits for that operation and returns its result (the last result when none runs); it can answer pending again."
     )]
     async fn wait(
         &self,
@@ -642,7 +651,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Idle or busy, without waiting: the running operation and its phase, or the last result."
+        description = "Idle or busy, without waiting: the running operation and its phase, or the last result. While busy, only status, wait, cancel, app_logs and session_close answer."
     )]
     async fn status(
         &self,
@@ -698,7 +707,9 @@ impl GolemMcp {
         }
     }
 
-    #[tool(description = "The draft as .test.toml text.")]
+    #[tool(
+        description = "The flow draft as .test.toml text: the flow file the session opened, or a new flow with the session's app whose first step starts block main."
+    )]
     async fn draft_show(
         &self,
         Parameters(_): Parameters<NoParams>,
@@ -708,7 +719,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The draft's steps near the cursor, or one block's: block:step, status, step, comment. Block headers show next and branches."
+        description = "The draft's steps near the cursor, or one block's, each as block:step (from 1), status, step and comment. Status: ✓ passed here, · not run here, ? unverified (# unverified in the file), ~ stale. A change (a new, edited, moved or deleted step) makes the next step ? and later steps ~. Block headers show next and branches."
     )]
     async fn draft_steps(
         &self,
@@ -724,7 +735,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Run the draft on the device: no setup, no teardown, the app as it is. Steps that pass become ✓. Stops before stop_at, at a failed step, or at the end; the cursor goes there."
+        description = "Run the draft on the device: no setup, no teardown, the app as it is. Steps that pass become ✓, also from ? or ~. Stops before stop_at, at a failed step, or at the end; the cursor goes there."
     )]
     async fn draft_run(
         &self,
@@ -790,7 +801,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's next, and add branches. After a block's last step the flow takes the first branch whose condition holds, else next, else the next block in the file; after the last block it ends."
+        description = "Set a block's next, and add branches. A flow is named blocks of steps. After a block's last step the flow takes the first branch whose condition holds, else next, else the next block in the file; after the last block it ends."
     )]
     async fn block_link(
         &self,
@@ -834,7 +845,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Record a step at the cursor without running it, for a path the session does not take. It is ?."
+        description = "Record a step at the cursor without running it, for a path the session does not take. It is ? (unverified), and so is the step after it."
     )]
     async fn record_only(
         &self,
@@ -847,7 +858,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Change a step without running it. Only a new comment or a larger timeout keeps its status; any other change makes it ?."
+        description = "Change a draft step without running it. Only a new comment or a larger timeout keeps its status; any other change makes it and the next step ?, and later steps ~."
     )]
     async fn step_edit(
         &self,
@@ -857,7 +868,9 @@ impl GolemMcp {
             .await
     }
 
-    #[tool(description = "Remove a step and its comment.")]
+    #[tool(
+        description = "Remove a draft step and its comment. The next step becomes ?, and later steps ~."
+    )]
     async fn step_delete(
         &self,
         Parameters(p): Parameters<StepAtParams>,
@@ -866,7 +879,9 @@ impl GolemMcp {
             .await
     }
 
-    #[tool(description = "Move a step. Where it was counts as a delete; where it lands it is ?.")]
+    #[tool(
+        description = "Move a draft step. Where it was counts as a delete; where it lands it is ?."
+    )]
     async fn step_move(
         &self,
         Parameters(p): Parameters<StepMoveParams>,
@@ -1347,8 +1362,31 @@ pub async fn serve(options: McpOptions) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// Every client keeps the instructions and the tool list in context,
-    /// also in sessions that never use golem: the text stays short.
+    #[test]
+    fn the_skill_is_valid_frontmatter_with_the_when_to_use_text() {
+        let skill = skill();
+        let front = skill
+            .strip_prefix("---\n")
+            .and_then(|r| r.split_once("\n---\n"))
+            .map(|(f, _)| f)
+            .expect("frontmatter");
+        let lines: Vec<&str> = front.lines().collect();
+        assert_eq!(lines[0], "name: golem");
+        // Quoted: the text has ": ", which ends a plain YAML scalar.
+        let description = lines[1]
+            .strip_prefix("description: \"")
+            .and_then(|d| d.strip_suffix('"'))
+            .expect("a quoted description");
+        assert!(!description.contains('"'), "{description}");
+        assert!(
+            description.starts_with("Mobile e2e testing"),
+            "{description}"
+        );
+        assert!(skill.contains(INSTRUCTIONS));
+    }
+
+    /// A client keeps the instructions in context in every session, used
+    /// or not, and many also keep every tool's text: both stay short.
     #[test]
     fn the_instructions_and_tool_text_stay_short() {
         let words = |s: &str| s.split_whitespace().count();
@@ -1361,7 +1399,7 @@ mod tests {
         for tool in router.list_all() {
             let name = tool.name.to_string();
             let d = tool.description.as_deref().unwrap_or_default();
-            assert!(words(d) <= 70, "{name}: {} words", words(d));
+            assert!(words(d) <= 95, "{name}: {} words", words(d));
             let schema = serde_json::Value::Object((*tool.input_schema).clone());
             assert!(schema.get("$schema").is_none(), "{name}");
             let props = schema["properties"]
