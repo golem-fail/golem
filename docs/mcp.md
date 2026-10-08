@@ -199,6 +199,7 @@ A session runs one operation at a time.
   ```
 
 - `wait(timeout_s?)` waits for the running operation and returns its result. It can answer `pending` again.
+- Sessions hold at most 3 devices at once, across all your MCP clients and shells. An open past the cap answers `pending` with the phase `waiting for a device`, and goes on when another session closes. Set `GOLEM_SESSION_MAX_DEVICES` in the server's `env` to change the cap. golem reads it when its background process starts, so restart the server after a change.
 - A call made while an operation runs answers `busy`. `app_logs` is the exception: it does not wait, so it can show why a step hangs.
 - `status` shows the running operation, or the last result.
 - `cancel` stops the running operation. The teardown does not run.

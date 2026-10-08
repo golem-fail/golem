@@ -386,6 +386,8 @@ struct ServerShared {
     active_sessions: std::sync::Arc<std::sync::atomic::AtomicU64>,
     /// The sessions opened by name, which outlive their connection.
     named: crate::session_ipc::Named,
+    /// The cap on the devices that sessions hold.
+    session_slots: std::sync::Arc<crate::session::Slots>,
 }
 
 impl OrchestratorServer {
@@ -488,6 +490,7 @@ pub async fn start_server(path: &Path, identity: &Identity) -> Result<Orchestrat
         active_runs: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         active_sessions: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         named: crate::session_ipc::Named::default(),
+        session_slots: std::sync::Arc::new(crate::session::Slots::from_env()),
     };
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let idle_since = std::sync::Arc::new(std::sync::Mutex::new(Some(std::time::Instant::now())));
@@ -616,6 +619,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             session.clone(),
                             shared.resource_mgr.clone(),
                             shared.install_cache.clone(),
+                            shared.session_slots.clone(),
                             shared.active_sessions.clone(),
                             shared.named.clone(),
                             writer.clone(),
