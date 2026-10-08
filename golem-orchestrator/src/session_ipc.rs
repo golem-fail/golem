@@ -84,6 +84,10 @@ async fn handle(
             comment: msg["comment"].as_str().map(str::to_string),
         }),
         "session_draft_show" => Some(Op::DraftShow),
+        "session_edit" => match parse_edit(msg) {
+            Ok(edit) => Some(Op::Edit(edit)),
+            Err(e) => return error(&format!("{e:#}")),
+        },
         "session_export" => Some(Op::Export {
             path: std::path::PathBuf::from(msg["path"].as_str().unwrap_or_default()),
             overwrite: msg["overwrite"].as_bool().unwrap_or(false),
@@ -328,6 +332,52 @@ fn watch_idle(
     });
 }
 
+/// A `session_edit`: `edit` names the change, the other fields carry it.
+fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEdit> {
+    use crate::session::DraftEdit;
+    let text = |k: &str| msg[k].as_str().map(str::to_string);
+    let need = |k: &str| text(k).ok_or_else(|| anyhow::anyhow!("this edit needs `{k}`"));
+    let object = |k: &str| match &msg[k] {
+        serde_json::Value::Object(m) => Ok(m.clone()),
+        _ => Err(anyhow::anyhow!("this edit needs `{k}` as an object")),
+    };
+    Ok(match msg["edit"].as_str().unwrap_or_default() {
+        "flow_set" => DraftEdit::FlowSet(crate::draft::FlowSet {
+            name: text("name"),
+            tags: msg["tags"].as_array().map(|a| {
+                a.iter()
+                    .filter_map(|t| t.as_str().map(str::to_string))
+                    .collect()
+            }),
+            vars: msg["vars"].as_object().cloned(),
+            seed: msg["seed"].as_u64(),
+            explicit_only: msg["explicit_only"].as_bool(),
+            start: text("start"),
+        }),
+        "apps_set" => DraftEdit::AppSet(object("app")?),
+        "block_begin" => DraftEdit::BlockBegin {
+            name: need("name")?,
+            next: text("next"),
+        },
+        "block_link" => DraftEdit::BlockLink {
+            block: need("block")?,
+            next: text("next"),
+            branches: msg["branches"].as_array().cloned().unwrap_or_default(),
+        },
+        "teardown_add" => DraftEdit::TeardownAdd {
+            step: need("step")?,
+            comment: text("comment"),
+        },
+        "data_add" => DraftEdit::DataAdd(object("row")?),
+        "comment_add" => DraftEdit::CommentAdd(need("text")?),
+        "record_only" => DraftEdit::RecordOnly {
+            step: need("step")?,
+            comment: text("comment"),
+        },
+        other => anyhow::bail!("unknown draft edit: {other:?}"),
+    })
+}
+
 fn error(message: &str) -> serde_json::Value {
     serde_json::json!({ "status": "error", "message": message })
 }
@@ -393,6 +443,7 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
             "flow": flow,
         }),
         OpResult::Draft(text) => serde_json::json!({ "draft": text }),
+        OpResult::Edited(text) => serde_json::json!({ "edited": text }),
         OpResult::Exported {
             path,
             steps,

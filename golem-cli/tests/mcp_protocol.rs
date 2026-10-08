@@ -84,6 +84,15 @@ async fn every_tool_works_against_a_stub_session() {
         "actions_help",
         "draft_show",
         "export_flow",
+        "flow_set",
+        "apps_set",
+        "block_begin",
+        "block_link",
+        "teardown_add",
+        "data_add",
+        "comment_add",
+        "record_only",
+        "mixins_list",
     ] {
         assert!(
             tools.iter().any(|t| t == name),
@@ -199,6 +208,67 @@ async fn every_tool_works_against_a_stub_session() {
     )
     .await;
     assert!(err, "an export over another file SHALL need overwrite: {c}");
+
+    for (tool, args) in [
+        (
+            "flow_set",
+            serde_json::json!({ "name": "Drafted", "tags": ["smoke"] }),
+        ),
+        (
+            "apps_set",
+            serde_json::json!({ "app": { "name": "app", "bundle": golem_driver::stub::STUB_BUNDLE_ID, "devices": [{ "os": "android:latest" }] } }),
+        ),
+        ("block_begin", serde_json::json!({ "name": "second" })),
+        ("comment_add", serde_json::json!({ "text": "Check it" })),
+        (
+            "record_only",
+            serde_json::json!({ "step": r#"{ action = "tap", on_text = "Maybe" }"#, "comment": "error path" }),
+        ),
+        (
+            "block_link",
+            serde_json::json!({ "block": "main", "next": "second" }),
+        ),
+        (
+            "teardown_add",
+            serde_json::json!({ "step": r#"{ action = "screenshot" }"# }),
+        ),
+        ("data_add", serde_json::json!({ "row": { "who": "Ada" } })),
+    ] {
+        let (c, err) = call(&client, tool, args).await;
+        assert!(!err, "{tool}: {c}");
+        assert!(text_of(&c).starts_with("draft updated"), "{tool}: {c}");
+    }
+    let (c, err) = call(
+        &client,
+        "record_only",
+        serde_json::json!({ "step": r#"{ action = "tapp" }"# }),
+    )
+    .await;
+    assert!(
+        err,
+        "a malformed step SHALL be refused even when it does not run: {c}"
+    );
+    let (c, _) = call(&client, "mixins_list", serde_json::json!({})).await;
+    assert!(text_of(&c).contains("no mixins"), "{c}");
+    let all = dir.path().join("flows/all.test.toml");
+    let (c, err) = call(
+        &client,
+        "export_flow",
+        serde_json::json!({ "path": all.display().to_string() }),
+    )
+    .await;
+    assert!(!err, "{c}");
+    assert!(
+        text_of(&c).contains(r#"unverified (recorded with record_only, never run):"#),
+        "{c}"
+    );
+    let flow =
+        golem_parser::parse_flow(&std::fs::read_to_string(&all).expect("read")).expect("parse");
+    assert_eq!(flow.flow.name, "Drafted");
+    assert_eq!(flow.block.len(), 2);
+    assert_eq!(flow.block[0].next.as_deref(), Some("second"));
+    assert_eq!(flow.teardown[0].steps.len(), 1);
+    assert_eq!(flow.data.len(), 1);
 
     let (c, err) = call(&client, "session_close", serde_json::json!({})).await;
     assert!(!err, "{c}");

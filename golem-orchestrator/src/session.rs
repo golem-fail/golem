@@ -82,6 +82,8 @@ pub enum Op {
     Screenshot,
     /// The flow draft as TOML.
     DraftShow,
+    /// Change the draft without touching the device.
+    Edit(DraftEdit),
     /// Check the draft and write it to `path`.
     Export { path: PathBuf, overwrite: bool },
 }
@@ -94,7 +96,73 @@ impl Op {
             Op::Probe { .. } => "probe",
             Op::Screenshot => "screenshot",
             Op::DraftShow => "draft_show",
+            Op::Edit(e) => e.name(),
             Op::Export { .. } => "export_flow",
+        }
+    }
+}
+
+/// A change to the flow draft that does not touch the device.
+#[derive(Debug, Clone)]
+pub enum DraftEdit {
+    FlowSet(crate::draft::FlowSet),
+    AppSet(serde_json::Map<String, serde_json::Value>),
+    BlockBegin {
+        name: String,
+        next: Option<String>,
+    },
+    BlockLink {
+        block: String,
+        next: Option<String>,
+        branches: Vec<serde_json::Value>,
+    },
+    TeardownAdd {
+        step: String,
+        comment: Option<String>,
+    },
+    DataAdd(serde_json::Map<String, serde_json::Value>),
+    CommentAdd(String),
+    /// A step that does not run, for a path the live session does not take.
+    RecordOnly {
+        step: String,
+        comment: Option<String>,
+    },
+}
+
+impl DraftEdit {
+    fn name(&self) -> &'static str {
+        match self {
+            DraftEdit::FlowSet(_) => "flow_set",
+            DraftEdit::AppSet(_) => "apps_set",
+            DraftEdit::BlockBegin { .. } => "block_begin",
+            DraftEdit::BlockLink { .. } => "block_link",
+            DraftEdit::TeardownAdd { .. } => "teardown_add",
+            DraftEdit::DataAdd(_) => "data_add",
+            DraftEdit::CommentAdd(_) => "comment_add",
+            DraftEdit::RecordOnly { .. } => "record_only",
+        }
+    }
+
+    fn apply(&self, draft: &mut crate::draft::Draft) -> Result<()> {
+        // A step that will not run is still checked as one.
+        let line = |step: &str| golem_parser::inline::parse_step_inline(step).map(|p| p.line);
+        match self {
+            DraftEdit::FlowSet(set) => draft.flow_set(set),
+            DraftEdit::AppSet(app) => draft.app_set(app),
+            DraftEdit::BlockBegin { name, next } => draft.block_begin(name, next.as_deref()),
+            DraftEdit::BlockLink {
+                block,
+                next,
+                branches,
+            } => draft.block_link(block, next.as_deref(), branches),
+            DraftEdit::TeardownAdd { step, comment } => {
+                draft.teardown_add(&line(step)?, comment.as_deref())
+            }
+            DraftEdit::DataAdd(row) => draft.data_add(row),
+            DraftEdit::CommentAdd(text) => draft.comment_add(text),
+            DraftEdit::RecordOnly { step, comment } => {
+                draft.record_unverified(&line(step)?, comment.as_deref())
+            }
         }
     }
 }
@@ -119,6 +187,8 @@ pub enum OpResult {
         png: Vec<u8>,
     },
     Draft(String),
+    /// A draft edit applied; where the next step goes.
+    Edited(String),
     Exported {
         path: PathBuf,
         steps: usize,
@@ -912,6 +982,7 @@ fn phase_of(op: &Op) -> String {
         Op::Probe { selector, .. } => format!("probe {selector}"),
         Op::Screenshot => "screenshot".to_string(),
         Op::DraftShow => "draft_show".to_string(),
+        Op::Edit(e) => e.name().to_string(),
         Op::Export { path, .. } => format!("export_flow {}", path.display()),
     }
 }
@@ -933,6 +1004,13 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
             comment,
         } => act(work, step, *tree, comment.as_deref()).await,
         Op::DraftShow => OpResult::Draft(work.draft.text()),
+        Op::Edit(edit) => match edit.apply(&mut work.draft) {
+            Ok(()) => OpResult::Edited(format!(
+                "draft updated · next step goes at {}",
+                work.draft.describe_insertion()
+            )),
+            Err(e) => OpResult::Failed(format!("{e:#}")),
+        },
         Op::Export { path, overwrite } => {
             let path = if path.is_absolute() {
                 path.clone()

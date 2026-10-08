@@ -216,6 +216,62 @@ pub struct WaitParams {
     pub timeout_s: Option<u64>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+pub struct FlowSetParams {
+    pub name: Option<String>,
+    pub tags: Option<Vec<String>>,
+    /// Merged into [flow] vars.
+    pub vars: Option<std::collections::BTreeMap<String, String>>,
+    pub seed: Option<u64>,
+    pub explicit_only: Option<bool>,
+    /// The block the flow starts at.
+    pub start: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AppsSetParams {
+    /// One [[flow.apps]] entry: { "name": "app", "bundle": "com.acme",
+    /// "devices": [{ "os": "ios:latest", "type": "phone" }],
+    /// "permissions": { "camera": "allow" }, "install_script": "scripts/install.sh" }.
+    /// An entry with an existing name replaces those fields.
+    pub app: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockBeginParams {
+    /// The block to record into next; created when the draft has none by this name.
+    pub name: String,
+    /// The block that follows it.
+    pub next: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockLinkParams {
+    pub block: String,
+    pub next: Option<String>,
+    /// Branches to add: [{ "if_visible": "Error", "goto": "retry" }], or
+    /// if_not_visible, or if_var with equals, matches or gte.
+    pub branches: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct StepNoteParams {
+    /// One step as a TOML inline table. It does not run.
+    pub step: String,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DataAddParams {
+    /// One [[data]] row: { "email": "a@b.test", "name": "Ada" }.
+    pub row: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CommentParams {
+    pub text: String,
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ExportParams {
     /// Where to write the .test.toml, relative to the project directory or absolute.
@@ -506,6 +562,129 @@ impl GolemMcp {
     }
 
     #[tool(
+        description = "Set [flow] fields of the draft: name, tags, vars, seed, explicit_only, start."
+    )]
+    async fn flow_set(
+        &self,
+        Parameters(p): Parameters<FlowSetParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({
+            "edit": "flow_set", "name": p.name, "tags": p.tags, "vars": p.vars,
+            "seed": p.seed, "explicit_only": p.explicit_only, "start": p.start,
+        }))
+        .await
+    }
+
+    #[tool(
+        description = "Add or replace a [[flow.apps]] entry in the draft. It need not match the session's device."
+    )]
+    async fn apps_set(
+        &self,
+        Parameters(p): Parameters<AppsSetParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "apps_set", "app": p.app }))
+            .await
+    }
+
+    #[tool(
+        description = "Record the next steps into block name, creating it at the end of the draft if it does not exist."
+    )]
+    async fn block_begin(
+        &self,
+        Parameters(p): Parameters<BlockBeginParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "block_begin", "name": p.name, "next": p.next }))
+            .await
+    }
+
+    #[tool(
+        description = "Set a block's next block and add branches (if_visible / if_not_visible / if_var, then goto)."
+    )]
+    async fn block_link(
+        &self,
+        Parameters(p): Parameters<BlockLinkParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({
+            "edit": "block_link", "block": p.block, "next": p.next, "branches": p.branches,
+        }))
+        .await
+    }
+
+    #[tool(description = "Add a step to the draft's [[teardown]]. The step does not run now.")]
+    async fn teardown_add(
+        &self,
+        Parameters(p): Parameters<StepNoteParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(
+            serde_json::json!({ "edit": "teardown_add", "step": p.step, "comment": p.comment }),
+        )
+        .await
+    }
+
+    #[tool(description = "Add a [[data]] row to the draft, for a for_each block.")]
+    async fn data_add(
+        &self,
+        Parameters(p): Parameters<DataAddParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "data_add", "row": p.row }))
+            .await
+    }
+
+    #[tool(description = "Add a comment line to the draft where the next step goes.")]
+    async fn comment_add(
+        &self,
+        Parameters(p): Parameters<CommentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "comment_add", "text": p.text }))
+            .await
+    }
+
+    #[tool(
+        description = "Record a step without running it, for a path the session does not take. It is marked # unverified, and export_flow lists it."
+    )]
+    async fn record_only(
+        &self,
+        Parameters(p): Parameters<StepNoteParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(
+            serde_json::json!({ "edit": "record_only", "step": p.step, "comment": p.comment }),
+        )
+        .await
+    }
+
+    #[tool(
+        description = "The project's mixins and the vars each expects. Use one with act('{ action = \"load_mixin\", mixin = \"name\", vars = { … } }')."
+    )]
+    async fn mixins_list(
+        &self,
+        Parameters(_): Parameters<NoParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let found = golem_orchestrator::draft::mixins(&self.options.project_root);
+        if found.is_empty() {
+            return text("no mixins: the project has no __mixins__/ directory");
+        }
+        let mut out = String::new();
+        for m in found {
+            let rel = m
+                .path
+                .strip_prefix(&self.options.project_root)
+                .unwrap_or(&m.path)
+                .display()
+                .to_string();
+            out.push_str(&format!(
+                "{} ({rel}){}\n",
+                m.name,
+                if m.vars.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · vars: {}", m.vars.join(", "))
+                }
+            ));
+        }
+        text(out)
+    }
+
+    #[tool(
         description = "How to write steps. Without an action: the notation and every action. With an action: its description and examples."
     )]
     async fn actions_help(
@@ -546,6 +725,11 @@ impl GolemMcp {
         self.call(kind, msg).await
     }
 
+    async fn edit(&self, msg: serde_json::Value) -> Result<CallToolResult, ErrorData> {
+        let reply = self.op("session_edit", msg).await?;
+        self.render(&reply, false)
+    }
+
     fn render(&self, reply: &serde_json::Value, json: bool) -> Result<CallToolResult, ErrorData> {
         if reply["status"] != "done" {
             return self.not_done(reply);
@@ -560,6 +744,9 @@ impl GolemMcp {
                 reply["op_id"],
                 reply["op"].as_str().unwrap_or_default()
             ));
+        }
+        if let Some(edited) = r["edited"].as_str() {
+            return self::text(edited.to_string());
         }
         if let Some(text) = r["draft"].as_str() {
             return self::text(text.to_string());

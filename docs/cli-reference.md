@@ -195,7 +195,16 @@ The server starts without device work. The session runs in the daemon and belong
 | `screenshot` | The screen as a PNG image |
 | `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
 | `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
-| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it |
+| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, listing any `record_only` steps |
+| `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
+| `apps_set(app)` | Add or replace a `[[flow.apps]]` entry: `bundle`, `devices`, `permissions`, `install_script` |
+| `block_begin(name, next?)` | Record the next steps into a block, creating it if needed |
+| `block_link(block, next?, branches?)` | Set a block's `next`, and add branches (`if_visible`, `if_not_visible` or `if_var`, then `goto`) |
+| `teardown_add(step, comment?)` | Add a step to the draft's `[[teardown]]`; it does not run |
+| `data_add(row)` | Add a `[[data]]` row |
+| `comment_add(text)` | Add a comment line where the next step goes |
+| `record_only(step, comment?)` | Record a step without running it, marked `# unverified`, for a path the session does not take |
+| `mixins_list` | The project's mixins and the vars each expects; run one with `act` and `action = "load_mixin"` |
 | `actions_help(action?)` | The step notation and every action, or one action's reference |
 
 **A session from a flow.** `session_open(flow = "e2e/checkout.test.toml")` runs the flow on the chosen device, then keeps the device, the driver and the flow's variables for the session:
