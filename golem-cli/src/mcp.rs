@@ -156,6 +156,25 @@ pub struct OpenParams {
     pub project: Option<String>,
     /// End the session after this many seconds with no operation (default 1800).
     pub idle_timeout_s: Option<u64>,
+    /// Run this flow file first (setup, apps, launch, steps), and open the
+    /// session where it stops. Its [[teardown]] runs at session_close.
+    pub flow: Option<String>,
+    /// With flow: stop before this step, "block" or "block:step" (steps count from 1).
+    pub stop_at: Option<String>,
+    /// With flow: keep the session open at a failed step. Without it, a
+    /// failed flow ends as golem run would, and no session opens.
+    #[serde(default)]
+    pub break_on_failure: bool,
+    /// With flow: false skips its [[teardown]] however the session ends.
+    pub teardown: Option<bool>,
+    /// With flow: variables to set, as with golem run --var.
+    pub vars: Option<std::collections::BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+pub struct CloseParams {
+    /// Run the [[teardown]] of the flow the session opened from (default true).
+    pub teardown: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -278,6 +297,12 @@ impl GolemMcp {
             },
             "project_root": project_root.display().to_string(),
             "idle_timeout_s": p.idle_timeout_s,
+            "flow": p.flow,
+            "stop_at": p.stop_at,
+            "break_on_failure": p.break_on_failure,
+            "teardown": p.teardown,
+            "vars": p.vars,
+            "wait_ms": self.options.soft_timeout.as_millis() as u64,
         });
         if self.options.stub {
             msg["stub"] = serde_json::json!(true);
@@ -309,26 +334,25 @@ impl GolemMcp {
             t.abort();
         }
         let reply = reply?;
-        match reply["status"].as_str() {
-            Some("open") => text(format!(
-                "session open · {} ({}) · app {} · idle timeout {}s",
-                reply["device"].as_str().unwrap_or_default(),
-                reply["udid"].as_str().unwrap_or_default(),
-                non_empty(reply["bundle"].as_str()).unwrap_or("(last launched)"),
-                reply["idle_timeout_s"]
-            )),
-            _ => self.not_done(&reply),
-        }
+        self.render(&reply, false)
     }
 
     #[tool(description = "Close the session and release its device.")]
     async fn session_close(
         &self,
-        Parameters(_): Parameters<NoParams>,
+        Parameters(p): Parameters<CloseParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let reply = self.call("session_close", serde_json::json!({})).await?;
+        let reply = self
+            .call(
+                "session_close",
+                serde_json::json!({ "teardown": p.teardown.unwrap_or(true) }),
+            )
+            .await?;
         match reply["status"].as_str() {
-            Some("closed") => text("session closed"),
+            Some("closed") => match reply["teardown"].as_str() {
+                Some(notes) => text(format!("session closed · {notes}")),
+                None => text("session closed"),
+            },
             _ => self.not_done(&reply),
         }
     }
@@ -501,6 +525,18 @@ impl GolemMcp {
                 reply["op_id"],
                 reply["op"].as_str().unwrap_or_default()
             ));
+        }
+        if r["opened"] == true {
+            let mut out = format!(
+                "session open · {} ({}) · app {}\n",
+                r["device"].as_str().unwrap_or_default(),
+                r["udid"].as_str().unwrap_or_default(),
+                non_empty(r["bundle"].as_str()).unwrap_or("(last launched)"),
+            );
+            if let Some(flow) = r["flow"].as_str() {
+                out.push_str(flow);
+            }
+            return text(out);
         }
         if let Some(png) = r["png_base64"].as_str() {
             return Ok(CallToolResult::success(vec![ContentBlock::image(

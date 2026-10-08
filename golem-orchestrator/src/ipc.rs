@@ -564,6 +564,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             json,
                             session.clone(),
                             shared.resource_mgr.clone(),
+                            shared.install_cache.clone(),
                             shared.active_sessions.clone(),
                             writer.clone(),
                         );
@@ -987,6 +988,7 @@ async fn handle_submit(
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
         child_env: parse_child_env(cfg).map(std::sync::Arc::new),
+        handoff: None,
     };
 
     let mut runner = SuiteRunner::with_resource_manager(

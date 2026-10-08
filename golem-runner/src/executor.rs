@@ -763,6 +763,26 @@ pub async fn execute_flow<'a>(
         // instant). Extracted from the recording at each recording-stop site.
         let mut deferred_frames: Vec<(std::path::PathBuf, std::time::Instant)> = Vec::new();
         for (step_idx, step) in block.steps.iter().enumerate() {
+            if ctx
+                .stop_at
+                .as_ref()
+                .is_some_and(|stop| stop.matches(block.name.as_deref(), step_idx))
+            {
+                ctx.stopped_at = ctx.stop_at.take();
+                return Ok(FlowResult {
+                    success: true,
+                    warnings,
+                    failed_step: None,
+                    failed_block: None,
+                    failed_action: None,
+                    failed_reason: None,
+                    failed_code: None,
+                    barrier_aborted: false,
+                    perf_snapshots: vec![],
+                    recordings: recordings.clone(),
+                    a11y_audits,
+                });
+            }
             ctx.step_index = step_idx;
             ctx.block_iteration = iteration.saturating_sub(1);
 
@@ -1976,6 +1996,32 @@ pub async fn execute_flow_with_teardown<'a>(
     )
     .await;
 
+    finish_flow(
+        flow,
+        driver,
+        vars,
+        default_timeout_ms,
+        ctx,
+        run_teardown,
+        &mut result,
+    )
+    .await;
+    result
+}
+
+/// The end of a flow after `execute_flow`: run its `[[teardown]]` blocks
+/// unless `run_teardown` is false, then close its browser whatever happened.
+/// Teardown notes fold into `result`'s warnings. A session opened from a
+/// flow calls this when it closes, long after `execute_flow` returned.
+pub async fn finish_flow<'a>(
+    flow: &'a FlowFile,
+    driver: &dyn PlatformDriver,
+    vars: &mut VariableStore,
+    default_timeout_ms: u64,
+    ctx: &ExecutionContext<'a>,
+    run_teardown: bool,
+    result: &mut Result<FlowResult>,
+) {
     if run_teardown && !flow.teardown.is_empty() {
         // execute_flow's &mut borrow has ended; teardown takes a shared ctx.
         let teardown = crate::teardown::execute_teardown(
@@ -2021,8 +2067,6 @@ pub async fn execute_flow_with_teardown<'a>(
             r.warnings.push(format!("Browser teardown error: {e:#}"));
         }
     }
-
-    result
 }
 
 /// Seed a `[*.vars]` map into `target` at `scope`, evaluating `fake:`
@@ -5867,5 +5911,88 @@ action = "screenshot"
             1,
             "no recovery hook SHALL mean no retry"
         );
+    }
+
+    #[tokio::test]
+    async fn stop_at_stops_before_the_named_step_the_first_time() {
+        let mut fail = crate::actions::test_helpers::make_step("fail");
+        fail.params.insert(
+            "message".into(),
+            toml::Value::String("ran past the stop".into()),
+        );
+        let flow = make_flow(vec![
+            make_block(
+                Some("one"),
+                vec![crate::actions::test_helpers::make_step("hide_keyboard")],
+            ),
+            make_block(
+                Some("two"),
+                vec![
+                    crate::actions::test_helpers::make_step("hide_keyboard"),
+                    fail,
+                ],
+            ),
+        ]);
+        let driver = MockPlatformDriver::new(golem_element::Element {
+            element_type: "View".into(),
+            text: None,
+            accessibility_label: None,
+            accessibility_id: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable: false,
+            focused: false,
+            bounds: golem_element::Bounds::new(0, 0, 100, 100),
+            visible_bounds: None,
+            hit_points: vec![],
+            drawing_order: None,
+            children: vec![],
+        });
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+        let capture = crate::capture::CaptureConfig {
+            screenshot_on_failure: false,
+            ..Default::default()
+        };
+        let mut ctx = ExecutionContext {
+            stop_at: Some(crate::context::StopAt::parse("two:2").expect("parse")),
+            ..ExecutionContext::new(&tmp, &tmp, &capture, "test")
+        };
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
+            .await
+            .expect("flow");
+        assert!(
+            result.success,
+            "the flow SHALL stop before the failing step"
+        );
+        assert_eq!(
+            ctx.stopped_at.as_ref().map(ToString::to_string).as_deref(),
+            Some("two:2")
+        );
+        assert!(ctx.stop_at.is_none(), "the stop SHALL fire once");
+        assert_eq!(ctx.global_step_index, 2, "two steps SHALL have run");
+    }
+
+    #[test]
+    fn stop_at_parses_a_block_and_an_optional_step() {
+        use crate::context::StopAt;
+        assert_eq!(
+            StopAt::parse("login").expect("block"),
+            StopAt {
+                block: "login".into(),
+                step: 1
+            }
+        );
+        assert_eq!(
+            StopAt::parse("login:3").expect("step"),
+            StopAt {
+                block: "login".into(),
+                step: 3
+            }
+        );
+        assert!(StopAt::parse("login:0").is_err());
+        assert!(StopAt::parse(":2").is_err());
+        assert!(StopAt::parse("login:x").is_err());
     }
 }

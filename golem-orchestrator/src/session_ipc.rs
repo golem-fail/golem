@@ -27,7 +27,7 @@ impl ConnSession {
     /// End the session when its connection drops: no teardown.
     pub(crate) async fn disconnect(&self) {
         if let Some(session) = self.slot.lock().await.take() {
-            session.close("client disconnected").await;
+            session.close("client disconnected", false).await;
         }
     }
 }
@@ -37,12 +37,21 @@ pub(crate) fn spawn(
     msg: serde_json::Value,
     conn: ConnSession,
     resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
     sessions: Arc<std::sync::atomic::AtomicU64>,
     writer: Writer,
 ) {
     tokio::spawn(async move {
         let id = msg["id"].clone();
-        let mut reply = handle(&msg, &conn, &resource_mgr, &sessions, &writer).await;
+        let mut reply = handle(
+            &msg,
+            &conn,
+            &resource_mgr,
+            &install_cache,
+            &sessions,
+            &writer,
+        )
+        .await;
         reply["type"] = serde_json::json!("session_reply");
         reply["id"] = id;
         let mut w = writer.lock().await;
@@ -54,12 +63,13 @@ async fn handle(
     msg: &serde_json::Value,
     conn: &ConnSession,
     resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: &golem_runner::installer::InstallCache,
     sessions: &Arc<std::sync::atomic::AtomicU64>,
     writer: &Writer,
 ) -> serde_json::Value {
     let kind = msg["type"].as_str().unwrap_or_default();
     if kind == "session_open" {
-        return open(msg, conn, resource_mgr, sessions, writer).await;
+        return open(msg, conn, resource_mgr, install_cache, sessions, writer).await;
     }
     let Some(session) = conn.slot.lock().await.clone() else {
         return error("no session is open on this connection; call session_open first");
@@ -98,9 +108,10 @@ async fn handle(
             serde_json::json!({ "status": "ok", "cancelled": cancelled })
         }
         "session_close" => {
-            session.close("closed").await;
+            let teardown = msg["teardown"].as_bool().unwrap_or(true);
+            let notes = session.close("closed", teardown).await;
             *conn.slot.lock().await = None;
-            serde_json::json!({ "status": "closed" })
+            serde_json::json!({ "status": "closed", "teardown": notes })
         }
         other => error(&format!("unknown session message: {other}")),
     }
@@ -110,6 +121,7 @@ async fn open(
     msg: &serde_json::Value,
     conn: &ConnSession,
     resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: &golem_runner::installer::InstallCache,
     sessions: &Arc<std::sync::atomic::AtomicU64>,
     writer: &Writer,
 ) -> serde_json::Value {
@@ -127,37 +139,40 @@ async fn open(
         Ok(r) => r,
         Err(e) => return error(&format!("{e:#}")),
     };
+    let flow = match parse_flow_open(msg) {
+        Ok(f) => f,
+        Err(e) => return error(&format!("{e:#}")),
+    };
     let idle_timeout = msg["idle_timeout_s"]
         .as_u64()
         .map_or(crate::session::DEFAULT_IDLE_TIMEOUT, Duration::from_secs);
+    let wait = msg["wait_ms"]
+        .as_u64()
+        .map_or(DEFAULT_WAIT, Duration::from_millis);
     #[cfg(debug_assertions)]
-    if msg["stub"].as_bool() == Some(true) {
-        let session = Arc::new(stub_session(req.project_root, idle_timeout));
-        *slot = Some(session.clone());
-        drop(slot);
-        sessions.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        watch_idle(
-            session.clone(),
-            conn.clone(),
-            sessions.clone(),
-            writer.clone(),
-        );
-        return opened_json(&session, idle_timeout);
-    }
-    let session = match Session::open(
-        OpenRequest {
-            query: req.query,
-            project_root: req.project_root,
-            child_env: req.child_env,
-            idle_timeout,
-        },
-        resource_mgr,
-    )
-    .await
-    {
-        Ok(s) => Arc::new(s),
-        Err(e) => return error(&format!("{e:#}")),
-    };
+    let stub = msg["stub"].as_bool() == Some(true) && flow.is_none();
+    #[cfg(not(debug_assertions))]
+    let stub = false;
+    let session = Arc::new(if stub {
+        #[cfg(debug_assertions)]
+        {
+            stub_session(req.project_root, idle_timeout)
+        }
+        #[cfg(not(debug_assertions))]
+        unreachable!("stub sessions exist in debug builds only")
+    } else {
+        Session::start(
+            OpenRequest {
+                query: req.query,
+                project_root: req.project_root,
+                child_env: req.child_env,
+                idle_timeout,
+                flow,
+            },
+            resource_mgr.clone(),
+            install_cache.clone(),
+        )
+    });
     *slot = Some(session.clone());
     drop(slot);
     sessions.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -167,16 +182,73 @@ async fn open(
         sessions.clone(),
         writer.clone(),
     );
-    opened_json(&session, idle_timeout)
+    if stub {
+        return opened_json(idle_timeout);
+    }
+    let waited = session.wait(wait).await;
+    // An open that failed leaves nothing to keep.
+    if let Waited::Done(Outcome {
+        result: OpResult::Failed(_),
+        ..
+    }) = &waited
+    {
+        session.close("the open failed", false).await;
+        let mut slot = conn.slot.lock().await;
+        if slot.as_ref().is_some_and(|s| Arc::ptr_eq(s, &session)) {
+            *slot = None;
+        }
+    }
+    waited_json(waited)
 }
 
-fn opened_json(session: &Session, idle_timeout: Duration) -> serde_json::Value {
+/// The flow part of a `session_open`: `flow`, `stop_at`,
+/// `break_on_failure`, `teardown` and `vars`.
+fn parse_flow_open(msg: &serde_json::Value) -> anyhow::Result<Option<crate::session::FlowOpen>> {
+    let Some(path) = msg["flow"].as_str() else {
+        if !msg["stop_at"].is_null() {
+            anyhow::bail!("stop_at needs a flow");
+        }
+        return Ok(None);
+    };
+    let stop_at = msg["stop_at"]
+        .as_str()
+        .map(golem_runner::context::StopAt::parse)
+        .transpose()?;
+    let vars = msg["vars"]
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        v.as_str().map_or_else(|| v.to_string(), str::to_string),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(Some(crate::session::FlowOpen {
+        path: std::path::PathBuf::from(path),
+        stop_at,
+        break_on_failure: msg["break_on_failure"].as_bool().unwrap_or(false),
+        no_teardown: msg["teardown"].as_bool() == Some(false),
+        vars,
+        stub: cfg!(debug_assertions) && msg["stub"].as_bool() == Some(true),
+    }))
+}
+
+fn opened_json(idle_timeout: Duration) -> serde_json::Value {
     serde_json::json!({
-        "status": "open",
-        "device": format!("{}/{}", session.device().platform, session.device().name),
-        "udid": session.device().udid,
-        "bundle": session.bundle(),
-        "idle_timeout_s": idle_timeout.as_secs(),
+        "status": "done",
+        "op_id": 0,
+        "op": "session_open",
+        "result": {
+            "opened": true,
+            "device": "android/Stub Device",
+            "udid": "stub-session",
+            "bundle": golem_driver::stub::STUB_BUNDLE_ID,
+            "idle_timeout_s": idle_timeout.as_secs(),
+        },
     })
 }
 
@@ -234,7 +306,7 @@ fn watch_idle(
                     "idle timeout after {}m",
                     session.idle_timeout().as_secs() / 60
                 );
-                session.close(&reason).await;
+                session.close(&reason, false).await;
                 let mut slot = conn.slot.lock().await;
                 if slot.as_ref().is_some_and(|s| Arc::ptr_eq(s, &session)) {
                     *slot = None;
@@ -301,6 +373,18 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
         OpResult::Probe { toon, json } => serde_json::json!({ "toon": toon, "report": json }),
         OpResult::Screenshot { png } => serde_json::json!({
             "png_base64": golem_driver::ime::base64_encode(png),
+        }),
+        OpResult::Opened {
+            device,
+            udid,
+            bundle,
+            flow,
+        } => serde_json::json!({
+            "opened": true,
+            "device": device,
+            "udid": udid,
+            "bundle": bundle,
+            "flow": flow,
         }),
         OpResult::Failed(message) => serde_json::json!({ "error": message }),
         OpResult::Cancelled => serde_json::json!({ "cancelled": true }),

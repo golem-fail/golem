@@ -209,6 +209,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 profile: args.profile.clone(),
                 // The daemon rebuilds this from the wire (`client_env`).
                 child_env: None,
+                handoff: None,
             };
 
             // Parse `--max-device-wait` into milliseconds for the wire. An
