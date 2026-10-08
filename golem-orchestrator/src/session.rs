@@ -47,8 +47,9 @@ pub enum Op {
     /// Run a step, given in the canonical notation; with `tree`, also read
     /// the visible tree after it.
     Act { step: String, tree: bool },
-    /// Read the tree: the visible one, or the full one as a hint.
-    Tree { full: bool },
+    /// Read the tree: the visible one, or the full one as a hint; as TOON,
+    /// or with `json` as the element tree.
+    Tree { full: bool, json: bool },
     /// Report what a selector matches, polling up to `timeout_ms`.
     Probe { selector: String, timeout_ms: u64 },
     /// Capture the screen as PNG.
@@ -420,7 +421,7 @@ fn phase_of(op: &Op) -> String {
             Ok(parsed) => format!("act {}", parsed.line),
             Err(_) => "act".to_string(),
         },
-        Op::Tree { full } => format!("tree{}", if *full { " (full)" } else { "" }),
+        Op::Tree { full, .. } => format!("tree{}", if *full { " (full)" } else { "" }),
         Op::Probe { selector, .. } => format!("probe {selector}"),
         Op::Screenshot => "screenshot".to_string(),
     }
@@ -438,7 +439,7 @@ fn summary_of(op: &Op, result: &OpResult) -> String {
 async fn run_op(work: &mut Work, op: &Op) -> OpResult {
     match op {
         Op::Act { step, tree } => act(work, step, *tree).await,
-        Op::Tree { full } => match read_tree(work.driver.as_ref(), *full).await {
+        Op::Tree { full, json } => match read_tree(work.driver.as_ref(), *full, *json).await {
             Ok(text) => OpResult::Tree(text),
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
@@ -520,7 +521,7 @@ async fn act(work: &mut Work, step: &str, tree: bool) -> OpResult {
     *step_count = ctx.global_step_index;
     *rng = ctx.rng.into_inner().unwrap_or_else(|e| e.into_inner());
     let tree = if tree {
-        read_tree(driver.as_ref(), false).await.ok()
+        read_tree(driver.as_ref(), false, false).await.ok()
     } else {
         None
     };
@@ -534,11 +535,21 @@ async fn act(work: &mut Work, step: &str, tree: bool) -> OpResult {
     }
 }
 
-async fn read_tree(driver: &dyn PlatformDriver, full: bool) -> Result<String> {
-    if !full {
+async fn read_tree(driver: &dyn PlatformDriver, full: bool, json: bool) -> Result<String> {
+    if !full && !json {
         return crate::interactive::visible_tree(driver).await;
     }
     let (root, meta) = driver.get_hierarchy().await?;
+    if json {
+        let tree = if full {
+            root
+        } else {
+            let mut viewport = golem_element::Viewport::from_root(&root);
+            viewport.height -= meta.keyboard_height;
+            golem_element::filter_viewport(&root, &viewport)
+        };
+        return Ok(serde_json::to_string_pretty(&tree)?);
+    }
     Ok(encode_tree(
         &root,
         &TreeHeader {
@@ -683,7 +694,16 @@ mod tests {
             None,
             DEFAULT_IDLE_TIMEOUT,
         );
-        match run(&s, Op::Tree { full: false }).await.result {
+        match run(
+            &s,
+            Op::Tree {
+                full: false,
+                json: false,
+            },
+        )
+        .await
+        .result
+        {
             OpResult::Tree(t) => assert!(t.contains("\"Pay 42\""), "{t}"),
             other => panic!("{other:?}"),
         }
@@ -716,7 +736,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn a_second_call_while_busy_is_refused_and_cancel_stops_it() {
         let s = session_on(stuck(), None, DEFAULT_IDLE_TIMEOUT);
-        let Begin::Started(first) = s.begin(Op::Tree { full: false }) else {
+        let Begin::Started(first) = s.begin(Op::Tree {
+            full: false,
+            json: false,
+        }) else {
             panic!("SHALL start");
         };
         match s.begin(Op::Screenshot) {
@@ -767,7 +790,10 @@ mod tests {
         let s = session_on(stuck(), None, Duration::from_secs(60));
         tokio::time::advance(Duration::from_secs(30)).await;
         assert_eq!(s.idle_for(), Duration::from_secs(30));
-        let _ = s.begin(Op::Tree { full: false });
+        let _ = s.begin(Op::Tree {
+            full: false,
+            json: false,
+        });
         tokio::time::advance(Duration::from_secs(600)).await;
         assert_eq!(
             s.idle_for(),
@@ -792,7 +818,10 @@ mod tests {
         ));
         let lease = rm.try_lease(&device(), 0).expect("lease");
         let s = session_on(stuck(), Some(lease), DEFAULT_IDLE_TIMEOUT);
-        let _ = s.begin(Op::Tree { full: false });
+        let _ = s.begin(Op::Tree {
+            full: false,
+            json: false,
+        });
         assert!(
             rm.try_allocate(&device(), 0).is_err(),
             "the session SHALL hold the device"

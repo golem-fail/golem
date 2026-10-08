@@ -25,6 +25,8 @@ pub enum Commands {
     /// Show what a selector matches on a device, without acting:
     /// `golem probe '{ on_text = "OK" }'`
     Probe(ProbeArgs),
+    /// Run an MCP server over stdio, so an LLM client can drive a device
+    Mcp(McpArgs),
     /// List available devices
     Devices,
     /// Initialize a new project
@@ -151,6 +153,22 @@ pub struct ProbeArgs {
     /// Output format
     #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
     pub output: TreeOutput,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct McpArgs {
+    /// The project directory that holds golem.toml (default: search up from
+    /// the working directory)
+    #[arg(long)]
+    pub project: Option<std::path::PathBuf>,
+
+    /// Seconds a tool waits for its operation before it answers `pending`
+    #[arg(long, default_value_t = 45)]
+    pub soft_timeout: u64,
+
+    /// Open sessions on the device-free stub driver (debug builds; tests)
+    #[arg(long, hide = true)]
+    pub stub_session: bool,
 }
 
 /// `golem tree` output formats.

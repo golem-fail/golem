@@ -10,6 +10,7 @@
 - [`golem tree`](#golem-tree)
 - [`golem do`](#golem-do)
 - [`golem probe`](#golem-probe)
+- [`golem mcp`](#golem-mcp)
 - [`golem devices`](#golem-devices)
 - [`golem init`](#golem-init)
 - [`golem create <name>`](#golem-create-name)
@@ -167,6 +168,35 @@ android/Pixel 8 Pro API 36 probe { on_text = "Action" } · 2 visible matches · 
  [16] Button "Action" 969,1098 225x132 @1081,1164  ·button·has_text·short_text·
 warn: more than one element matches, and act picks the first. Add index, or a tighter selector
 ```
+
+## `golem mcp`
+
+Run an MCP server over stdio, so an LLM client (Claude Code, Codex, Claude Desktop) can drive a device one step at a time.
+
+```bash
+golem mcp [--project <DIR>] [--soft-timeout <SECS>]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--project <DIR>` | The project directory that holds `golem.toml`. Without it, golem searches up from the working directory. `session_open` can also name a project. |
+| `--soft-timeout <SECS>` | How long a tool waits for its operation before it answers `pending` (default 45). |
+
+The server starts without device work. The session runs in the daemon and belongs to this server: when the client stops the server, the session ends and its device is released. Stdout carries JSON-RPC only.
+
+| Tool | Description |
+|------|-------------|
+| `devices(platform?)` | Every device, with its state and the port of a live companion |
+| `session_open(platform?, device?, bundle?, app?, project?, idle_timeout_s?)` | Open a session on one device and app. It ends after `idle_timeout_s` (default 1800) with no operation |
+| `session_close` | Close the session and release the device |
+| `act(step, comment?, tree?, format?)` | Run one step, as in `golem do`. `tree = true` adds the visible tree after the step |
+| `probe(selector, timeout_ms?, format?)` | As `golem probe` |
+| `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
+| `screenshot` | The screen as a PNG image |
+| `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
+| `actions_help(action?)` | The step notation and every action, or one action's reference |
+
+A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 
 ## `golem devices`
 

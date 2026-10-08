@@ -147,8 +147,7 @@ pub(crate) fn is_known_action(action: &str) -> bool {
 }
 
 /// Every action a step may name, alphabetical within each group.
-#[cfg(test)]
-pub(crate) fn known_actions() -> &'static [&'static str] {
+pub fn known_actions() -> &'static [&'static str] {
     KNOWN_ACTIONS
 }
 
