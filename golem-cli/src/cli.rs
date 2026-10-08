@@ -104,9 +104,10 @@ pub struct ProbeArgs {
     #[arg(long, default_value_t = 0)]
     pub timeout: u64,
 
-    /// Consider only devices on this platform (ios or android)
+    /// Consider only devices with this OS, as a flow's `os`: ios, android,
+    /// ios:26, ios:26+ or ios:latest
     #[arg(long)]
-    pub platform: Option<String>,
+    pub os: Option<String>,
 
     /// The device: a UDID or serial, a name, or part of either
     #[arg(long)]
@@ -357,9 +358,10 @@ pub enum TreeOutput {
 
 #[derive(clap::Args, Debug)]
 pub struct TreeArgs {
-    /// Filter by platform (ios or android)
+    /// Consider only devices with this OS, as a flow's `os`: ios, android,
+    /// ios:26, ios:26+ or ios:latest
     #[arg(long)]
-    pub platform: Option<String>,
+    pub os: Option<String>,
 
     /// Filter by device name or UDID
     #[arg(long)]
@@ -969,7 +971,7 @@ mod tests {
         let Commands::Tree(tree) = cli.command else {
             panic!("expected Tree");
         };
-        assert!(tree.platform.is_none());
+        assert!(tree.os.is_none());
         assert!(tree.device.is_none());
         assert!(!tree.full);
         assert!(!tree.json);
@@ -982,8 +984,8 @@ mod tests {
     fn tree_all_options() {
         let cli = parse(&[
             "tree",
-            "--platform",
-            "android",
+            "--os",
+            "android:36",
             "--device",
             "emulator-5554",
             "--full",
@@ -995,7 +997,7 @@ mod tests {
         let Commands::Tree(tree) = cli.command else {
             panic!("expected Tree");
         };
-        assert_eq!(tree.platform.as_deref(), Some("android"));
+        assert_eq!(tree.os.as_deref(), Some("android:36"));
         assert_eq!(tree.device.as_deref(), Some("emulator-5554"));
         assert!(tree.full, "full SHALL be set");
         assert!(tree.json, "json SHALL be set");

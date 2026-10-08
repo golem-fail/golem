@@ -96,7 +96,7 @@ golem tree [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--platform <ios\|android>` | Consider only devices on this platform |
+| `--os <OS>` | Consider only devices with this OS, in the flow syntax: `ios`, `android`, `ios:26` (any 26.x), `ios:26+` or `ios:latest` |
 | `--device <ID\|NAME>` | The device: a UDID or serial, a name, or part of either (case-insensitive) |
 | `--bundle <ID>` | The bundle ID of the app to read |
 | `--app <NAME>` | The app to read, by its name in the `golem.toml` `[[apps]]` registry |
@@ -105,7 +105,23 @@ golem tree [OPTIONS]
 | `--json` | Same as `--output json` |
 | `--verbose` | Show metadata (CDP status, enrichment, keyboard, safe area) and the debug element tree |
 
-**Device.** Without `--device`, golem reads the only booted device (a booted simulator or emulator, or a connected physical device). With `--device`, an exact UDID or serial wins, then an exact name, then part of either. If more than one device matches, or no `--device` is given and more than one device is booted, the command fails and lists the candidates. golem reuses the device's running companion, or starts one.
+**Device.** golem reads a device that runs: a booted simulator or emulator, or a connected physical device. It does not boot one; `golem session start` does.
+
+- If only one running device fits `--os`, golem uses it.
+- With `--device`, an exact UDID or serial wins, then an exact name, then part of either.
+- If more than one running device fits, or none does, the command fails. It lists the running devices that fit, in the format of [`golem devices`](#golem-devices), so that you can retry with `--device`:
+
+```text
+Error: 2 running ios devices; pick one with --device <id or name>:
+
+iOS Simulators:
+  iPhone 16  ios:18.6  phone  booted  A66D93B7-B5C0-426E-87E2-276098961C99
+  iPhone 17  ios:26.5  phone  booted  B9100F0F-54EB-4DE3-9DFD-CB5FBC8FAB2B
+
+All devices, shut-down ones too: golem devices
+```
+
+golem reuses the device's running companion, or starts one.
 
 **App.** `--bundle` is used as given. `--app` looks the bundle up in `golem.toml`. With neither, golem reads the registry's only app. If the registry has several apps or none, no bundle is set: on iOS the companion reads the app it last launched, and on Android the tree covers the whole screen.
 
@@ -122,7 +138,7 @@ The selector is one TOML inline table, in the same notation as a step in a flow 
 | Flag | Description |
 |------|-------------|
 | `--timeout <MS>` | Poll for up to this long while nothing visible matches (default 0: check the screen once) |
-| `--platform <ios\|android>` | Consider only devices on this platform |
+| `--os <OS>` | Consider only devices with this OS, in the flow syntax: `ios`, `android`, `ios:26` (any 26.x), `ios:26+` or `ios:latest` |
 | `--device <ID\|NAME>` | The device, chosen as `golem tree` chooses it |
 | `--bundle <ID>` | The bundle ID of the app |
 | `--app <NAME>` | The app, by its name in the `golem.toml` `[[apps]]` registry |
@@ -262,7 +278,13 @@ session default stopped
 
 ## `golem devices`
 
-List all connected simulators, emulators, and physical devices.
+List all simulators, emulators and physical devices, in any state. Each row shows the name, the OS, the type, the state and the UDID (iOS) or serial (Android). Pass the UDID or serial to `--device` when two devices share a name.
+
+```text
+iOS Simulators:
+  iPhone 16  ios:18.6  phone  booted    A66D93B7-B5C0-426E-87E2-276098961C99
+  iPhone 16  ios:26.5  phone  shutdown  E5F6A7B8-0C1D-4E2F-9A3B-5C6D7E8F9A0B
+```
 
 ## `golem init`
 

@@ -2,8 +2,9 @@
 //! `golem probe`: what one selector matches on a device, through the
 //! daemon.
 
-use anyhow::{bail, Result};
-use golem_orchestrator::{daemon, interactive, ipc, project, target::TargetQuery};
+use anyhow::Result;
+use golem_orchestrator::target::{OsQuery, TargetQuery};
+use golem_orchestrator::{daemon, interactive, ipc, project};
 
 use crate::cli::{ProbeArgs, TreeOutput};
 
@@ -11,7 +12,7 @@ use crate::cli::{ProbeArgs, TreeOutput};
 pub async fn run(args: &ProbeArgs) -> Result<i32> {
     golem_parser::inline::parse_selector_inline(&args.selector)?;
     let query = TargetQuery {
-        os: platform_os(args.platform.as_deref())?,
+        os: args.os.as_deref().map(OsQuery::parse).transpose()?,
         device_type: None,
         device: args.device.clone(),
         bundle: args.bundle.clone(),
@@ -39,30 +40,4 @@ pub async fn run(args: &ProbeArgs) -> Result<i32> {
         ),
     }
     Ok(0)
-}
-
-/// A `--platform` flag as the target query's `os`, any version.
-pub(crate) fn platform_os(
-    platform: Option<&str>,
-) -> Result<Option<golem_orchestrator::target::OsQuery>> {
-    match platform {
-        None => Ok(None),
-        Some(p @ ("ios" | "android")) => Ok(Some(golem_orchestrator::target::OsQuery::parse(p)?)),
-        Some(p) => bail!("unknown platform: {p}. Use 'ios' or 'android'."),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_platform_must_be_ios_or_android() {
-        assert!(platform_os(Some("web")).is_err());
-        assert!(platform_os(Some("ios:26")).is_err());
-        assert_eq!(
-            platform_os(Some("ios")).expect("ios").map(|o| o.platform),
-            Some(golem_devices::Platform::Ios)
-        );
-    }
 }
