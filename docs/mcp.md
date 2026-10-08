@@ -26,6 +26,7 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
 - [Sessions](#sessions)
   - [A session from a flow](#a-session-from-a-flow)
   - [Long operations](#long-operations)
+- [The draft and step status](#the-draft-and-step-status)
 - [Example: write a new flow](#example-write-a-new-flow)
 - [Example: debug an app issue](#example-debug-an-app-issue)
 - [Upgrades and troubleshooting](#upgrades-and-troubleshooting)
@@ -389,6 +390,46 @@ A session runs one operation at a time.
 - A call made while an operation runs answers `busy`. `app_logs` is the exception: it does not wait, so it can show why a step hangs.
 - `status` shows the running operation, or the last result.
 - `cancel` stops the running operation. The teardown does not run.
+
+## The draft and step status
+
+Each step that passes in `act` goes into the session's flow draft, at the cursor. A session from a flow puts the cursor where the flow stopped. A new session starts a block named `main`.
+
+`draft_steps` lists the steps near the cursor. Each line has the step's address (`block:step`, steps count from 1), its status, the step and its comment:
+
+```text
+draft · 4 steps: 2 ✓ passed, 1 ? unverified, 1 ~ stale · cursor before login:3
+[login] 3 steps · goto retry if { if_visible = "Error" }
+  login:1 ✓ { action = "launch", app = "app", restart = true }  # Start clean
+  login:2 ✓ { action = "tap", on_text = "Sign in" }
+  ▸ cursor
+  login:3 ? { action = "assert_visible", on_text = "Welcome" }
+[retry] 1 step · next login
+  retry:1 ~ { action = "tap", on_text = "Retry" }
+```
+
+| Status | Meaning |
+|--------|---------|
+| `✓` | The step passed in this session. |
+| `·` | The step comes from the flow file and did not run in this session. |
+| `?` | Unverified: the step did not run in its current form, or it is the first step after a change. |
+| `~` | Stale: a step before it changed after it passed or was saved. |
+
+A change, such as a new step from `act` or `record_only`, sets these statuses:
+
+- The next active step becomes `?`, because the screen before it is different now. A `screenshot` is not an active step, so the step after it becomes `?`.
+- Each later step that can run after the change becomes `~`. That is the rest of the block, then each block that a `branch`, `next` or the next block in the file leads to.
+
+Only `?` goes into the file, as a `# unverified` line above the step. A step that passes in the session loses the line. `export_flow` gives the count of each status and lists the unverified steps.
+
+`draft_steps` takes these arguments:
+
+- `around`: `cursor` (the default), or a step address.
+- `context`: the number of steps on each side. The default is 5.
+- `block`: list the steps of one block instead.
+- `limit`: show at most this many steps.
+
+Each block's header line is always in the list, with its `next` and its branches.
 
 ## Example: write a new flow
 

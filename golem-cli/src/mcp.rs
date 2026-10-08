@@ -294,6 +294,19 @@ pub struct ExportParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DraftStepsParams {
+    /// "cursor" (default), "block" or "block:step" (steps count from 1).
+    pub around: Option<String>,
+    /// Steps on each side of around. Default 5.
+    pub context: Option<usize>,
+    /// List this block's steps instead.
+    pub block: Option<String>,
+    /// At most this many steps.
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct HelpParams {
     /// One action to describe. Without it, every action is listed.
     pub action: Option<String>,
@@ -591,6 +604,22 @@ impl GolemMcp {
         Parameters(_): Parameters<NoParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let reply = self.op("session_draft_show", serde_json::json!({})).await?;
+        self.render(&reply, false)
+    }
+
+    #[tool(
+        description = "The draft's steps near the cursor (or a block), each as block:step, a status and the step: ✓ passed here, · not run here, ? unverified (marked # unverified in the file), ~ stale (a step before it changed). Block headers show next and branches."
+    )]
+    async fn draft_steps(
+        &self,
+        Parameters(p): Parameters<DraftStepsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let reply = self
+            .op(
+                "session_draft_steps",
+                serde_json::json!({ "around": p.around, "context": p.context, "block": p.block, "limit": p.limit }),
+            )
+            .await?;
         self.render(&reply, false)
     }
 

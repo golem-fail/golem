@@ -83,6 +83,7 @@ async fn every_tool_works_against_a_stub_session() {
         "cancel",
         "actions_help",
         "draft_show",
+        "draft_steps",
         "export_flow",
         "flow_set",
         "apps_set",
@@ -202,6 +203,20 @@ async fn every_tool_works_against_a_stub_session() {
     );
     assert!(!text_of(&c).contains("tapp"), "{c}");
 
+    let (c, err) = call(&client, "draft_steps", serde_json::json!({})).await;
+    assert!(!err, "{c}");
+    assert!(
+        text_of(&c).contains(r#"main:1 ✓ { action = "tap", on_text = "Submit" }"#),
+        "the passing tap SHALL be listed as passed: {c}"
+    );
+    let (c, err) = call(
+        &client,
+        "draft_steps",
+        serde_json::json!({ "around": "main:7" }),
+    )
+    .await;
+    assert!(err, "a step the draft does not have SHALL be an error: {c}");
+
     let out = dir.path().join("flows/new.test.toml");
     let (c, err) = call(
         &client,
@@ -272,7 +287,7 @@ async fn every_tool_works_against_a_stub_session() {
     .await;
     assert!(!err, "{c}");
     assert!(
-        text_of(&c).contains(r#"unverified (recorded with record_only, never run):"#),
+        text_of(&c).contains("unverified (never run in this form):\n  second:1 "),
         "{c}"
     );
     let flow =

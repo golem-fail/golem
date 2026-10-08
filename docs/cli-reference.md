@@ -203,7 +203,8 @@ The server starts without device work.
 | `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
 | `app_logs(since?, filter?, limit?, app?)` | The app's device log, see below. It does not wait for a running operation |
 | `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
-| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, listing any `record_only` steps |
+| `draft_steps(around?, context?, block?, limit?)` | The draft's steps near the cursor, or one block's steps, each with its `block:step` address and status |
+| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, with the count of each status and the unverified steps |
 | `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
 | `apps_set(app)` | Add or replace a `[[flow.apps]]` entry: `bundle`, `devices`, `permissions`, `install_script` |
 | `block_begin(name, next?)` | Record the next steps into a block, creating it if needed |
@@ -232,6 +233,8 @@ The server starts without device work.
 - On iOS, the lines come from the app's process. The app's `print` output does not reach the unified log; `NSLog`, `os_log` and `Logger` do. A process that a signal kills logs nothing itself, so golem adds SpringBoard's `Process exited` line for the app, which names the signal.
 
 **The flow draft.** Each step that passes in `act` goes into the session's draft, as written (a `${var}` stays a reference), with `comment` on its own line above it. A step that fails does not. A session opened from a flow drafts that file: steps go in where the flow stopped (before `stop_at`, or before the failed step), else at the end of the last block, and the file's comments, key order and whitespace stay as they were. A step takes the form its block already uses, `steps = [ … ]` or `[[block.steps]]`; a one-line `steps = [{ … }]` becomes one step per line. A new session drafts a new flow with its app and a `main` block. `export_flow` refuses a draft that does not validate, and refuses to replace a file the session did not open from unless `overwrite = true`.
+
+**Step status.** Each step of the draft has a status, which `draft_steps` and `export_flow` show: `✓` passed in this session, `·` comes from the file and did not run in this session, `?` unverified, `~` stale. A change to the draft (a step from `act`, `record_only`) makes the next active step `?`, because the screen before it changed. Each later step that can run after the change becomes `~`: the rest of the block, then each block that a `branch` target, `next` or the next block in the file leads to. A `screenshot` is not an active step. Only `?` is in the file, as a `# unverified` line above the step; a step that passes in the session loses it.
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 
