@@ -1,4 +1,7 @@
-use golem_devices::{DeviceInfo, DeviceState, Platform};
+//! The device table of `golem devices`, also used by the commands that
+//! list their candidate devices in an error.
+
+use crate::{DeviceInfo, DeviceState, Platform};
 use std::fmt::Write;
 
 /// Format a device state as a human-readable string.
@@ -14,9 +17,19 @@ fn state_label(state: DeviceState) -> &'static str {
 /// Format a list of devices into a human-readable table grouped by category.
 ///
 /// Categories are: iOS Simulators, Android Emulators, Physical Devices.
-/// Each device row shows: name, platform:version, device_type, state.
-/// Columns are aligned within each category.
+/// Each device row shows: name, platform:version, device_type, state, and
+/// the UDID or serial. Columns are aligned within each category.
 pub fn format_device_list(devices: &[DeviceInfo]) -> String {
+    format_sections(devices, true)
+}
+
+/// [`format_device_list`] for some devices only: a category with none of
+/// them is left out, not shown as `(none)`.
+pub fn format_device_groups(devices: &[DeviceInfo]) -> String {
+    format_sections(devices, false)
+}
+
+fn format_sections(devices: &[DeviceInfo], show_empty: bool) -> String {
     let ios_sims: Vec<&DeviceInfo> = devices
         .iter()
         .filter(|d| d.platform == Platform::Ios && !d.physical)
@@ -31,9 +44,15 @@ pub fn format_device_list(devices: &[DeviceInfo]) -> String {
 
     let mut out = String::new();
 
-    write_section(&mut out, "iOS Simulators:", &ios_sims);
-    write_section(&mut out, "Android Emulators:", &android_emus);
-    write_section(&mut out, "Physical Devices:", &physical);
+    for (header, group) in [
+        ("iOS Simulators:", &ios_sims),
+        ("Android Emulators:", &android_emus),
+        ("Physical Devices:", &physical),
+    ] {
+        if show_empty || !group.is_empty() {
+            write_section(&mut out, header, group);
+        }
+    }
 
     // Remove the trailing newline if present
     if out.ends_with('\n') {
@@ -69,18 +88,27 @@ fn write_section(out: &mut String, header: &str, devices: &[&DeviceInfo]) {
         .max()
         .unwrap_or(0);
 
+    let state_width = devices
+        .iter()
+        .map(|d| state_label(d.state).len())
+        .max()
+        .unwrap_or(0);
+
     for (device, ver_str) in devices.iter().zip(version_strings.iter()) {
         let dtype = device.device_type.to_string();
         let state = state_label(device.state);
         let _ = writeln!(
             out,
-            "  {:<name_w$}  {:<ver_w$}  {:<type_w$}  {state}",
+            "  {:<name_w$}  {:<ver_w$}  {:<type_w$}  {:<state_w$}  {}",
             device.name,
             ver_str,
             dtype,
+            state,
+            device.udid,
             name_w = name_width,
             ver_w = version_width,
             type_w = type_width,
+            state_w = state_width,
         );
     }
 
@@ -90,7 +118,7 @@ fn write_section(out: &mut String, header: &str, devices: &[&DeviceInfo]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use golem_devices::{DeviceType, Platform};
+    use crate::{DeviceType, Platform};
 
     /// Helper to build a DeviceInfo with minimal boilerplate.
     fn make_device(
@@ -601,9 +629,27 @@ mod tests {
         let ver = row.find("ios:17.5").expect("version SHALL appear");
         let dtype = row.find("tablet").expect("type SHALL appear");
         let state = row.find("booted").expect("state SHALL appear");
+        let id = row.find("udid-iPad Pro").expect("the UDID SHALL appear");
         assert!(
-            name < ver && ver < dtype && dtype < state,
-            "Row fields SHALL appear in order name < version < type < state"
+            name < ver && ver < dtype && dtype < state && state < id,
+            "Row fields SHALL appear in order name < version < type < state < id"
         );
+    }
+
+    #[test]
+    fn groups_leave_out_a_category_with_no_device() {
+        let devices = vec![make_device(
+            "Pixel 8",
+            Platform::Android,
+            DeviceType::Phone,
+            "16",
+            16,
+            DeviceState::Booted,
+            false,
+        )];
+        let out = format_device_groups(&devices);
+        assert!(out.starts_with("Android Emulators:"), "{out}");
+        assert!(!out.contains("(none)"), "{out}");
+        assert!(!out.contains("iOS Simulators:"), "{out}");
     }
 }

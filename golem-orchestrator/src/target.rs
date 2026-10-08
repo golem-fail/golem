@@ -157,8 +157,26 @@ impl TargetQuery {
     /// case-insensitive. `Ok(None)` when nothing matches; an error when
     /// more than one device matches at the first step that matches.
     fn named<'a>(&self, devices: &[&'a DeviceInfo]) -> Result<Option<&'a DeviceInfo>> {
+        let hits = self.named_hits(devices);
+        match hits.as_slice() {
+            [] => Ok(None),
+            [only] => Ok(Some(only)),
+            many => Err(ambiguous(
+                &format!(
+                    "{} devices match \"{}\"",
+                    many.len(),
+                    self.device.as_deref().unwrap_or_default()
+                ),
+                many,
+            )),
+        }
+    }
+
+    /// The devices that `device` names, at the first matching step of
+    /// [`Self::named`]. Empty without a `device`, or with no match.
+    fn named_hits<'a>(&self, devices: &[&'a DeviceInfo]) -> Vec<&'a DeviceInfo> {
         let Some(wanted) = self.device.as_deref() else {
-            return Ok(None);
+            return Vec::new();
         };
         let wanted_lc = wanted.to_lowercase();
         let steps: [&dyn Fn(&DeviceInfo) -> bool; 3] = [
@@ -175,18 +193,11 @@ impl TargetQuery {
                 .copied()
                 .filter(|d| matches_step(d))
                 .collect();
-            match hits.as_slice() {
-                [] => continue,
-                [only] => return Ok(Some(only)),
-                many => {
-                    return Err(ambiguous(
-                        &format!("{} devices match \"{wanted}\"", many.len()),
-                        many,
-                    ))
-                }
+            if !hits.is_empty() {
+                return hits;
             }
         }
-        Ok(None)
+        Vec::new()
     }
 }
 
@@ -264,7 +275,7 @@ fn sorted<'a>(devices: &[&'a DeviceInfo]) -> Vec<&'a DeviceInfo> {
 
 /// `head`, then every candidate on its own line.
 fn ambiguous(head: &str, matches: &[&DeviceInfo]) -> anyhow::Error {
-    let mut msg = format!("{head}; set device to one of:");
+    let mut msg = format!("{head}; name one by its id:");
     for d in sorted(matches) {
         msg.push('\n');
         msg.push_str(&candidate_line(d));
@@ -280,49 +291,69 @@ fn ambiguous(head: &str, matches: &[&DeviceInfo]) -> anyhow::Error {
 /// one match at the first step that matches anything is an error listing
 /// the candidates.
 pub fn select_device<'a>(devices: &'a [DeviceInfo], query: &TargetQuery) -> Result<&'a DeviceInfo> {
-    let on_platform: Vec<&DeviceInfo> = devices.iter().filter(|d| query.fits(d, devices)).collect();
-    let usable: Vec<&DeviceInfo> = on_platform
-        .iter()
-        .copied()
-        .filter(|d| is_usable(d))
-        .collect();
-    let platform = query.shape();
+    let fitting: Vec<&DeviceInfo> = devices.iter().filter(|d| query.fits(d, devices)).collect();
+    let usable: Vec<&DeviceInfo> = fitting.iter().copied().filter(|d| is_usable(d)).collect();
+    let shape = query.shape();
+    let narrow = if query.os.is_none() {
+        "--device <id or name>, or narrow them with --os"
+    } else {
+        "--device <id or name>"
+    };
 
     let Some(wanted) = query.device.as_deref() else {
         return match usable.as_slice() {
             [only] => Ok(only),
-            [] => bail!("no booted {platform}device; start a simulator or emulator first"),
-            many => Err(ambiguous(
-                &format!("{} booted {platform}devices", many.len()),
-                many,
-            )),
+            [] => bail!(
+                "no running {shape}device; start a simulator or emulator, or run \
+                 `golem session start`, which boots one.\n{SEE_ALL}"
+            ),
+            many => bail!(
+                "{} running {shape}devices; pick one with {narrow}:\n\n{}\n\n{SEE_ALL}",
+                many.len(),
+                table(many)
+            ),
         };
     };
 
-    if let Some(hit) = query.named(&usable)? {
-        return Ok(hit);
+    match query.named_hits(&usable).as_slice() {
+        [only] => return Ok(only),
+        [] => {}
+        many => bail!(
+            "{} running devices match \"{wanted}\"; pick one with --device <id>:\n\n{}\n\n{SEE_ALL}",
+            many.len(),
+            table(many)
+        ),
     }
-    let wanted_lc = wanted.to_lowercase();
-    if let Some(idle) = on_platform
-        .iter()
-        .find(|d| d.udid.to_lowercase() == wanted_lc || d.name.to_lowercase() == wanted_lc)
-    {
+    if let [idle, ..] = query.named_hits(&fitting).as_slice() {
         bail!(
-            "{} ({}) is {}; boot it first",
+            "{} ({}) is {}; boot it first, or run `golem session start --device {}`, which boots it",
             idle.name,
             idle.udid,
-            state_label(idle.state)
+            match idle.state {
+                DeviceState::Shutdown => "shut down",
+                other => state_label(other),
+            },
+            idle.udid
         );
     }
-    let mut msg = format!("no booted {platform}device matches \"{wanted}\"");
-    if !usable.is_empty() {
-        msg.push_str("; booted devices:");
-        for d in sorted(&usable) {
-            msg.push('\n');
-            msg.push_str(&candidate_line(d));
-        }
+    if usable.is_empty() {
+        bail!("no running {shape}device matches \"{wanted}\", and none runs.\n{SEE_ALL}");
     }
-    bail!(msg)
+    bail!(
+        "no running {shape}device matches \"{wanted}\". Running devices:\n\n{}\n\n{SEE_ALL}",
+        table(&usable)
+    )
+}
+
+/// The pointer to the full device list, at the end of a device error.
+const SEE_ALL: &str = "All devices, shut-down ones too: golem devices";
+
+/// `devices` as `golem devices` shows them.
+fn table(devices: &[&DeviceInfo]) -> String {
+    let owned: Vec<DeviceInfo> = sorted(devices).into_iter().cloned().collect();
+    golem_devices::listing::format_device_groups(&owned)
+        .trim_end()
+        .to_string()
 }
 
 /// The bundle id to act on: `bundle` as given, else the registry entry
@@ -857,11 +888,20 @@ mod tests {
         let fleet = fleet();
         assert_eq!(
             error(&fleet, &query(Some(Platform::Ios), None)),
-            "2 booted ios devices; set device to one of:\n  \
-             ios A1B2C3D4 \"iPhone 16\" os:18.6\n  \
-             ios B9100F0F \"iPhone 17\" os:26.5"
+            "2 running ios devices; pick one with --device <id or name>:\n\n\
+             iOS Simulators:\n  \
+             iPhone 16  ios:18.6  phone  booted  A1B2C3D4\n  \
+             iPhone 17  ios:26.5  phone  booted  B9100F0F\n\n\
+             All devices, shut-down ones too: golem devices"
         );
-        assert!(error(&fleet, &query(None, None)).starts_with("3 booted devices;"));
+        let all = error(&fleet, &query(None, None));
+        assert!(
+            all.starts_with(
+                "3 running devices; pick one with --device <id or name>, or narrow them with --os:"
+            ),
+            "{all}"
+        );
+        assert!(all.contains("Android Emulators:"), "{all}");
     }
 
     #[test]
@@ -896,9 +936,11 @@ mod tests {
         let fleet = fleet();
         assert_eq!(
             error(&fleet, &query(None, Some("iphone"))),
-            "2 devices match \"iphone\"; set device to one of:\n  \
-             ios A1B2C3D4 \"iPhone 16\" os:18.6\n  \
-             ios B9100F0F \"iPhone 17\" os:26.5"
+            "2 running devices match \"iphone\"; pick one with --device <id>:\n\n\
+             iOS Simulators:\n  \
+             iPhone 16  ios:18.6  phone  booted  A1B2C3D4\n  \
+             iPhone 17  ios:26.5  phone  booted  B9100F0F\n\n\
+             All devices, shut-down ones too: golem devices"
         );
     }
 
@@ -907,12 +949,16 @@ mod tests {
         let fleet = fleet();
         assert_eq!(
             error(&fleet, &query(Some(Platform::Android), Some("Pixel 9"))),
-            "no booted android device matches \"Pixel 9\"; booted devices:\n  \
-             android emulator-5554 \"Pixel_8_Pro\" os:16"
+            "no running android device matches \"Pixel 9\". Running devices:\n\n\
+             Android Emulators:\n  \
+             Pixel_8_Pro  android:16  phone  booted  emulator-5554\n\n\
+             All devices, shut-down ones too: golem devices"
         );
         assert_eq!(
             error(&[], &query(None, None)),
-            "no booted device; start a simulator or emulator first"
+            "no running device; start a simulator or emulator, or run \
+             `golem session start`, which boots one.\n\
+             All devices, shut-down ones too: golem devices"
         );
     }
 
@@ -921,7 +967,8 @@ mod tests {
         let fleet = fleet();
         assert_eq!(
             error(&fleet, &query(None, Some("iPad mini"))),
-            "iPad mini (C0FFEE00) is shutdown; boot it first"
+            "iPad mini (C0FFEE00) is shut down; boot it first, or run \
+             `golem session start --device C0FFEE00`, which boots it"
         );
     }
 
@@ -930,7 +977,7 @@ mod tests {
         let fleet = fleet();
         assert!(
             error(&fleet, &query(Some(Platform::Android), Some("iPhone 17")))
-                .starts_with("no booted android device matches")
+                .starts_with("no running android device matches")
         );
     }
 

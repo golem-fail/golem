@@ -8,7 +8,11 @@ use crate::cli::TreeArgs;
 /// Run the `golem tree` command: fetch and display the UI hierarchy.
 pub async fn run(args: &TreeArgs) -> Result<()> {
     let query = golem_orchestrator::target::TargetQuery {
-        os: crate::probe_cmd::platform_os(args.platform.as_deref())?,
+        os: args
+            .os
+            .as_deref()
+            .map(golem_orchestrator::target::OsQuery::parse)
+            .transpose()?,
         device_type: None,
         device: args.device.clone(),
         bundle: args.bundle.clone(),

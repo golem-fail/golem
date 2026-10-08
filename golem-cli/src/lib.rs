@@ -2,7 +2,6 @@ pub mod a11y_extract;
 pub mod cache;
 pub mod cli;
 pub mod dev_server;
-pub mod devices;
 pub mod discovery;
 pub mod doctor;
 pub mod install_script_cmd;
@@ -373,7 +372,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             if let Ok(android) = golem_devices::android::discover_android_devices().await {
                 all_devices.extend(android);
             }
-            let output = devices::format_device_list(&all_devices);
+            let output = golem_devices::listing::format_device_list(&all_devices);
             println!("{output}");
         }
 
