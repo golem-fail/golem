@@ -136,18 +136,26 @@ impl DaemonLink {
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DevicesParams {
-    /// Only devices on this platform: "ios" or "android".
-    pub platform: Option<String>,
+    /// Only devices with this OS, as a flow's `os`: "ios", "android",
+    /// "ios:26", "ios:26+" or "ios:latest".
+    pub os: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
 pub struct OpenParams {
-    /// "ios" or "android".
-    pub platform: Option<String>,
-    /// The device: a UDID or serial, a name, or part of either. Needed when
-    /// more than one device is booted.
+    /// The OS, as a flow's `os`: "ios", "android", "ios:26", "ios:26+" or
+    /// "ios:latest". Without it, any OS.
+    pub os: Option<String>,
+    /// "phone" or "tablet", as a flow's `type`.
+    #[serde(rename = "type")]
+    pub device_type: Option<String>,
+    /// One device: a UDID or serial, a name, or part of either.
     pub device: Option<String>,
+    /// Boot a shut-down device when no running device fits (default true).
+    pub boot: Option<bool>,
     /// The bundle ID of the app.
     pub bundle: Option<String>,
     /// The app, by its name in the golem.toml [[apps]] registry.
@@ -329,31 +337,34 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "List devices: platform, id, name, OS, state, and the port of a live companion."
+        description = "List devices in any state: platform, id, name, OS, state, and the port of a live companion. session_open boots a shut-down device when no running one fits."
     )]
     async fn devices(
         &self,
         Parameters(p): Parameters<DevicesParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let platform = match p.platform.as_deref() {
-            None => None,
-            Some("ios") => Some(golem_devices::Platform::Ios),
-            Some("android") => Some(golem_devices::Platform::Android),
-            Some(other) => {
-                return tool_error(format!("unknown platform: {other}; use ios or android"))
-            }
+        let query = target::TargetQuery {
+            os: match p.os.as_deref().map(target::OsQuery::parse).transpose() {
+                Ok(os) => os,
+                Err(e) => return tool_error(format!("{e:#}")),
+            },
+            ..Default::default()
         };
-        let entries = target::list_devices(platform).await;
+        let mut entries = target::list_devices(query.platform()).await;
+        let all: Vec<golem_devices::DeviceInfo> =
+            entries.iter().map(|e| e.device.clone()).collect();
+        entries.retain(|e| query.fits(&e.device, &all));
         if entries.is_empty() {
-            return text(
-                "no devices found; is adb or xcrun on PATH? Start a simulator or emulator",
-            );
+            return text(match &query.os {
+                Some(os) => format!("no {} device found", os.text),
+                None => "no devices found; is adb or xcrun on PATH?".to_string(),
+            });
         }
         text(target::format_device_entries(&entries))
     }
 
     #[tool(
-        description = "Open a session on one device and app. The session holds the device until session_close, until this server stops, or until it is idle for idle_timeout_s."
+        description = "Open a session on one device and app. A running device that fits os, type and device wins; else golem boots one, unless boot = false. The session holds the device until session_close, until this server stops, or until it is idle for idle_timeout_s."
     )]
     async fn session_open(
         &self,
@@ -367,13 +378,15 @@ impl GolemMcp {
             .unwrap_or_else(|| self.options.project_root.clone());
         let mut msg = serde_json::json!({
             "query": {
-                "platform": p.platform,
+                "os": p.os,
+                "type": p.device_type,
                 "device": p.device,
                 "bundle": p.bundle,
                 "app": p.app,
             },
             "project_root": project_root.display().to_string(),
             "idle_timeout_s": p.idle_timeout_s,
+            "boot": p.boot.unwrap_or(true),
             "flow": p.flow,
             "stop_at": p.stop_at,
             "break_on_failure": p.break_on_failure,

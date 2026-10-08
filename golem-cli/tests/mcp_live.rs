@@ -99,7 +99,7 @@ impl Live {
 
     /// `session_open` arguments for this platform and device.
     fn on_device(&self, mut args: serde_json::Value) -> serde_json::Value {
-        args["platform"] = serde_json::json!(self.platform);
+        args["os"] = serde_json::json!(self.platform);
         if let Some(d) = &self.device {
             args["device"] = serde_json::json!(d);
         }

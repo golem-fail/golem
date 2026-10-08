@@ -4,10 +4,10 @@ pub mod cli;
 pub mod dev_server;
 pub mod devices;
 pub mod discovery;
-pub mod do_cmd;
 pub mod doctor;
 pub mod install_script_cmd;
 pub mod mcp;
+pub mod probe_cmd;
 pub mod scaffold;
 pub mod session_cmd;
 pub mod tree;
@@ -406,10 +406,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             return doctor::run(&args).await;
         }
 
-        Commands::Do(args) => {
-            return do_cmd::run(&args).await;
-        }
-
         Commands::Mcp(args) => {
             let cwd = std::env::current_dir()?;
             let project_root = match args.project {
@@ -435,7 +431,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
         }
 
         Commands::Probe(args) => {
-            return do_cmd::probe(&args).await;
+            return probe_cmd::run(&args).await;
         }
 
         Commands::Session(args) => {

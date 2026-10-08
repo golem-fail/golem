@@ -1,7 +1,7 @@
 //! The canonical step notation: one step as a one-line TOML inline table,
 //! `{ action = "tap", on_text = "Sign in" }` — the same text as a step in
-//! a flow file's `steps = [ … ]` array. `golem do`, `golem probe` and the
-//! MCP tools take a step in this form.
+//! a flow file's `steps = [ … ]` array. `golem probe`, `golem session` and
+//! the MCP tools take a step in this form.
 
 use anyhow::{bail, Result};
 use serde::Deserialize;

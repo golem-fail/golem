@@ -621,26 +621,6 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             writer.clone(),
                         );
                     }
-                    Some("do") if greeted => {
-                        let _run = RunGuard::new(&shared.active_runs);
-                        let resp = match crate::interactive::parse_do_request(&json) {
-                            Ok(req) => {
-                                match crate::interactive::run_do(&req, &shared.resource_mgr).await {
-                                    Ok(done) => do_result_json(&done),
-                                    Err(e) => serde_json::json!({
-                                        "type": "error",
-                                        "message": format!("{e:#}"),
-                                    }),
-                                }
-                            }
-                            Err(e) => serde_json::json!({
-                                "type": "error",
-                                "message": format!("{e:#}"),
-                            }),
-                        };
-                        let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
-                    }
                     Some("probe") if greeted => {
                         let resp = match crate::interactive::parse_probe_request(&json) {
                             Ok(req) => match crate::interactive::run_probe(&req).await {
@@ -870,18 +850,6 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         stub_fail_on_runs,
         profile,
     }
-}
-
-/// The reply to a `do`.
-fn do_result_json(done: &crate::interactive::DoResult) -> serde_json::Value {
-    serde_json::json!({
-        "type": "do_result",
-        "passed": !matches!(done.report.outcome, golem_report::StepOutcome::Failed { .. }),
-        "device": done.device,
-        "toon": golem_report::toon::format_step_toon(&done.report).trim_start(),
-        "step": golem_report::json::step_json(&done.report),
-        "tree": done.tree,
-    })
 }
 
 /// The client's environment and working directory from a submit's

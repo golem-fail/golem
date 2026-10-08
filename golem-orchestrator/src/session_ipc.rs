@@ -261,17 +261,14 @@ async fn open(
             named_map = Some(map);
         }
     }
-    let req = match crate::interactive::parse_do_request(&serde_json::json!({
-        "step": "",
-        "query": msg["query"],
-        "project_root": msg["project_root"],
-        "client_env": msg["client_env"],
-        "client_cwd": msg["client_cwd"],
-    })) {
+    let (query, project_root) = match crate::interactive::parse_query(&msg["query"])
+        .and_then(|q| Ok((q, crate::interactive::project_root(msg)?)))
+    {
         Ok(r) => r,
         Err(e) => return error(&format!("{e:#}")),
     };
-    let flow = match parse_flow_open(msg, &req.project_root) {
+    let child_env = crate::ipc::parse_child_env(msg);
+    let flow = match parse_flow_open(msg, &project_root) {
         Ok(f) => f,
         Err(e) => return error(&format!("{e:#}")),
     };
@@ -288,18 +285,19 @@ async fn open(
     let session = Arc::new(if stub {
         #[cfg(debug_assertions)]
         {
-            stub_session(req.project_root, idle_timeout)
+            stub_session(project_root, idle_timeout)
         }
         #[cfg(not(debug_assertions))]
         unreachable!("stub sessions exist in debug builds only")
     } else {
         Session::start(
             OpenRequest {
-                query: req.query,
-                project_root: req.project_root,
-                child_env: req.child_env,
+                query,
+                project_root,
+                child_env,
                 idle_timeout,
                 flow,
+                boot: msg["boot"].as_bool().unwrap_or(true),
             },
             resource_mgr.clone(),
             install_cache.clone(),
@@ -650,6 +648,15 @@ mod tests {
     }
 
     impl Daemon {
+        /// A project whose `golem.toml` does not parse: an open there
+        /// fails before it looks for a device.
+        fn broken_project(&self) -> std::path::PathBuf {
+            let root = self.dir.path().join("broken");
+            std::fs::create_dir_all(&root).expect("dir");
+            std::fs::write(root.join("golem.toml"), "[[apps]\n").expect("golem.toml");
+            root
+        }
+
         /// One message on a connection of its own, as each `golem session`
         /// command sends.
         async fn call(&self, kind: &str, mut msg: serde_json::Value) -> serde_json::Value {
@@ -810,7 +817,7 @@ mod tests {
                 serde_json::json!({
                     "session": "x",
                     "wait_ms": 0,
-                    "project_root": d.dir.path().join("no-project").display().to_string(),
+                    "project_root": d.broken_project().display().to_string(),
                 }),
             )
         };
@@ -859,14 +866,13 @@ mod tests {
     #[tokio::test]
     async fn a_failed_open_answers_with_its_error_however_it_races_the_cleanup() {
         let d = daemon().await;
-        // Each open lists the host's devices: two keep the test fast.
-        for _ in 0..2 {
+        for _ in 0..20 {
             let reply = d
                 .call(
                     "session_open",
                     serde_json::json!({
                         "wait_ms": 5000,
-                        "project_root": d.dir.path().join("no-project").display().to_string(),
+                        "project_root": d.broken_project().display().to_string(),
                     }),
                 )
                 .await;

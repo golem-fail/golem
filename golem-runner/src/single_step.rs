@@ -1,5 +1,4 @@
-//! Run one step outside a flow, for `golem do`, `golem probe` and
-//! interactive sessions.
+//! Run one step outside a flow, for interactive sessions.
 
 use std::time::Instant;
 

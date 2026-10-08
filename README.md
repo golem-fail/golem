@@ -117,7 +117,7 @@ golem tree
 | Doc | What's in it |
 |-----|--------------|
 | [Installing golem](docs/distribution.md) | Install channels (brew, npm, curl, GitHub Action), runtime prerequisites, `golem doctor`. |
-| [CLI Reference](docs/cli-reference.md) | Every command and flag — `run`, `tree`, `do`, `probe`, `session`, `mcp`, `devices`, `init`, `create`, `install-script`, `doctor`. |
+| [CLI Reference](docs/cli-reference.md) | Every command and flag — `run`, `tree`, `probe`, `session`, `mcp`, `devices`, `init`, `create`, `install-script`, `doctor`. |
 | [Test Structure](docs/test-structure.md) | Flow anatomy: blocks, steps, selectors, coverage strategies, subflows, data-driven tests, variables, fake-data generators, multi-app flows. |
 | [Selectors](docs/selectors.md) | The full selector reference: text/label/index/state, traits, relational + geometric `contains`/`inside`, nesting, and resolution order. |
 | [Actions Reference](docs/actions-reference.md) | The complete action vocabulary, grouped by category. |

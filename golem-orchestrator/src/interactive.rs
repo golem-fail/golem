@@ -1,10 +1,7 @@
-//! One-off commands the daemon runs for a client outside any suite:
-//! `golem do` runs one step on one device, and `golem probe` reports what
-//! a selector matches there.
-//!
-//! They run in the daemon, not in the client, so that a step takes its
-//! device from the same `ResourceManager` as the suite runs: a `golem do`
-//! never acts on a device a run is using.
+//! `golem probe`, which the daemon runs for a client outside any suite:
+//! what a selector matches on one device. Also the helpers that sessions
+//! share with it: the target query, the device lease, the app list and
+//! the visible tree.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,82 +10,8 @@ use anyhow::{Context, Result};
 use golem_devices::resource_manager::ResourceManager;
 use golem_element::toon::{encode_tree, TreeHeader};
 use golem_element::{filter_viewport, Viewport};
-use golem_report::StepReport;
 
 use crate::target::{self, TargetQuery};
-
-/// A `golem do` request.
-#[derive(Debug, Clone)]
-pub struct DoRequest {
-    /// The step, in the canonical one-line notation.
-    pub step: String,
-    pub query: TargetQuery,
-    /// The client's project root: `golem.toml` is read from here, and
-    /// relative script and fixture paths resolve against it.
-    pub project_root: PathBuf,
-    /// Also return the visible tree after the step.
-    pub tree: bool,
-    pub child_env: Option<golem_common::command::ChildEnv>,
-}
-
-/// What a `golem do` returns.
-pub struct DoResult {
-    pub report: StepReport,
-    /// The visible tree after the step, as TOON, when asked for.
-    pub tree: Option<String>,
-    /// `<platform>/<name>` of the device the step ran on.
-    pub device: String,
-}
-
-/// Run one step on the device and app `req` names.
-pub async fn run_do(req: &DoRequest, resource_mgr: &Arc<ResourceManager>) -> Result<DoResult> {
-    let step = golem_parser::inline::parse_step_inline(&req.step)?.step;
-    let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
-    let selection = target::select(&req.query, &project.apps).await?;
-    // Lease before any companion work: see `target::connect`.
-    let _lease = lease(resource_mgr, &selection.device)?;
-    let target = target::connect(selection).await?;
-    let driver = target.driver();
-    let apps = app_configs(&project.apps);
-    let capture = golem_runner::capture::CaptureConfig {
-        screenshot_on_failure: false,
-        output_dir: req.project_root.join(".golem/results"),
-        ..Default::default()
-    };
-    let mut ctx = golem_runner::context::ExecutionContext {
-        device: Some(&target.device),
-        child_env: req.child_env.as_ref(),
-        ..golem_runner::context::ExecutionContext::new(
-            &req.project_root,
-            &req.project_root,
-            &capture,
-            "golem do",
-        )
-    };
-    let mut vars = golem_vars::VariableStore::new();
-    vars.push_scope(golem_vars::Scope::new(golem_vars::ScopeLevel::Flow));
-
-    let report = golem_runner::single_step::execute_single_step(
-        &step,
-        driver.as_ref(),
-        &mut vars,
-        &mut ctx,
-        &apps,
-        golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS,
-    )
-    .await;
-
-    let tree = if req.tree {
-        Some(visible_tree(driver.as_ref()).await?)
-    } else {
-        None
-    };
-    Ok(DoResult {
-        report,
-        tree,
-        device: format!("{}/{}", target.device.platform, target.device.name),
-    })
-}
 
 /// A `golem probe` request.
 #[derive(Debug, Clone)]
@@ -123,15 +46,10 @@ pub fn parse_probe_request(msg: &serde_json::Value) -> Result<ProbeRequest> {
         .as_str()
         .context("a probe request needs a `selector`")?
         .to_string();
-    let as_do = parse_do_request(&serde_json::json!({
-        "step": "",
-        "query": msg["query"],
-        "project_root": msg["project_root"],
-    }))?;
     Ok(ProbeRequest {
         selector,
-        query: as_do.query,
-        project_root: as_do.project_root,
+        query: parse_query(&msg["query"])?,
+        project_root: project_root(msg)?,
         timeout_ms: msg["timeout_ms"].as_u64().unwrap_or(0),
     })
 }
@@ -143,11 +61,13 @@ pub fn probe_request_json(
     project_root: &Path,
     timeout_ms: u64,
 ) -> serde_json::Value {
-    let mut msg = do_request_json("", query, project_root, false);
-    msg["type"] = serde_json::json!("probe");
-    msg["selector"] = serde_json::json!(selector);
-    msg["timeout_ms"] = serde_json::json!(timeout_ms);
-    msg
+    serde_json::json!({
+        "type": "probe",
+        "selector": selector,
+        "query": query_json(query),
+        "project_root": project_root.display().to_string(),
+        "timeout_ms": timeout_ms,
+    })
 }
 
 /// Lease `device` for an interactive command, or say who holds it.
@@ -192,57 +112,41 @@ pub(crate) fn app_configs(apps: &[golem_parser::ProjectAppConfig]) -> Vec<golem_
         .collect()
 }
 
-/// Read a `do` request from a submit-style JSON message.
-pub fn parse_do_request(msg: &serde_json::Value) -> Result<DoRequest> {
-    let step = msg["step"]
-        .as_str()
-        .context("a do request needs a `step`")?
-        .to_string();
-    let q = &msg["query"];
-    let text = |v: &serde_json::Value| v.as_str().map(str::to_string);
-    let platform = match q["platform"].as_str() {
-        None => None,
-        Some("ios") => Some(golem_devices::Platform::Ios),
-        Some("android") => Some(golem_devices::Platform::Android),
-        Some(p) => anyhow::bail!("unknown platform: {p}. Use 'ios' or 'android'."),
-    };
-    let project_root = msg["project_root"]
+/// The `project_root` of a request.
+pub fn project_root(msg: &serde_json::Value) -> Result<PathBuf> {
+    msg["project_root"]
         .as_str()
         .map(PathBuf::from)
-        .context("a do request needs a `project_root`")?;
-    Ok(DoRequest {
-        step,
-        query: TargetQuery {
-            platform,
-            device: text(&q["device"]),
-            bundle: text(&q["bundle"]),
-            app: text(&q["app"]),
-        },
-        project_root,
-        tree: msg["tree"].as_bool().unwrap_or(false),
-        child_env: crate::ipc::parse_child_env(msg),
+        .context("the request needs a `project_root`")
+}
+
+/// A target query from its JSON form: `os`, `type`, `device`, `bundle`
+/// and `app`, each optional.
+pub fn parse_query(q: &serde_json::Value) -> Result<TargetQuery> {
+    let text = |v: &serde_json::Value| v.as_str().map(str::to_string);
+    Ok(TargetQuery {
+        os: q["os"]
+            .as_str()
+            .map(crate::target::OsQuery::parse)
+            .transpose()?,
+        device_type: q["type"]
+            .as_str()
+            .map(crate::target::parse_device_type)
+            .transpose()?,
+        device: text(&q["device"]),
+        bundle: text(&q["bundle"]),
+        app: text(&q["app"]),
     })
 }
 
-/// The `do` request message for `req`, without the client context that
-/// [`crate::ipc`] adds.
-pub fn do_request_json(
-    step: &str,
-    query: &TargetQuery,
-    project_root: &Path,
-    tree: bool,
-) -> serde_json::Value {
+/// The JSON form of `query`, as [`parse_query`] reads it.
+pub fn query_json(query: &TargetQuery) -> serde_json::Value {
     serde_json::json!({
-        "type": "do",
-        "step": step,
-        "query": {
-            "platform": query.platform.map(|p| p.to_string()),
-            "device": query.device,
-            "bundle": query.bundle,
-            "app": query.app,
-        },
-        "project_root": project_root.display().to_string(),
-        "tree": tree,
+        "os": query.os.as_ref().map(|o| o.text.clone()),
+        "type": query.device_type.map(|t| t.to_string()),
+        "device": query.device,
+        "bundle": query.bundle,
+        "app": query.app,
     })
 }
 
@@ -251,55 +155,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_do_request_round_trips() {
+    fn a_query_round_trips() {
         let query = TargetQuery {
-            platform: Some(golem_devices::Platform::Ios),
+            os: Some(crate::target::OsQuery::parse("ios:26").expect("os")),
+            device_type: Some(golem_devices::DeviceType::Phone),
             device: Some("iPhone 17".into()),
             bundle: None,
             app: Some("app".into()),
         };
-        let mut msg = do_request_json(
-            r#"{ action = "tap", on_text = "+" }"#,
-            &query,
-            Path::new("/proj"),
-            true,
-        );
-        msg["client_cwd"] = serde_json::json!("/proj/sub");
-        msg["client_env"] = serde_json::json!([["A", "1"]]);
-        let req = parse_do_request(&msg).expect("parse");
-        assert_eq!(req.step, r#"{ action = "tap", on_text = "+" }"#);
-        assert_eq!(req.query.platform, Some(golem_devices::Platform::Ios));
-        assert_eq!(req.query.device.as_deref(), Some("iPhone 17"));
-        assert_eq!(req.query.app.as_deref(), Some("app"));
-        assert!(req.query.bundle.is_none());
-        assert_eq!(req.project_root, Path::new("/proj"));
-        assert!(req.tree);
-        let env = req.child_env.expect("env");
-        assert_eq!(env.cwd.as_deref(), Some(Path::new("/proj/sub")));
-        assert_eq!(env.vars, vec![("A".to_string(), "1".to_string())]);
+        let back = parse_query(&query_json(&query)).expect("parse");
+        assert_eq!(back.os, query.os);
+        assert_eq!(back.device_type, query.device_type);
+        assert_eq!(back.device, query.device);
+        assert_eq!(back.app, query.app);
+        assert!(back.bundle.is_none());
     }
 
     #[test]
     fn a_probe_request_round_trips() {
         let query = TargetQuery {
-            platform: Some(golem_devices::Platform::Android),
+            os: Some(crate::target::OsQuery::parse("android").expect("os")),
             ..TargetQuery::default()
         };
         let msg = probe_request_json(r#"{ on_text = "OK" }"#, &query, Path::new("/proj"), 750);
         let req = parse_probe_request(&msg).expect("parse");
         assert_eq!(req.selector, r#"{ on_text = "OK" }"#);
-        assert_eq!(req.query.platform, Some(golem_devices::Platform::Android));
+        assert_eq!(req.query.platform(), Some(golem_devices::Platform::Android));
         assert_eq!(req.project_root, Path::new("/proj"));
         assert_eq!(req.timeout_ms, 750);
-    }
-
-    #[test]
-    fn a_do_request_without_a_step_is_refused() {
-        let msg = serde_json::json!({ "type": "do", "project_root": "/p" });
-        assert!(parse_do_request(&msg)
-            .expect_err("no step")
-            .to_string()
-            .contains("`step`"));
     }
 
     #[test]
