@@ -142,74 +142,69 @@ impl DaemonLink {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DevicesParams {
-    /// Only devices with this OS, as a flow's `os`: "ios", "android",
-    /// "ios:26", "ios:26+" or "ios:latest".
+    /// "ios", "android", "ios:26", "ios:26+" or "ios:latest".
     pub os: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct OpenParams {
-    /// The OS, as a flow's `os`: "ios", "android", "ios:26", "ios:26+" or
-    /// "ios:latest". Without it, any OS.
+    /// "ios", "android", "ios:26", "ios:26+" or "ios:latest". Default: any.
     pub os: Option<String>,
-    /// "phone" or "tablet", as a flow's `type`.
+    /// "phone" or "tablet".
     #[serde(rename = "type")]
     pub device_type: Option<String>,
-    /// One device: a UDID or serial, a name, or part of either.
+    /// A UDID, a serial, a name, or part of one.
     pub device: Option<String>,
-    /// Boot a shut-down device when no running device fits (default true).
+    /// Boot a device when no running one fits. Default true.
     pub boot: Option<bool>,
-    /// The bundle ID of the app.
+    /// The app's bundle id.
     pub bundle: Option<String>,
-    /// The app, by its name in the golem.toml [[apps]] registry.
+    /// The app's name in golem.toml [[apps]].
     pub app: Option<String>,
-    /// The project directory that holds golem.toml.
+    /// The directory with golem.toml. Default: the server's project.
     pub project: Option<String>,
-    /// End the session after this many seconds with no operation (default 1800).
+    /// End the session after this many idle seconds. Default 1800.
     pub idle_timeout_s: Option<u64>,
-    /// Run this flow file first (setup, apps, launch, steps), and open the
-    /// session where it stops. Its [[teardown]] runs at session_close.
+    /// Run this .test.toml first, as golem run does; the session opens
+    /// where it stops. Its [[teardown]] runs at session_close.
     pub flow: Option<String>,
-    /// With flow: stop before this step, "block" or "block:step" (steps count from 1).
+    /// With flow: stop before this step: block or block:step.
     pub stop_at: Option<String>,
-    /// With flow: false installs and sets up, but runs no steps; the cursor is before step 1.
+    /// With flow: false does the setup but runs no steps.
     pub run: Option<bool>,
-    /// With flow: keep the session open at a failed step. Without it, a
-    /// failed flow ends as golem run would, and no session opens.
+    /// With flow: open at a failed step instead of ending.
     #[serde(default)]
     pub break_on_failure: bool,
-    /// With flow: false skips its [[teardown]] however the session ends.
+    /// With flow: false never runs its [[teardown]].
     pub teardown: Option<bool>,
-    /// With flow: variables to set, as with golem run --var.
+    /// With flow: variables, as golem run --var.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct CloseParams {
-    /// Run the [[teardown]] of the flow the session opened from (default true).
+    /// Run the flow's [[teardown]]. Default true.
     pub teardown: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ActParams {
-    /// One step as a TOML inline table: { action = "tap", on_text = "Sign in" }
     pub step: String,
-    /// Why this step, for the flow draft.
+    /// Goes above the step in the draft.
     pub comment: Option<String>,
-    /// Also return the visible tree after the screen settles.
+    /// Also return the visible tree after the step.
     #[serde(default)]
     pub tree: bool,
-    /// "toon" (default) or "json".
+    /// "toon" (compact text, default) or "json".
     pub format: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ProbeParams {
-    /// A selector as a TOML inline table: { on_text = "Sign in" }. A whole
-    /// step works too; its action is ignored.
+    /// { on_text = "Sign in" }; a whole step works too.
     pub selector: String,
-    /// Poll up to this many milliseconds while nothing visible matches (default 0).
+    /// Poll this long while nothing matches. Default 0.
     pub timeout_ms: Option<u64>,
     /// "toon" (default) or "json".
     pub format: Option<String>,
@@ -217,7 +212,7 @@ pub struct ProbeParams {
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct TreeParams {
-    /// The full tree, not only what is on screen: a hint only.
+    /// Add off-screen elements: a hint, never proof.
     #[serde(default)]
     pub full: bool,
     /// "toon" (default) or "json".
@@ -226,7 +221,7 @@ pub struct TreeParams {
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct WaitParams {
-    /// Wait up to this many seconds (default: the server's soft timeout).
+    /// Default: the server's soft timeout.
     pub timeout_s: Option<u64>,
 }
 
@@ -236,26 +231,25 @@ pub struct FlowSetParams {
     pub tags: Option<Vec<String>>,
     /// Merged into [flow] vars.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
+    /// The seed for fake: generators.
     pub seed: Option<u64>,
+    /// true: golem run without a path skips this flow.
     pub explicit_only: Option<bool>,
-    /// The block the flow starts at.
+    /// The first block.
     pub start: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct AppsSetParams {
-    /// One [[flow.apps]] entry: { "name": "app", "bundle": "com.acme",
-    /// "devices": [{ "os": "ios:latest", "type": "phone" }],
-    /// "permissions": { "camera": "allow" }, "install_script": "scripts/install.sh" }.
-    /// An entry with an existing name replaces those fields.
+    /// { "name": "app", "bundle": "com.acme", "devices": [{ "os": "ios:latest" }] };
+    /// also permissions, install_script. The same name replaces those fields.
     pub app: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct BlockBeginParams {
-    /// The block to record into next; created when the draft has none by this name.
     pub name: String,
-    /// The block that follows it.
+    /// Its next block.
     pub next: Option<String>,
 }
 
@@ -263,46 +257,45 @@ pub struct BlockBeginParams {
 pub struct BlockLinkParams {
     pub block: String,
     pub next: Option<String>,
-    /// Branches to add: [{ "if_visible": "Error", "goto": "retry" }], or
-    /// if_not_visible, or if_var with equals, matches or gte.
+    /// [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, or
+    /// if_var with equals, matches or gte.
     pub branches: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepNoteParams {
-    /// One step as a TOML inline table. It does not run.
     pub step: String,
     pub comment: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepEditParams {
-    /// The step, as block:step (steps count from 1).
+    /// block:step, from 1.
     pub at: String,
-    /// The new step, as a TOML inline table. It does not run.
+    /// The whole new step.
     pub step: Option<String>,
-    /// The new comment above the step; "" removes it.
+    /// "" removes it.
     pub comment: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepAtParams {
-    /// The step, as block:step (steps count from 1).
+    /// block:step, from 1.
     pub at: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StepMoveParams {
-    /// The step to move, as block:step.
+    /// block:step, from 1.
     pub from: String,
-    /// Its address after the move, as block:step; one past a block's last step appends.
+    /// Its block:step after the move, counted without the moved step; one
+    /// past a block's last step appends.
     pub to: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct BlockRenameParams {
     pub name: String,
-    /// The new name.
     pub to: String,
 }
 
@@ -313,7 +306,7 @@ pub struct BlockNameParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct DataAddParams {
-    /// One [[data]] row: { "email": "a@b.test", "name": "Ada" }.
+    /// { "email": "a@b.test", "name": "Ada" }
     pub row: serde_json::Map<String, serde_json::Value>,
 }
 
@@ -324,9 +317,9 @@ pub struct CommentParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ExportParams {
-    /// Where to write the .test.toml, relative to the project directory or absolute.
+    /// Relative to the project, or absolute.
     pub path: String,
-    /// Replace a file the session did not open from.
+    /// Needed to replace a file this session did not open or export.
     #[serde(default)]
     pub overwrite: bool,
 }
@@ -334,29 +327,28 @@ pub struct ExportParams {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DraftRunParams {
-    /// true: run from the start. false (default): resume from the cursor.
+    /// true: from the start. Default false: from the cursor.
     #[serde(default)]
     pub restart: bool,
-    /// Stop before this step, "block" or "block:step". Without it, run to the end.
+    /// Stop before this step: block or block:step.
     pub stop_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DraftStepsParams {
-    /// "cursor" (default), "block" or "block:step" (steps count from 1).
+    /// "cursor" (default) or block:step.
     pub around: Option<String>,
-    /// Steps on each side of around. Default 5.
+    /// Steps on each side. Default 5.
     pub context: Option<usize>,
-    /// List this block's steps instead.
+    /// List this block instead.
     pub block: Option<String>,
-    /// At most this many steps.
     pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct HelpParams {
-    /// One action to describe. Without it, every action is listed.
+    /// Default: list every action.
     pub action: Option<String>,
 }
 
@@ -365,14 +357,84 @@ pub struct NoParams {}
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct LogsParams {
-    /// Seconds back from now. Without it, lines since the session opened.
+    /// Seconds back. Default: since the session opened.
     pub since: Option<u64>,
-    /// Only lines whose tag or message contains this text, in any case.
+    /// Only lines with this text, in any case.
     pub filter: Option<String>,
-    /// The most lines to show besides crash lines. Default 200, the newest.
+    /// Lines besides crash lines. Default 200, the newest.
     pub limit: Option<usize>,
-    /// The app's name in the flow, or its bundle id. Without it, the session's app.
+    /// An app name or bundle id. Default: the session's app.
     pub app: Option<String>,
+}
+
+/// When to consider golem: the part of the instructions that a client
+/// keeps in context in every session, used or not. How to use each tool is
+/// in its own description, which a client with tool search loads only
+/// when it picks the tool, and which a client that drops the instructions
+/// still sends.
+macro_rules! when_to_use {
+    () => {
+        "Mobile e2e testing on iOS and Android simulators and emulators. Use it when the user \
+         wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to \
+         reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs."
+    };
+}
+
+/// The server instructions: what golem is, when to use it, where to start.
+pub const INSTRUCTIONS: &str = concat!(
+    "golem (MCP server): ",
+    when_to_use!(),
+    " Start with session_open; actions_help explains the step notation."
+);
+
+/// The instructions as an Agent Skill, for a client that does not pass a
+/// server's instructions to the model: the skill's description is what
+/// makes the client consider it.
+pub fn skill() -> String {
+    format!(
+        "---\nname: golem\ndescription: \"{}\"\n---\n\n{INSTRUCTIONS}\n\nThe tools come from the \
+         golem MCP server. If they are missing, ask the user to add it: \
+         `golem mcp --print-config <client>` prints the config block.\n",
+        when_to_use!()
+    )
+}
+
+/// The tools' input schemas without what costs a client tokens and tells
+/// it nothing: the `$schema` dialect (MCP's default) and the `null` that
+/// each optional field allows (leaving a field out says the same).
+fn compact_schemas<S>(mut router: ToolRouter<S>) -> ToolRouter<S> {
+    fn compact(v: &mut serde_json::Value) {
+        match v {
+            serde_json::Value::Object(map) => {
+                map.remove("$schema");
+                if let Some(serde_json::Value::Array(types)) = map.get("type") {
+                    let kept: Vec<serde_json::Value> =
+                        types.iter().filter(|t| *t != "null").cloned().collect();
+                    if let [one] = kept.as_slice() {
+                        map.insert("type".into(), one.clone());
+                    }
+                }
+                if let Some(serde_json::Value::String(f)) = map.get("format") {
+                    if f.starts_with("uint") || f.starts_with("int") {
+                        map.remove("format");
+                    }
+                }
+                for v in map.values_mut() {
+                    compact(v);
+                }
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(compact),
+            _ => {}
+        }
+    }
+    for route in router.map.values_mut() {
+        let mut schema = serde_json::Value::Object((*route.attr.input_schema).clone());
+        compact(&mut schema);
+        if let serde_json::Value::Object(map) = schema {
+            route.attr.input_schema = Arc::new(map);
+        }
+    }
+    router
 }
 
 fn text(s: impl Into<String>) -> Result<CallToolResult, ErrorData> {
@@ -400,12 +462,12 @@ impl GolemMcp {
                 options.soft_timeout.unwrap_or(DEFAULT_SOFT_TIMEOUT),
             )),
             options,
-            tool_router: Self::tool_router(),
+            tool_router: compact_schemas(Self::tool_router()),
         }
     }
 
     #[tool(
-        description = "List devices in any state: platform, id, name, OS, state, and the port of a live companion. session_open boots a shut-down device when no running one fits."
+        description = "Devices in any state: platform, id, name, OS, state, live companion port."
     )]
     async fn devices(
         &self,
@@ -432,7 +494,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Open a session on one device and app. A running device that fits os, type and device wins; else golem boots one, unless boot = false. The session holds the device until session_close, until this server stops, or until it is idle for idle_timeout_s."
+        description = "Open a session on one device and app. A running device that fits wins; else golem boots one. The session ends at session_close, when this server stops, or after idle_timeout_s idle."
     )]
     async fn session_open(
         &self,
@@ -496,7 +558,7 @@ impl GolemMcp {
         self.render(&reply, false)
     }
 
-    #[tool(description = "Close the session and release its device.")]
+    #[tool(description = "Close the session; release the device.")]
     async fn session_close(
         &self,
         Parameters(p): Parameters<CloseParams>,
@@ -517,7 +579,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Run one step and return its result. The step is a TOML inline table, the same text as a step in a flow file: { action = \"tap\", on_text = \"Sign in\" }. Call actions_help for the actions."
+        description = "Run one step on the device. The step is a one-line TOML inline table; actions_help lists the actions and keys. Examples: { action = \"tap\", on_text = \"Sign in\" } · { action = \"type\", on_text = \"Email\", input = \"a@b.test\" } · { action = \"assert_visible\", on_text = \"Welcome\" }. A step that passes goes into the flow draft at the cursor, as written (a ${var} stays a reference), and the cursor moves after it; a failed step does not. Warns when a step passes in half its timeout or more."
     )]
     async fn act(&self, Parameters(p): Parameters<ActParams>) -> Result<CallToolResult, ErrorData> {
         let reply = self
@@ -530,7 +592,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Show what a selector matches on screen without acting: every visible match, which one act would pick, each anchor, and on a miss which clause removed the candidates. Never fails."
+        description = "What a selector matches, without acting: each visible match, which one act picks, each anchor; on a miss, which clause removed the candidates. Never fails."
     )]
     async fn probe(
         &self,
@@ -546,7 +608,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The UI tree: one indexed line per element you can target. The visible tree by default; full = true adds what is off-screen, as a hint only."
+        description = "The screen: one indexed line per element you can target. Only the visible tree decides what is on screen; full adds off-screen elements as a hint. Target an element with selector keys (actions_help), not its index."
     )]
     async fn tree(
         &self,
@@ -562,7 +624,7 @@ impl GolemMcp {
         self.render(&reply, json)
     }
 
-    #[tool(description = "A screenshot of the device, as a PNG image.")]
+    #[tool(description = "The screen as a PNG.")]
     async fn screenshot(
         &self,
         Parameters(_): Parameters<NoParams>,
@@ -572,7 +634,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Wait for the running operation and return its result, or the last result when none is running."
+        description = "A tool whose operation outlasts the soft timeout answers pending. wait waits for that operation and returns its result (the last result when none runs); it can answer pending again."
     )]
     async fn wait(
         &self,
@@ -589,7 +651,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Whether the session is idle or busy, with the running operation, or the last result."
+        description = "Idle or busy, without waiting: the running operation and its phase, or the last result. While busy, only status, wait, cancel, app_logs and session_close answer."
     )]
     async fn status(
         &self,
@@ -613,7 +675,7 @@ impl GolemMcp {
         }
     }
 
-    #[tool(description = "Stop the running operation. The teardown does not run.")]
+    #[tool(description = "Stop the running operation. No teardown runs.")]
     async fn cancel(
         &self,
         Parameters(_): Parameters<NoParams>,
@@ -627,7 +689,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The app's device log (Android logcat, iOS simulator unified log): crash lines first, then the newest lines. Works while an act is still running, so use it when the app hangs or crashes."
+        description = "The app's device log (Android logcat, iOS simulator; not physical iOS): crash lines first, then the newest. Answers while another operation runs."
     )]
     async fn app_logs(
         &self,
@@ -646,7 +708,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The flow draft: every step that passed in act, at its insertion point, as .test.toml text."
+        description = "The flow draft as .test.toml text: the flow file the session opened, or a new flow with the session's app whose first step starts block main."
     )]
     async fn draft_show(
         &self,
@@ -657,7 +719,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The draft's steps near the cursor (or a block), each as block:step, a status and the step: ✓ passed here, · not run here, ? unverified (marked # unverified in the file), ~ stale (a step before it changed). Block headers show next and branches."
+        description = "The draft's steps near the cursor, or one block's, each as block:step (from 1), status, step and comment. Status: ✓ passed here, · not run here, ? unverified (# unverified in the file), ~ stale. A change (a new, edited, moved or deleted step) makes the next step ? and later steps ~. Block headers show next and branches."
     )]
     async fn draft_steps(
         &self,
@@ -673,7 +735,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Run the draft on the device, without setup or teardown: from the start (restart) or from the cursor. Steps that pass become ✓ and lose # unverified. Stops at stop_at or a failed step, and puts the cursor there."
+        description = "Run the draft on the device: no setup, no teardown, the app as it is. Steps that pass become ✓, also from ? or ~. Stops before stop_at, at a failed step, or at the end; the cursor goes there."
     )]
     async fn draft_run(
         &self,
@@ -689,7 +751,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Check the flow draft as golem run would, then write it to path. A file the session did not open from needs overwrite = true."
+        description = "Validate the draft as golem run does; if valid, write it. Reports the status counts and the unverified steps."
     )]
     async fn export_flow(
         &self,
@@ -704,9 +766,7 @@ impl GolemMcp {
         self.render(&reply, false)
     }
 
-    #[tool(
-        description = "Set [flow] fields of the draft: name, tags, vars, seed, explicit_only, start."
-    )]
+    #[tool(description = "Set [flow] fields of the draft.")]
     async fn flow_set(
         &self,
         Parameters(p): Parameters<FlowSetParams>,
@@ -719,7 +779,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Add or replace a [[flow.apps]] entry in the draft. It need not match the session's device."
+        description = "Add or replace a [[flow.apps]] entry in the draft. The session does not change."
     )]
     async fn apps_set(
         &self,
@@ -730,7 +790,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Record the next steps into block name, creating it at the end of the draft if it does not exist."
+        description = "Move the cursor to the end of a block; a new name adds the block at the end."
     )]
     async fn block_begin(
         &self,
@@ -741,7 +801,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's next block and add branches (if_visible / if_not_visible / if_var, then goto)."
+        description = "Set a block's next, and add branches. A flow is named blocks of steps. After a block's last step the flow takes the first branch whose condition holds, else next, else the next block in the file; after the last block it ends."
     )]
     async fn block_link(
         &self,
@@ -753,7 +813,7 @@ impl GolemMcp {
         .await
     }
 
-    #[tool(description = "Add a step to the draft's [[teardown]]. The step does not run now.")]
+    #[tool(description = "Add a step to the draft's [[teardown]]. It does not run.")]
     async fn teardown_add(
         &self,
         Parameters(p): Parameters<StepNoteParams>,
@@ -764,7 +824,9 @@ impl GolemMcp {
         .await
     }
 
-    #[tool(description = "Add a [[data]] row to the draft, for a for_each block.")]
+    #[tool(
+        description = "Add a [[data]] row. A block with for_each = \"data\" runs once per row; its steps read ${_each.field}."
+    )]
     async fn data_add(
         &self,
         Parameters(p): Parameters<DataAddParams>,
@@ -773,7 +835,7 @@ impl GolemMcp {
             .await
     }
 
-    #[tool(description = "Add a comment line to the draft where the next step goes.")]
+    #[tool(description = "Add a comment line at the cursor.")]
     async fn comment_add(
         &self,
         Parameters(p): Parameters<CommentParams>,
@@ -783,7 +845,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Record a step without running it, for a path the session does not take. It is marked # unverified, and export_flow lists it."
+        description = "Record a step at the cursor without running it, for a path the session does not take. It is ? (unverified), and so is the step after it."
     )]
     async fn record_only(
         &self,
@@ -796,7 +858,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Change a draft step without running it: the step, its comment, or both. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified."
+        description = "Change a draft step without running it. Only a new comment or a larger timeout keeps its status; any other change makes it and the next step ?, and later steps ~."
     )]
     async fn step_edit(
         &self,
@@ -807,7 +869,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Remove a draft step and its comment. The next active step becomes unverified."
+        description = "Remove a draft step and its comment. The next step becomes ?, and later steps ~."
     )]
     async fn step_delete(
         &self,
@@ -818,7 +880,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Move a draft step. Where it left counts as a delete; the step is unverified where it lands."
+        description = "Move a draft step. Where it was counts as a delete; where it lands it is ?."
     )]
     async fn step_move(
         &self,
@@ -828,9 +890,7 @@ impl GolemMcp {
             .await
     }
 
-    #[tool(
-        description = "Rename a draft block, and each next, goto and [flow] start that names it."
-    )]
+    #[tool(description = "Rename a block, and each next, goto and start that names it.")]
     async fn block_rename(
         &self,
         Parameters(p): Parameters<BlockRenameParams>,
@@ -840,7 +900,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Remove a draft block and its steps. Refused while a next, goto or [flow] start names it."
+        description = "Remove a block and its steps. Refused while a next, goto or start names it."
     )]
     async fn block_delete(
         &self,
@@ -851,7 +911,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The project's mixins and the vars each expects. Use one with act('{ action = \"load_mixin\", mixin = \"name\", vars = { … } }')."
+        description = "The project's mixins and the vars each uses. Run one with act: { action = \"load_mixin\", mixin = \"name\", vars = { … } }."
     )]
     async fn mixins_list(
         &self,
@@ -882,9 +942,7 @@ impl GolemMcp {
         text(out)
     }
 
-    #[tool(
-        description = "How to write steps. Without an action: the notation and every action. With an action: its description and examples."
-    )]
+    #[tool(description = "Every action, or one action's keys and examples.")]
     async fn actions_help(
         &self,
         Parameters(p): Parameters<HelpParams>,
@@ -1080,12 +1138,7 @@ impl ServerHandler for GolemMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("golem", env!("CARGO_PKG_VERSION")))
-            .with_instructions(
-                "golem drives an iOS or Android device. Call session_open first (devices lists \
-                 them). Then use tree to see the screen, probe to check a selector, and act to \
-                 run one step. Steps are TOML inline tables: { action = \"tap\", on_text = \"OK\" }. \
-                 A long operation returns pending: call wait.",
-            )
+            .with_instructions(INSTRUCTIONS)
     }
 
     async fn initialize(
@@ -1308,6 +1361,58 @@ pub async fn serve(options: McpOptions) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_skill_is_valid_frontmatter_with_the_when_to_use_text() {
+        let skill = skill();
+        let front = skill
+            .strip_prefix("---\n")
+            .and_then(|r| r.split_once("\n---\n"))
+            .map(|(f, _)| f)
+            .expect("frontmatter");
+        let lines: Vec<&str> = front.lines().collect();
+        assert_eq!(lines[0], "name: golem");
+        // Quoted: the text has ": ", which ends a plain YAML scalar.
+        let description = lines[1]
+            .strip_prefix("description: \"")
+            .and_then(|d| d.strip_suffix('"'))
+            .expect("a quoted description");
+        assert!(!description.contains('"'), "{description}");
+        assert!(
+            description.starts_with("Mobile e2e testing"),
+            "{description}"
+        );
+        assert!(skill.contains(INSTRUCTIONS));
+    }
+
+    /// A client keeps the instructions in context in every session, used
+    /// or not, and many also keep every tool's text: both stay short.
+    #[test]
+    fn the_instructions_and_tool_text_stay_short() {
+        let words = |s: &str| s.split_whitespace().count();
+        assert!(
+            words(INSTRUCTIONS) <= 270,
+            "instructions: {}",
+            words(INSTRUCTIONS)
+        );
+        let router = compact_schemas(GolemMcp::tool_router());
+        for tool in router.list_all() {
+            let name = tool.name.to_string();
+            let d = tool.description.as_deref().unwrap_or_default();
+            assert!(words(d) <= 95, "{name}: {} words", words(d));
+            let schema = serde_json::Value::Object((*tool.input_schema).clone());
+            assert!(schema.get("$schema").is_none(), "{name}");
+            let props = schema["properties"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            for (key, p) in props {
+                let pd = p["description"].as_str().unwrap_or_default();
+                assert!(words(pd) <= 25, "{name}.{key}: {} words", words(pd));
+                assert!(!p["type"].is_array(), "{name}.{key}: {}", p["type"]);
+            }
+        }
+    }
 
     #[test]
     fn the_soft_timeout_stays_under_the_clients_own_limit() {

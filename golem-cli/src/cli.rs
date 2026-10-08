@@ -145,6 +145,16 @@ pub struct McpArgs {
     #[arg(long, value_enum)]
     pub print_config: Option<crate::mcp::Client>,
 
+    /// Print the server instructions as an Agent Skill (SKILL.md), for a
+    /// client that does not pass server instructions to the model, then exit
+    #[arg(long, conflicts_with = "print_config")]
+    pub print_skill: bool,
+
+    /// Print the server instructions as plain text, for AGENTS.md or a
+    /// client's rules file, then exit
+    #[arg(long, conflicts_with_all = ["print_config", "print_skill"])]
+    pub print_instructions: bool,
+
     /// Open sessions on the device-free stub driver (debug builds; tests)
     #[arg(long, hide = true)]
     pub stub_session: bool,

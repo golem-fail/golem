@@ -21,6 +21,7 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
   - [Scripts](#scripts): mcpc
   - [Install channels](#install-channels)
   - [Timeouts](#timeouts)
+  - [When the client drops the instructions](#when-the-client-drops-the-instructions)
 - [The step notation](#the-step-notation)
 - [The visible tree decides](#the-visible-tree-decides)
 - [Sessions](#sessions)
@@ -169,6 +170,8 @@ Open the MCP Servers panel, then Configure, then Configure MCP Servers. Add the 
 ```
 
 Use the absolute path of `golem`. `timeout` is in seconds (default 60). The Cline CLI adds the server with `cline mcp add golem --yes -- golem mcp`. Guide: [Adding and configuring MCP servers](https://docs.cline.bot/mcp/adding-and-configuring-servers).
+
+Cline does not pass a server's instructions to the model ([cline#14806](https://github.com/cline/cline/issues/14806)), so the model does not learn when to use golem. Add the instructions to `.clinerules`, as [When the client drops the instructions](#when-the-client-drops-the-instructions) shows.
 
 #### Continue
 
@@ -333,6 +336,30 @@ golem sets the soft timeout from the client that connects, by the name in its MC
 | Cursor, Windsurf, Devin, others | unknown | 45 s | per client |
 
 Where a client's docs and its source disagree, golem uses the lower limit. golem knows each client's default only, not a value you set. If you lower a client's limit below golem's soft timeout, or use a client that golem does not know and that waits less than 45 s, start the server with `--soft-timeout <secs>` below that limit. `--soft-timeout` always wins.
+
+### When the client drops the instructions
+
+golem sends short instructions when a client connects: what golem is, and when to use it. Most clients keep this text in the model's context, so the model considers golem for a mobile e2e task even before it looks at a tool. Each tool's description says how to use that tool.
+
+Some clients drop the instructions, for example Cline. With such a client, give the model the same text in another way. Use the first way that your client supports:
+
+1. **An Agent Skill.** Write the skill into the client's skills folder. For Claude Code:
+
+   ```bash
+   mkdir -p .claude/skills/golem
+   golem mcp --print-skill > .claude/skills/golem/SKILL.md
+   ```
+
+   The skill's `description` tells the client when to use golem.
+2. **`AGENTS.md`, or the client's rules file.** Add the plain text:
+
+   ```bash
+   golem mcp --print-instructions >> AGENTS.md
+   ```
+
+   For Cline, add the text to `.clinerules` instead.
+
+Both commands print the text that the server sends, so the text stays the same after an upgrade. Run the command again after you upgrade golem.
 
 ## The step notation
 

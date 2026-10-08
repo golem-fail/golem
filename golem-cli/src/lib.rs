@@ -411,6 +411,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 Some(dir) => dir,
                 None => project::find_project_root(&cwd).unwrap_or(cwd),
             };
+            if args.print_skill {
+                print!("{}", mcp::skill());
+                return Ok(0);
+            }
+            if args.print_instructions {
+                println!("{}", mcp::INSTRUCTIONS);
+                return Ok(0);
+            }
             if let Some(client) = args.print_config {
                 let exe = std::env::current_exe()?;
                 let env: Vec<(String, String)> = ["PATH", "ANDROID_HOME"]
