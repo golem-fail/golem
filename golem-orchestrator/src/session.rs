@@ -196,6 +196,8 @@ pub enum Op {
     Screenshot,
     /// The flow draft as TOML.
     DraftShow,
+    /// The draft's steps, each with its address and status.
+    DraftSteps(crate::draft::StepsQuery),
     /// Change the draft without touching the device.
     Edit(DraftEdit),
     /// Check the draft and write it to `path`.
@@ -210,6 +212,7 @@ impl Op {
             Op::Probe { .. } => "probe",
             Op::Screenshot => "screenshot",
             Op::DraftShow => "draft_show",
+            Op::DraftSteps(_) => "draft_steps",
             Op::Edit(e) => e.name(),
             Op::Export { .. } => "export_flow",
         }
@@ -306,6 +309,8 @@ pub enum OpResult {
     Exported {
         path: PathBuf,
         steps: usize,
+        /// The count of steps with each status, as text.
+        counts: String,
         unverified: Vec<String>,
     },
     /// The session holds its device now.
@@ -1164,10 +1169,18 @@ async fn open_flow(
     let mut runner =
         crate::suite::SuiteRunner::with_resource_manager(config, resource_mgr, install_cache);
     runner.event_forwarder = Some(events);
-    let phase = tokio::spawn(follow_phase(subs.subscribe(), status.clone()));
+    let passed: Passed = Arc::default();
+    let mut phase = tokio::spawn(follow_phase(
+        subs.subscribe(),
+        status.clone(),
+        passed.clone(),
+    ));
     drop(subs);
     let report = runner.run_suite(std::slice::from_ref(&path)).await;
     drop(runner);
+    // The last step events can still be in the channel: give the follower
+    // a moment to read them before it stops.
+    let _ = tokio::time::timeout(Duration::from_millis(500), &mut phase).await;
     phase.abort();
     let report = report?;
     // The legend lines (`# …`) explain TOON to a first-time reader; a
@@ -1209,14 +1222,17 @@ async fn open_flow(
     work.teardown_on_close = !f.no_teardown;
     work.flow = Some(h.flow);
     work.draft = crate::draft::Draft::from_file(&path)?;
-    match h.stopped_at.as_ref().or(h.failed_at.as_ref()) {
-        // Blocks a mixin added are not in the file; record at the end then.
-        Some(at) => {
-            if work.draft.insert_at(&at.block, Some(at.step)).is_err() {
-                work.draft.insert_at_end();
-            }
-        }
-        None => work.draft.insert_at_end(),
+    let passed = std::mem::take(&mut *passed.lock().unwrap_or_else(|e| e.into_inner()));
+    if let Some(flow) = &work.flow {
+        work.draft.mark_ran(flow, &passed)?;
+    }
+    let placed = match (h.stopped_at.as_ref().or(h.failed_at.as_ref()), &work.flow) {
+        (Some(at), Some(flow)) => work.draft.place_cursor(flow, &at.block, at.step),
+        _ => false,
+    };
+    // Blocks a mixin added are not in the file; record at the end then.
+    if !placed {
+        work.draft.insert_at_end();
     }
     Ok((work, Some(summary)))
 }
@@ -1308,12 +1324,41 @@ async fn check_flow(
     Ok(slot)
 }
 
-/// Keep the open's phase current from the flow run's events.
+/// The steps a flow run passed, as (block label, 0-based step).
+type Passed = Arc<std::sync::Mutex<Vec<(String, usize)>>>;
+
+/// Keep the open's phase current from the flow run's events, and collect
+/// the steps that pass.
 async fn follow_phase(
     mut events: tokio::sync::broadcast::Receiver<golem_events::Event>,
     status: Arc<Mutex<Status>>,
+    passed: Passed,
 ) {
-    while let Ok(event) = events.recv().await {
+    let mut running: Option<(String, usize)> = None;
+    loop {
+        let event = match events.recv().await {
+            Ok(event) => event,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        };
+        if let golem_events::EventKind::StepFinished { outcome, .. } = &event.kind {
+            let ok = matches!(
+                outcome,
+                golem_events::StepOutcome::Success | golem_events::StepOutcome::Warning { .. }
+            );
+            if let (true, Some(step)) = (ok, running.take()) {
+                passed.lock().unwrap_or_else(|e| e.into_inner()).push(step);
+            }
+            continue;
+        }
+        if let golem_events::EventKind::StepStarted {
+            block_name,
+            step_index_in_block,
+            ..
+        } = &event.kind
+        {
+            running = Some((block_name.clone(), *step_index_in_block));
+        }
         let phase = match &event.kind {
             golem_events::EventKind::InstallStarted { app_name, .. } => {
                 format!("installing {app_name}")
@@ -1362,6 +1407,7 @@ fn phase_of(op: &Op) -> String {
         Op::Probe { selector, .. } => format!("probe {selector}"),
         Op::Screenshot => "screenshot".to_string(),
         Op::DraftShow => "draft_show".to_string(),
+        Op::DraftSteps(_) => "draft_steps".to_string(),
         Op::Edit(e) => e.name().to_string(),
         Op::Export { path, .. } => format!("export_flow {}", path.display()),
     }
@@ -1384,6 +1430,10 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
             comment,
         } => act(work, step, *tree, comment.as_deref()).await,
         Op::DraftShow => OpResult::Draft(work.draft.text()),
+        Op::DraftSteps(q) => match work.draft.steps(q) {
+            Ok(text) => OpResult::Draft(text),
+            Err(e) => OpResult::Failed(format!("{e:#}")),
+        },
         Op::Edit(edit) => match edit.apply(&mut work.draft) {
             Ok(()) => OpResult::Edited(format!(
                 "draft updated · next step goes at {}",
@@ -1405,6 +1455,7 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
                 Ok(done) => OpResult::Exported {
                     path: done.path,
                     steps: done.steps,
+                    counts: done.counts.to_string(),
                     unverified: done.unverified,
                 },
                 Err(e) => OpResult::Failed(format!("{e:#}")),
@@ -2147,6 +2198,24 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
         let s = open_flow(dir.path(), Some("two:2"), false);
         let summary = opened(&s).await;
         assert!(summary.contains("session open before two:2"), "{summary}");
+        match run(&s, Op::DraftSteps(crate::draft::StepsQuery::default()))
+            .await
+            .result
+        {
+            OpResult::Draft(steps) => {
+                for line in [
+                    "one:1 ✓",
+                    "two:1 ✓",
+                    "▸ cursor\n  two:2 · { action = \"fail\"",
+                ] {
+                    assert!(
+                        steps.contains(line),
+                        "the steps the flow ran SHALL be passed: {steps}"
+                    );
+                }
+            }
+            other => panic!("{other:?}"),
+        }
         let next = run(
             &s,
             act(r#"{ action = "assert_visible", on_text = "${target}" }"#),
@@ -2282,7 +2351,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
         let after = std::fs::read_to_string(&path).expect("read");
         let want = before.replace(
             "  {{ action = \"fail\"".replace("{{", "{").as_str(),
-            "  # Still here\n  { action = \"assert_visible\", on_text = \"${target}\" },\n  { action = \"fail\"",
+            "  # Still here\n  { action = \"assert_visible\", on_text = \"${target}\" },\n  # unverified\n  { action = \"fail\"",
         );
         assert_eq!(
             after, want,

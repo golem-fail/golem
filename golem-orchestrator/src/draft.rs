@@ -15,6 +15,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
 
+mod status;
+pub use status::{StatusCounts, StepStatus, StepsQuery};
+
 /// Where the next recorded step goes: a block, and a position in its steps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Insertion {
@@ -32,9 +35,9 @@ pub struct Draft {
     /// to: writing over these needs no `overwrite`.
     own: Vec<PathBuf>,
     insertion: Option<Insertion>,
-    /// Steps recorded without running them (`record_only`), for the export
-    /// report.
-    unverified: Vec<String>,
+    /// The status of each step, by block index then step index; kept in
+    /// step with the `[[block]]` tables.
+    status: Vec<Vec<StepStatus>>,
     /// A comment for the next step into a `[[block.steps]]` block, which
     /// has no place for a standalone comment between tables.
     pending_comment: Option<String>,
@@ -45,6 +48,9 @@ pub struct Draft {
 pub struct Exported {
     pub path: PathBuf,
     pub steps: usize,
+    /// How many steps have each status.
+    pub counts: StatusCounts,
+    /// Each unverified step, as `block:step line`.
     pub unverified: Vec<String>,
 }
 
@@ -65,7 +71,7 @@ impl Draft {
             doc: text.parse().unwrap_or_default(),
             own: Vec::new(),
             insertion: None,
-            unverified: Vec::new(),
+            status: Vec::new(),
             pending_comment: None,
         }
     }
@@ -74,15 +80,29 @@ impl Draft {
     pub fn from_file(path: &Path) -> Result<Draft> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read {}", path.display()))?;
-        Ok(Draft {
+        let mut draft = Draft {
             doc: text
                 .parse()
                 .with_context(|| format!("failed to parse {}", path.display()))?,
             own: vec![path.to_path_buf()],
             insertion: None,
-            unverified: Vec::new(),
+            status: Vec::new(),
             pending_comment: None,
-        })
+        };
+        draft.status = (0..draft.block_count())
+            .map(|b| {
+                (0..draft.steps_len(b))
+                    .map(|i| {
+                        if draft.has_marker(b, i) {
+                            StepStatus::Unverified
+                        } else {
+                            StepStatus::NotRun
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        Ok(draft)
     }
 
     /// The draft as TOML text.
@@ -139,6 +159,10 @@ impl Draft {
     /// Record a step that passed: `line` in the canonical one-line form,
     /// with `comment` on its own line above it.
     pub fn record(&mut self, line: &str, comment: Option<&str>) -> Result<()> {
+        self.record_as(line, comment, StepStatus::Passed)
+    }
+
+    fn record_as(&mut self, line: &str, comment: Option<&str>, status: StepStatus) -> Result<()> {
         let step: Value = line
             .parse()
             .with_context(|| format!("not a one-line step: {line}"))?;
@@ -159,7 +183,11 @@ impl Draft {
             block: insertion.block,
             at: insertion.at.map(|_| at + 1),
         });
-        self.reparse()
+        self.reparse()?;
+        if let Some(statuses) = self.status.get_mut(insertion.block) {
+            statuses.insert(at.min(statuses.len()), status);
+        }
+        self.after_change(insertion.block, at, at + 1)
     }
 
     /// Record a step that did not run, marked `# unverified`.
@@ -168,9 +196,7 @@ impl Draft {
             Some(c) => format!("unverified: {c}"),
             None => "unverified".to_string(),
         };
-        self.record(line, Some(&marked))?;
-        self.unverified.push(line.to_string());
-        Ok(())
+        self.record_as(line, Some(&marked), StepStatus::Unverified)
     }
 
     /// Add a `[[block]]` named `name` at the end, in the inline-array form,
@@ -196,6 +222,7 @@ impl Draft {
         blocks.push(table);
         let index = blocks.len() - 1;
         self.reparse()?;
+        self.status.resize_with(index + 1, Vec::new);
         self.insertion = Some(Insertion {
             block: index,
             at: None,
@@ -230,10 +257,17 @@ impl Draft {
         if !same_as_source {
             self.own.push(path.to_path_buf());
         }
+        let unverified = self
+            .addresses()
+            .into_iter()
+            .filter(|(b, i)| self.status_of(*b, *i) == Some(StepStatus::Unverified))
+            .map(|(b, i)| format!("{} {}", self.address(b, i), self.step_line(b, i)))
+            .collect();
         Ok(Exported {
             path: path.to_path_buf(),
             steps: flow.block.iter().map(|b| b.steps.len()).sum(),
-            unverified: self.unverified.clone(),
+            counts: self.counts(),
+            unverified,
         })
     }
 
@@ -287,24 +321,7 @@ impl Draft {
             Some(_) => bail!("the block's `steps` is neither an array nor [[block.steps]] tables"),
         }
         if let Some(Item::Value(Value::Array(steps))) = block.get_mut("steps") {
-            // A one-line `steps = [{ … }]` has no room for a comment line:
-            // it becomes one step per line, the house form, and only its own
-            // lines change.
-            let single_line = !steps.is_empty()
-                && !steps.iter().any(|v| {
-                    v.decor()
-                        .prefix()
-                        .and_then(|p| p.as_str())
-                        .is_some_and(|p| p.contains('\n'))
-                });
-            if single_line {
-                for v in steps.iter_mut() {
-                    v.decor_mut().set_prefix("\n  ");
-                    v.decor_mut().set_suffix("");
-                }
-                steps.set_trailing("\n");
-                steps.set_trailing_comma(true);
-            }
+            expand_one_line(steps);
             let at = ins.at.unwrap_or(steps.len()).min(steps.len());
             let indent = element_indent(steps);
             let mut value = Value::InlineTable(step);
@@ -384,6 +401,26 @@ impl Draft {
             .parse()
             .context("the draft no longer parses")?;
         Ok(())
+    }
+}
+
+/// A one-line `steps = [{ … }]` has no room for a comment line: it becomes
+/// one step per line, the house form, and only its own lines change.
+fn expand_one_line(steps: &mut toml_edit::Array) {
+    let single_line = !steps.is_empty()
+        && !steps.iter().any(|v| {
+            v.decor()
+                .prefix()
+                .and_then(|p| p.as_str())
+                .is_some_and(|p| p.contains('\n'))
+        });
+    if single_line {
+        for v in steps.iter_mut() {
+            v.decor_mut().set_prefix("\n  ");
+            v.decor_mut().set_suffix("");
+        }
+        steps.set_trailing("\n");
+        steps.set_trailing_comma(true);
     }
 }
 
@@ -967,6 +1004,11 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             "  { action = \"tap\", on_text = \"Log in\" },  # the header button\n  \
              { action = \"type\", on_text = \"Email\", input = \"a@b.test\" },\n  \
              # Send the form\n  { action = \"tap\", on_text = \"Submit\" },\n]",
+        )
+        // The next block's first step runs after the new steps now.
+        .replace(
+            "steps = [{ action = \"assert_visible\", on_text = \"Hi\" }]",
+            "steps = [\n  # unverified\n  { action = \"assert_visible\", on_text = \"Hi\" },\n]",
         );
         assert_eq!(d.text(), want);
     }
@@ -986,7 +1028,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             "  { action = \"launch\", app = \"app\", restart = true },\n",
             "  { action = \"launch\", app = \"app\", restart = true },\n  \
              { action = \"assert_visible\", on_text = \"Welcome\" },\n  \
-             { action = \"hide_keyboard\" },\n",
+             { action = \"hide_keyboard\" },\n  # unverified\n",
         );
         assert_eq!(d.text(), want, "steps SHALL go in order at the stop point");
     }
@@ -1000,7 +1042,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         let want = INLINE.replace(
             "steps = [{ action = \"assert_visible\", on_text = \"Hi\" }]",
             "steps = [\n  # Count one\n  { action = \"tap\", on_text = \"+\" },\n  \
-             { action = \"assert_visible\", on_text = \"Hi\" },\n]",
+             # unverified\n  { action = \"assert_visible\", on_text = \"Hi\" },\n]",
         );
         assert_eq!(d.text(), want, "only the array's own lines SHALL change");
     }
@@ -1017,6 +1059,11 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         let want = TABLES.replace(
             "on_text = \"Go\"\n\n[[block]]",
             "on_text = \"Go\"\n\n# Check\n[[block.steps]]\naction = \"assert_visible\"\non_text = \"Next\"\n\n[[block]]",
+        )
+        // The next block's first step runs after the new step now.
+        .replace(
+            "steps = [{ action = \"assert_visible\", on_text = \"Done\" }]",
+            "steps = [\n  # unverified\n  { action = \"assert_visible\", on_text = \"Done\" },\n]",
         );
         assert_eq!(d.text(), want);
         let flow = golem_parser::parse_flow(&d.text()).expect("parse");
@@ -1038,7 +1085,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         assert_eq!(actions, ["launch", "hide_keyboard", "tap"]);
         assert!(
             d.text()
-                .contains("# Then tap.\n[[block.steps]]\naction = \"tap\""),
+                .contains("# Then tap.\n# unverified\n[[block.steps]]\naction = \"tap\""),
             "{}",
             d.text()
         );
@@ -1138,7 +1185,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             .expect("export");
         assert_eq!(
             done.unverified,
-            [r#"{ action = "tap", on_text = "Retry" }"#]
+            [r#"main:1 { action = "tap", on_text = "Retry" }"#]
         );
     }
 

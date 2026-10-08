@@ -274,6 +274,13 @@ async fn live_mcp_export_of_a_flow_session_keeps_its_comments_and_format() {
         serde_json::json!({ "step": r#"{ action = "assert_visible", on_text = "Submit" }"#, "comment": "The form shows" }),
     )
     .await;
+    let steps = mcp
+        .ok("draft_steps", serde_json::json!({ "context": 1 }))
+        .await;
+    assert!(
+        steps.contains("tap_interactions:1 ✓") && steps.contains("tap_interactions:2 ?"),
+        "the new step SHALL pass and the next SHALL be unverified:\n{steps}"
+    );
     mcp.ok(
         "export_flow",
         serde_json::json!({ "path": copy.display().to_string() }),
@@ -305,9 +312,11 @@ async fn live_mcp_export_of_a_flow_session_keeps_its_comments_and_format() {
         added.iter().map(|l| l.trim()).collect::<Vec<_>>(),
         vec![
             "# The form shows",
-            r#"{ action = "assert_visible", on_text = "Submit" },"#
+            r#"{ action = "assert_visible", on_text = "Submit" },"#,
+            // The step after the new one ran after another screen.
+            "# unverified",
         ],
-        "the export SHALL add only the new step and its comment:\n{exported}"
+        "the export SHALL add only the new step, its comment and the marker:\n{exported}"
     );
 }
 

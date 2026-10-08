@@ -247,8 +247,11 @@ pub(crate) fn note_text(reply: &serde_json::Value) -> Option<String> {
     }
     if let Some(path) = r["exported"].as_str() {
         let mut out = format!("exported {path} · {} steps · valid\n", r["steps"]);
+        if let Some(counts) = r["counts"].as_str().filter(|c| !c.is_empty()) {
+            out.push_str(&format!("{counts}\n"));
+        }
         if let Some(list) = r["unverified"].as_array().filter(|l| !l.is_empty()) {
-            out.push_str("unverified (recorded with record_only, never run):\n");
+            out.push_str("unverified (never run in this form):\n");
             for step in list {
                 out.push_str(&format!("  {}\n", step.as_str().unwrap_or_default()));
             }

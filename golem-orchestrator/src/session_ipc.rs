@@ -158,6 +158,12 @@ async fn handle(
             comment: msg["comment"].as_str().map(str::to_string),
         }),
         "session_draft_show" => Some(Op::DraftShow),
+        "session_draft_steps" => Some(Op::DraftSteps(crate::draft::StepsQuery {
+            around: msg["around"].as_str().map(str::to_string),
+            context: msg["context"].as_u64().map(|n| n as usize),
+            block: msg["block"].as_str().map(str::to_string),
+            limit: msg["limit"].as_u64().map(|n| n as usize),
+        })),
         "session_edit" => match parse_edit(msg) {
             Ok(edit) => Some(Op::Edit(edit)),
             Err(e) => return error(&format!("{e:#}")),
@@ -538,10 +544,12 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
         OpResult::Exported {
             path,
             steps,
+            counts,
             unverified,
         } => serde_json::json!({
             "exported": path.display().to_string(),
             "steps": steps,
+            "counts": counts,
             "unverified": unverified,
         }),
         OpResult::Failed(message) => serde_json::json!({ "error": message }),
