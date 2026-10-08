@@ -363,9 +363,9 @@ pub struct SessionStopArgs {
 /// `golem tree` output formats.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TreeOutput {
-    /// One line per selectable element, indexed
+    /// TOON: compact text, one line per element or step
     Toon,
-    /// The element tree as JSON
+    /// JSON
     Json,
 }
 

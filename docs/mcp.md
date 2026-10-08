@@ -31,7 +31,9 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
   - [Edit the draft](#edit-the-draft)
   - [Blocks](#blocks)
   - [Run the draft again](#run-the-draft-again)
+  - [Other draft tools](#other-draft-tools)
 - [Example: write a new flow](#example-write-a-new-flow)
+- [Example: edit a flow that exists](#example-edit-a-flow-that-exists)
 - [Example: debug an app issue](#example-debug-an-app-issue)
 - [Upgrades and troubleshooting](#upgrades-and-troubleshooting)
 
@@ -381,7 +383,7 @@ golem tests as a person does. A step finds its element only in the visible tree:
 
 A session holds one device, one app, the variables and a flow draft. Each MCP server has one session at a time.
 
-1. `session_open` picks the device and the app. It can first run a flow (see below).
+1. `session_open` picks the device and the app. It can first run a flow (see below). `devices` lists every device in any state, with the port of a live companion.
 2. `act`, `probe`, `tree`, `screenshot` and `app_logs` work on that device.
 3. `session_close` ends the session and releases the device.
 
@@ -426,7 +428,7 @@ A session runs one operation at a time.
 
 Each step that passes in `act` goes into the session's flow draft, at the cursor. A session from a flow puts the cursor where the flow stopped. A new session starts a block named `main`.
 
-`draft_steps` lists the steps near the cursor. Each line has the step's address (`block:step`, steps count from 1), its status, the step and its comment:
+`draft_show` returns the whole draft as `.test.toml` text. `draft_steps` lists the steps near the cursor. Each line has the step's address (`block:step`, steps count from 1), its status, the step and its comment:
 
 ```text
 draft · 4 steps: 2 ✓ passed, 1 ? unverified, 1 ~ stale · cursor before login:3
@@ -505,6 +507,19 @@ Each step that passes becomes `✓` and loses its `# unverified` line. A step th
 
 `restart` does not clear the app's data. A flow clears state in its own steps, for example with `launch` and `restart = true`.
 
+### Other draft tools
+
+These tools change only the draft. They never touch the device, and they set no step status.
+
+| Tool | What it does |
+|------|--------------|
+| `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Sets fields of `[flow]`. `vars` merges into the flow's variables. |
+| `apps_set(app)` | Adds a `[[flow.apps]]` entry, or replaces the fields of the entry with the same name. The entry can differ from the session's device. |
+| `teardown_add(step, comment?)` | Adds a step to the `[[teardown]]`. The step does not run now. |
+| `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` runs once for each row, and its steps read the fields as `${_each.field}`. |
+| `comment_add(text)` | Adds a comment line at the cursor. |
+| `mixins_list` | Lists the project's mixins and the variables each uses. To use a mixin, run `act` with `{ action = "load_mixin", mixin = "name", vars = { … } }`. The draft records the `load_mixin` step, not the mixin's steps. |
+
 ## Example: write a new flow
 
 The LLM writes a login flow for the app `app` in `golem.toml`:
@@ -530,6 +545,27 @@ Then the LLM runs `golem run flows/login.test.toml` in a shell to prove that the
 - If a step passes but takes half its timeout or more, `act` adds a warning with a suggested timeout: `warning: took 4.1s of its 5s timeout · consider timeout = 9000`. The step is in the draft. On a slower device or a busy host, the same step can time out in `golem run`. To raise the timeout, use `step_edit`. A larger timeout keeps the step's status.
 - `record_only` adds a step that does not run, for a path that the session does not take. The step gets an `# unverified` marker, and `export_flow` lists it.
 - To add steps to a flow that exists, open the session from that flow with `stop_at`. The new steps go in where the flow stopped. The export keeps the file's comments, key order and whitespace.
+
+## Example: edit a flow that exists
+
+The selector of a step in `flows/login.test.toml` no longer matches. The LLM fixes it, proves the flow again, and saves the file:
+
+```text
+session_open(os = "android", flow = "flows/login.test.toml", run = false)
+draft_steps(block = "login")
+draft_run(stop_at = "login:3")
+probe(selector = '{ on_accessibility_label = "Sign in" }')
+step_edit(at = "login:3", step = '{ action = "tap", on_accessibility_label = "Sign in" }')
+draft_run(restart = true)
+draft_steps()
+export_flow(path = "flows/login.test.toml")
+session_close()
+```
+
+- `run = false` opens the session before the first step, without running the flow.
+- The first `draft_run` brings the app to the screen of the broken step, so that `probe` reads the real screen.
+- After `step_edit`, step 3 and the step after it are `?`. The `draft_run` from the start makes every step that passes `✓`, and removes the `# unverified` lines.
+- `export_flow` writes over the file without `overwrite`, because the session opened from it.
 
 ## Example: debug an app issue
 

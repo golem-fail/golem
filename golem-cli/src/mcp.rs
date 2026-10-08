@@ -1385,6 +1385,24 @@ mod tests {
         assert!(skill.contains(INSTRUCTIONS));
     }
 
+    #[test]
+    fn every_tool_is_in_the_user_docs() {
+        let docs = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/mcp.md"),
+        )
+        .expect("docs/mcp.md");
+        let missing: Vec<String> = GolemMcp::tool_router()
+            .list_all()
+            .into_iter()
+            .map(|t| t.name.to_string())
+            .filter(|name| !docs.contains(&format!("`{name}")))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "docs/mcp.md SHALL describe: {missing:?}"
+        );
+    }
+
     /// A client keeps the instructions in context in every session, used
     /// or not, and many also keep every tool's text: both stay short.
     #[test]
