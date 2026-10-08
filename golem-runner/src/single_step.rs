@@ -22,7 +22,9 @@ use crate::policy::{execute_step_with_policy, StepOutcome};
 /// resolve against; its first entry is the app `${_app}` names.
 ///
 /// A step that cannot be interpolated is reported as failed, without
-/// running.
+/// running. With `ctx.recovery`, a companion that dies during the step is
+/// restarted, and the step is retried unless its mutation already landed,
+/// as in a flow.
 pub async fn execute_single_step(
     step: &Step,
     driver: &dyn PlatformDriver,
@@ -74,7 +76,36 @@ pub async fn execute_single_step(
     crate::reset_step_tree_stats();
     let started = Instant::now();
 
-    let result = execute_step_with_policy(&step, driver, vars, timeout_ms, ctx, apps).await;
+    let witness = ctx
+        .recovery
+        .map(|_| crate::recovery::WitnessDriver::new(driver));
+    let step_driver: &dyn PlatformDriver = match witness.as_ref() {
+        Some(w) => {
+            w.set_terminal(crate::recovery::terminal_mutation(&step.action));
+            w
+        }
+        None => driver,
+    };
+    let result = execute_step_with_policy(&step, step_driver, vars, timeout_ms, ctx, apps).await;
+    let result = match (ctx.recovery, witness.as_ref()) {
+        (Some(recovery), Some(w)) => {
+            crate::executor::run_step_recovery(
+                result,
+                recovery,
+                w,
+                step_driver,
+                &step,
+                vars,
+                timeout_ms,
+                ctx,
+                apps,
+                &mut 0,
+            )
+            .await
+        }
+        _ => result,
+    };
+    let result = crate::policy::apply_if_fail_for_death(result, &step);
 
     report.duration_ms = started.elapsed().as_millis() as u64;
     report.tree_stats = crate::take_step_tree_stats();
@@ -268,6 +299,118 @@ mod tests {
         assert!(
             !driver.get_calls().iter().any(|(m, _)| m == "tap"),
             "nothing SHALL reach the device"
+        );
+    }
+
+    /// Counts restarts; the mock driver's next call after a scripted death
+    /// succeeds, so a restart needs to change nothing.
+    struct CountingRecovery(std::sync::atomic::AtomicU32);
+
+    #[async_trait::async_trait]
+    impl crate::recovery::CompanionRecovery for CountingRecovery {
+        async fn restart_and_reconnect(&self) -> anyhow::Result<()> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn taps(driver: &MockPlatformDriver) -> usize {
+        driver.get_calls().iter().filter(|c| c.0 == "tap").count()
+    }
+
+    #[tokio::test]
+    async fn a_companion_death_before_the_tap_restarts_and_retries_the_step() {
+        let driver = screen();
+        driver.set_error_on_calls(
+            "tap",
+            golem_events::FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let recovery = CountingRecovery(Default::default());
+        let mut vars = make_vars();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut ctx = crate::context::test_ctx(tmp.path());
+        ctx.recovery = Some(&recovery);
+
+        let report =
+            execute_single_step(&tap("Sign in"), &driver, &mut vars, &mut ctx, &[], 2_000).await;
+
+        assert!(
+            matches!(report.outcome, ReportOutcome::Success),
+            "{}",
+            format_step_toon(&report)
+        );
+        assert_eq!(recovery.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(
+            taps(&driver),
+            2,
+            "the step SHALL run again after the restart"
+        );
+        assert!(
+            report
+                .substeps
+                .iter()
+                .any(|s| matches!(s, SubstepDetail::CompanionRestarted { .. })),
+            "the report SHALL show the restart"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_companion_death_after_the_tap_landed_does_not_tap_again() {
+        let driver = screen();
+        // get_hierarchy #1 checks the keyboard, #2 resolves, then the tap
+        // lands, and #3 (the post-settle read) dies.
+        driver.set_error_on_calls(
+            "get_hierarchy",
+            golem_events::FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[3],
+        );
+        let recovery = CountingRecovery(Default::default());
+        let mut vars = make_vars();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut ctx = crate::context::test_ctx(tmp.path());
+        ctx.recovery = Some(&recovery);
+
+        let report =
+            execute_single_step(&tap("Sign in"), &driver, &mut vars, &mut ctx, &[], 2_000).await;
+
+        assert!(
+            matches!(report.outcome, ReportOutcome::Success),
+            "{}",
+            format_step_toon(&report)
+        );
+        assert_eq!(recovery.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(taps(&driver), 1, "a tap that landed SHALL not run twice");
+    }
+
+    #[tokio::test]
+    async fn without_a_recovery_hook_a_companion_death_fails_the_step() {
+        let driver = screen();
+        driver.set_error_on_calls(
+            "tap",
+            golem_events::FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let mut vars = make_vars();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut ctx = crate::context::test_ctx(tmp.path());
+
+        let report =
+            execute_single_step(&tap("Sign in"), &driver, &mut vars, &mut ctx, &[], 2_000).await;
+
+        assert!(
+            matches!(
+                report.outcome,
+                ReportOutcome::Failed {
+                    code: golem_events::FailureCode::DeviceCompanionUnreachable,
+                    ..
+                }
+            ),
+            "{}",
+            format_step_toon(&report)
         );
     }
 }

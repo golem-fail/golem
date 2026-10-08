@@ -401,6 +401,35 @@ struct Work {
     log: Vec<LogEntry>,
     /// The session's place under the device cap.
     slot: Option<Slot>,
+    /// Restarts the companion when it dies. `None` on the stub driver.
+    recovery: Option<Arc<dyn golem_runner::recovery::CompanionRecovery>>,
+}
+
+/// Restart a dead companion on the session's device, and point the
+/// session's driver at the new one. The suite's `CompanionRecoveryImpl`
+/// does the same with the suite's registration server; a session has
+/// none, so it starts the companion as `golem tree` does.
+struct SessionRecovery {
+    device: DeviceInfo,
+    driver: Arc<dyn PlatformDriver>,
+    /// The app to re-target on iOS, where a new companion drives no app
+    /// until one is launched. Empty when the session names none.
+    bundle: String,
+}
+
+#[async_trait::async_trait]
+impl golem_runner::recovery::CompanionRecovery for SessionRecovery {
+    async fn restart_and_reconnect(&self) -> Result<()> {
+        let (port, _) = crate::suite::start_companion_for_device(&self.device).await?;
+        self.driver.reconnect(port);
+        // `launch_app` on the iOS companion activates a running app without
+        // restarting it. Android's tree covers the whole screen, and its
+        // launch could restart the app, so it is left alone.
+        if self.device.platform == golem_devices::Platform::Ios && !self.bundle.is_empty() {
+            let _ = self.driver.launch_app(&self.bundle).await;
+        }
+        Ok(())
+    }
 }
 
 /// An open session.
@@ -823,6 +852,7 @@ impl Work {
             browser: Default::default(),
             log: Vec::new(),
             slot: None,
+            recovery: None,
         }
     }
 }
@@ -968,6 +998,13 @@ async fn open(
             };
             held.hold(format!("{} ({})", work.device.name, work.device.udid));
             work.slot = Some(held);
+            if !req.stub {
+                work.recovery = Some(Arc::new(SessionRecovery {
+                    device: work.device.clone(),
+                    driver: work.driver.clone(),
+                    bundle: bundle.clone(),
+                }));
+            }
             let mut source = LogSource::of(&work, opened);
             if source.apps.is_empty() && !bundle.is_empty() {
                 source.apps.push(bundle_app(&bundle));
@@ -1373,37 +1410,61 @@ async fn run_op(work: &mut Work, op: &Op) -> OpResult {
                 Err(e) => OpResult::Failed(format!("{e:#}")),
             }
         }
-        Op::Tree { full, json } => match read_tree(work.driver.as_ref(), *full, *json).await {
-            Ok(text) => OpResult::Tree(text),
-            Err(e) => OpResult::Failed(format!("{e:#}")),
-        },
+        Op::Tree { .. } | Op::Probe { .. } | Op::Screenshot => {
+            let first = read(work, op).await;
+            let result = match (first, &work.recovery) {
+                (Err(e), Some(recovery)) if golem_runner::recovery::is_companion_death_err(&e) => {
+                    if let Err(restart) = recovery.restart_and_reconnect().await {
+                        return OpResult::Failed(format!(
+                            "{e:#}; restarting the companion failed: {restart:#}"
+                        ));
+                    }
+                    read(work, op).await.map(|done| match done {
+                        OpResult::Tree(text) => OpResult::Tree(format!("{RESTARTED}\n{text}")),
+                        OpResult::Probe { toon, json } => OpResult::Probe {
+                            toon: format!("{RESTARTED}\n{toon}"),
+                            json,
+                        },
+                        other => other,
+                    })
+                }
+                (result, _) => result,
+            };
+            result.unwrap_or_else(|e| OpResult::Failed(format!("{e:#}")))
+        }
+    }
+}
+
+/// The first line of a read that restarted a dead companion.
+const RESTARTED: &str = "companion restarted: it had stopped answering";
+
+/// A read-only operation: the tree, a probe or a screenshot.
+async fn read(work: &Work, op: &Op) -> Result<OpResult> {
+    match op {
+        Op::Tree { full, json } => Ok(OpResult::Tree(
+            read_tree(work.driver.as_ref(), *full, *json).await?,
+        )),
         Op::Probe {
             selector,
             timeout_ms,
         } => {
-            let parsed = match golem_parser::inline::parse_selector_inline(selector) {
-                Ok(p) => p,
-                Err(e) => return OpResult::Failed(format!("{e:#}")),
-            };
-            match golem_runner::probe::probe(
+            let parsed = golem_parser::inline::parse_selector_inline(selector)?;
+            let report = golem_runner::probe::probe(
                 work.driver.as_ref(),
                 &parsed.step,
                 &parsed.line,
                 *timeout_ms,
             )
-            .await
-            {
-                Ok(report) => OpResult::Probe {
-                    toon: golem_runner::probe::render_toon(&report),
-                    json: golem_runner::probe::render_json(&report),
-                },
-                Err(e) => OpResult::Failed(format!("{e:#}")),
-            }
+            .await?;
+            Ok(OpResult::Probe {
+                toon: golem_runner::probe::render_toon(&report),
+                json: golem_runner::probe::render_json(&report),
+            })
         }
-        Op::Screenshot => match work.driver.screenshot().await {
-            Ok(shot) => OpResult::Screenshot { png: shot.data },
-            Err(e) => OpResult::Failed(format!("{e:#}")),
-        },
+        Op::Screenshot => Ok(OpResult::Screenshot {
+            png: work.driver.screenshot().await?.data,
+        }),
+        _ => unreachable!("read() takes only read-only operations"),
     }
 }
 
@@ -1423,6 +1484,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         step_count,
         rng,
         browser,
+        recovery,
         ..
     } = work;
     // The context lives for one step; what must outlast it (step counter,
@@ -1436,6 +1498,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
             golem_vars::seed::FakeRng::from_optional_seed(None),
         )),
         browser: browser.clone(),
+        recovery: recovery.as_deref(),
         ..golem_runner::context::ExecutionContext::new(
             project_root,
             project_root,
@@ -1667,6 +1730,71 @@ mod tests {
             Waited::Done(o) => o,
             other => panic!("SHALL finish: {other:?}"),
         }
+    }
+
+    /// Counts restarts. The mock driver's call after a scripted death
+    /// succeeds, so a restart needs to change nothing.
+    struct CountingRecovery(std::sync::atomic::AtomicU32);
+
+    #[async_trait::async_trait]
+    impl golem_runner::recovery::CompanionRecovery for CountingRecovery {
+        async fn restart_and_reconnect(&self) -> Result<()> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// A mock session whose companion dies on the first `method` call.
+    async fn dying_session(
+        method: &str,
+    ) -> (Session, Arc<MockPlatformDriver>, Arc<CountingRecovery>) {
+        let driver = Arc::new(MockPlatformDriver::new(screen()));
+        driver.set_error_on_calls(
+            method,
+            golem_events::FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+            &[1],
+        );
+        let s = session_on(driver.clone(), None, DEFAULT_IDLE_TIMEOUT);
+        let recovery = Arc::new(CountingRecovery(Default::default()));
+        s.work.lock().await.as_mut().expect("work").recovery = Some(recovery.clone());
+        (s, driver, recovery)
+    }
+
+    #[tokio::test]
+    async fn an_act_whose_companion_dies_restarts_it_and_passes_on_the_retry() {
+        let (s, driver, recovery) = dying_session("tap").await;
+        let done = run(&s, act(r#"{ action = "tap", on_text = "Pay 42" }"#)).await;
+        match &done.result {
+            OpResult::Act { passed, toon, .. } => {
+                assert!(passed, "{toon}");
+                assert!(toon.contains("restart:companion 1/"), "{toon}");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(recovery.0.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            driver.get_calls().iter().filter(|c| c.0 == "tap").count(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn a_tree_whose_companion_dies_restarts_it_and_says_so() {
+        let (s, _, recovery) = dying_session("get_hierarchy").await;
+        let done = run(
+            &s,
+            Op::Tree {
+                full: false,
+                json: false,
+            },
+        )
+        .await;
+        match &done.result {
+            OpResult::Tree(text) => assert!(text.starts_with(RESTARTED), "{text}"),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(recovery.0.load(Ordering::SeqCst), 1);
     }
 
     fn act(step: &str) -> Op {
