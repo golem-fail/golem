@@ -194,6 +194,8 @@ The server starts without device work. The session runs in the daemon and belong
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |
 | `wait(timeout_s?)`, `status`, `cancel` | The running operation: its result, its state, or stop it |
+| `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
+| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it |
 | `actions_help(action?)` | The step notation and every action, or one action's reference |
 
 **A session from a flow.** `session_open(flow = "e2e/checkout.test.toml")` runs the flow on the chosen device, then keeps the device, the driver and the flow's variables for the session:
@@ -202,6 +204,8 @@ The server starts without device work. The session runs in the daemon and belong
 - `break_on_failure = true` opens the session at a failed step. Without it, a failed flow ends as `golem run` would, teardown included, and no session opens.
 - The flow's `[[teardown]]` runs only on `session_close`. A dropped connection or the idle timeout skips it, and `teardown = false` skips it on every end.
 - The flow must run once on one device: a flow that expands to several runs or devices is refused, and so is a `stop_at` in a `for_each` block.
+
+**The flow draft.** Each step that passes in `act` goes into the session's draft, as written (a `${var}` stays a reference), with `comment` on its own line above it. A step that fails does not. A session opened from a flow drafts that file: steps go in where the flow stopped (before `stop_at`, or before the failed step), else at the end of the last block, and the file's comments, key order and whitespace stay as they were. A step takes the form its block already uses, `steps = [ … ]` or `[[block.steps]]`; a one-line `steps = [{ … }]` becomes one step per line. A new session drafts a new flow with its app and a `main` block. `export_flow` refuses a draft that does not validate, and refuses to replace a file the session did not open from unless `overwrite = true`.
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 

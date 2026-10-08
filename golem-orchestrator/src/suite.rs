@@ -257,6 +257,8 @@ pub struct Handoff {
     /// The failed step, when the flow failed and `break_on_failure` kept
     /// the device.
     pub failure: Option<String>,
+    /// Where it failed, as a step to insert before.
+    pub failed_at: Option<golem_runner::context::StopAt>,
 }
 
 /// Configuration for a suite run.
@@ -4111,6 +4113,17 @@ async fn run_flow_on_device(
                     Err(e) => Some(format!("{e:#}")),
                     _ => None,
                 };
+                let failed_at = match &result {
+                    Ok(r) if !r.success => {
+                        r.failed_block
+                            .clone()
+                            .map(|block| golem_runner::context::StopAt {
+                                block,
+                                step: r.failed_step.map_or(1, |i| i + 1),
+                            })
+                    }
+                    _ => None,
+                };
                 let rng = std::mem::replace(
                     &mut *ctx.rng.lock().unwrap_or_else(|e| e.into_inner()),
                     golem_vars::seed::FakeRng::from_optional_seed(None),
@@ -4128,6 +4141,7 @@ async fn run_flow_on_device(
                         base_timeout_ms: base_timeout,
                         stopped_at: ctx.stopped_at.clone(),
                         failure,
+                        failed_at,
                     });
                 }
             } else {
