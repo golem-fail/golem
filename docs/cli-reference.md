@@ -8,7 +8,6 @@
 
 - [`golem run`](#golem-run)
 - [`golem tree`](#golem-tree)
-- [`golem do`](#golem-do)
 - [`golem probe`](#golem-probe)
 - [`golem mcp`](#golem-mcp)
 - [`golem session`](#golem-session)
@@ -110,32 +109,6 @@ golem tree [OPTIONS]
 
 **App.** `--bundle` is used as given. `--app` looks the bundle up in `golem.toml`. With neither, golem reads the registry's only app. If the registry has several apps or none, no bundle is set: on iOS the companion reads the app it last launched, and on Android the tree covers the whole screen.
 
-## `golem do`
-
-Run one step on one device.
-
-```bash
-golem do '{ action = "tap", on_text = "Sign in" }' [OPTIONS]
-```
-
-The step is one TOML inline table, the same text as one step in a flow file's `steps = [ … ]` array. The outer braces are optional. A malformed step fails with a corrected example.
-
-| Flag | Description |
-|------|-------------|
-| `--platform <ios\|android>` | Consider only devices on this platform |
-| `--device <ID\|NAME>` | The device, chosen as `golem tree` chooses it |
-| `--bundle <ID>` | The bundle ID of the app |
-| `--app <NAME>` | The app, by its name in the `golem.toml` `[[apps]]` registry |
-| `--tree` | Also print the visible tree after the step, in the [TOON tree](output-formats.md#toon-tree) format |
-| `--output <toon\|json>` | `toon` (default): the device, then the step's TOON line. `json`: the step as `results.json` records it |
-
-The step runs in the daemon and leases its device for that step, so it never acts on a device that a run is using. It uses the same element resolution, auto-scroll, settle and timeout as a step in a flow. `golem do` keeps no state between calls: variables, WebView inspector connections and recordings do not carry over. The exit code is 1 when the step fails.
-
-```text
-$ golem do '{ action = "tap", on_text = "+" }' --app app
-android/Pixel 8 Pro API 36 +tap:on_text="+" d:1515 @243,732 b180,666,126,132 t:4/357
-```
-
 ## `golem probe`
 
 Show what a selector matches on one device, without acting.
@@ -144,12 +117,15 @@ Show what a selector matches on one device, without acting.
 golem probe '{ on_text = "Sign in" }' [OPTIONS]
 ```
 
-The selector uses the same notation as `golem do`. You can paste the step you plan to run: `probe` ignores its `action`. `probe` never fails: it always exits 0.
+The selector is one TOML inline table, in the same notation as a step in a flow file's `steps = [ … ]` array. The outer braces are optional. You can paste the step you plan to run: `probe` ignores its `action`. `probe` never fails: it always exits 0.
 
 | Flag | Description |
 |------|-------------|
 | `--timeout <MS>` | Poll for up to this long while nothing visible matches (default 0: check the screen once) |
-| `--platform`, `--device`, `--bundle`, `--app` | As for `golem do` |
+| `--platform <ios\|android>` | Consider only devices on this platform |
+| `--device <ID\|NAME>` | The device, chosen as `golem tree` chooses it |
+| `--bundle <ID>` | The bundle ID of the app |
+| `--app <NAME>` | The app, by its name in the `golem.toml` `[[apps]]` registry |
 | `--output <toon\|json>` | `toon` (default) or `json` |
 
 The output shows:
@@ -187,14 +163,22 @@ Setup for each client, the session rules and two example sequences are in [golem
 | `--soft-timeout <SECS>` | How long a tool waits for its operation before it answers `pending` (default 45). |
 | `--print-config <CLIENT>` | Print the config block that adds this server to `claude` (`.mcp.json`), `codex` (`config.toml`), `opencode` (`opencode.json`), `gemini` (`.gemini/settings.json`) or `desktop` (`claude_desktop_config.json`), with the absolute path of this `golem`, then exit. The `desktop` block also sets `env` to your `PATH` and `ANDROID_HOME`. |
 
-The server starts without device work, and `session_open` needs a device that is already booted: it does not boot one, as `golem run` does. The session runs in the daemon and belongs to this server: when the client stops the server, the session ends and its device is released. Stdout carries JSON-RPC only.
+The server starts without device work.
+
+**The device.** `session_open` picks its device as a flow's `[[flow.apps.devices]]` would:
+
+- `os` takes the flow syntax: `ios`, `android`, `ios:26` (any 26.x), `ios:26+`, or `ios:latest` (the newest OS on the host, in any state). `type` is `phone` or `tablet`. `device` names one device by UDID, serial, name, or part of either, in any state.
+- A running device that fits and is free wins: a simulator or emulator before a physical device, then the newest OS. A device that a run or another session holds is skipped.
+- If no running device fits, golem boots the fitting shut-down device with the newest OS, as `golem run` does. The open answers `pending` with the phase `booting …` while it boots. `boot = false` refuses instead. When the daemon exits, it shuts down the devices that golem booted, unless a `golem run --keep-devices` used it.
+- With `flow`, the flow's device constraint fills each of `os`, `type` and `device` that the call leaves out. A flow that runs on both platforms needs `os`.
+- `session_open` refuses an argument it does not know, so a misspelt name fails instead of being ignored. The session runs in the daemon and belongs to this server: when the client stops the server, the session ends and its device is released. Stdout carries JSON-RPC only.
 
 | Tool | Description |
 |------|-------------|
-| `devices(platform?)` | Every device, with its state and the port of a live companion |
-| `session_open(platform?, device?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
+| `devices(os?)` | Every device in any state, with the port of a live companion. `os` filters as in `session_open` |
+| `session_open(os?, type?, device?, boot?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app; see "The device" below. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
 | `session_close(teardown?)` | Close the session and release the device. For a session opened from a flow, the flow's `[[teardown]]` runs unless `teardown = false` |
-| `act(step, comment?, tree?, format?)` | Run one step, as in `golem do`. `tree = true` adds the visible tree after the step |
+| `act(step, comment?, tree?, format?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step |
 | `probe(selector, timeout_ms?, format?)` | As `golem probe` |
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |
@@ -235,10 +219,10 @@ A session runs one operation at a time. A call made while another runs answers `
 
 ## `golem session`
 
-Keep a device session open between shell commands. `golem do` keeps no state; a session keeps the device, the app's companion, the variables and a flow draft until it stops. The daemon holds the session, so each command is a new process.
+Keep a device session open between shell commands. A session keeps the device, the variables and a flow draft until it stops. The daemon holds the session, so each command is a new process.
 
 ```bash
-golem session start [--name <NAME>] [--platform …] [--device …] [--app …] [--flow <FILE> …]
+golem session start [--name <NAME>] [--os …] [--type …] [--device …] [--no-boot] [--app …] [--flow <FILE> …]
 golem session do '{ action = "tap", on_text = "Sign in" }' [--comment <TEXT>] [--tree]
 golem session probe '{ on_text = "Sign in" }' [--timeout <MS>]
 golem session tree [--full]
@@ -251,8 +235,8 @@ golem session list
 
 | Command | Description |
 |---------|-------------|
-| `start` | Open a session. It takes the device flags of `golem do`, and `--idle-timeout <SECS>` (default 1800). With `--flow`, golem first runs that flow as `golem run` would and opens the session where it stops; `--stop-at`, `--break-on-failure`, `--no-teardown` and `--var KEY=VALUE` work as in the MCP `session_open` |
-| `do` | Run one step, as `golem do` does, with the session's variables. A step that passes goes into the draft, with `--comment` above it. The exit code is 1 when the step fails |
+| `start` | Open a session. `--os`, `--type`, `--device`, `--no-boot`, `--bundle` and `--app` work as the `session_open` arguments of [`golem mcp`](#golem-mcp). `--idle-timeout <SECS>` defaults to 1800. With `--flow`, golem first runs that flow as `golem run` would and opens the session where it stops; `--stop-at`, `--break-on-failure`, `--no-teardown` and `--var KEY=VALUE` work as in the MCP `session_open` |
+| `do` | Run one step, with the session's variables, as a step in a flow runs. A step that passes goes into the draft, with `--comment` above it. The exit code is 1 when the step fails |
 | `probe`, `tree` | As `golem probe` and `golem tree`, on the session's device |
 | `screenshot` | Write the screen to a PNG file |
 | `logs` | The app's device log, as the MCP `app_logs` tool returns it |

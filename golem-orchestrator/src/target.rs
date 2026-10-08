@@ -1,28 +1,193 @@
 //! Device and app selection for the interactive commands: `golem tree`,
-//! `golem do`, `golem probe`, sessions and the MCP `devices` tool.
+//! `golem probe`, sessions and the MCP `devices` tool.
 //!
-//! A suite run picks devices from flow constraints. An interactive command
-//! names one device and one app, and acts on exactly that pair: when the
-//! request matches more than one device it fails with the candidates
-//! instead of picking one.
+//! `golem tree` and `golem probe` read the screen of a device that runs:
+//! when the request matches more than one, they fail with the candidates
+//! instead of picking one. A session picks as a flow's device constraint
+//! does, and may boot a device ([`choose_for_session`]).
 
 use std::fmt::Write;
 
-use anyhow::{bail, Result};
-use golem_devices::{DeviceInfo, DeviceState, Platform};
+use anyhow::{bail, Context, Result};
+use golem_devices::{DeviceInfo, DeviceState, DeviceType, OsVersionSpec, Platform};
 use golem_driver::CompanionHealth;
 use golem_parser::ProjectAppConfig;
 
 /// What the caller asked for. Every field is optional.
 #[derive(Debug, Clone, Default)]
 pub struct TargetQuery {
-    pub platform: Option<Platform>,
+    /// The OS, as a flow's `os`: `ios`, `ios:26`, `ios:latest`.
+    pub os: Option<OsQuery>,
+    /// The form factor, as a flow's `type`.
+    pub device_type: Option<DeviceType>,
     /// UDID, serial or name.
     pub device: Option<String>,
     /// Bundle id, used as given.
     pub bundle: Option<String>,
     /// An app name from the project `[[apps]]` registry.
     pub app: Option<String>,
+}
+
+/// An `os` value: a platform, and the versions it allows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OsQuery {
+    pub platform: Platform,
+    /// `None` for a bare platform: any version.
+    pub version: Option<OsVersionSpec>,
+    /// As the caller wrote it.
+    pub text: String,
+}
+
+impl OsQuery {
+    /// Read `ios`, `android`, `ios:26`, `ios:26+` or `ios:latest`. A
+    /// session holds one device, so `latest:N` is refused.
+    pub fn parse(text: &str) -> Result<OsQuery> {
+        let platform = |p: &str| match p {
+            "ios" => Ok(Platform::Ios),
+            "android" => Ok(Platform::Android),
+            other => bail!(
+                "unknown os: {other}. Use ios or android, with an optional :version, as in a flow"
+            ),
+        };
+        let version = match text.split_once(':') {
+            None => {
+                return Ok(OsQuery {
+                    platform: platform(text)?,
+                    version: None,
+                    text: text.to_string(),
+                })
+            }
+            Some((p, _)) => {
+                platform(p)?;
+                golem_devices::version::parse_os_version(text)
+                    .with_context(|| format!("invalid os {text:?}"))?
+            }
+        };
+        if let OsVersionSpec::Latest { count, .. } = version {
+            if count > 1 {
+                bail!("os {text:?} asks for {count} versions; a session holds one device");
+            }
+        }
+        let (OsVersionSpec::Exact { platform, .. }
+        | OsVersionSpec::Minimum { platform, .. }
+        | OsVersionSpec::Latest { platform, .. }) = version;
+        Ok(OsQuery {
+            platform,
+            version: Some(version),
+            text: text.to_string(),
+        })
+    }
+}
+
+impl OsQuery {
+    /// The query for a flow slot's platform and OS version.
+    pub fn of(platform: Platform, version: Option<OsVersionSpec>) -> OsQuery {
+        let text = match version {
+            None => platform.to_string(),
+            Some(OsVersionSpec::Exact { major, .. }) => format!("{platform}:{major}"),
+            Some(OsVersionSpec::Minimum { major, .. }) => format!("{platform}:{major}+"),
+            Some(OsVersionSpec::Latest { .. }) => format!("{platform}:latest"),
+        };
+        OsQuery {
+            platform,
+            version,
+            text,
+        }
+    }
+}
+
+/// Read a flow-style `type`: `phone` or `tablet`.
+pub fn parse_device_type(text: &str) -> Result<DeviceType> {
+    match text {
+        "phone" => Ok(DeviceType::Phone),
+        "tablet" => Ok(DeviceType::Tablet),
+        other => bail!("unknown type: {other}. Use phone or tablet"),
+    }
+}
+
+impl TargetQuery {
+    pub fn platform(&self) -> Option<Platform> {
+        self.os.as_ref().map(|o| o.platform)
+    }
+
+    /// The query's `os` and `type`, for an error message.
+    fn shape(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(os) = &self.os {
+            parts.push(os.text.clone());
+        }
+        if let Some(t) = self.device_type {
+            parts.push(t.to_string());
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", parts.join(" "))
+        }
+    }
+
+    /// Whether `device` has the query's platform, OS version and type.
+    /// `latest` is the newest OS major among `all`, in any state.
+    pub fn fits(&self, device: &DeviceInfo, all: &[DeviceInfo]) -> bool {
+        if let Some(os) = &self.os {
+            if device.platform != os.platform {
+                return false;
+            }
+            let ok = match os.version {
+                None => true,
+                Some(OsVersionSpec::Exact { major, .. }) => device.os_major == major,
+                Some(OsVersionSpec::Minimum { major, .. }) => device.os_major >= major,
+                Some(OsVersionSpec::Latest { platform, .. }) => {
+                    all.iter()
+                        .filter(|d| d.platform == platform)
+                        .map(|d| d.os_major)
+                        .max()
+                        == Some(device.os_major)
+                }
+            };
+            if !ok {
+                return false;
+            }
+        }
+        self.device_type.is_none_or(|t| device.device_type == t)
+    }
+
+    /// The device that `device` names among `devices`: an exact UDID or
+    /// serial, then an exact name, then a substring of either, all
+    /// case-insensitive. `Ok(None)` when nothing matches; an error when
+    /// more than one device matches at the first step that matches.
+    fn named<'a>(&self, devices: &[&'a DeviceInfo]) -> Result<Option<&'a DeviceInfo>> {
+        let Some(wanted) = self.device.as_deref() else {
+            return Ok(None);
+        };
+        let wanted_lc = wanted.to_lowercase();
+        let steps: [&dyn Fn(&DeviceInfo) -> bool; 3] = [
+            &|d| d.udid.to_lowercase() == wanted_lc,
+            &|d| d.name.to_lowercase() == wanted_lc,
+            &|d| {
+                d.udid.to_lowercase().contains(&wanted_lc)
+                    || d.name.to_lowercase().contains(&wanted_lc)
+            },
+        ];
+        for matches_step in steps {
+            let hits: Vec<&DeviceInfo> = devices
+                .iter()
+                .copied()
+                .filter(|d| matches_step(d))
+                .collect();
+            match hits.as_slice() {
+                [] => continue,
+                [only] => return Ok(Some(only)),
+                many => {
+                    return Err(ambiguous(
+                        &format!("{} devices match \"{wanted}\"", many.len()),
+                        many,
+                    ))
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 /// A device with a live companion, and the app to act on.
@@ -115,16 +280,13 @@ fn ambiguous(head: &str, matches: &[&DeviceInfo]) -> anyhow::Error {
 /// one match at the first step that matches anything is an error listing
 /// the candidates.
 pub fn select_device<'a>(devices: &'a [DeviceInfo], query: &TargetQuery) -> Result<&'a DeviceInfo> {
-    let on_platform: Vec<&DeviceInfo> = devices
-        .iter()
-        .filter(|d| query.platform.is_none_or(|p| d.platform == p))
-        .collect();
+    let on_platform: Vec<&DeviceInfo> = devices.iter().filter(|d| query.fits(d, devices)).collect();
     let usable: Vec<&DeviceInfo> = on_platform
         .iter()
         .copied()
         .filter(|d| is_usable(d))
         .collect();
-    let platform = query.platform.map_or_else(String::new, |p| format!("{p} "));
+    let platform = query.shape();
 
     let Some(wanted) = query.device.as_deref() else {
         return match usable.as_slice() {
@@ -137,28 +299,10 @@ pub fn select_device<'a>(devices: &'a [DeviceInfo], query: &TargetQuery) -> Resu
         };
     };
 
-    let wanted_lc = wanted.to_lowercase();
-    let steps: [&dyn Fn(&DeviceInfo) -> bool; 3] = [
-        &|d| d.udid.to_lowercase() == wanted_lc,
-        &|d| d.name.to_lowercase() == wanted_lc,
-        &|d| {
-            d.udid.to_lowercase().contains(&wanted_lc) || d.name.to_lowercase().contains(&wanted_lc)
-        },
-    ];
-    for matches_step in steps {
-        let hits: Vec<&DeviceInfo> = usable.iter().copied().filter(|d| matches_step(d)).collect();
-        match hits.as_slice() {
-            [] => continue,
-            [only] => return Ok(only),
-            many => {
-                return Err(ambiguous(
-                    &format!("{} devices match \"{wanted}\"", many.len()),
-                    many,
-                ))
-            }
-        }
+    if let Some(hit) = query.named(&usable)? {
+        return Ok(hit);
     }
-
+    let wanted_lc = wanted.to_lowercase();
     if let Some(idle) = on_platform
         .iter()
         .find(|d| d.udid.to_lowercase() == wanted_lc || d.name.to_lowercase() == wanted_lc)
@@ -210,6 +354,120 @@ pub fn resolve_bundle(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<
     }
 }
 
+/// The device a session takes.
+#[derive(Debug)]
+pub enum Choice<'a> {
+    /// Booted or connected: use it as it is.
+    Ready(&'a DeviceInfo),
+    /// Shut down: boot it first.
+    Boot(&'a DeviceInfo),
+}
+
+/// Pick the device for a session, as a flow's device constraint would.
+///
+/// A named device is used in any state. Otherwise a free booted device
+/// that fits wins, a simulator or emulator before a physical device, then
+/// the newest OS. With none, the fitting shut-down device with the newest
+/// OS is booted. `in_use` says whether a run or a session holds a device.
+///
+/// Unlike [`select_device`], several fitting devices are no error: a
+/// session that may boot a device picks one as `golem run` does.
+pub fn choose_for_session<'a>(
+    devices: &'a [DeviceInfo],
+    query: &TargetQuery,
+    in_use: &dyn Fn(&DeviceInfo) -> bool,
+) -> Result<Choice<'a>> {
+    let fitting: Vec<&DeviceInfo> = devices.iter().filter(|d| query.fits(d, devices)).collect();
+    let shape = query.shape();
+    let ready_or_boot = |d: &'a DeviceInfo| match d.state {
+        DeviceState::Shutdown => Ok(Choice::Boot(d)),
+        DeviceState::NeedsCreation => bail!("{} ({}) does not exist yet", d.name, d.udid),
+        _ => Ok(Choice::Ready(d)),
+    };
+    if let Some(wanted) = query.device.as_deref() {
+        if let Some(hit) = query.named(&fitting)? {
+            return ready_or_boot(hit);
+        }
+        let all: Vec<&DeviceInfo> = devices.iter().collect();
+        if let Some(other) = query.named(&all)? {
+            bail!(
+                "{} ({}) is {} os:{}, not {}",
+                other.name,
+                other.udid,
+                other.device_type,
+                other.os_version,
+                shape.trim_end()
+            );
+        }
+        bail!("no {shape}device matches \"{wanted}\"");
+    }
+    let newest_first = |a: &&DeviceInfo, b: &&DeviceInfo| {
+        (a.physical, std::cmp::Reverse(a.os_major), &a.name, &a.udid).cmp(&(
+            b.physical,
+            std::cmp::Reverse(b.os_major),
+            &b.name,
+            &b.udid,
+        ))
+    };
+    let mut usable: Vec<&DeviceInfo> = fitting.iter().copied().filter(|d| is_usable(d)).collect();
+    usable.sort_by(newest_first);
+    if let Some(free) = usable.iter().find(|d| !in_use(d)) {
+        return Ok(Choice::Ready(free));
+    }
+    if !usable.is_empty() {
+        bail!(
+            "every booted {shape}device is in use by a run or a session ({}); close one, or boot another",
+            usable
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let mut shutdown: Vec<&DeviceInfo> = fitting
+        .iter()
+        .copied()
+        .filter(|d| d.state == DeviceState::Shutdown)
+        .collect();
+    shutdown.sort_by(newest_first);
+    match shutdown.first() {
+        Some(d) => Ok(Choice::Boot(d)),
+        None => bail!(
+            "no {shape}device on this host; create a simulator in Xcode or an emulator in Android Studio"
+        ),
+    }
+}
+
+/// The device and app for a session: [`choose_for_session`], then a boot
+/// when the choice needs one and `boot` allows it. A device golem boots is
+/// marked so that the daemon shuts it down when it exits.
+pub async fn select_for_session(
+    query: &TargetQuery,
+    apps: &[ProjectAppConfig],
+    resource_mgr: &golem_devices::resource_manager::ResourceManager,
+    boot: bool,
+    on_boot: &(dyn Fn(&DeviceInfo) + Send + Sync),
+) -> Result<Selection> {
+    let bundle = resolve_bundle(query, apps)?;
+    let devices = discover_devices(query.platform()).await;
+    let in_use = |d: &DeviceInfo| resource_mgr.port_for(&d.udid).is_some();
+    let device = match choose_for_session(&devices, query, &in_use)? {
+        Choice::Ready(d) => d.clone(),
+        Choice::Boot(d) if !boot => bail!(
+            "{} ({}) is shut down and booting is turned off; boot it first",
+            d.name,
+            d.udid
+        ),
+        Choice::Boot(d) => {
+            on_boot(d);
+            let booted = golem_devices::lifecycle::boot_device(d).await?;
+            resource_mgr.mark_golem_booted(booted.clone());
+            booted
+        }
+    };
+    Ok(Selection { device, bundle })
+}
+
 /// The live companion running on `device`, by the UDID it reports.
 pub fn companion_on(
     device: &DeviceInfo,
@@ -249,7 +507,7 @@ pub struct Selection {
 /// that leases the device does so between this and [`connect`].
 pub async fn select(query: &TargetQuery, apps: &[ProjectAppConfig]) -> Result<Selection> {
     let bundle = resolve_bundle(query, apps)?;
-    let devices = discover_devices(query.platform).await;
+    let devices = discover_devices(query.platform()).await;
     let device = select_device(&devices, query)?.clone();
     Ok(Selection { device, bundle })
 }
@@ -400,9 +658,173 @@ mod tests {
         ]
     }
 
+    fn session_query(
+        os: Option<&str>,
+        device_type: Option<&str>,
+        device: Option<&str>,
+    ) -> TargetQuery {
+        TargetQuery {
+            os: os.map(|o| OsQuery::parse(o).expect("os")),
+            device_type: device_type.map(|t| parse_device_type(t).expect("type")),
+            device: device.map(str::to_string),
+            ..TargetQuery::default()
+        }
+    }
+
+    fn chosen(devices: &[DeviceInfo], q: &TargetQuery, busy: &[&str]) -> (bool, String) {
+        let in_use = |d: &DeviceInfo| busy.contains(&d.udid.as_str());
+        match choose_for_session(devices, q, &in_use).expect("SHALL choose") {
+            Choice::Ready(d) => (false, d.udid.clone()),
+            Choice::Boot(d) => (true, d.udid.clone()),
+        }
+    }
+
+    fn refused(devices: &[DeviceInfo], q: &TargetQuery, busy: &[&str]) -> String {
+        let in_use = |d: &DeviceInfo| busy.contains(&d.udid.as_str());
+        format!(
+            "{:#}",
+            choose_for_session(devices, q, &in_use).expect_err("SHALL refuse")
+        )
+    }
+
+    #[test]
+    fn os_reads_every_flow_form_for_one_device() {
+        let os = |t: &str| OsQuery::parse(t).expect(t);
+        assert_eq!(os("ios").version, None);
+        assert_eq!(os("android").platform, Platform::Android);
+        assert_eq!(
+            os("ios:26").version,
+            Some(OsVersionSpec::Exact {
+                platform: Platform::Ios,
+                major: 26
+            })
+        );
+        assert_eq!(
+            os("android:34+").version,
+            Some(OsVersionSpec::Minimum {
+                platform: Platform::Android,
+                major: 34
+            })
+        );
+        assert_eq!(
+            os("ios:latest").version,
+            Some(OsVersionSpec::Latest {
+                platform: Platform::Ios,
+                count: 1
+            })
+        );
+        for bad in ["web", "ios:", "web:26", "ios:latest:2"] {
+            assert!(OsQuery::parse(bad).is_err(), "{bad} SHALL be refused");
+        }
+        assert_eq!(
+            OsQuery::of(Platform::Ios, os("ios:26+").version).text,
+            "ios:26+"
+        );
+    }
+
+    #[test]
+    fn a_session_takes_the_free_booted_device_with_the_newest_os() {
+        let q = session_query(Some("ios"), None, None);
+        assert_eq!(chosen(&fleet(), &q, &[]), (false, "B9100F0F".into()));
+        assert_eq!(
+            chosen(&fleet(), &q, &["B9100F0F"]),
+            (false, "A1B2C3D4".into()),
+            "a device a run or a session holds SHALL be skipped"
+        );
+    }
+
+    #[test]
+    fn a_session_boots_the_newest_fitting_device_when_none_runs() {
+        let mut devices = fleet();
+        devices.retain(|d| d.udid != "B9100F0F");
+        assert_eq!(
+            chosen(&devices, &session_query(Some("ios:26"), None, None), &[]),
+            (true, "E5F6A7B8".into())
+        );
+        devices[2].device_type = DeviceType::Tablet;
+        assert_eq!(
+            chosen(
+                &devices,
+                &session_query(Some("ios"), Some("tablet"), None),
+                &[]
+            ),
+            (true, "C0FFEE00".into())
+        );
+    }
+
+    #[test]
+    fn latest_is_the_newest_os_on_the_host_in_any_state() {
+        let mut devices = fleet();
+        devices.retain(|d| d.udid != "B9100F0F");
+        assert_eq!(
+            chosen(
+                &devices,
+                &session_query(Some("ios:latest"), None, None),
+                &[]
+            ),
+            (true, "E5F6A7B8".into()),
+            "a booted iOS 18 SHALL not stand in for latest when iOS 26 exists"
+        );
+    }
+
+    #[test]
+    fn a_named_session_device_is_used_in_any_state() {
+        assert_eq!(
+            chosen(&fleet(), &session_query(None, None, Some("E5F6A7B8")), &[]),
+            (true, "E5F6A7B8".into())
+        );
+        let err = refused(
+            &fleet(),
+            &session_query(Some("ios:18"), None, Some("iPhone 17")),
+            &[],
+        );
+        assert!(err.contains("is phone os:26.5, not ios:18"), "{err}");
+    }
+
+    #[test]
+    fn a_session_prefers_an_emulator_to_a_physical_phone() {
+        let mut devices = fleet();
+        devices.insert(
+            0,
+            dev(
+                Platform::Android,
+                "R5CT",
+                "Galaxy",
+                "16",
+                DeviceState::Connected,
+            ),
+        );
+        assert_eq!(
+            chosen(&devices, &session_query(Some("android"), None, None), &[]),
+            (false, "emulator-5554".into())
+        );
+    }
+
+    #[test]
+    fn a_session_refuses_when_every_fitting_device_is_busy_or_none_exists() {
+        let err = refused(
+            &fleet(),
+            &session_query(Some("android"), None, None),
+            &["emulator-5554"],
+        );
+        assert!(
+            err.contains("in use by a run or a session (Pixel_8_Pro)"),
+            "{err}"
+        );
+        let err = refused(
+            &fleet(),
+            &session_query(Some("android:30"), None, None),
+            &[],
+        );
+        assert!(
+            err.starts_with("no android:30 device on this host"),
+            "{err}"
+        );
+    }
+
     fn query(platform: Option<Platform>, device: Option<&str>) -> TargetQuery {
         TargetQuery {
-            platform,
+            os: platform.map(|p| OsQuery::parse(&p.to_string()).expect("os")),
             device: device.map(str::to_string),
             ..TargetQuery::default()
         }

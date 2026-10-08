@@ -7,14 +7,9 @@ use crate::cli::TreeArgs;
 
 /// Run the `golem tree` command: fetch and display the UI hierarchy.
 pub async fn run(args: &TreeArgs) -> Result<()> {
-    let platform = match args.platform.as_deref() {
-        None => None,
-        Some("ios") => Some(golem_devices::Platform::Ios),
-        Some("android") => Some(golem_devices::Platform::Android),
-        Some(p) => bail!("unknown platform: {p}. Use 'ios' or 'android'."),
-    };
     let query = golem_orchestrator::target::TargetQuery {
-        platform,
+        os: crate::probe_cmd::platform_os(args.platform.as_deref())?,
+        device_type: None,
         device: args.device.clone(),
         bundle: args.bundle.clone(),
         app: args.app.clone(),

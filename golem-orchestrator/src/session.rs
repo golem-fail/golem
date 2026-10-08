@@ -2,8 +2,8 @@
 //! across many operations, for an LLM or a person working step by step.
 //!
 //! A session holds a lease on its device, so no suite run takes the device
-//! while the session is open. It keeps what `golem do` loses between calls:
-//! the driver (with its WebView inspector connection and IME state), the
+//! while the session is open. It keeps what separate one-step commands
+//! would lose between calls: the driver (with its WebView inspector connection and IME state), the
 //! variables, the step counter and the seeded RNG.
 //!
 //! A session runs one operation at a time. While one runs, [`Session::begin`]
@@ -41,6 +41,8 @@ pub struct OpenRequest {
     pub idle_timeout: Duration,
     /// Run this flow first, and open the session where it stops.
     pub flow: Option<FlowOpen>,
+    /// Boot a shut-down device when no booted device fits.
+    pub boot: bool,
 }
 
 /// A flow to run before the session takes over its device.
@@ -781,7 +783,7 @@ async fn open(
     (logs, opened): (Arc<Mutex<Option<LogSource>>>, SystemTime),
 ) -> OpResult {
     let result = match req.flow.clone() {
-        None => open_device(&req, &resource_mgr).await,
+        None => open_device(&req, &resource_mgr, &status).await,
         Some(f) => open_flow(&req, f, resource_mgr, install_cache, &status).await,
     };
     match result {
@@ -804,12 +806,32 @@ async fn open(
     }
 }
 
+/// Show the boot of `device` as the open's phase.
+fn boot_phase(status: &Arc<Mutex<Status>>) -> impl Fn(&golem_devices::DeviceInfo) + Send + Sync {
+    let status = status.clone();
+    move |device| {
+        if let Ok(mut s) = status.lock() {
+            if let Status::Busy(r) = &mut *s {
+                r.phase = format!("booting {} ({})", device.name, device.udid);
+            }
+        }
+    }
+}
+
 async fn open_device(
     req: &OpenRequest,
     resource_mgr: &Arc<ResourceManager>,
+    status: &Arc<Mutex<Status>>,
 ) -> Result<(Work, Option<String>)> {
     let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
-    let selection = target::select(&req.query, &project.apps).await?;
+    let selection = target::select_for_session(
+        &req.query,
+        &project.apps,
+        resource_mgr,
+        req.boot,
+        &boot_phase(status),
+    )
+    .await?;
     let lease = crate::interactive::lease(resource_mgr, &selection.device)?;
     let target = target::connect(selection).await?;
     let mut apps = crate::interactive::app_configs(&project.apps);
@@ -868,25 +890,40 @@ async fn open_flow(
     };
     let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
     let stub = cfg!(debug_assertions) && f.stub;
+    let slot = check_flow(
+        &path,
+        &project.apps,
+        &req.project_root,
+        if stub {
+            Some(
+                req.query
+                    .platform()
+                    .unwrap_or(golem_devices::Platform::Android),
+            )
+        } else {
+            req.query.platform()
+        },
+        f.stop_at.as_ref(),
+    )
+    .await?;
     let (platform, pin_udid) = if stub {
         (
             req.query
-                .platform
+                .platform()
                 .unwrap_or(golem_devices::Platform::Android),
             None,
         )
     } else {
-        let selection = target::select(&req.query, &project.apps).await?;
+        let selection = target::select_for_session(
+            &flow_query(&req.query, &slot),
+            &project.apps,
+            &resource_mgr,
+            req.boot,
+            &boot_phase(status),
+        )
+        .await?;
         (selection.device.platform, Some(selection.device.udid))
     };
-    check_flow(
-        &path,
-        &project.apps,
-        &req.project_root,
-        platform,
-        f.stop_at.as_ref(),
-    )
-    .await?;
 
     let slot: Arc<std::sync::Mutex<Option<crate::suite::Handoff>>> = Arc::default();
     let config = crate::suite::SuiteConfig {
@@ -973,20 +1010,37 @@ async fn open_flow(
     Ok((work, Some(summary)))
 }
 
-/// Refuse a flow that would not run as one session on `device`, and a
-/// `stop_at` it does not have, before any device work.
+/// The session's query, with the flow's device constraint filling each
+/// field the session left open.
+fn flow_query(query: &TargetQuery, slot: &crate::plan::DeviceSlot) -> TargetQuery {
+    let mut q = query.clone();
+    if q.os.is_none() {
+        q.os = slot
+            .platform
+            .map(|p| target::OsQuery::of(p, slot.os_version.clone()));
+    }
+    q.device_type = q.device_type.or(slot.device_type);
+    if q.device.is_none() {
+        q.device = slot.name.clone();
+    }
+    q
+}
+
+/// Refuse a flow that would not run as one session on one device, and a
+/// `stop_at` it does not have, before any device work. Returns the flow's
+/// one device slot.
 async fn check_flow(
     path: &std::path::Path,
     apps: &[golem_parser::ProjectAppConfig],
     project_root: &std::path::Path,
-    platform: golem_devices::Platform,
+    platform: Option<golem_devices::Platform>,
     stop_at: Option<&golem_runner::context::StopAt>,
-) -> Result<()> {
+) -> Result<crate::plan::DeviceSlot> {
     let planned = crate::plan::plan(
         &[path.to_path_buf()],
         apps,
         project_root,
-        Some(platform),
+        platform,
         None,
         1,
         None,
@@ -996,19 +1050,23 @@ async fn check_flow(
     if let Some(failure) = planned.parse_failures.first() {
         anyhow::bail!("{}: {}", failure.path.display(), failure.error);
     }
-    match planned.flow_runs.as_slice() {
-        [run] if run.slots.len() == 1 => {}
+    let slot = match planned.flow_runs.as_slice() {
+        [run] if run.slots.len() == 1 => run.slots[0].clone(),
         [run] => anyhow::bail!(
             "the flow drives {} devices at once; a session holds one",
             run.slots.len()
         ),
+        runs if platform.is_none() => anyhow::bail!(
+            "the flow expands to {} runs; set os (for example os = \"ios\") so that it runs once on one device",
+            runs.len()
+        ),
         runs => anyhow::bail!(
             "the flow expands to {} runs on {}; a session runs it once on one device",
             runs.len(),
-            platform
+            platform.map_or_else(String::new, |p| p.to_string())
         ),
-    }
-    let Some(stop) = stop_at else { return Ok(()) };
+    };
+    let Some(stop) = stop_at else { return Ok(slot) };
     let flow = &planned.flows[0].flow;
     let Some(block) = flow
         .block
@@ -1036,7 +1094,7 @@ async fn check_flow(
             block.steps.len()
         );
     }
-    Ok(())
+    Ok(slot)
 }
 
 /// Keep the open's phase current from the flow run's events.
@@ -1684,6 +1742,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                     vars: Vec::new(),
                     stub: true,
                 }),
+                boot: false,
             },
             Arc::new(ResourceManager::new(
                 golem_devices::concurrency::ConcurrencyConfig::default(),

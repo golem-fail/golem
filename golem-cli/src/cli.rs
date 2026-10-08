@@ -20,8 +20,6 @@ pub enum Commands {
     Run(RunArgs),
     /// Show the UI element tree from a running companion
     Tree(TreeArgs),
-    /// Run one step on a device: `golem do '{ action = "tap", on_text = "OK" }'`
-    Do(DoArgs),
     /// Show what a selector matches on a device, without acting:
     /// `golem probe '{ on_text = "OK" }'`
     Probe(ProbeArgs),
@@ -94,36 +92,6 @@ pub enum CacheCommands {
 
     /// Delete the install cache (`.golem/install-cache.json`)
     Clear,
-}
-
-#[derive(clap::Args, Debug)]
-pub struct DoArgs {
-    /// The step, as one TOML inline table: `{ action = "tap", on_text = "OK" }`
-    pub step: String,
-
-    /// Consider only devices on this platform (ios or android)
-    #[arg(long)]
-    pub platform: Option<String>,
-
-    /// The device: a UDID or serial, a name, or part of either
-    #[arg(long)]
-    pub device: Option<String>,
-
-    /// The bundle ID of the app
-    #[arg(long, conflicts_with = "app")]
-    pub bundle: Option<String>,
-
-    /// The app, by its name in the golem.toml [[apps]] registry
-    #[arg(long)]
-    pub app: Option<String>,
-
-    /// Also print the visible tree after the step
-    #[arg(long)]
-    pub tree: bool,
-
-    /// Output format
-    #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
-    pub output: TreeOutput,
 }
 
 #[derive(clap::Args, Debug)]
@@ -219,13 +187,21 @@ pub struct SessionStartArgs {
     #[command(flatten)]
     pub name: SessionName,
 
-    /// Consider only devices on this platform (ios or android)
+    /// The OS, as a flow's `os`: ios, android, ios:26, ios:26+ or ios:latest
     #[arg(long)]
-    pub platform: Option<String>,
+    pub os: Option<String>,
+
+    /// The form factor, as a flow's `type`: phone or tablet
+    #[arg(long = "type", value_name = "TYPE")]
+    pub device_type: Option<String>,
 
     /// The device: a UDID or serial, a name, or part of either
     #[arg(long)]
     pub device: Option<String>,
+
+    /// Use only a device that is already running: never boot one
+    #[arg(long)]
+    pub no_boot: bool,
 
     /// The bundle ID of the app
     #[arg(long, conflicts_with = "app")]

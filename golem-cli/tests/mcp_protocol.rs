@@ -110,6 +110,18 @@ async fn every_tool_works_against_a_stub_session() {
     assert!(err, "a session tool SHALL fail before session_open");
     assert!(text_of(&c).contains("session_open"), "{c}");
 
+    let (c, err) = call(
+        &client,
+        "session_open",
+        serde_json::json!({ "platform": "android" }),
+    )
+    .await;
+    assert!(err, "an unknown argument SHALL be refused: {c}");
+    assert!(
+        text_of(&c).contains("unknown field `platform`, expected one of `os`"),
+        "{c}"
+    );
+
     let (c, err) = call(&client, "session_open", serde_json::json!({})).await;
     assert!(!err, "{c}");
     assert!(

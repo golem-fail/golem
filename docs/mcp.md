@@ -36,7 +36,7 @@ Before you start, run `golem doctor`.
 
 `golem mcp --print-config <client>` prints a config block for `claude`, `codex`, `opencode`, `gemini` or `desktop`. The block holds the absolute path of the `golem` that you ran.
 
-**Boot a device first.** `session_open` uses a simulator, an emulator or a connected device that is already booted. It does not boot a device, as `golem run` does. `devices` lists each device and its state.
+**Devices.** `session_open` uses a running simulator, emulator or connected device that fits. If none runs, golem boots one, as `golem run` does. Booting takes up to a few minutes, and the open answers `pending` meanwhile. Tell the LLM which device to use with the flow syntax, for example `os = "ios:26"` and `type = "tablet"`, or name one device with `device`. The [CLI reference](cli-reference.md#golem-mcp) has the rules.
 
 ### Claude Code
 
@@ -208,7 +208,7 @@ A session runs one operation at a time.
 The LLM writes a login flow for the app `app` in `golem.toml`:
 
 ```text
-session_open(platform = "android", app = "app")
+session_open(os = "android", app = "app")
 act(step = '{ action = "launch", app = "app", restart = true }', comment = "Start from a clean launch")
 tree()
 probe(selector = '{ on_accessibility_label = "Email" }')
@@ -233,7 +233,7 @@ Then the LLM runs `golem run flows/login.test.toml` in a shell to prove that the
 The user reports that the app crashes after Save on the profile screen:
 
 ```text
-session_open(platform = "ios", app = "app", flow = "flows/profile.test.toml", stop_at = "edit")
+session_open(os = "ios", app = "app", flow = "flows/profile.test.toml", stop_at = "edit")
 screenshot()
 act(step = '{ action = "type", on_accessibility_label = "Name", input = "Ada" }')
 act(step = '{ action = "tap", on_text = "Save" }', tree = true)

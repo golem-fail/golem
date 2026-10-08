@@ -21,11 +21,13 @@ pub async fn run(args: &SessionArgs) -> Result<i32> {
             let project_root = project::find_project_root(&cwd).unwrap_or(cwd);
             let mut msg = serde_json::json!({
                 "query": {
-                    "platform": a.platform,
+                    "os": a.os,
+                    "type": a.device_type,
                     "device": a.device,
                     "bundle": a.bundle,
                     "app": a.app,
                 },
+                "boot": !a.no_boot,
                 "project_root": project_root.display().to_string(),
                 "idle_timeout_s": a.idle_timeout,
                 "flow": a.flow.as_ref().map(|f| absolute(f).display().to_string()),
