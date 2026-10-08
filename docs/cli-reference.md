@@ -194,7 +194,7 @@ The server starts without device work.
 | Tool | Description |
 |------|-------------|
 | `devices(os?)` | Every device in any state, with the port of a live companion. `os` filters as in `session_open` |
-| `session_open(os?, type?, device?, boot?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app; see "The device" below. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
+| `session_open(os?, type?, device?, boot?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, run?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app; see "The device" below. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
 | `session_close(teardown?)` | Close the session and release the device. For a session opened from a flow, the flow's `[[teardown]]` runs unless `teardown = false` |
 | `act(step, comment?, tree?, format?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step |
 | `probe(selector, timeout_ms?, format?)` | As `golem probe` |
@@ -204,6 +204,7 @@ The server starts without device work.
 | `app_logs(since?, filter?, limit?, app?)` | The app's device log, see below. It does not wait for a running operation |
 | `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
 | `draft_steps(around?, context?, block?, limit?)` | The draft's steps near the cursor, or one block's steps, each with its `block:step` address and status |
+| `draft_run(restart?, stop_at?)` | Run the draft on the device without setup or teardown, from the start (`restart = true`) or from the cursor. Steps that pass become `✓`; the cursor goes where the run stops or fails |
 | `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, with the count of each status and the unverified steps |
 | `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
 | `apps_set(app)` | Add or replace a `[[flow.apps]]` entry: `bundle`, `devices`, `permissions`, `install_script` |
@@ -225,6 +226,7 @@ The server starts without device work.
 
 - `stop_at = "block"` or `"block:step"` stops before that step (steps count from 1). Without it, the session opens where the flow ends.
 - `break_on_failure = true` opens the session at a failed step. Without it, a failed flow ends as `golem run` would, teardown included, and no session opens.
+- `run = false` installs and sets up, but runs no steps: the session opens before the first step of the start block. It does not combine with `stop_at`.
 - The flow's `[[teardown]]` runs only on `session_close`. A dropped connection or the idle timeout skips it, and `teardown = false` skips it on every end.
 - The flow must run once on one device: a flow that expands to several runs or devices is refused, and so is a `stop_at` in a `for_each` block.
 

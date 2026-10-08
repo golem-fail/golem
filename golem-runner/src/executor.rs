@@ -762,7 +762,17 @@ pub async fn execute_flow<'a>(
         // Deferred `--trace` boundary frames for this block: (png target, capture
         // instant). Extracted from the recording at each recording-stop site.
         let mut deferred_frames: Vec<(std::path::PathBuf, std::time::Instant)> = Vec::new();
+        let skip_before = match ctx.start_at.take() {
+            Some(start) if block.name.as_deref() == Some(start.block.as_str()) => start.step - 1,
+            other => {
+                ctx.start_at = other;
+                0
+            }
+        };
         for (step_idx, step) in block.steps.iter().enumerate() {
+            if step_idx < skip_before {
+                continue;
+            }
             if ctx
                 .stop_at
                 .as_ref()
@@ -5911,6 +5921,65 @@ action = "screenshot"
             1,
             "no recovery hook SHALL mean no retry"
         );
+    }
+
+    #[tokio::test]
+    async fn start_at_skips_the_steps_before_it_in_its_block() {
+        let fail = |msg: &str| {
+            let mut f = crate::actions::test_helpers::make_step("fail");
+            f.params
+                .insert("message".into(), toml::Value::String(msg.into()));
+            f
+        };
+        let flow = make_flow(vec![
+            make_block(Some("one"), vec![fail("ran a block before the start")]),
+            make_block(
+                Some("two"),
+                vec![
+                    fail("ran a step before the start"),
+                    crate::actions::test_helpers::make_step("hide_keyboard"),
+                ],
+            ),
+        ]);
+        let driver = MockPlatformDriver::new(golem_element::Element {
+            element_type: "View".into(),
+            text: None,
+            accessibility_label: None,
+            accessibility_id: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable: false,
+            focused: false,
+            bounds: golem_element::Bounds::new(0, 0, 100, 100),
+            visible_bounds: None,
+            hit_points: vec![],
+            drawing_order: None,
+            children: vec![],
+        });
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+        let capture = crate::capture::CaptureConfig {
+            screenshot_on_failure: false,
+            ..Default::default()
+        };
+        let mut ctx = ExecutionContext {
+            start_at: Some(crate::context::StopAt::parse("two:2").expect("parse")),
+            ..ExecutionContext::new(&tmp, &tmp, &capture, "test")
+        };
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            Some("two"),
+            10_000,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("flow");
+        assert!(result.success, "{:?}", result.failed_reason);
+        assert!(ctx.start_at.is_none(), "the start SHALL apply once");
     }
 
     #[tokio::test]

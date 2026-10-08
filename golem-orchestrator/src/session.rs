@@ -14,12 +14,12 @@
 //! Who owns a session is up to the caller: the daemon ties one to the
 //! connection that opened it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use golem_devices::resource_manager::{DeviceLease, ResourceManager};
 use golem_devices::DeviceInfo;
 use golem_driver::PlatformDriver;
@@ -198,6 +198,12 @@ pub enum Op {
     DraftShow,
     /// The draft's steps, each with its address and status.
     DraftSteps(crate::draft::StepsQuery),
+    /// Run the draft on the device: from the start with `restart`, else
+    /// from the cursor; stop before `stop_at` (`block` or `block:step`).
+    DraftRun {
+        restart: bool,
+        stop_at: Option<String>,
+    },
     /// Change the draft without touching the device.
     Edit(DraftEdit),
     /// Check the draft and write it to `path`.
@@ -213,6 +219,7 @@ impl Op {
             Op::Screenshot => "screenshot",
             Op::DraftShow => "draft_show",
             Op::DraftSteps(_) => "draft_steps",
+            Op::DraftRun { .. } => "draft_run",
             Op::Edit(e) => e.name(),
             Op::Export { .. } => "export_flow",
         }
@@ -625,13 +632,14 @@ impl Session {
     pub fn begin(&self, op: Op) -> Begin {
         let name = op.name();
         let phase = phase_of(&op);
+        let status = self.status.clone();
         self.run_checked(name, phase, move |slot| {
             Box::pin(async move {
                 let mut slot = slot;
                 let Some(work) = slot.as_mut() else {
                     return OpResult::Failed("the session holds no device".into());
                 };
-                let result = run_op(work, &op).await;
+                let result = run_op(work, &op, &status).await;
                 work.log.push(LogEntry {
                     op_id: 0,
                     op: op.name(),
@@ -1471,6 +1479,16 @@ fn phase_of(op: &Op) -> String {
         Op::Screenshot => "screenshot".to_string(),
         Op::DraftShow => "draft_show".to_string(),
         Op::DraftSteps(_) => "draft_steps".to_string(),
+        Op::DraftRun { restart, .. } => {
+            format!(
+                "draft_run{}",
+                if *restart {
+                    " from the start"
+                } else {
+                    " from the cursor"
+                }
+            )
+        }
         Op::Edit(e) => e.name().to_string(),
         Op::Export { path, .. } => format!("export_flow {}", path.display()),
     }
@@ -1485,8 +1503,11 @@ fn summary_of(op: &Op, result: &OpResult) -> String {
     }
 }
 
-async fn run_op(work: &mut Work, op: &Op) -> OpResult {
+async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResult {
     match op {
+        Op::DraftRun { restart, stop_at } => draft_run(work, *restart, stop_at.as_deref(), status)
+            .await
+            .unwrap_or_else(|e| OpResult::Failed(format!("{e:#}"))),
         Op::Act {
             step,
             tree,
@@ -1653,6 +1674,180 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         step: golem_report::json::step_json(&report),
         tree,
     }
+}
+
+/// Run the draft on the session's device, as `golem run` runs a flow but
+/// without its setup or teardown. The steps that pass become passed, and
+/// the cursor goes where the run stops or fails.
+async fn draft_run(
+    work: &mut Work,
+    restart: bool,
+    stop_at: Option<&str>,
+    status: &Arc<Mutex<Status>>,
+) -> Result<OpResult> {
+    let mut flow = golem_parser::parse_flow(&work.draft.text())
+        .context("the draft does not parse as a flow")?;
+    let errors = golem_parser::validation::validate_flow(&flow);
+    if !errors.is_empty() {
+        let detail: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+        anyhow::bail!("the draft does not validate: {}", detail.join("; "));
+    }
+    let flow_dir = work
+        .draft
+        .source_dir()
+        .map_or_else(|| work.project_root.clone(), Path::to_path_buf);
+    for block in &mut flow.block {
+        block.steps =
+            golem_parser::mixin::expand_mixins(&block.steps, &flow_dir, &work.project_root)?;
+    }
+    // The draft's apps can lack what golem.toml adds (a bundle, a profile):
+    // the run drives the apps the session resolved, as `act` does.
+    if !work.apps.is_empty() {
+        flow.flow.apps = work.apps.clone();
+    }
+    // A place in the draft as the run numbers it, through `load_mixin`.
+    let run_place = |draft: &crate::draft::Draft,
+                     block: &str,
+                     index: usize|
+     -> Result<golem_runner::context::StopAt> {
+        let ran = flow
+            .block
+            .iter()
+            .find(|b| b.name.as_deref() == Some(block))
+            .with_context(|| format!("the draft has no block named {block:?}"))?;
+        let b = draft
+            .block_position(block)
+            .with_context(|| format!("the draft has no block named {block:?}"))?;
+        let step = draft.run_step(b, index, ran.steps.len()).with_context(|| {
+            format!("block {block:?} has more than one load_mixin, so a place in it is unclear; run from the start")
+        })?;
+        Ok(golem_runner::context::StopAt {
+            block: block.to_string(),
+            step: step + 1,
+        })
+    };
+    let stop = match stop_at {
+        Some(s) => {
+            let at = golem_runner::context::StopAt::parse(s)?;
+            Some(run_place(&work.draft, &at.block, at.step - 1)?)
+        }
+        None => None,
+    };
+    let start = if restart {
+        None
+    } else {
+        let (block, index) = work
+            .draft
+            .cursor()
+            .context("the draft has no steps to run from")?;
+        Some(run_place(&work.draft, &block, index)?)
+    };
+    let start_block = match &start {
+        Some(s) => Some(s.block.clone()),
+        None => flow.flow.start.clone(),
+    };
+    let base_timeout = flow
+        .flow
+        .options
+        .as_ref()
+        .and_then(|o| o.step_timeout)
+        .unwrap_or(work.base_timeout_ms);
+
+    let (events, subs) = golem_events::channel::event_channel();
+    let passed: Passed = Arc::default();
+    let mut follow = tokio::spawn(follow_phase(
+        subs.subscribe(),
+        status.clone(),
+        passed.clone(),
+    ));
+    drop(subs);
+    let emitter = golem_events::emitter::DeviceEmitter::new(
+        events,
+        golem_events::DeviceId(work.device.name.clone()),
+    );
+    let Work {
+        device,
+        driver,
+        project_root,
+        capture,
+        child_env,
+        vars,
+        step_count,
+        rng,
+        browser,
+        recovery,
+        ..
+    } = work;
+    let flow_name = flow.flow.name.clone();
+    let mut ctx = golem_runner::context::ExecutionContext {
+        device: Some(device),
+        child_env: child_env.as_ref(),
+        global_step_index: *step_count,
+        rng: std::sync::Mutex::new(std::mem::replace(
+            rng,
+            golem_vars::seed::FakeRng::from_optional_seed(None),
+        )),
+        browser: browser.clone(),
+        recovery: recovery.as_deref(),
+        emitter: Some(&emitter),
+        stop_at: stop,
+        start_at: start,
+        ..golem_runner::context::ExecutionContext::new(&flow_dir, project_root, capture, &flow_name)
+    };
+    let result = golem_runner::executor::execute_flow(
+        &flow,
+        driver.as_ref(),
+        vars,
+        start_block.as_deref(),
+        base_timeout,
+        &mut ctx,
+        None,
+    )
+    .await;
+    *step_count = ctx.global_step_index;
+    let stopped = ctx.stopped_at.take();
+    *rng = ctx.rng.into_inner().unwrap_or_else(|e| e.into_inner());
+    drop(emitter);
+    let _ = tokio::time::timeout(Duration::from_millis(500), &mut follow).await;
+    follow.abort();
+
+    let passed = std::mem::take(&mut *passed.lock().unwrap_or_else(|e| e.into_inner()));
+    work.draft.mark_ran(&flow, &passed)?;
+    let (outcome, at) = match &result {
+        Ok(r) if !r.success => (
+            format!(
+                "failed at {}:{} {}: {}",
+                r.failed_block.as_deref().unwrap_or("?"),
+                r.failed_step.map_or(0, |i| i + 1),
+                r.failed_action.as_deref().unwrap_or("?"),
+                r.failed_reason.as_deref().unwrap_or_default()
+            ),
+            r.failed_block
+                .clone()
+                .map(|b| (b, r.failed_step.map_or(1, |i| i + 1))),
+        ),
+        Ok(_) => match &stopped {
+            Some(s) => (
+                format!("stopped before {s}"),
+                Some((s.block.clone(), s.step)),
+            ),
+            None => ("ran to the end".to_string(), None),
+        },
+        Err(e) => (format!("failed: {e:#}"), None),
+    };
+    let placed = at.is_some_and(|(block, step)| work.draft.place_cursor(&flow, &block, step));
+    if !placed {
+        work.draft.insert_at_end();
+    }
+    let listing = work.draft.steps(&crate::draft::StepsQuery {
+        context: Some(3),
+        ..crate::draft::StepsQuery::default()
+    })?;
+    Ok(OpResult::Edited(format!(
+        "draft_run · {} step{} passed · {outcome}\n{listing}",
+        passed.len(),
+        if passed.len() == 1 { "" } else { "s" }
+    )))
 }
 
 async fn read_tree(driver: &dyn PlatformDriver, full: bool, json: bool) -> Result<String> {
@@ -2377,6 +2572,95 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn draft_run_resumes_from_the_cursor_and_restarts_from_the_start() {
+        let (dir, _) = flow_dir();
+        // As run = false: nothing ran, and the cursor is before one:1.
+        let s = open_flow(dir.path(), Some("one"), false);
+        let _ = opened(&s).await;
+        let text = |o: Outcome| match o.result {
+            OpResult::Edited(t) => t,
+            other => panic!("{other:?}"),
+        };
+        let resumed = text(
+            run(
+                &s,
+                Op::DraftRun {
+                    restart: false,
+                    stop_at: Some("two:2".into()),
+                },
+            )
+            .await,
+        );
+        assert!(
+            resumed.starts_with("draft_run · 2 steps passed · stopped before two:2\n"),
+            "{resumed}"
+        );
+        assert!(resumed.contains("two:1 ✓"), "{resumed}");
+        assert!(resumed.contains("▸ cursor\n  two:2 ·"), "{resumed}");
+
+        let restarted = text(
+            run(
+                &s,
+                Op::DraftRun {
+                    restart: true,
+                    stop_at: None,
+                },
+            )
+            .await,
+        );
+        assert!(
+            restarted.starts_with(
+                "draft_run · 2 steps passed · failed at two:2 fail: the second step of two"
+            ),
+            "{restarted}"
+        );
+        assert!(restarted.contains("▸ cursor\n  two:2 ·"), "{restarted}");
+        s.close("closed", false).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn draft_run_clears_the_marker_of_a_step_that_passes() {
+        let (dir, _) = flow_dir();
+        let s = open_flow(dir.path(), Some("two:2"), false);
+        let _ = opened(&s).await;
+        let added = run(
+            &s,
+            act(r#"{ action = "assert_visible", on_text = "Submit" }"#),
+        )
+        .await;
+        assert!(matches!(added.result, OpResult::Act { passed: true, .. }));
+        match run(&s, Op::DraftShow).await.result {
+            OpResult::Draft(t) => assert!(t.contains("# unverified"), "{t}"),
+            other => panic!("{other:?}"),
+        }
+        let edited = run(&s, Op::Edit(DraftEdit::StepDelete { at: "two:3".into() })).await;
+        assert!(matches!(edited.result, OpResult::Edited(_)), "{edited:?}");
+        let _ = run(
+            &s,
+            Op::DraftRun {
+                restart: true,
+                stop_at: None,
+            },
+        )
+        .await;
+        match run(&s, Op::DraftShow).await.result {
+            OpResult::Draft(t) => assert!(!t.contains("# unverified"), "{t}"),
+            other => panic!("{other:?}"),
+        }
+        match run(&s, Op::DraftSteps(crate::draft::StepsQuery::default()))
+            .await
+            .result
+        {
+            OpResult::Draft(t) => assert!(
+                t.contains("draft · 3 steps: 3 ✓ passed"),
+                "a full run SHALL pass every step: {t}"
+            ),
+            other => panic!("{other:?}"),
+        }
+        s.close("closed", false).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -29,6 +29,7 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
 - [The draft and step status](#the-draft-and-step-status)
   - [Edit the draft](#edit-the-draft)
   - [Blocks](#blocks)
+  - [Run the draft again](#run-the-draft-again)
 - [Example: write a new flow](#example-write-a-new-flow)
 - [Example: debug an app issue](#example-debug-an-app-issue)
 - [Upgrades and troubleshooting](#upgrades-and-troubleshooting)
@@ -374,6 +375,7 @@ Only an explicit `session_close` runs the teardown. A teardown can change the ap
 
 - `stop_at = "block"` or `"block:step"` stops the flow before that step. Steps count from 1.
 - `break_on_failure = true` opens the session at a failed step, so that you can look at the screen. Without it, a failed flow ends as `golem run` ends it, and no session opens.
+- `run = false` installs the app and does the setup, but runs no steps. The cursor is before the first step of the start block. Use it to edit a flow. Do not give `stop_at` with `run = false`.
 - A relative `flow` path is in the project directory.
 
 ### Long operations
@@ -463,6 +465,18 @@ A flow is a list of blocks. After a block's last step, the flow goes to the firs
 | `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
 
 A step that `act` records in a new block passed on the device. But the session does not run the other ways through a branch. Use `record_only` for the steps of a way that the session does not take.
+
+### Run the draft again
+
+After edits, some steps are `?` or `~`. `draft_run` runs the draft on the device to verify them. It runs the draft as it is in the session, not the file on disk. It does no setup and no teardown.
+
+- `draft_run(restart = true)` runs from the first step of the start block.
+- `draft_run()` resumes from the cursor.
+- `stop_at = "block"` or `"block:step"` stops before that step. Without it, the run goes to the end of the flow.
+
+Each step that passes becomes `✓` and loses its `# unverified` line. A step that fails stops the run, and the session stays open. The cursor goes where the run stops, so the next `act` records there. The result gives the count of steps that passed, where the run stopped, and the steps around the cursor.
+
+`restart` does not clear the app's data. A flow clears state in its own steps, for example with `launch` and `restart = true`.
 
 ## Example: write a new flow
 
