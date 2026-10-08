@@ -93,6 +93,7 @@ async fn every_tool_works_against_a_stub_session() {
         "comment_add",
         "record_only",
         "mixins_list",
+        "app_logs",
     ] {
         assert!(
             tools.iter().any(|t| t == name),
@@ -269,6 +270,22 @@ async fn every_tool_works_against_a_stub_session() {
     assert_eq!(flow.block[0].next.as_deref(), Some("second"));
     assert_eq!(flow.teardown[0].steps.len(), 1);
     assert_eq!(flow.data.len(), 1);
+
+    let (c, err) = call(
+        &client,
+        "app_logs",
+        serde_json::json!({ "filter": "marker", "since": 60 }),
+    )
+    .await;
+    assert!(!err, "{c}");
+    let t = text_of(&c);
+    assert!(
+        !t.contains("crash["),
+        "the filter SHALL apply to crash lines too: {t}"
+    );
+    assert!(t.contains("golem-marker stub"), "{t}");
+    let (c, _) = call(&client, "app_logs", serde_json::json!({})).await;
+    assert!(text_of(&c).contains("crash[1]:"), "{c}");
 
     let (c, err) = call(&client, "session_close", serde_json::json!({})).await;
     assert!(!err, "{c}");

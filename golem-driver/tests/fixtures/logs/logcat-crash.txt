@@ -1,0 +1,28 @@
+--------- beginning of main
+         1791357625.244  1000   670  1727 D WifiNl80211Manager: Scan result ready event
+         1791357625.244  1000   670  1727 D WifiNative: Scan result ready event
+         1791357625.246 10145  1263  1902 I WifiScanner: onFullResults
+         1791357625.248  1000   670   833 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+         1791357625.444 99086 28070 28070 D AndroidRuntime: Shutting down VM
+--------- beginning of crash
+         1791357625.446 99086 28070 28070 E AndroidRuntime: FATAL EXCEPTION: main
+         1791357625.446 99086 28070 28070 E AndroidRuntime: Process: com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0, PID: 28070
+         1791357625.446 99086 28070 28070 E AndroidRuntime: android.app.RemoteServiceException$CrashedByAdbException: shell-induced crash
+         1791357625.446 99086 28070 28070 E AndroidRuntime: 	at android.app.ActivityThread.throwRemoteServiceException(ActivityThread.java:2377)
+         1791357625.446 99086 28070 28070 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mthrowRemoteServiceException(Unknown Source:0)
+         1791357625.448 99086 28070 28070 F chromium: [FATAL:base/android/java_exception_reporter.cc:93] Uncaught exception
+         1791357625.496 10233 28165 28165 W linker64: type=1400 audit(0.0:883): avc:  denied  { search } for  name="tests" dev="dm-53" ino=196612 scontext=u:r:untrusted_app:s0:c233,c256,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=fail.golem.test
+         1791357627.345 99086 28070 28070 F DEBUG   : Abort message: '[FATAL:base/android/java_exception_reporter.cc:93] Uncaught exception'
+--------- beginning of system
+         1791357627.359  1000   670  1192 I ActivityManager: Process com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 (pid 28070) has died: fg +1 BTOP
+         1791357627.360 10233 28018 28060 W cr_ChildProcessConn: onServiceDisconnected (crash or killed by oom): pid=28070 bindings:W  S
+         1791357627.360  1000   670   712 I libprocessgroup: Removed cgroup /sys/fs/cgroup/apps/uid_99086/pid_28070
+         1791357627.361  1000   670  1192 W ActivityManager: Scheduling restart of crashed service fail.golem.test/org.chromium.content.app.SandboxedProcessService0:0 in 1000ms for connection
+         1791357627.365 10233 28018 28018 E chromium: [ERROR:android_webview/browser/aw_browser_terminator.cc:173] Renderer process (28070) crash detected (code 5).
+         1791357627.365 10233 28018 28045 I RustStdoutStderr: [ERROR:android_webview/browser/aw_browser_terminator.cc:173] Renderer process (28070) crash detected (code 5).
+         1791357627.367 10233 28018 28018 F chromium: [FATAL:third_party/crashpad/crashpad/client/crashpad_client_linux.cc:744] Render process (28070)'s crash wasn't handled by all associated  webviews, triggering application crash.
+         1791357627.367 10233 28018 28045 I RustStdoutStderr: [FATAL:third_party/crashpad/crashpad/client/crashpad_client_linux.cc:744] Render process (28070)'s crash wasn't handled by all associated  webviews, triggering application crash.
+         1791357627.367 10233 28018 28018 F libc    : Fatal signal 5 (SIGTRAP), code 1 (TRAP_BRKPT), fault addr 0x71c3eda1d8 in tid 28018 (fail.golem.test), pid 28018 (fail.golem.test)
+         1791357627.397 10233 28170 28170 I crash_dump64: obtaining output fd from tombstoned, type: kDebuggerdTombstoneProto
+         1791357627.400  1058   274   274 I tombstoned: received crash request for pid 28018
+         1791357627.402 10233 28170 28170 I crash_dump64: performing dump of process 28018 (target tid = 28018)

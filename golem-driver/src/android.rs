@@ -888,6 +888,44 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
+    async fn app_logs(
+        &self,
+        bundle_id: &str,
+        since: std::time::SystemTime,
+    ) -> Result<Vec<crate::logs::LogLine>> {
+        let listing = self
+            .adb(&["shell", "pm", "list", "packages", "-U", bundle_id])
+            .await?;
+        let uid = crate::logs::package_uid(&listing, bundle_id).ok_or_else(|| {
+            anyhow::anyhow!("`{bundle_id}` is not installed on {}", self.device_serial)
+        })?;
+        // A real device's clock can drift from the host's, so `since` is
+        // measured back from the device's own now. `date` prints whole
+        // seconds; the extra second covers the cut.
+        let device_now: f64 = self
+            .adb(&["shell", "date", "+%s"])
+            .await?
+            .trim()
+            .parse()
+            .context("reading the device clock")?;
+        let back = since.elapsed().unwrap_or_default().as_secs_f64();
+        let start = format!("{:.3}", (device_now - back - 1.0).max(0.0));
+        let text = self
+            .adb(&[
+                "shell",
+                "logcat",
+                "-d",
+                "-b",
+                "main,system,crash",
+                "-v",
+                "epoch,uid",
+                "-T",
+                &start,
+            ])
+            .await?;
+        Ok(crate::logs::parse_logcat(&text, uid, bundle_id))
+    }
+
     async fn clear_app_data(&self, bundle_id: &str) -> Result<()> {
         self.adb(&["shell", "pm", "clear", bundle_id]).await?;
         Ok(())

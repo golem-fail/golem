@@ -721,6 +721,81 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
+    async fn app_logs(
+        &self,
+        bundle_id: &str,
+        since: std::time::SystemTime,
+    ) -> Result<Vec<crate::logs::LogLine>> {
+        if self.physical {
+            bail!(
+                "app_logs is simulator-only on iOS — `{}` is a physical device, \
+                 whose log `simctl` can't read",
+                self.device_id
+            );
+        }
+        let container = self
+            .simctl(&["get_app_container", &self.device_id, bundle_id])
+            .await?;
+        let info = std::path::Path::new(container.trim()).join("Info.plist");
+        let exe = plist::Value::from_file(&info)
+            .ok()
+            .and_then(|v| {
+                v.as_dictionary()?
+                    .get("CFBundleExecutable")?
+                    .as_string()
+                    .map(str::to_string)
+            })
+            .with_context(|| format!("no CFBundleExecutable in {}", info.display()))?;
+        let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+        // XCUITest logs every accessibility snapshot the companion takes
+        // under the app's process: thousands of lines that are golem's, not
+        // the app's. A process killed by a signal logs nothing itself;
+        // SpringBoard's exit line is where its crash shows.
+        let predicate = format!(
+            "(process == \"{}\" AND subsystem != \"com.apple.dt.xctest\") OR \
+             (process == \"SpringBoard\" AND eventMessage BEGINSWITH \"Process exited: \" \
+             AND eventMessage CONTAINS \"app<{}>:\")",
+            quote(&exe),
+            quote(bundle_id)
+        );
+        // Without `--start`, `log show` reads the whole log store.
+        let start = format!(
+            "@{}",
+            since
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        );
+        // Not through `simctl()`'s host-wide queue: `log show` only reads,
+        // and queueing it would hold app_logs behind the stuck simctl call
+        // it is meant to explain.
+        let argv = [
+            "simctl",
+            "spawn",
+            &self.device_id,
+            "log",
+            "show",
+            "--style",
+            "ndjson",
+            "--info",
+            "--start",
+            &start,
+            "--predicate",
+            &predicate,
+        ];
+        let output = golem_common::command::output_argv("xcrun", &argv)
+            .await
+            .context("failed to spawn xcrun simctl")?;
+        if !output.status.success() {
+            bail!(
+                "xcrun simctl spawn log show failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
+        Ok(crate::logs::parse_os_log(&text))
+    }
+
     async fn clear_app_data(&self, bundle_id: &str) -> Result<()> {
         // Wipe the app's data container in place, keeping the app installed, so
         // a flow can relaunch and observe the reset — the same shape as Android
