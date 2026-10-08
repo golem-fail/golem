@@ -255,9 +255,9 @@ Keep a device session open between shell commands. A session keeps the device, t
 
 ```bash
 golem session start [--name <NAME>] [--os …] [--type …] [--device …] [--no-boot] [--app …] [--flow <FILE> …]
-golem session do '{ action = "tap", on_text = "Sign in" }' [--comment <TEXT>] [--tree]
-golem session probe '{ on_text = "Sign in" }' [--timeout <MS>]
-golem session tree [--full]
+golem session do '{ action = "tap", on_text = "Sign in" }' [--comment <TEXT>] [--tree] [--output toon|json]
+golem session probe '{ on_text = "Sign in" }' [--timeout <MS>] [--output toon|json]
+golem session tree [--full] [--output toon|json]
 golem session screenshot <PATH>
 golem session logs [--since <SECS>] [--filter <TEXT>] [--limit <N>] [--app <APP>]
 golem session export <PATH> [--overwrite]
