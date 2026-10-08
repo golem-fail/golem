@@ -423,7 +423,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             mcp::serve(mcp::McpOptions {
                 socket: ipc::socket_path(),
                 project_root,
-                soft_timeout: std::time::Duration::from_secs(args.soft_timeout),
+                soft_timeout: args.soft_timeout.map(std::time::Duration::from_secs),
                 stub: cfg!(debug_assertions) && args.stub_session,
             })
             .await?;
