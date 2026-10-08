@@ -138,7 +138,8 @@ pub struct McpArgs {
     pub soft_timeout: u64,
 
     /// Print the config block that adds this server to an MCP client
-    /// (claude, codex, desktop, opencode or gemini), then exit
+    /// (claude, codex, desktop, opencode, gemini, copilot, goose, zed or
+    /// continue), then exit
     #[arg(long, value_enum)]
     pub print_config: Option<crate::mcp::Client>,
 

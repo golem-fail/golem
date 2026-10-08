@@ -4,7 +4,7 @@
 
 ← [Back to README](../README.md) · See also [CLI Reference](cli-reference.md#golem-mcp) · [Actions Reference](actions-reference.md)
 
-`golem mcp` is an [MCP](https://modelcontextprotocol.io) server. An LLM client, such as Claude Code, Codex, OpenCode, Gemini CLI or Claude Desktop, uses it to drive an iOS or Android device one step at a time. Use it for two tasks:
+`golem mcp` is an [MCP](https://modelcontextprotocol.io) server. An LLM client, such as Claude Code, Codex, Cursor or Claude Desktop, uses it to drive an iOS or Android device one step at a time. Use it for two tasks:
 
 - **Write a flow.** The LLM runs steps on a live device. Each step that passes goes into a flow draft. The LLM then exports the draft as a `.test.toml` file that `golem run` runs.
 - **Debug an app.** The LLM taps through the app, reads the screen, takes screenshots and reads the app's device log, then reports what it found.
@@ -14,11 +14,11 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
 ## Contents
 
 - [Setup](#setup)
-  - [Claude Code](#claude-code)
-  - [Codex CLI](#codex-cli)
-  - [OpenCode](#opencode)
-  - [Gemini CLI](#gemini-cli)
-  - [Claude Desktop and other GUI clients](#claude-desktop-and-other-gui-clients)
+  - [Terminal agents](#terminal-agents): Claude Code, Codex CLI, Gemini CLI, OpenCode, GitHub Copilot CLI, Goose, Devin CLI
+  - [Editors](#editors): Cursor, Cline, Continue, Zed, Windsurf
+  - [Desktop apps](#desktop-apps): Claude Desktop, AnythingLLM, LibreChat
+  - [Your own agent](#your-own-agent): Vercel AI SDK, PydanticAI, Spring AI
+  - [Scripts](#scripts): mcpc
   - [Install channels](#install-channels)
   - [Timeouts](#timeouts)
 - [The step notation](#the-step-notation)
@@ -34,11 +34,17 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
 
 Before you start, run `golem doctor`.
 
-`golem mcp --print-config <client>` prints a config block for `claude`, `codex`, `opencode`, `gemini` or `desktop`. The block holds the absolute path of the `golem` that you ran.
+Each client starts the command `golem` with the argument `mcp` on the machine that runs your simulators and emulators. A client in the cloud, or in a container without access to those devices, cannot use golem.
+
+`golem mcp --print-config <client>` prints a ready-made block with the absolute path of the `golem` that you ran. It knows `claude`, `codex`, `opencode`, `gemini`, `copilot`, `goose`, `zed`, `continue` and `desktop`. The other clients read one of these formats, as their sections say.
 
 **Devices.** `session_open` uses a running simulator, emulator or connected device that fits. If none runs, golem boots one, as `golem run` does. Booting takes up to a few minutes, and the open answers `pending` meanwhile. Tell the LLM which device to use with the flow syntax, for example `os = "ios:26"` and `type = "tablet"`, or name one device with `device`. The [CLI reference](cli-reference.md#golem-mcp) has the rules.
 
-### Claude Code
+**Apps that do not get your shell `PATH`.** An editor or desktop app that starts from the Dock or a launcher may not get your shell `PATH`. Then it cannot find `golem`, and golem cannot find `adb` or `xcrun`. In such a client, set `command` to the output of `which golem`, and set `PATH` and `ANDROID_HOME` in the server's `env` (see [Claude Desktop](#claude-desktop)). `--print-config desktop` and `--print-config zed` write these values for you.
+
+### Terminal agents
+
+#### Claude Code
 
 Add the server for the current project:
 
@@ -54,9 +60,9 @@ claude mcp add golem -- golem mcp
   { "mcpServers": { "golem": { "command": "golem", "args": ["mcp"] } } }
   ```
 
-Check the server with `/mcp` in a Claude Code session, or with `claude mcp list`.
+Check the server with `/mcp` in a Claude Code session, or with `claude mcp list`. Guide: [Claude Code MCP](https://code.claude.com/docs/en/mcp).
 
-### Codex CLI
+#### Codex CLI
 
 ```bash
 codex mcp add golem -- golem mcp --project /path/to/your/project
@@ -70,9 +76,20 @@ command = "golem"
 args = ["mcp", "--project", "/path/to/your/project"]
 ```
 
-Codex can start the server from any directory, so give `--project`. A trusted project can also hold the block in `.codex/config.toml`. Check the server with `codex mcp list`.
+Codex can start the server from any directory, so give `--project`. A trusted project can also hold the block in `.codex/config.toml`. Check the server with `codex mcp list`. Guide: [Codex MCP](https://developers.openai.com/codex/mcp).
 
-### OpenCode
+#### Gemini CLI
+
+```bash
+gemini mcp add golem golem mcp
+```
+
+- The default scope is `project`: the command writes `.gemini/settings.json` in the project. Commit that file to share the server with your team.
+- `--scope user` writes `~/.gemini/settings.json`. Then add `--project /path/to/your/project` to the server's arguments.
+
+The block has the same form as the Claude Code block. Check the server with `/mcp` in a Gemini CLI session, or with `gemini mcp list`. `gemini mcp list` shows the server as connected only in a trusted folder. Guide: [Gemini CLI MCP servers](https://geminicli.com/docs/tools/mcp-server/).
+
+#### OpenCode
 
 OpenCode has no command that adds a server. Add the server to `opencode.json` at the project root, or to `~/.config/opencode/opencode.json` for all your projects:
 
@@ -85,28 +102,114 @@ OpenCode has no command that adds a server. Add the server to `opencode.json` at
 }
 ```
 
-In the global file, add `"--project", "/path/to/your/project"` to `command`. Check the server with `opencode mcp list`.
+In the global file, add `"--project", "/path/to/your/project"` to `command`. Check the server with `opencode mcp list`. Guide: [OpenCode MCP servers](https://opencode.ai/docs/mcp-servers/).
 
-### Gemini CLI
+#### GitHub Copilot CLI
 
 ```bash
-gemini mcp add golem golem mcp
+copilot mcp add golem --timeout 120000 -- golem mcp
 ```
 
-- The default scope is `project`: the command writes `.gemini/settings.json` in the project. Commit that file to share the server with your team.
-- `--scope user` writes `~/.gemini/settings.json`. Then add `--project /path/to/your/project` to the server's arguments.
-
-The block has the same form as the Claude Code block:
+The command writes `~/.copilot/mcp-config.json`. For one project, put the block in `.mcp.json`, or in `.github/mcp.json` to commit it:
 
 ```json
-{ "mcpServers": { "golem": { "command": "golem", "args": ["mcp"] } } }
+{ "mcpServers": { "golem": { "type": "stdio", "command": "golem", "args": ["mcp"], "tools": ["*"], "timeout": 120000 } } }
 ```
 
-Check the server with `/mcp` in a Gemini CLI session, or with `gemini mcp list`. `gemini mcp list` shows the server as connected only in a trusted folder.
+Copilot waits 30 s for one call by default, which is less than golem's soft timeout. Keep `timeout` (milliseconds) at 60000 or more. Check the server with `copilot mcp list`, or `/mcp` in a session. Guide: [Add MCP servers to Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
 
-### Claude Desktop and other GUI clients
+#### Goose
 
-Add the same `mcpServers` block to the client's config file. For Claude Desktop on macOS, the file is `~/Library/Application Support/Claude/claude_desktop_config.json`. Then restart the client.
+Run `goose configure`, then choose Add Extension and Command-line Extension, with the command `golem mcp --project /path/to/your/project`. Or add the block to `~/.config/goose/config.yaml` (`%APPDATA%\Block\goose\config\config.yaml` on Windows):
+
+```yaml
+extensions:
+  golem:
+    type: stdio
+    name: golem
+    enabled: true
+    cmd: golem
+    args: ["mcp", "--project", "/path/to/your/project"]
+    envs: {}
+    timeout: 300
+```
+
+Goose has no project scope, so give `--project`. To use golem in one session only, run `goose session --with-extension "golem mcp"`. In the Goose desktop app, use the absolute path of `golem`. Guide: [Using extensions](https://goose-docs.ai/docs/getting-started/using-extensions).
+
+#### Devin CLI
+
+```bash
+devin mcp add golem -- golem mcp
+```
+
+The command writes `~/.config/devin/mcp_config.json`. For one project, put the Claude Code block in `.devin/mcp_config.json`, or in `.devin/mcp_config.local.json` to keep it out of git. Check the server with `devin mcp list`. Guide: [Devin CLI MCP](https://docs.devin.ai/cli/extensibility/mcp/configuration). Hosted Devin runs in Devin's own machine, not next to your devices, so it cannot use golem on your simulators.
+
+### Editors
+
+#### Cursor
+
+Add the block to `.cursor/mcp.json` in the project, or to `~/.cursor/mcp.json` for all your projects. The Cursor CLI (`agent`) reads the same files.
+
+```json
+{ "mcpServers": { "golem": { "type": "stdio", "command": "/opt/homebrew/bin/golem", "args": ["mcp", "--project", "${workspaceFolder}"] } } }
+```
+
+Use the absolute path of `golem`. Check the server in Cursor's MCP settings, or with `agent mcp list`. Guide: [Cursor MCP](https://cursor.com/docs/context/mcp).
+
+#### Cline
+
+Open the MCP Servers panel, then Configure, then Configure MCP Servers. Add the block to `cline_mcp_settings.json`:
+
+```json
+{ "mcpServers": { "golem": { "command": "/opt/homebrew/bin/golem", "args": ["mcp", "--project", "/path/to/your/project"], "timeout": 600 } } }
+```
+
+Use the absolute path of `golem`. `timeout` is in seconds (default 60). The Cline CLI adds the server with `cline mcp add golem --yes -- golem mcp`. Guide: [Adding and configuring MCP servers](https://docs.cline.bot/mcp/adding-and-configuring-servers).
+
+#### Continue
+
+Continue uses MCP servers in Agent mode only. Write the block to `.continue/mcpServers/golem.yaml` in the project:
+
+```yaml
+name: golem
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: golem
+    type: stdio
+    command: golem
+    args: ["mcp", "--project", "/path/to/your/project"]
+```
+
+For all your projects, add the entry under `mcpServers:` in `~/.continue/config.yaml`. Continue also accepts a Claude Code JSON block copied into `.continue/mcpServers/`. Guide: [Continue MCP](https://docs.continue.dev/customize/deep-dives/mcp).
+
+#### Zed
+
+Add the server under `context_servers` in `.zed/settings.json` in the project, or in `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "golem": {
+      "command": "/opt/homebrew/bin/golem",
+      "args": ["mcp", "--project", "/path/to/your/project"],
+      "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin", "ANDROID_HOME": "/Users/you/Library/Android/sdk" }
+    }
+  }
+}
+```
+
+Check the server in Settings, AI, MCP Servers: a green dot means that it runs. Guide: [Zed MCP](https://zed.dev/docs/ai/mcp).
+
+#### Windsurf (Devin Desktop)
+
+Windsurf is now Devin Desktop. Add the Claude Desktop block, with the absolute path of `golem`, to `~/.config/devin/mcp_config.json`. Older Windsurf versions read `~/.codeium/windsurf/mcp_config.json`. Check the server in the Cascade panel, under the `…` menu, MCPs. Guide: [Cascade MCP](https://docs.devin.ai/desktop/cascade/mcp).
+
+### Desktop apps
+
+#### Claude Desktop
+
+Add the block to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), then restart the app.
 
 ```json
 {
@@ -123,9 +226,79 @@ Add the same `mcpServers` block to the client's config file. For Claude Desktop 
 }
 ```
 
-- Use the absolute path of `golem`. A GUI app does not get your shell `PATH`.
-- Set `PATH` and `ANDROID_HOME` in `env`. Without them, golem cannot find `adb` or `xcrun`.
-- `golem mcp --print-config desktop` writes this block with your current `PATH` and `ANDROID_HOME`.
+`golem mcp --print-config desktop` writes this block with your current `PATH` and `ANDROID_HOME`. Guide: [Connect to local MCP servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
+
+#### AnythingLLM
+
+The desktop app reads `plugins/anythingllm_mcp_servers.json` in its storage folder: `~/Library/Application Support/anythingllm-desktop/storage` on macOS, `~/.config/anythingllm-desktop/storage` on Linux. The file appears when you open the Agent Skills page. Add the Claude Desktop block, then press refresh on that page. Call the tools with `@agent` in a chat. The Docker version of AnythingLLM cannot reach your devices. Guide: [AnythingLLM MCP](https://docs.anythingllm.com/mcp-compatibility/desktop).
+
+#### LibreChat
+
+LibreChat runs MCP servers on its own server, so golem works only with a native (not Docker) install on the machine with the devices. Add the server to `librechat.yaml`:
+
+```yaml
+mcpServers:
+  golem:
+    type: stdio
+    command: golem
+    args: ["mcp", "--project", "/path/to/your/project"]
+    timeout: 120000
+```
+
+The default `timeout` is 30000 ms, which is less than golem's soft timeout. Guide: [LibreChat MCP servers](https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers).
+
+### Your own agent
+
+An agent framework starts `golem mcp` as a stdio MCP server, as any client does. Keep the framework's limit for one call above golem's soft timeout.
+
+- **Vercel AI SDK** ([guide](https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools)):
+
+  ```ts
+  import { createMCPClient } from '@ai-sdk/mcp';
+  import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+  const golem = await createMCPClient({
+    transport: new StdioClientTransport({ command: 'golem', args: ['mcp'] }),
+  });
+  const tools = await golem.tools();
+  ```
+
+- **PydanticAI** ([guide](https://pydantic.dev/docs/ai/mcp/client/)):
+
+  ```python
+  from fastmcp.client.transports import StdioTransport
+  from pydantic_ai import Agent
+  from pydantic_ai.mcp import MCPToolset
+
+  golem = MCPToolset(StdioTransport(command='golem', args=['mcp']))
+  agent = Agent('anthropic:claude-sonnet-5-5', toolsets=[golem])
+  ```
+
+- **Spring AI** ([guide](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-client-boot-starter-docs.html)). The default `request-timeout` is 20 s, so raise it:
+
+  ```yaml
+  spring:
+    ai:
+      mcp:
+        client:
+          request-timeout: 120s
+          stdio:
+            connections:
+              golem:
+                command: golem
+                args: [mcp]
+  ```
+
+### Scripts
+
+[mcpc](https://github.com/apify/mcpc) calls MCP tools from a shell or a script, with no model. It reads the Claude Code block from `~/.mcpc/config.json` or `./mcpc.config.json`:
+
+```bash
+mcpc connect ./mcpc.config.json:golem @golem
+mcpc @golem tools-list
+```
+
+`--timeout` (seconds, default 60) sets the limit for one call.
 
 ### Install channels
 
@@ -138,11 +311,20 @@ Add the same `mcpServers` block to the client's config file. For Claude Desktop 
 
 A client stops waiting for one tool call after a limit. golem answers every call before the **soft timeout** (default 45 s). If the work is not done by then, the call answers `pending`, and the LLM calls `wait` for the result. See [Long operations](#long-operations).
 
-- **Codex:** `tool_timeout_sec` defaults to 60. Keep it above the soft timeout. `startup_timeout_sec` defaults to 10. The server starts in well under that time.
-- **Claude Code:** `MCP_TOOL_TIMEOUT` (milliseconds) sets the limit for every server, and `"timeout"` on one server in `.mcp.json` sets it for that server. The defaults are much longer than the soft timeout.
-- **Gemini CLI:** `"timeout"` on the server (milliseconds) defaults to 600000, which is longer than the soft timeout.
-- **OpenCode:** `"timeout"` on the server (milliseconds, default 5000) applies only while the server starts. golem starts in well under that time.
-- **Other clients:** if a client's limit is under 45 s, start the server with `--soft-timeout` below that limit.
+| Client | Limit for one call | Change it with |
+|--------|--------------------|----------------|
+| Claude Code | long by default | `MCP_TOOL_TIMEOUT` (ms), or `"timeout"` on the server in `.mcp.json` |
+| Codex | 60 s | `tool_timeout_sec` |
+| Gemini CLI | 600 s | `"timeout"` (ms) |
+| Copilot CLI | **30 s** | `"timeout"` (ms), or `--timeout` on `copilot mcp add` |
+| Goose | 300 s | `timeout` (s) |
+| Cline | 60 s | `"timeout"` (s) |
+| Zed | 60 s | `"timeout"` (s) on the server, or `context_server_timeout` |
+| LibreChat | **30 s** | `timeout` (ms) |
+| Spring AI | **20 s** | `spring.ai.mcp.client.request-timeout` |
+| mcpc | 60 s | `--timeout` (s) |
+
+OpenCode's `"timeout"` applies only while the server starts. If a client's limit is under 45 s and you cannot raise it, start the server with `--soft-timeout` below that limit.
 
 ## The step notation
 
@@ -251,5 +433,5 @@ session_close(teardown = false)
 - **After an upgrade,** restart the golem MCP server in your client. Until you do, the client uses the old golem, and its tools can fail with an "is older than the running daemon" error.
 - **An open session delays `golem run` after an upgrade.** The new `golem run` waits for the sessions of the old golem to end, up to `GOLEM_DAEMON_WAIT` seconds (default 300). Close the session, or stop the MCP server, to continue.
 - **Two golem versions,** such as an npm project version and a global brew version, interfere with each other. Use the same version for both, or set `GOLEM_SOCKET` to a different path for each one.
-- **`adb` or `xcrun` not found:** the client did not give golem your shell `PATH`. Set `PATH` and `ANDROID_HOME` in the server's `env`, as in the [Claude Desktop](#claude-desktop-and-other-gui-clients) example.
+- **`adb` or `xcrun` not found:** the client did not give golem your shell `PATH`. Set `PATH` and `ANDROID_HOME` in the server's `env`, as in the [Claude Desktop](#claude-desktop) example.
 - **The log** of the golem background process is `~/.golem/golem.log`. See [The daemon](cli-reference.md#the-daemon).

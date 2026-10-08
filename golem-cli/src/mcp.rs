@@ -943,14 +943,28 @@ pub enum Client {
     Opencode,
     /// Gemini CLI: `.gemini/settings.json` in the project.
     Gemini,
+    /// GitHub Copilot CLI: `.mcp.json`, `.github/mcp.json` or
+    /// `~/.copilot/mcp-config.json`.
+    Copilot,
+    /// Goose: `~/.config/goose/config.yaml`.
+    Goose,
+    /// Zed: `.zed/settings.json` or `~/.config/zed/settings.json`.
+    Zed,
+    /// Continue: `.continue/mcpServers/golem.yaml`.
+    Continue,
+}
+
+/// `s` as a YAML scalar: a JSON string is valid YAML.
+fn yaml_str(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_default()
 }
 
 /// The config block that starts `exe mcp` from `client`.
 ///
-/// Claude Code, OpenCode and Gemini CLI read these blocks from a project
-/// file and start the server in the project directory, so their blocks
-/// need no `--project`. Codex and a GUI client can start the server
-/// anywhere. A GUI client also does not get the shell `PATH`, so its block
+/// Claude Code, OpenCode, Gemini CLI and Copilot CLI read these blocks
+/// from a project file and start the server in the project directory, so
+/// their blocks need no `--project`. Codex, Goose and the editors can
+/// start the server anywhere. A GUI client also does not get the shell `PATH`, so its block
 /// carries `env`: without it the daemon cannot find `adb` or `xcrun`.
 pub fn client_config(
     client: Client,
@@ -982,6 +996,46 @@ pub fn client_config(
             doc.insert("mcp_servers", toml_edit::Item::Table(servers));
             doc.to_string()
         }
+        Client::Copilot => {
+            // Copilot's default limit for one call is 30 s, under golem's
+            // 45 s soft timeout.
+            let v = serde_json::json!({
+                "mcpServers": { "golem": {
+                    "type": "stdio",
+                    "command": exe,
+                    "args": ["mcp"],
+                    "tools": ["*"],
+                    "timeout": 120000,
+                } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+        }
+        Client::Goose => format!(
+            "extensions:\n  golem:\n    type: stdio\n    name: golem\n    enabled: true\n    \
+             cmd: {}\n    args: [\"mcp\", \"--project\", {}]\n    envs: {{}}\n    timeout: 300\n",
+            yaml_str(&exe),
+            yaml_str(&project)
+        ),
+        Client::Zed => {
+            let env: serde_json::Map<String, serde_json::Value> = env
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::json!(v)))
+                .collect();
+            let v = serde_json::json!({
+                "context_servers": { "golem": {
+                    "command": exe,
+                    "args": ["mcp", "--project", project],
+                    "env": env,
+                } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+        }
+        Client::Continue => format!(
+            "name: golem\nversion: 0.0.1\nschema: v1\nmcpServers:\n  - name: golem\n    \
+             type: stdio\n    command: {}\n    args: [\"mcp\", \"--project\", {}]\n",
+            yaml_str(&exe),
+            yaml_str(&project)
+        ),
         Client::Opencode => {
             let v = serde_json::json!({
                 "$schema": "https://opencode.ai/config.json",
@@ -1050,6 +1104,52 @@ mod tests {
         assert_eq!(
             opencode["mcp"]["golem"],
             serde_json::json!({ "type": "local", "command": ["/opt/golem/bin/golem", "mcp"], "enabled": true })
+        );
+
+        let copilot: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Copilot, exe, root, &env)).expect("json");
+        let golem = &copilot["mcpServers"]["golem"];
+        assert_eq!(golem["args"], serde_json::json!(["mcp"]));
+        assert_eq!(golem["tools"], serde_json::json!(["*"]));
+        assert!(
+            golem["timeout"].as_u64() > Some(45_000),
+            "Copilot's limit SHALL exceed golem's soft timeout"
+        );
+
+        let zed: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Zed, exe, root, &env)).expect("json");
+        let golem = &zed["context_servers"]["golem"];
+        assert_eq!(golem["command"], "/opt/golem/bin/golem");
+        assert_eq!(
+            golem["args"],
+            serde_json::json!(["mcp", "--project", "/work/app"])
+        );
+        assert_eq!(golem["env"]["ANDROID_HOME"], "/sdk");
+
+        let goose = client_config(Client::Goose, exe, root, &env);
+        assert!(
+            goose.starts_with("extensions:\n  golem:\n    type: stdio\n"),
+            "{goose}"
+        );
+        assert!(
+            goose.contains("    cmd: \"/opt/golem/bin/golem\"\n"),
+            "{goose}"
+        );
+        assert!(
+            goose.contains("    args: [\"mcp\", \"--project\", \"/work/app\"]\n"),
+            "{goose}"
+        );
+
+        let cont = client_config(Client::Continue, exe, root, &env);
+        assert!(
+            cont.starts_with(
+                "name: golem\nversion: 0.0.1\nschema: v1\nmcpServers:\n  - name: golem\n"
+            ),
+            "{cont}"
+        );
+        assert!(
+            cont.contains("    command: \"/opt/golem/bin/golem\"\n"),
+            "{cont}"
         );
 
         let codex: toml::Value =
