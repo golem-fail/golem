@@ -293,6 +293,16 @@ pub struct PerfSnapshotData {
 
 // ── Event hierarchy ──
 
+/// How much a [`EventKind::HostDiagnostic`] matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiagLevel {
+    Info,
+    Warn,
+    /// Sent only for a run with `--debug`.
+    Debug,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventKind {
     // Suite level
@@ -533,6 +543,12 @@ pub enum EventKind {
     FlowParseFailed {
         path: String,
         error: String,
+    },
+    /// A line from host-side code (devices, drivers, the host queue) that
+    /// ran for this run, for example a boot or a WebView setup failure.
+    HostDiagnostic {
+        level: DiagLevel,
+        message: String,
     },
     /// No booted device matched a slot; scheduler is booting a shutdown
     /// one to satisfy it.

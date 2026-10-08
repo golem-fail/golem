@@ -357,17 +357,13 @@ async fn await_first_frame_default(
                     "webview DOM not ready after {:?} ({last_webview_count} nodes) — first action may run against an unrendered page",
                     start.elapsed()
                 );
-                if golem_common::is_debug() {
-                    eprintln!("  [launch] {warning}");
-                }
+                golem_common::diag::debug(format!("[launch] {warning}"));
                 return Ok(Some(warning));
             }
-            if golem_common::is_debug() {
-                eprintln!(
-                    "  [launch] settle deadline reached after {:?}, last seen {prev_count} nodes — proceeding anyway",
+            golem_common::diag::debug(format!(
+                    "[launch] settle deadline reached after {:?}, last seen {prev_count} nodes — proceeding anyway",
                     start.elapsed()
-                );
-            }
+                ));
             return Ok(None);
         }
         let (count, webview_count) = match driver.get_hierarchy().await {
@@ -386,13 +382,11 @@ async fn await_first_frame_default(
                 .elapsed()
                 >= AWAIT_FIRST_FRAME_WEBVIEW_STABLE
             {
-                if golem_common::is_debug() {
-                    eprintln!(
-                        "  [launch] small webview page settled in {:?} ({wc} DOM nodes, unchanged for {:?})",
+                golem_common::diag::debug(format!(
+                        "[launch] small webview page settled in {:?} ({wc} DOM nodes, unchanged for {:?})",
                         start.elapsed(),
                         AWAIT_FIRST_FRAME_WEBVIEW_STABLE
-                    );
-                }
+                    ));
                 return Ok(None);
             }
             webview_seen = true;
@@ -407,12 +401,10 @@ async fn await_first_frame_default(
         if count >= AWAIT_FIRST_FRAME_MIN_NODES && count == prev_count && webview_ready {
             stable_polls += 1;
             if stable_polls >= STABLE_POLLS_REQUIRED {
-                if golem_common::is_debug() {
-                    eprintln!(
-                        "  [launch] UI settled in {:?} ({count} nodes)",
-                        start.elapsed()
-                    );
-                }
+                golem_common::diag::debug(format!(
+                    "[launch] UI settled in {:?} ({count} nodes)",
+                    start.elapsed()
+                ));
                 return Ok(None);
             }
         } else {

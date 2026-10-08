@@ -907,6 +907,12 @@ pub async fn stream_human(
                     eprintln!("{ts}  Parse error {code} ({path}): {error}");
                 }
             }
+            EventKind::HostDiagnostic { level, message } => {
+                eprintln!(
+                    "{}",
+                    format_host_diagnostic(&ts, *level, message, use_color)
+                );
+            }
             EventKind::DeviceAutoBoot {
                 device_name,
                 slot_shape,
@@ -1126,6 +1132,22 @@ pub async fn stream_human(
 
 mod render;
 pub(crate) use render::*;
+
+/// A host diagnostic line: a warning in yellow, a debug line dim.
+fn format_host_diagnostic(
+    ts: &str,
+    level: golem_events::DiagLevel,
+    message: &str,
+    use_color: bool,
+) -> String {
+    use golem_events::DiagLevel;
+    match (level, use_color) {
+        (DiagLevel::Warn, true) => format!("{ts}  {YELLOW}warning:{RESET} {message}"),
+        (DiagLevel::Warn, false) => format!("{ts}  warning: {message}"),
+        (DiagLevel::Debug, true) => format!("{ts}  {DIM}{message}{RESET}"),
+        _ => format!("{ts}  {message}"),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1606,6 +1628,28 @@ mod tests {
             lines[1].contains("element_not_found \"Submit\" after 5000ms"),
             "the replayed substep SHALL render its element_not_found detail, got: {:?}",
             lines[1]
+        );
+    }
+
+    #[test]
+    fn a_host_diagnostic_renders_on_its_runs_timeline() {
+        use golem_events::DiagLevel;
+        assert_eq!(
+            format_host_diagnostic(
+                "12:00:01",
+                DiagLevel::Info,
+                "[devices] Booting iPhone 17...",
+                false
+            ),
+            "12:00:01  [devices] Booting iPhone 17..."
+        );
+        assert_eq!(
+            format_host_diagnostic("12:00:01", DiagLevel::Warn, "[ime] restore failed", false),
+            "12:00:01  warning: [ime] restore failed"
+        );
+        assert_eq!(
+            format_host_diagnostic("12:00:01", DiagLevel::Debug, "[webkit] setup failed", true),
+            "12:00:01  \x1b[2m[webkit] setup failed\x1b[0m"
         );
     }
 }

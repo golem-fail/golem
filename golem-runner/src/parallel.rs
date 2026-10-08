@@ -56,7 +56,7 @@ where
         let id = device_id.clone();
         let func = task_fn.clone();
 
-        let handle = tokio::spawn(async move {
+        let handle = golem_common::diag::spawn(async move {
             let _permit = match sem.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {

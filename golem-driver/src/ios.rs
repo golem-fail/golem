@@ -210,9 +210,7 @@ impl IosDriver {
                 Some(s)
             }
             Err(e) => {
-                if golem_common::is_debug() {
-                    eprintln!("  [webkit] eval_in_webview failed: {e}");
-                }
+                golem_common::diag::debug(format!("[webkit] eval_in_webview failed: {e}"));
                 *wk = WebKitLifecycle::Failed;
                 None
             }
@@ -399,9 +397,7 @@ async fn setup_webkit(target_udid: &str) -> Option<WebKitState> {
     match crate::webkit::WebKitInspector::connect(Some(target_udid)).await {
         Ok(inspector) => Some(WebKitState { inspector }),
         Err(e) => {
-            if golem_common::is_debug() {
-                eprintln!("  [webkit] setup failed: {e}");
-            }
+            golem_common::diag::debug(format!("[webkit] setup failed: {e}"));
             None
         }
     }
@@ -467,7 +463,7 @@ impl PlatformDriver for IosDriver {
                         // First WebView sighting — kick off background setup
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let udid = self.device_id.clone();
-                        tokio::spawn(async move {
+                        golem_common::diag::spawn(async move {
                             let result = setup_webkit(&udid).await;
                             let _ = tx.send(result);
                         });
@@ -499,7 +495,7 @@ impl PlatformDriver for IosDriver {
                         // Retry — the app may have been relaunched
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let udid = self.device_id.clone();
-                        tokio::spawn(async move {
+                        golem_common::diag::spawn(async move {
                             let result = setup_webkit(&udid).await;
                             let _ = tx.send(result);
                         });

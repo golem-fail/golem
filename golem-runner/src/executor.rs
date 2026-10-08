@@ -1465,7 +1465,7 @@ async fn apply_launch_permissions(
         .await
         .with_context(|| format!("app '{}'", app.name))?;
     for warning in warnings {
-        eprintln!("warning: app '{}' launch permissions: {warning}", app.name);
+        golem_common::diag::warn(format!("app '{}' launch permissions: {warning}", app.name));
     }
     Ok(())
 }

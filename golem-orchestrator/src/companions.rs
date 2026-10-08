@@ -118,7 +118,7 @@ fn extract_ios_from(ios: &[u8], base_dir: &Path) -> Result<Option<PathBuf>> {
         return Ok(Some(ios_dir));
     }
 
-    eprintln!("  Extracting embedded iOS companion...");
+    golem_common::diag::info("Extracting embedded iOS companion...");
 
     if ios_dir.exists() {
         fs::remove_dir_all(&ios_dir).context("failed to clean iOS companion directory")?;
@@ -170,7 +170,7 @@ fn extract_android_from(
         return Ok((Some(test_apk), Some(main_apk)));
     }
 
-    eprintln!("  Extracting embedded Android companion...");
+    golem_common::diag::info("Extracting embedded Android companion...");
 
     fs::create_dir_all(&android_dir).context("failed to create Android companion directory")?;
     fs::write(&test_apk, test_bytes).context("failed to write Android test APK")?;

@@ -273,6 +273,28 @@ fn gallery() -> Vec<(DeviceId, EventKind)> {
             error: "expected a table key at line 4".into(),
         },
     ));
+    for (level, message) in [
+        (
+            golem_events::DiagLevel::Info,
+            "[devices] Booting golem-pixel-api36...",
+        ),
+        (
+            golem_events::DiagLevel::Warn,
+            "[ime] restore on emulator-5554 failed: device offline",
+        ),
+        (
+            golem_events::DiagLevel::Debug,
+            "[webkit] setup failed: no inspector socket",
+        ),
+    ] {
+        ev.push((
+            suite(),
+            EventKind::HostDiagnostic {
+                level,
+                message: message.into(),
+            },
+        ));
+    }
     ev.push((
         suite(),
         EventKind::DeviceAutoBoot {
@@ -616,6 +638,7 @@ fn _eventkind_exhaustiveness_guard(k: &EventKind) {
         | EventKind::InstallSkipped { .. }
         | EventKind::InstallCacheMiss { .. }
         | EventKind::FlowParseFailed { .. }
+        | EventKind::HostDiagnostic { .. }
         | EventKind::DeviceAutoBoot { .. }
         | EventKind::DeviceAutoBootFinished { .. }
         | EventKind::SlotSetupFailed { .. }
