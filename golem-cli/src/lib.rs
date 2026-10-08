@@ -416,6 +416,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 Some(dir) => dir,
                 None => project::find_project_root(&cwd).unwrap_or(cwd),
             };
+            if let Some(client) = args.print_config {
+                let exe = std::env::current_exe()?;
+                let env: Vec<(String, String)> = ["PATH", "ANDROID_HOME"]
+                    .into_iter()
+                    .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v)))
+                    .collect();
+                print!("{}", mcp::client_config(client, &exe, &project_root, &env));
+                return Ok(0);
+            }
             mcp::serve(mcp::McpOptions {
                 socket: ipc::socket_path(),
                 project_root,

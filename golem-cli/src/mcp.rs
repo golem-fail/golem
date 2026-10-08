@@ -916,6 +916,83 @@ impl ServerHandler for GolemMcp {
     }
 }
 
+/// An MCP client that `golem mcp --print-config` writes a config block for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Client {
+    /// Claude Code: `.mcp.json` at the project root.
+    Claude,
+    /// Codex CLI: `~/.codex/config.toml`, or `.codex/config.toml` in a
+    /// trusted project.
+    Codex,
+    /// Claude Desktop and other GUI clients: `claude_desktop_config.json`.
+    Desktop,
+    /// OpenCode: `opencode.json` at the project root.
+    Opencode,
+    /// Gemini CLI: `.gemini/settings.json` in the project.
+    Gemini,
+}
+
+/// The config block that starts `exe mcp` from `client`.
+///
+/// Claude Code, OpenCode and Gemini CLI read these blocks from a project
+/// file and start the server in the project directory, so their blocks
+/// need no `--project`. Codex and a GUI client can start the server
+/// anywhere. A GUI client also does not get the shell `PATH`, so its block
+/// carries `env`: without it the daemon cannot find `adb` or `xcrun`.
+pub fn client_config(
+    client: Client,
+    exe: &std::path::Path,
+    project_root: &std::path::Path,
+    env: &[(String, String)],
+) -> String {
+    let exe = exe.display().to_string();
+    let project = project_root.display().to_string();
+    match client {
+        Client::Claude | Client::Gemini => {
+            let v = serde_json::json!({
+                "mcpServers": { "golem": { "command": exe, "args": ["mcp"] } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+        }
+        Client::Codex => {
+            let mut server = toml_edit::Table::new();
+            server.insert("command", toml_edit::value(exe));
+            let mut args = toml_edit::Array::new();
+            for a in ["mcp", "--project", project.as_str()] {
+                args.push(a);
+            }
+            server.insert("args", toml_edit::value(args));
+            let mut servers = toml_edit::Table::new();
+            servers.set_implicit(true);
+            servers.insert("golem", toml_edit::Item::Table(server));
+            let mut doc = toml_edit::DocumentMut::new();
+            doc.insert("mcp_servers", toml_edit::Item::Table(servers));
+            doc.to_string()
+        }
+        Client::Opencode => {
+            let v = serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": { "golem": { "type": "local", "command": [exe, "mcp"], "enabled": true } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+        }
+        Client::Desktop => {
+            let env: serde_json::Map<String, serde_json::Value> = env
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::json!(v)))
+                .collect();
+            let v = serde_json::json!({
+                "mcpServers": { "golem": {
+                    "command": exe,
+                    "args": ["mcp", "--project", project],
+                    "env": env,
+                } }
+            });
+            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+        }
+    }
+}
+
 /// Run the server on stdio until the client closes it.
 pub async fn serve(options: McpOptions) -> Result<()> {
     use rmcp::ServiceExt;
@@ -930,6 +1007,57 @@ pub async fn serve(options: McpOptions) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_client_config_starts_this_binary_with_mcp() {
+        let exe = std::path::Path::new("/opt/golem/bin/golem");
+        let root = std::path::Path::new("/work/app");
+        let env = vec![
+            (
+                "PATH".to_string(),
+                "/usr/bin:/sdk/platform-tools".to_string(),
+            ),
+            ("ANDROID_HOME".to_string(), "/sdk".to_string()),
+        ];
+
+        let claude: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Claude, exe, root, &env)).expect("json");
+        assert_eq!(
+            claude,
+            serde_json::json!({ "mcpServers": { "golem": {
+                "command": "/opt/golem/bin/golem", "args": ["mcp"] } } })
+        );
+
+        let gemini: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Gemini, exe, root, &env)).expect("json");
+        assert_eq!(gemini, claude, "Gemini CLI reads the same mcpServers block");
+
+        let opencode: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Opencode, exe, root, &env)).expect("json");
+        assert_eq!(
+            opencode["mcp"]["golem"],
+            serde_json::json!({ "type": "local", "command": ["/opt/golem/bin/golem", "mcp"], "enabled": true })
+        );
+
+        let codex: toml::Value =
+            toml::from_str(&client_config(Client::Codex, exe, root, &env)).expect("toml");
+        let golem = &codex["mcp_servers"]["golem"];
+        assert_eq!(golem["command"].as_str(), Some("/opt/golem/bin/golem"));
+        assert_eq!(
+            golem["args"],
+            toml::Value::Array(vec!["mcp".into(), "--project".into(), "/work/app".into()])
+        );
+
+        let desktop: serde_json::Value =
+            serde_json::from_str(&client_config(Client::Desktop, exe, root, &env)).expect("json");
+        let golem = &desktop["mcpServers"]["golem"];
+        assert_eq!(
+            golem["args"],
+            serde_json::json!(["mcp", "--project", "/work/app"])
+        );
+        assert_eq!(golem["env"]["ANDROID_HOME"], "/sdk");
+        assert_eq!(golem["env"]["PATH"], "/usr/bin:/sdk/platform-tools");
+    }
 
     #[test]
     fn every_known_action_has_a_reference_section() {
