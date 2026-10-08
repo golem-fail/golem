@@ -109,7 +109,7 @@ golem tree
 - **Device control** — dark mode, GPS location, permissions, hardware buttons, push notifications (sim/emu).
 - **WebView support** — drive web content inside native apps via the Chrome DevTools Protocol.
 - **Built-in accessibility audit** — every run automatically checks the visible UI for tiny tap targets, unlabeled controls, low-contrast text, and small text; findings surface in every report, with an annotated screenshot at the `strict` level. On by default, zero config.
-- **LLM sessions over MCP** — `golem mcp` lets Claude Code, Codex, OpenCode, Gemini CLI or Claude Desktop drive a device one step at a time, read the app's log, and export the steps that passed as a flow ([setup](docs/mcp.md)).
+- **LLM sessions over MCP** — `golem mcp` lets an LLM client such as Claude Code, Codex, Cursor or Claude Desktop drive a device one step at a time, read the app's log, and export the steps that passed as a flow ([setup](docs/mcp.md)).
 - **CI-ready output** — human, JSON, JUnit XML, and a token-optimised `toon` format; every failure carries a [grep-able error code](docs/error-codes.md).
 
 ## Documentation
@@ -123,7 +123,7 @@ golem tree
 | [Actions Reference](docs/actions-reference.md) | The complete action vocabulary, grouped by category. |
 | [Accessibility](docs/accessibility.md) | The automatic a11y audit: levels, checks, thresholds, confidence, and how to read the annotated screenshot. |
 | [App Install](docs/app-install.md) | Install scripts, the install cache, `--rebuild` / `--no-build`, `install_env` + `--profile`, supported frameworks. |
-| [MCP server](docs/mcp.md) | `golem mcp` for LLM clients: setup for Claude Code, Codex, OpenCode, Gemini CLI and Claude Desktop, sessions, long operations, and two example sequences. |
+| [MCP server](docs/mcp.md) | `golem mcp` for LLM clients: setup for terminal agents, editors, desktop apps and your own agent, sessions, long operations, and two example sequences. |
 | [Output Formats](docs/output-formats.md) | `human`, `json`, `junit`, `toon`. |
 | [Error Codes](docs/error-codes.md) | The `EF408`-style code system and full registry. |
 | [Unsupported](docs/unsupported.md) | Known limitations. |

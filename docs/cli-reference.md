@@ -164,11 +164,11 @@ warn: more than one element matches, and act picks the first. Add index, or a ti
 
 ## `golem mcp`
 
-Run an MCP server over stdio, so an LLM client (Claude Code, Codex, OpenCode, Gemini CLI, Claude Desktop) can drive a device one step at a time.
+Run an MCP server over stdio, so an LLM client (Claude Code, Codex, Cursor, Claude Desktop and others) can drive a device one step at a time.
 
 ```bash
 golem mcp [--project <DIR>] [--soft-timeout <SECS>]
-golem mcp --print-config claude|codex|opencode|gemini|desktop
+golem mcp --print-config <CLIENT>
 ```
 
 Setup for each client, the session rules and two example sequences are in [golem as an MCP server](mcp.md).
@@ -177,7 +177,7 @@ Setup for each client, the session rules and two example sequences are in [golem
 |------|-------------|
 | `--project <DIR>` | The project directory that holds `golem.toml`. Without it, golem searches up from the working directory. `session_open` can also name a project. |
 | `--soft-timeout <SECS>` | How long a tool waits for its operation before it answers `pending` (default 45). |
-| `--print-config <CLIENT>` | Print the config block that adds this server to `claude` (`.mcp.json`), `codex` (`config.toml`), `opencode` (`opencode.json`), `gemini` (`.gemini/settings.json`) or `desktop` (`claude_desktop_config.json`), with the absolute path of this `golem`, then exit. The `desktop` block also sets `env` to your `PATH` and `ANDROID_HOME`. |
+| `--print-config <CLIENT>` | Print the config block that adds this server to a client, with the absolute path of this `golem`, then exit. `CLIENT` is `claude`, `codex`, `opencode`, `gemini`, `copilot`, `goose`, `zed`, `continue` or `desktop`. The `desktop` and `zed` blocks also set `env` to your `PATH` and `ANDROID_HOME`. [MCP Server](mcp.md#setup) says which file each block goes in, and which block the other clients use. |
 
 The server starts without device work.
 
