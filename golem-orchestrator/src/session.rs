@@ -43,6 +43,118 @@ pub struct OpenRequest {
     pub flow: Option<FlowOpen>,
     /// Boot a shut-down device when no booted device fits.
     pub boot: bool,
+    /// Open on the device-free stub driver. Debug builds only, for the
+    /// tests of session clients.
+    pub stub: bool,
+}
+
+/// The daemon-wide cap on the devices that sessions hold.
+///
+/// Several MCP servers can share one daemon and one host, for example
+/// subagents or parallel worktrees. Each session takes a slot before it
+/// picks a device, and holds it until the session ends. An open past the
+/// cap waits: an LLM handles `pending`, while a refusal makes it retry or
+/// give up.
+pub struct Slots {
+    permits: Arc<tokio::sync::Semaphore>,
+    max: usize,
+    /// What each held slot is for, by slot id: the device, once picked.
+    holders: Arc<Mutex<Vec<(u64, String)>>>,
+    next: AtomicU64,
+}
+
+/// One held slot, released on drop.
+pub struct Slot {
+    _permit: tokio::sync::OwnedSemaphorePermit,
+    id: u64,
+    holders: Arc<Mutex<Vec<(u64, String)>>>,
+}
+
+/// The default cap, when `GOLEM_SESSION_MAX_DEVICES` is not set.
+pub const DEFAULT_MAX_SESSION_DEVICES: usize = 3;
+
+impl Slots {
+    pub fn new(max: usize) -> Slots {
+        let max = max.max(1);
+        Slots {
+            permits: Arc::new(tokio::sync::Semaphore::new(max)),
+            max,
+            holders: Arc::default(),
+            next: AtomicU64::new(1),
+        }
+    }
+
+    /// The cap from `GOLEM_SESSION_MAX_DEVICES`, else the default.
+    pub fn from_env() -> Slots {
+        Slots::new(
+            std::env::var("GOLEM_SESSION_MAX_DEVICES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(DEFAULT_MAX_SESSION_DEVICES),
+        )
+    }
+
+    /// Take a slot, waiting while every slot is held. `waiting` gets the
+    /// phase to show, again whenever the holders change.
+    pub async fn take(&self, waiting: &(dyn Fn(String) + Send + Sync)) -> Slot {
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        let permit = loop {
+            if let Ok(p) = self.permits.clone().try_acquire_owned() {
+                break p;
+            }
+            waiting(self.waiting_phase());
+            tokio::select! {
+                p = self.permits.clone().acquire_owned() => {
+                    break p.unwrap_or_else(|_| unreachable!("the slot semaphore is never closed"));
+                }
+                () = tokio::time::sleep(Duration::from_secs(1)) => {}
+            }
+        };
+        self.holders
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((id, "a session that is opening".into()));
+        Slot {
+            _permit: permit,
+            id,
+            holders: self.holders.clone(),
+        }
+    }
+
+    fn waiting_phase(&self) -> String {
+        let holders = self.holders.lock().unwrap_or_else(|e| e.into_inner());
+        let names: Vec<&str> = holders.iter().map(|(_, h)| h.as_str()).collect();
+        format!(
+            "waiting for a device: {} of {} held by sessions ({}); GOLEM_SESSION_MAX_DEVICES sets the cap",
+            names.len(),
+            self.max,
+            names.join(", ")
+        )
+    }
+}
+
+impl Slot {
+    /// Name what the slot holds, for the phase of an open that waits.
+    fn hold(&self, what: String) {
+        if let Some(h) = self
+            .holders
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter_mut()
+            .find(|(id, _)| *id == self.id)
+        {
+            h.1 = what;
+        }
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.holders
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(id, _)| *id != self.id);
+    }
 }
 
 /// A flow to run before the session takes over its device.
@@ -287,6 +399,8 @@ struct Work {
     rng: golem_vars::seed::FakeRng,
     browser: Arc<tokio::sync::Mutex<golem_runner::browser::BrowserSlot>>,
     log: Vec<LogEntry>,
+    /// The session's place under the device cap.
+    slot: Option<Slot>,
 }
 
 /// An open session.
@@ -344,6 +458,7 @@ impl Session {
         req: OpenRequest,
         resource_mgr: Arc<ResourceManager>,
         install_cache: golem_runner::installer::InstallCache,
+        slots: Arc<Slots>,
     ) -> Session {
         let session = Session::empty(req.idle_timeout);
         let phase = session.status.clone();
@@ -361,6 +476,7 @@ impl Session {
                         req,
                         resource_mgr,
                         install_cache,
+                        &slots,
                         slot,
                         phase,
                         (logs, opened),
@@ -496,9 +612,11 @@ impl Session {
                     if Instant::now() >= deadline {
                         return Waited::Pending(running);
                     }
+                    // On the deadline, loop to answer with the current phase,
+                    // which may have changed without a notify.
                     tokio::select! {
                         () = notified => {}
-                        () = tokio::time::sleep_until(deadline) => return Waited::Pending(running),
+                        () = tokio::time::sleep_until(deadline) => {}
                     }
                 }
             }
@@ -652,6 +770,36 @@ pub struct Parts {
     pub child_env: Option<golem_common::command::ChildEnv>,
 }
 
+/// The parts of a session on the device-free stub driver.
+fn stub_parts(project_root: PathBuf) -> Parts {
+    let device = DeviceInfo {
+        name: "Stub Device".into(),
+        udid: "stub-session".into(),
+        platform: golem_devices::Platform::Android,
+        device_type: golem_devices::DeviceType::Phone,
+        os_major: 0,
+        os_version: "0".into(),
+        state: golem_devices::DeviceState::Booted,
+        physical: false,
+        playstore: false,
+        screen_width: None,
+        screen_height: None,
+        screen_scale: None,
+        last_booted: None,
+        runtime_id: None,
+        device_type_id: None,
+    };
+    Parts {
+        device,
+        bundle: golem_driver::stub::STUB_BUNDLE_ID.into(),
+        driver: Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+        lease: None,
+        project_root,
+        apps: Vec::new(),
+        child_env: None,
+    }
+}
+
 impl Work {
     fn from_parts(parts: Parts) -> Work {
         let mut vars = golem_vars::VariableStore::new();
@@ -674,6 +822,7 @@ impl Work {
             rng: golem_vars::seed::FakeRng::from_optional_seed(None),
             browser: Default::default(),
             log: Vec::new(),
+            slot: None,
         }
     }
 }
@@ -778,27 +927,52 @@ async fn open(
     req: OpenRequest,
     resource_mgr: Arc<ResourceManager>,
     install_cache: golem_runner::installer::InstallCache,
+    slots: &Slots,
     mut slot: tokio::sync::OwnedMutexGuard<Option<Work>>,
     status: Arc<Mutex<Status>>,
     (logs, opened): (Arc<Mutex<Option<LogSource>>>, SystemTime),
 ) -> OpResult {
-    let result = match req.flow.clone() {
-        None => open_device(&req, &resource_mgr, &status).await,
-        Some(f) => open_flow(&req, f, resource_mgr, install_cache, &status).await,
+    let phase = status.clone();
+    let held = slots
+        .take(&move |text| {
+            if let Ok(mut s) = phase.lock() {
+                if let Status::Busy(r) = &mut *s {
+                    r.phase = text;
+                }
+            }
+        })
+        .await;
+    let result = if cfg!(debug_assertions) && req.stub {
+        Ok((Work::from_parts(stub_parts(req.project_root.clone())), None))
+    } else {
+        match req.flow.clone() {
+            None => open_device(&req, &resource_mgr, &status).await,
+            Some(f) => open_flow(&req, f, resource_mgr, install_cache, &status).await,
+        }
     };
     match result {
-        Ok((work, flow_report)) => {
+        Ok((mut work, flow_report)) => {
+            let bundle = if req.stub {
+                golem_driver::stub::STUB_BUNDLE_ID.to_string()
+            } else {
+                work.apps
+                    .first()
+                    .and_then(|a| a.bundle.clone())
+                    .unwrap_or_default()
+            };
             let out = OpResult::Opened {
                 device: format!("{}/{}", work.device.platform, work.device.name),
                 udid: work.device.udid.clone(),
-                bundle: work
-                    .apps
-                    .first()
-                    .and_then(|a| a.bundle.clone())
-                    .unwrap_or_default(),
+                bundle: bundle.clone(),
                 flow: flow_report,
             };
-            *logs.lock().unwrap_or_else(|e| e.into_inner()) = Some(LogSource::of(&work, opened));
+            held.hold(format!("{} ({})", work.device.name, work.device.udid));
+            work.slot = Some(held);
+            let mut source = LogSource::of(&work, opened);
+            if source.apps.is_empty() && !bundle.is_empty() {
+                source.apps.push(bundle_app(&bundle));
+            }
+            *logs.lock().unwrap_or_else(|e| e.into_inner()) = Some(source);
             *slot = Some(work);
             out
         }
@@ -1743,12 +1917,90 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                     stub: true,
                 }),
                 boot: false,
+                stub: false,
             },
             Arc::new(ResourceManager::new(
                 golem_devices::concurrency::ConcurrencyConfig::default(),
             )),
             golem_runner::installer::InstallCache::new(),
+            Arc::new(Slots::new(DEFAULT_MAX_SESSION_DEVICES)),
         )
+    }
+
+    /// A stub session that takes its slot from `slots`.
+    fn open_stub(slots: &Arc<Slots>) -> Session {
+        Session::start(
+            OpenRequest {
+                query: TargetQuery::default(),
+                project_root: std::env::temp_dir(),
+                child_env: None,
+                idle_timeout: DEFAULT_IDLE_TIMEOUT,
+                flow: None,
+                boot: false,
+                stub: true,
+            },
+            Arc::new(ResourceManager::new(
+                golem_devices::concurrency::ConcurrencyConfig::default(),
+            )),
+            golem_runner::installer::InstallCache::new(),
+            slots.clone(),
+        )
+    }
+
+    async fn is_open(s: &Session) -> bool {
+        matches!(
+            s.wait(Duration::from_secs(5)).await,
+            Waited::Done(Outcome {
+                result: OpResult::Opened { .. },
+                ..
+            })
+        )
+    }
+
+    #[tokio::test]
+    async fn an_open_past_the_device_cap_waits_and_names_the_holders() {
+        let slots = Arc::new(Slots::new(3));
+        let held = [open_stub(&slots), open_stub(&slots), open_stub(&slots)];
+        for s in &held {
+            assert!(is_open(s).await);
+        }
+        let fourth = open_stub(&slots);
+        let Waited::Pending(running) = fourth.wait(Duration::from_millis(200)).await else {
+            panic!("the fourth open SHALL wait");
+        };
+        assert!(
+            running.phase.starts_with(
+                "waiting for a device: 3 of 3 held by sessions (Stub Device (stub-session), "
+            ),
+            "{}",
+            running.phase
+        );
+
+        held[1].close("closed", false).await;
+        assert!(
+            is_open(&fourth).await,
+            "the waiting open SHALL go on once a session closes"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_ends_a_wait_for_a_device_without_taking_a_slot() {
+        let slots = Arc::new(Slots::new(1));
+        let first = open_stub(&slots);
+        assert!(is_open(&first).await);
+        let second = open_stub(&slots);
+        assert!(matches!(
+            second.wait(Duration::from_millis(100)).await,
+            Waited::Pending(_)
+        ));
+        assert!(second.cancel().await, "the waiting open SHALL be cancelled");
+
+        first.close("closed", false).await;
+        let third = open_stub(&slots);
+        assert!(
+            is_open(&third).await,
+            "the cancelled open SHALL have left the slot free"
+        );
     }
 
     async fn opened(s: &Session) -> String {

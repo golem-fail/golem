@@ -101,28 +101,28 @@ impl Home {
     }
 }
 
+/// What the daemon shares with every session: devices, the install
+/// cache, the device cap and the session count.
+#[derive(Clone)]
+pub(crate) struct Resources {
+    pub resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
+    pub install_cache: golem_runner::installer::InstallCache,
+    pub slots: Arc<crate::session::Slots>,
+    /// Open sessions, for the daemon's idle check.
+    pub sessions: Arc<std::sync::atomic::AtomicU64>,
+}
+
 /// Answer one `session_*` message in its own task.
 pub(crate) fn spawn(
     msg: serde_json::Value,
     conn: ConnSession,
-    resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: golem_runner::installer::InstallCache,
-    sessions: Arc<std::sync::atomic::AtomicU64>,
+    resources: Resources,
     named: Named,
     writer: Writer,
 ) {
     tokio::spawn(async move {
         let id = msg["id"].clone();
-        let mut reply = handle(
-            &msg,
-            &conn,
-            &resource_mgr,
-            &install_cache,
-            &sessions,
-            &named,
-            &writer,
-        )
-        .await;
+        let mut reply = handle(&msg, &conn, &resources, &named, &writer).await;
         reply["type"] = serde_json::json!("session_reply");
         reply["id"] = id;
         let mut w = writer.lock().await;
@@ -133,9 +133,7 @@ pub(crate) fn spawn(
 async fn handle(
     msg: &serde_json::Value,
     conn: &ConnSession,
-    resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    sessions: &Arc<std::sync::atomic::AtomicU64>,
+    resources: &Resources,
     named: &Named,
     writer: &Writer,
 ) -> serde_json::Value {
@@ -145,7 +143,7 @@ async fn handle(
     }
     let home = Home::of(msg, conn, named, writer);
     if kind == "session_open" {
-        return open(msg, &home, resource_mgr, install_cache, sessions).await;
+        return open(msg, &home, resources).await;
     }
     let Some(session) = home.get().await else {
         return error(&home.missing());
@@ -233,13 +231,13 @@ async fn handle(
     }
 }
 
-async fn open(
-    msg: &serde_json::Value,
-    home: &Home,
-    resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    sessions: &Arc<std::sync::atomic::AtomicU64>,
-) -> serde_json::Value {
+async fn open(msg: &serde_json::Value, home: &Home, resources: &Resources) -> serde_json::Value {
+    let Resources {
+        resource_mgr,
+        install_cache,
+        slots,
+        sessions,
+    } = resources;
     // Held until the new session is in place, so two opens cannot race.
     let mut conn_slot = None;
     let mut named_map = None;
@@ -278,31 +276,21 @@ async fn open(
     let wait = msg["wait_ms"]
         .as_u64()
         .map_or(DEFAULT_WAIT, Duration::from_millis);
-    #[cfg(debug_assertions)]
-    let stub = msg["stub"].as_bool() == Some(true) && flow.is_none();
-    #[cfg(not(debug_assertions))]
-    let stub = false;
-    let session = Arc::new(if stub {
-        #[cfg(debug_assertions)]
-        {
-            stub_session(project_root, idle_timeout)
-        }
-        #[cfg(not(debug_assertions))]
-        unreachable!("stub sessions exist in debug builds only")
-    } else {
-        Session::start(
-            OpenRequest {
-                query,
-                project_root,
-                child_env,
-                idle_timeout,
-                flow,
-                boot: msg["boot"].as_bool().unwrap_or(true),
-            },
-            resource_mgr.clone(),
-            install_cache.clone(),
-        )
-    });
+    let stub = cfg!(debug_assertions) && msg["stub"].as_bool() == Some(true) && flow.is_none();
+    let session = Arc::new(Session::start(
+        OpenRequest {
+            query,
+            project_root,
+            child_env,
+            idle_timeout,
+            flow,
+            boot: msg["boot"].as_bool().unwrap_or(true),
+            stub,
+        },
+        resource_mgr.clone(),
+        install_cache.clone(),
+        slots.clone(),
+    ));
     if let Some(mut slot) = conn_slot {
         *slot = Some(session.clone());
     }
@@ -311,9 +299,6 @@ async fn open(
     }
     sessions.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     watch_idle(session.clone(), home.clone(), sessions.clone());
-    if stub {
-        return opened_json(idle_timeout);
-    }
     forget_failed_open(session.clone(), home.clone());
     let waited = session.wait(wait).await;
     // An open that failed leaves nothing to keep. `forget_failed_open` can
@@ -368,56 +353,6 @@ fn parse_flow_open(
         vars,
         stub: cfg!(debug_assertions) && msg["stub"].as_bool() == Some(true),
     }))
-}
-
-fn opened_json(idle_timeout: Duration) -> serde_json::Value {
-    serde_json::json!({
-        "status": "done",
-        "op_id": 0,
-        "op": "session_open",
-        "result": {
-            "opened": true,
-            "device": "android/Stub Device",
-            "udid": "stub-session",
-            "bundle": golem_driver::stub::STUB_BUNDLE_ID,
-            "idle_timeout_s": idle_timeout.as_secs(),
-        },
-    })
-}
-
-/// A session on the device-free stub driver, for the integration tests of
-/// session clients. Debug builds only, like the `--stub` run path.
-#[cfg(debug_assertions)]
-fn stub_session(project_root: std::path::PathBuf, idle_timeout: Duration) -> Session {
-    let device = golem_devices::DeviceInfo {
-        name: "Stub Device".into(),
-        udid: "stub-session".into(),
-        platform: golem_devices::Platform::Android,
-        device_type: golem_devices::DeviceType::Phone,
-        os_major: 0,
-        os_version: "0".into(),
-        state: golem_devices::DeviceState::Booted,
-        physical: false,
-        playstore: false,
-        screen_width: None,
-        screen_height: None,
-        screen_scale: None,
-        last_booted: None,
-        runtime_id: None,
-        device_type_id: None,
-    };
-    Session::from_parts(
-        crate::session::Parts {
-            device,
-            bundle: golem_driver::stub::STUB_BUNDLE_ID.into(),
-            driver: Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
-            lease: None,
-            project_root,
-            apps: Vec::new(),
-            child_env: None,
-        },
-        idle_timeout,
-    )
 }
 
 /// Close and forget a session whose open fails, however long the open

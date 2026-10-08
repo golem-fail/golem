@@ -185,7 +185,9 @@ The server starts without device work.
 
 - `os` takes the flow syntax: `ios`, `android`, `ios:26` (any 26.x), `ios:26+`, or `ios:latest` (the newest OS on the host, in any state). `type` is `phone` or `tablet`. `device` names one device by UDID, serial, name, or part of either, in any state.
 - A running device that fits and is free wins: a simulator or emulator before a physical device, then the newest OS. A device that a run or another session holds is skipped.
-- If no running device fits, golem boots the fitting shut-down device with the newest OS, as `golem run` does. The open answers `pending` with the phase `booting …` while it boots. `boot = false` refuses instead. When the daemon exits, it shuts down the devices that golem booted, unless a `golem run --keep-devices` used it.
+- If no running device fits, golem boots the fitting shut-down device with the newest OS, as `golem run` does. The open answers `pending` with the phase `booting …` while it boots. `boot = false` refuses instead.
+- Sessions hold at most 3 devices at once, across every MCP server and shell on the host (`GOLEM_SESSION_MAX_DEVICES`). An open past the cap waits with the phase `waiting for a device: 3 of 3 held by sessions (…)`, and goes on when a session closes. `cancel` ends the wait. Runs from `golem run` do not count toward the cap.
+- When the daemon exits, it shuts down the devices that golem booted, unless a `golem run --keep-devices` used it.
 - With `flow`, the flow's device constraint fills each of `os`, `type` and `device` that the call leaves out. A flow that runs on both platforms needs `os`.
 - `session_open` refuses an argument it does not know, so a misspelt name fails instead of being ignored. The session runs in the daemon and belongs to this server: when the client stops the server, the session ends and its device is released. Stdout carries JSON-RPC only.
 
@@ -369,3 +371,4 @@ One background process, the daemon, owns the devices. Every `golem run` is a cli
 | `GOLEM_SOCKET` | The daemon's socket (default `~/.golem/golem.sock`). A different socket gives a separate daemon with its own devices; its lock and log sit next to it. |
 | `GOLEM_DAEMON_IDLE_SECS` | Seconds with no client before the daemon exits (default 45). |
 | `GOLEM_DAEMON_WAIT` | Seconds a command waits for an outdated daemon to finish its runs and exit (default 300). |
+| `GOLEM_SESSION_MAX_DEVICES` | The most devices that sessions hold at once, across every client of the daemon (default 3). Read when the daemon starts. |
