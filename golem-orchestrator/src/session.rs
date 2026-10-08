@@ -1609,6 +1609,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         Ok(parsed) => (parsed.step, parsed.line),
         Err(e) => return OpResult::Failed(format!("{e:#}")),
     };
+    let timeout_ms = golem_runner::policy::effective_timeout(&step, work.base_timeout_ms);
     let Work {
         device,
         driver,
@@ -1621,6 +1622,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         rng,
         browser,
         recovery,
+        base_timeout_ms,
         ..
     } = work;
     // The context lives for one step; what must outlast it (step counter,
@@ -1648,7 +1650,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         vars,
         &mut ctx,
         apps,
-        golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS,
+        *base_timeout_ms,
     )
     .await;
     *step_count = ctx.global_step_index;
@@ -1666,11 +1668,22 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
             return OpResult::Failed(format!("the step passed, but the draft refused it: {e:#}"));
         }
     }
+    let mut toon = golem_report::toon::format_step_toon(&report)
+        .trim_start()
+        .to_string();
+    if let Some(warning) = passed
+        .then(|| slow_warning(report.duration_ms, timeout_ms))
+        .flatten()
+    {
+        if !toon.ends_with('\n') {
+            toon.push('\n');
+        }
+        toon.push_str(&warning);
+        toon.push('\n');
+    }
     OpResult::Act {
         passed,
-        toon: golem_report::toon::format_step_toon(&report)
-            .trim_start()
-            .to_string(),
+        toon,
         step: golem_report::json::step_json(&report),
         tree,
     }
@@ -1848,6 +1861,28 @@ async fn draft_run(
         passed.len(),
         if passed.len() == 1 { "" } else { "s" }
     )))
+}
+
+/// A warning for a step that passed in half its timeout or more: on a
+/// slower device or a busy host the same step can time out in `golem run`.
+/// It suggests about twice the time taken, rounded up to a second.
+fn slow_warning(duration_ms: u64, timeout_ms: u64) -> Option<String> {
+    if timeout_ms == 0 || duration_ms.saturating_mul(2) < timeout_ms {
+        return None;
+    }
+    let suggest = (duration_ms.saturating_mul(2).max(timeout_ms + 1)).div_ceil(1000) * 1000;
+    let secs = |ms: u64| {
+        if ms.is_multiple_of(1000) {
+            format!("{}s", ms / 1000)
+        } else {
+            format!("{:.1}s", ms as f64 / 1000.0)
+        }
+    };
+    Some(format!(
+        "warning: took {} of its {} timeout · consider timeout = {suggest}",
+        secs(duration_ms),
+        secs(timeout_ms)
+    ))
 }
 
 async fn read_tree(driver: &dyn PlatformDriver, full: bool, json: bool) -> Result<String> {
@@ -2570,6 +2605,51 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                     "a failed step SHALL NOT be recorded: {text}"
                 );
             }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_step_that_takes_half_its_timeout_or_more_gets_a_warning() {
+        assert_eq!(slow_warning(2_400, 5_000), None);
+        assert_eq!(
+            slow_warning(2_500, 5_000).as_deref(),
+            Some("warning: took 2.5s of its 5s timeout · consider timeout = 6000")
+        );
+        assert_eq!(
+            slow_warning(4_100, 5_000).as_deref(),
+            Some("warning: took 4.1s of its 5s timeout · consider timeout = 9000")
+        );
+        assert_eq!(
+            slow_warning(9_000, 10_000).as_deref(),
+            Some("warning: took 9s of its 10s timeout · consider timeout = 18000")
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn act_warns_when_a_step_passes_near_its_explicit_timeout() {
+        let s = session_on(
+            Arc::new(golem_driver::stub::StubDriver::new(1, Default::default())),
+            None,
+            Duration::from_secs(60),
+        );
+        let done = run(
+            &s,
+            act(r#"{ action = "bash", run = "sleep 0.6", timeout = 1000 }"#),
+        )
+        .await;
+        match done.result {
+            OpResult::Act {
+                passed: true, toon, ..
+            } => assert!(
+                toon.contains("warning: took ") && toon.contains("of its 1s timeout"),
+                "{toon}"
+            ),
+            other => panic!("{other:?}"),
+        }
+        let quick = run(&s, act(r#"{ action = "hide_keyboard" }"#)).await;
+        match quick.result {
+            OpResult::Act { toon, .. } => assert!(!toon.contains("warning"), "{toon}"),
             other => panic!("{other:?}"),
         }
     }

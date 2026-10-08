@@ -196,7 +196,7 @@ The server starts without device work.
 | `devices(os?)` | Every device in any state, with the port of a live companion. `os` filters as in `session_open` |
 | `session_open(os?, type?, device?, boot?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, run?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app; see "The device" below. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
 | `session_close(teardown?)` | Close the session and release the device. For a session opened from a flow, the flow's `[[teardown]]` runs unless `teardown = false` |
-| `act(step, comment?, tree?, format?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step |
+| `act(step, comment?, tree?, format?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step. A step that passes in half its timeout or more gets a warning with a suggested `timeout` |
 | `probe(selector, timeout_ms?, format?)` | As `golem probe` |
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |

@@ -500,6 +500,7 @@ session_close()
 Then the LLM runs `golem run flows/login.test.toml` in a shell to prove that the flow passes.
 
 - A step that fails does not go into the draft. The LLM fixes the selector with `probe` and runs `act` again.
+- If a step passes but takes half its timeout or more, `act` adds a warning with a suggested timeout: `warning: took 4.1s of its 5s timeout · consider timeout = 9000`. The step is in the draft. On a slower device or a busy host, the same step can time out in `golem run`. To raise the timeout, use `step_edit`. A larger timeout keeps the step's status.
 - `record_only` adds a step that does not run, for a path that the session does not take. The step gets an `# unverified` marker, and `export_flow` lists it.
 - To add steps to a flow that exists, open the session from that flow with `stop_at`. The new steps go in where the flow stopped. The export keeps the file's comments, key order and whitespace.
 
