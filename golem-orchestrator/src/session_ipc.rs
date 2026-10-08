@@ -101,30 +101,28 @@ impl Home {
     }
 }
 
+/// What the daemon shares with every session: devices, the install
+/// cache, the device cap and the session count.
+#[derive(Clone)]
+pub(crate) struct Resources {
+    pub resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
+    pub install_cache: golem_runner::installer::InstallCache,
+    pub slots: Arc<crate::session::Slots>,
+    /// Open sessions, for the daemon's idle check.
+    pub sessions: Arc<std::sync::atomic::AtomicU64>,
+}
+
 /// Answer one `session_*` message in its own task.
 pub(crate) fn spawn(
     msg: serde_json::Value,
     conn: ConnSession,
-    resource_mgr: Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: golem_runner::installer::InstallCache,
-    slots: Arc<crate::session::Slots>,
-    sessions: Arc<std::sync::atomic::AtomicU64>,
+    resources: Resources,
     named: Named,
     writer: Writer,
 ) {
     tokio::spawn(async move {
         let id = msg["id"].clone();
-        let mut reply = handle(
-            &msg,
-            &conn,
-            &resource_mgr,
-            &install_cache,
-            &slots,
-            &sessions,
-            &named,
-            &writer,
-        )
-        .await;
+        let mut reply = handle(&msg, &conn, &resources, &named, &writer).await;
         reply["type"] = serde_json::json!("session_reply");
         reply["id"] = id;
         let mut w = writer.lock().await;
@@ -135,10 +133,7 @@ pub(crate) fn spawn(
 async fn handle(
     msg: &serde_json::Value,
     conn: &ConnSession,
-    resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    slots: &Arc<crate::session::Slots>,
-    sessions: &Arc<std::sync::atomic::AtomicU64>,
+    resources: &Resources,
     named: &Named,
     writer: &Writer,
 ) -> serde_json::Value {
@@ -148,7 +143,7 @@ async fn handle(
     }
     let home = Home::of(msg, conn, named, writer);
     if kind == "session_open" {
-        return open(msg, &home, resource_mgr, install_cache, slots, sessions).await;
+        return open(msg, &home, resources).await;
     }
     let Some(session) = home.get().await else {
         return error(&home.missing());
@@ -236,14 +231,13 @@ async fn handle(
     }
 }
 
-async fn open(
-    msg: &serde_json::Value,
-    home: &Home,
-    resource_mgr: &Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    slots: &Arc<crate::session::Slots>,
-    sessions: &Arc<std::sync::atomic::AtomicU64>,
-) -> serde_json::Value {
+async fn open(msg: &serde_json::Value, home: &Home, resources: &Resources) -> serde_json::Value {
+    let Resources {
+        resource_mgr,
+        install_cache,
+        slots,
+        sessions,
+    } = resources;
     // Held until the new session is in place, so two opens cannot race.
     let mut conn_slot = None;
     let mut named_map = None;

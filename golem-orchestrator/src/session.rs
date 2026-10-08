@@ -923,7 +923,6 @@ async fn finish_work(work: &mut Work, run_teardown: bool) -> Option<String> {
 
 /// The session open: select, lease, connect; or for a flow, run it as a
 /// one-flow suite that hands its device over.
-#[allow(clippy::too_many_arguments)] // the open's own inputs, then the session's parts it fills
 async fn open(
     req: OpenRequest,
     resource_mgr: Arc<ResourceManager>,

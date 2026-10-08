@@ -617,10 +617,12 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                         crate::session_ipc::spawn(
                             json,
                             session.clone(),
-                            shared.resource_mgr.clone(),
-                            shared.install_cache.clone(),
-                            shared.session_slots.clone(),
-                            shared.active_sessions.clone(),
+                            crate::session_ipc::Resources {
+                                resource_mgr: shared.resource_mgr.clone(),
+                                install_cache: shared.install_cache.clone(),
+                                slots: shared.session_slots.clone(),
+                                sessions: shared.active_sessions.clone(),
+                            },
                             shared.named.clone(),
                             writer.clone(),
                         );
