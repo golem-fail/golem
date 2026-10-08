@@ -53,7 +53,7 @@ async fn every_tool_works_against_a_stub_session() {
     let server = GolemMcp::new(McpOptions {
         socket: socket.clone(),
         project_root: dir.path().to_path_buf(),
-        soft_timeout: Duration::from_secs(10),
+        soft_timeout: Some(Duration::from_secs(10)),
         stub: true,
     });
     let (server_io, client_io) = tokio::io::duplex(1 << 20);
@@ -304,5 +304,33 @@ async fn every_tool_works_against_a_stub_session() {
     let (c, err) = call(&client, "tree", serde_json::json!({})).await;
     assert!(err, "a closed session SHALL refuse work: {c}");
 
+    client.cancel().await.expect("close client");
+}
+
+#[tokio::test]
+async fn a_client_with_a_short_limit_gets_a_shorter_soft_timeout() {
+    let dir = tempfile::Builder::new()
+        .prefix("gmcp")
+        .tempdir_in("/tmp")
+        .expect("tempdir");
+    let server = GolemMcp::new(McpOptions {
+        socket: dir.path().join("d.sock"),
+        project_root: dir.path().to_path_buf(),
+        soft_timeout: None,
+        stub: true,
+    });
+    let watched = server.clone();
+    let (server_io, client_io) = tokio::io::duplex(1 << 16);
+    tokio::spawn(async move {
+        let service = server.serve(server_io).await.expect("serve");
+        let _ = service.waiting().await;
+    });
+    // GitHub Copilot CLI waits 30 s for one call.
+    let copilot = rmcp::model::InitializeRequestParams::new(
+        rmcp::model::ClientCapabilities::default(),
+        rmcp::model::Implementation::new("github-copilot-developer", "1.0.62"),
+    );
+    let client = copilot.serve(client_io).await.expect("client");
+    assert_eq!(watched.soft_timeout(), Duration::from_secs(20));
     client.cancel().await.expect("close client");
 }

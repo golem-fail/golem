@@ -33,7 +33,8 @@ pub struct McpOptions {
     /// another.
     pub project_root: PathBuf,
     /// How long a tool waits for its operation before it answers `pending`.
-    pub soft_timeout: Duration,
+    /// `None` picks it from the client that connects ([`soft_timeout_for`]).
+    pub soft_timeout: Option<Duration>,
     /// Open sessions on the device-free stub driver. Debug builds only,
     /// for the integration tests.
     pub stub: bool,
@@ -44,6 +45,9 @@ pub struct McpOptions {
 pub struct GolemMcp {
     link: Arc<DaemonLink>,
     options: McpOptions,
+    /// The soft timeout in force: `options.soft_timeout`, else the one
+    /// picked for the client at `initialize`.
+    soft_timeout: Arc<std::sync::Mutex<Duration>>,
     #[allow(dead_code)] // read by the `tool_handler` macro
     tool_router: ToolRouter<Self>,
 }
@@ -331,6 +335,9 @@ impl GolemMcp {
                 conn: tokio::sync::Mutex::new(None),
                 ended: Arc::default(),
             }),
+            soft_timeout: Arc::new(std::sync::Mutex::new(
+                options.soft_timeout.unwrap_or(DEFAULT_SOFT_TIMEOUT),
+            )),
             options,
             tool_router: Self::tool_router(),
         }
@@ -392,7 +399,7 @@ impl GolemMcp {
             "break_on_failure": p.break_on_failure,
             "teardown": p.teardown,
             "vars": p.vars,
-            "wait_ms": self.options.soft_timeout.as_millis() as u64,
+            "wait_ms": self.soft_timeout().as_millis() as u64,
         });
         if self.options.stub {
             msg["stub"] = serde_json::json!(true);
@@ -509,9 +516,7 @@ impl GolemMcp {
         &self,
         Parameters(p): Parameters<WaitParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let wait = p
-            .timeout_s
-            .map_or(self.options.soft_timeout, Duration::from_secs);
+        let wait = p.timeout_s.map_or(self.soft_timeout(), Duration::from_secs);
         let reply = self
             .call(
                 "session_wait",
@@ -748,6 +753,12 @@ impl GolemMcp {
 }
 
 impl GolemMcp {
+    /// The soft timeout in force: after `initialize`, the one picked for
+    /// the client.
+    pub fn soft_timeout(&self) -> Duration {
+        *self.soft_timeout.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     async fn call(
         &self,
         kind: &str,
@@ -765,7 +776,7 @@ impl GolemMcp {
         kind: &str,
         mut msg: serde_json::Value,
     ) -> Result<serde_json::Value, ErrorData> {
-        msg["wait_ms"] = serde_json::json!(self.options.soft_timeout.as_millis() as u64);
+        msg["wait_ms"] = serde_json::json!(self.soft_timeout().as_millis() as u64);
         self.call(kind, msg).await
     }
 
@@ -927,6 +938,80 @@ impl ServerHandler for GolemMcp {
                  A long operation returns pending: call wait.",
             )
     }
+
+    async fn initialize(
+        &self,
+        request: rmcp::model::InitializeRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::InitializeResult, ErrorData> {
+        context.peer.set_peer_info(request.clone());
+        let client = &request.client_info;
+        if self.options.soft_timeout.is_none() {
+            let picked = soft_timeout_for(&client.name);
+            *self.soft_timeout.lock().unwrap_or_else(|e| e.into_inner()) = picked;
+            eprintln!(
+                "golem mcp: client {} {} · soft timeout {}s (--soft-timeout sets it)",
+                client.name,
+                client.version,
+                picked.as_secs()
+            );
+        }
+        self.negotiate_initialize(&request)
+    }
+}
+
+/// The soft timeout for a client golem does not know.
+pub const DEFAULT_SOFT_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// The most golem waits before `pending`, whatever the client allows: golem
+/// knows a client's default limit, not the one its user set.
+const MAX_SOFT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// A client with no limit for one call.
+const NO_LIMIT: Duration = Duration::from_secs(24 * 3600);
+
+/// Each client's default limit for one tool call, by the `clientInfo.name`
+/// it sends; a name ending in `*` matches a prefix. Only names read in the
+/// client's source are listed: a guessed name would match nothing, or the
+/// wrong client. Where the client's docs and its source disagree, the lower
+/// limit is listed, so that golem answers `pending` before the client gives
+/// up in either case (Codex: docs 60 s, source 300 s; Copilot CLI: docs
+/// 30 s, source 180 s; LibreChat: docs 30 s, source 60 s).
+const CLIENT_LIMITS: &[(&str, Duration)] = &[
+    ("claude-code", NO_LIMIT),
+    ("codex-mcp-client", Duration::from_secs(60)),
+    ("gemini-cli-mcp-client", Duration::from_secs(600)),
+    ("opencode", Duration::from_secs(60)),
+    ("github-copilot-developer", Duration::from_secs(30)),
+    ("goose-cli", Duration::from_secs(300)),
+    ("goose-desktop", Duration::from_secs(300)),
+    ("Cline", Duration::from_secs(60)),
+    ("continue-client", Duration::from_secs(60)),
+    ("Zed", Duration::from_secs(60)),
+    ("claude-desktop-3p", Duration::from_secs(60)),
+    ("local-agent-mode-*", Duration::from_secs(60)),
+    ("@librechat/api-client", Duration::from_secs(30)),
+    ("mcpc", Duration::from_secs(60)),
+    ("ai-sdk-mcp-client", NO_LIMIT),
+    ("spring-ai-mcp-client*", Duration::from_secs(20)),
+    ("Visual Studio Code", NO_LIMIT),
+    ("Code - OSS", NO_LIMIT),
+];
+
+/// The soft timeout for the client named `name`: two thirds of its limit
+/// for one call, at most [`MAX_SOFT_TIMEOUT`] and at least 5 s, so that
+/// golem answers `pending` before the client gives up. A client golem does
+/// not know gets [`DEFAULT_SOFT_TIMEOUT`].
+pub fn soft_timeout_for(name: &str) -> Duration {
+    CLIENT_LIMITS
+        .iter()
+        .find(|(known, _)| match known.strip_suffix('*') {
+            Some(prefix) => name.starts_with(prefix),
+            None => *known == name,
+        })
+        .map_or(DEFAULT_SOFT_TIMEOUT, |(_, limit)| {
+            (*limit * 2 / 3).clamp(Duration::from_secs(5), MAX_SOFT_TIMEOUT)
+        })
 }
 
 /// An MCP client that `golem mcp --print-config` writes a config block for.
@@ -1074,6 +1159,26 @@ pub async fn serve(options: McpOptions) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_soft_timeout_stays_under_the_clients_own_limit() {
+        let secs = |name: &str| soft_timeout_for(name).as_secs();
+        assert_eq!(secs("github-copilot-developer"), 20, "30 s limit");
+        assert_eq!(
+            secs("spring-ai-mcp-client - golem"),
+            13,
+            "20 s limit, by prefix"
+        );
+        assert_eq!(secs("Zed"), 40, "60 s limit");
+        assert_eq!(secs("goose-cli"), 120, "300 s limit, capped");
+        assert_eq!(secs("claude-code"), 120, "no limit, capped");
+        assert_eq!(secs("some-new-client"), 45, "unknown: the default");
+        assert_eq!(secs("zed"), 45, "names match exactly, as clients send them");
+        for (name, limit) in CLIENT_LIMITS {
+            let name = name.trim_end_matches('*');
+            assert!(soft_timeout_for(name) < *limit, "{name}");
+        }
+    }
 
     #[test]
     fn each_client_config_starts_this_binary_with_mcp() {

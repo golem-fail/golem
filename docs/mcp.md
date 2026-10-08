@@ -116,7 +116,7 @@ The command writes `~/.copilot/mcp-config.json`. For one project, put the block 
 { "mcpServers": { "golem": { "type": "stdio", "command": "golem", "args": ["mcp"], "tools": ["*"], "timeout": 120000 } } }
 ```
 
-Copilot waits 30 s for one call by default, which is less than golem's soft timeout. Keep `timeout` (milliseconds) at 60000 or more. Check the server with `copilot mcp list`, or `/mcp` in a session. Guide: [Add MCP servers to Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
+`timeout` (milliseconds) is Copilot's limit for one call. Check the server with `copilot mcp list`, or `/mcp` in a session. Guide: [Add MCP servers to Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
 
 #### Goose
 
@@ -245,11 +245,11 @@ mcpServers:
     timeout: 120000
 ```
 
-The default `timeout` is 30000 ms, which is less than golem's soft timeout. Guide: [LibreChat MCP servers](https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers).
+`timeout` (milliseconds) is LibreChat's limit for one call. Guide: [LibreChat MCP servers](https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers).
 
 ### Your own agent
 
-An agent framework starts `golem mcp` as a stdio MCP server, as any client does. Keep the framework's limit for one call above golem's soft timeout.
+An agent framework starts `golem mcp` as a stdio MCP server, as any client does. golem knows the client names that the Vercel AI SDK and Spring AI send, and answers within their limits (see [Timeouts](#timeouts)).
 
 - **Vercel AI SDK** ([guide](https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools)):
 
@@ -274,7 +274,7 @@ An agent framework starts `golem mcp` as a stdio MCP server, as any client does.
   agent = Agent('anthropic:claude-sonnet-5-5', toolsets=[golem])
   ```
 
-- **Spring AI** ([guide](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-client-boot-starter-docs.html)). The default `request-timeout` is 20 s, so raise it:
+- **Spring AI** ([guide](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-client-boot-starter-docs.html)). The default `request-timeout` is 20 s. A longer one means fewer `pending` answers:
 
   ```yaml
   spring:
@@ -309,22 +309,26 @@ mcpc @golem tools-list
 
 ### Timeouts
 
-A client stops waiting for one tool call after a limit. golem answers every call before the **soft timeout** (default 45 s). If the work is not done by then, the call answers `pending`, and the LLM calls `wait` for the result. See [Long operations](#long-operations).
+A client stops waiting for one tool call after a limit. golem answers every call before its **soft timeout**. If the work is not done by then, the call answers `pending`, and the LLM calls `wait` for the result. See [Long operations](#long-operations).
 
-| Client | Limit for one call | Change it with |
-|--------|--------------------|----------------|
-| Claude Code | long by default | `MCP_TOOL_TIMEOUT` (ms), or `"timeout"` on the server in `.mcp.json` |
-| Codex | 60 s | `tool_timeout_sec` |
-| Gemini CLI | 600 s | `"timeout"` (ms) |
-| Copilot CLI | **30 s** | `"timeout"` (ms), or `--timeout` on `copilot mcp add` |
-| Goose | 300 s | `timeout` (s) |
-| Cline | 60 s | `"timeout"` (s) |
-| Zed | 60 s | `"timeout"` (s) on the server, or `context_server_timeout` |
-| LibreChat | **30 s** | `timeout` (ms) |
-| Spring AI | **20 s** | `spring.ai.mcp.client.request-timeout` |
-| mcpc | 60 s | `--timeout` (s) |
+golem sets the soft timeout from the client that connects, by the name in its MCP handshake: two thirds of the client's default limit, at most 120 s. A client that golem does not know gets 45 s. You do not need to set anything. golem writes its choice to stderr when the client connects, for example `golem mcp: client github-copilot-developer 1.0.62 · soft timeout 20s`.
 
-OpenCode's `"timeout"` applies only while the server starts. If a client's limit is under 45 s and you cannot raise it, start the server with `--soft-timeout` below that limit.
+| Client | Default limit for one call | golem's soft timeout | Client setting |
+|--------|----------------------------|----------------------|----------------|
+| Claude Code | none (27 h) | 120 s | `MCP_TOOL_TIMEOUT` (ms), or `"timeout"` in `.mcp.json` |
+| Codex | 60 s in the docs, 300 s in the source | 40 s | `tool_timeout_sec` |
+| Gemini CLI | 600 s | 120 s | `"timeout"` (ms) |
+| OpenCode | 60 s | 40 s | `"timeout"` (ms) |
+| Copilot CLI | 30 s in the docs, 180 s in the source | 20 s | `"timeout"` (ms) |
+| Goose | 300 s | 120 s | `timeout` (s) |
+| Cline, Continue, Zed, mcpc | 60 s | 40 s | per client, see its section |
+| Claude Desktop (agent mode) | 60 s | 40 s | none |
+| LibreChat | 30 s in the docs, 60 s in the source | 20 s | `timeout` (ms) |
+| Spring AI | 20 s | 13 s | `spring.ai.mcp.client.request-timeout` |
+| Vercel AI SDK, VS Code | none | 120 s | none |
+| Cursor, Windsurf, Devin, others | unknown | 45 s | per client |
+
+Where a client's docs and its source disagree, golem uses the lower limit. golem knows each client's default only, not a value you set. If you lower a client's limit below golem's soft timeout, or use a client that golem does not know and that waits less than 45 s, start the server with `--soft-timeout <secs>` below that limit. `--soft-timeout` always wins.
 
 ## The step notation
 

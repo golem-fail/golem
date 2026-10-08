@@ -133,9 +133,11 @@ pub struct McpArgs {
     #[arg(long)]
     pub project: Option<std::path::PathBuf>,
 
-    /// Seconds a tool waits for its operation before it answers `pending`
-    #[arg(long, default_value_t = 45)]
-    pub soft_timeout: u64,
+    /// Seconds a tool waits for its operation before it answers `pending`.
+    /// Without it, golem picks a value below the connecting client's own
+    /// limit for one call, or 45 for a client it does not know
+    #[arg(long)]
+    pub soft_timeout: Option<u64>,
 
     /// Print the config block that adds this server to an MCP client
     /// (claude, codex, desktop, opencode, gemini, copilot, goose, zed or
