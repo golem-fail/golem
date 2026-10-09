@@ -305,6 +305,25 @@ pub struct BlockNameParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct OptionsSetParams {
+    /// { "step_timeout": 8000, "app_lifecycle": "manual" }; null removes a key.
+    pub options: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockSetParams {
+    pub name: String,
+    /// { "for_each": "data", "where": { "os": "ios" } }; null removes a key.
+    pub fields: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TeardownDeleteParams {
+    /// The teardown step, from 1.
+    pub n: usize,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct DataAddParams {
     /// { "email": "a@b.test", "name": "Ada" }
     pub row: serde_json::Map<String, serde_json::Value>,
@@ -844,7 +863,40 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Add a [[data]] row. A block with for_each = \"data\" runs once per row; its steps read ${_each.field}."
+        description = "Set [flow.options] keys of the draft, such as step_timeout, app_lifecycle, max_runtime, record or coverage. help(\"flow\", \"flow/options\") lists them. An unknown key or a wrong type is refused."
+    )]
+    async fn options_set(
+        &self,
+        Parameters(p): Parameters<OptionsSetParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "options_set", "options": p.options }))
+            .await
+    }
+
+    #[tool(
+        description = "Set a block's own fields: app, for_each, where (the device filter), run_flow, vars, save_to, record. block_link sets next and branches. The block's steps then become ? and ~."
+    )]
+    async fn block_set(
+        &self,
+        Parameters(p): Parameters<BlockSetParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "block_set", "name": p.name, "fields": p.fields }))
+            .await
+    }
+
+    #[tool(
+        description = "Remove a [[teardown]] step. To change one, remove it and teardown_add the new one."
+    )]
+    async fn teardown_delete(
+        &self,
+        Parameters(p): Parameters<TeardownDeleteParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "teardown_delete", "n": p.n }))
+            .await
+    }
+
+    #[tool(
+        description = "Add a [[data]] row. A block with for_each = \"data\" (block_set) runs once per row; its steps read ${_each.field}."
     )]
     async fn data_add(
         &self,

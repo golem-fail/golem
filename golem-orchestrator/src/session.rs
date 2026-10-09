@@ -275,6 +275,15 @@ pub enum DraftEdit {
     BlockDelete {
         name: String,
     },
+    /// Set `[flow.options]` keys; a null removes one.
+    OptionsSet(serde_json::Map<String, serde_json::Value>),
+    /// Set a block's own fields (`for_each`, `where` …); a null removes one.
+    BlockSet {
+        name: String,
+        fields: serde_json::Map<String, serde_json::Value>,
+    },
+    /// Remove `[[teardown]]` step `n`, from 1.
+    TeardownDelete(usize),
 }
 
 impl DraftEdit {
@@ -293,6 +302,9 @@ impl DraftEdit {
             DraftEdit::StepMove { .. } => "step_move",
             DraftEdit::BlockRename { .. } => "block_rename",
             DraftEdit::BlockDelete { .. } => "block_delete",
+            DraftEdit::OptionsSet(_) => "options_set",
+            DraftEdit::BlockSet { .. } => "block_set",
+            DraftEdit::TeardownDelete(_) => "teardown_delete",
         }
     }
 
@@ -348,6 +360,9 @@ impl DraftEdit {
             DraftEdit::RecordOnly { step, comment } => {
                 draft.record_unverified(&line(step)?, comment.as_deref())
             }
+            DraftEdit::OptionsSet(options) => draft.options_set(options),
+            DraftEdit::BlockSet { name, fields } => draft.block_set(name, fields),
+            DraftEdit::TeardownDelete(n) => draft.teardown_delete(*n),
             DraftEdit::StepEdit { .. }
             | DraftEdit::StepDelete { .. }
             | DraftEdit::StepMove { .. }

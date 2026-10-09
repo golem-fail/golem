@@ -542,7 +542,10 @@ These tools change only the draft. They never touch the device, and they set no 
 | `flow_set(name?, tags?, vars?, explicit_only?, start?)` | Sets fields of `[flow]`. `vars` merges into the flow's variables, and sets them in the session, so that `act` resolves them at once. |
 | `apps_set(app)` | Adds a `[[flow.apps]]` entry, or replaces the fields of the entry with the same name. The entry can differ from the session's device. |
 | `teardown_add(step, comment?)` | Adds a step to the `[[teardown]]`. The step does not run now. |
-| `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` runs once for each row, and its steps read the fields as `${_each.field}`. |
+| `teardown_delete(n)` | Removes `[[teardown]]` step `n`, counted from 1. To change a teardown step, remove it and add the new one. |
+| `options_set(options)` | Sets `[flow.options]` keys, such as `step_timeout`, `app_lifecycle`, `max_runtime`, `record` or `coverage`. A null value removes a key. The tool refuses an unknown key, or a value of the wrong type. |
+| `block_set(name, fields)` | Sets a block's own fields: `app`, `for_each`, `where` (the device filter), `run_flow`, `vars`, `save_to` and `record`. A null value removes a field. The block's steps then become `?` and `~`. `block_link` sets `next` and branches. |
+| `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` (set it with `block_set`) runs once for each row, and its steps read the fields as `${_each.field}`. |
 | `comment_add(text)` | Adds a comment line at the cursor. |
 | `mixins_list` | Lists the project's mixins and the variables each uses. To use a mixin, run `act` with `{ action = "load_mixin", mixin = "name", vars = { … } }`. The draft records the `load_mixin` step, not the mixin's steps. |
 

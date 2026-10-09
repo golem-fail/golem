@@ -216,6 +216,9 @@ The server starts without device work.
 | `block_link(block, next?, branches?)` | Set a block's `next`, and add branches (`if_visible`, `if_not_visible` or `if_var`, then `goto`) |
 | `teardown_add(step, comment?)` | Add a step to the draft's `[[teardown]]`; it does not run |
 | `data_add(row)` | Add a `[[data]]` row |
+| `teardown_delete(n)` | Remove `[[teardown]]` step `n` (from 1) |
+| `options_set(options)` | Set `[flow.options]` keys; a null removes one |
+| `block_set(name, fields)` | Set a block's `app`, `for_each`, `where`, `run_flow`, `vars`, `save_to` or `record`; a null removes one |
 | `comment_add(text)` | Add a comment line where the next step goes |
 | `record_only(step, comment?)` | Record a step without running it, marked `# unverified`, for a path the session does not take |
 | `step_edit(at, step?, comment?)` | Change a draft step without running it. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified |
