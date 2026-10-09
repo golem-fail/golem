@@ -1,7 +1,7 @@
 use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_element::glob::GlobMatcher;
-use golem_element::selector::{find_elements, Selector};
+use golem_element::selector::Selector;
 use golem_parser::BranchCondition;
 use golem_vars::VariableStore;
 
@@ -20,6 +20,22 @@ pub async fn evaluate_branch(
     Ok(None)
 }
 
+/// Matches for `text_pattern` in the visible tree, the same tree
+/// `assert_visible` judges against.
+async fn visible_text_matches(
+    driver: &dyn PlatformDriver,
+    text_pattern: &str,
+) -> Result<Vec<golem_element::FindResult>> {
+    let (hierarchy, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+    let selector = Selector {
+        text: Some(text_pattern.to_string()),
+        ..Selector::default()
+    };
+    let (_, _, results) =
+        crate::resolution::visible_matches(&hierarchy, meta.keyboard_height, &selector);
+    Ok(results)
+}
+
 /// Check whether a single branch condition matches the current state.
 async fn matches_condition(
     cond: &BranchCondition,
@@ -28,23 +44,13 @@ async fn matches_condition(
 ) -> Result<bool> {
     // Screen-based: if_visible
     if let Some(ref text_pattern) = cond.if_visible {
-        let (hierarchy, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
-        let selector = Selector {
-            text: Some(text_pattern.clone()),
-            ..Selector::default()
-        };
-        let results = find_elements(&hierarchy, &selector);
+        let results = visible_text_matches(driver, text_pattern).await?;
         return Ok(!results.is_empty());
     }
 
     // Screen-based: if_not_visible
     if let Some(ref text_pattern) = cond.if_not_visible {
-        let (hierarchy, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
-        let selector = Selector {
-            text: Some(text_pattern.clone()),
-            ..Selector::default()
-        };
-        let results = find_elements(&hierarchy, &selector);
+        let results = visible_text_matches(driver, text_pattern).await?;
         return Ok(results.is_empty());
     }
 
@@ -294,6 +300,40 @@ mod tests {
         let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
 
         let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(result, None);
+    }
+
+    // ---------------------------------------------------------------
+    // 4b. screen conditions judge the visible tree: an element that is
+    //     in the hierarchy but off screen is not visible
+    // ---------------------------------------------------------------
+    fn hierarchy_with_offscreen_text(text: &str) -> Element {
+        root_with_children(vec![make_element(
+            "Label",
+            Some(text),
+            Bounds::new(10, 5000, 200, 40),
+        )])
+    }
+
+    #[tokio::test]
+    async fn if_not_visible_matches_when_element_only_off_screen() {
+        let driver = MockPlatformDriver::new(hierarchy_with_offscreen_text("Try Premium Free"));
+        let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
+
+        let result = evaluate_branch(&conditions, &driver, &VariableStore::new())
+            .await
+            .expect("should not error");
+        assert_eq!(result, Some("free_flow".to_string()));
+    }
+
+    #[tokio::test]
+    async fn if_visible_skips_when_element_only_off_screen() {
+        let driver = MockPlatformDriver::new(hierarchy_with_offscreen_text("Try Premium Free"));
+        let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
+
+        let result = evaluate_branch(&conditions, &driver, &VariableStore::new())
             .await
             .expect("should not error");
         assert_eq!(result, None);
