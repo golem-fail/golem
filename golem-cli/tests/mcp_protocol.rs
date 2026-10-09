@@ -91,7 +91,6 @@ async fn every_tool_works_against_a_stub_session() {
         "block_link",
         "teardown_add",
         "data_add",
-        "record_only",
         "step_edit",
         "step_delete",
         "step_move",
@@ -269,8 +268,8 @@ async fn every_tool_works_against_a_stub_session() {
         ),
         ("block_begin", serde_json::json!({ "name": "second" })),
         (
-            "record_only",
-            serde_json::json!({ "step": r#"{ action = "tap", on_text = "Maybe" }"#, "comment": "error path" }),
+            "act",
+            serde_json::json!({ "step": r#"{ action = "tap", on_text = "Maybe" }"#, "comment": "error path", "run": false }),
         ),
         (
             "block_link",
@@ -288,8 +287,8 @@ async fn every_tool_works_against_a_stub_session() {
     }
     let (c, err) = call(
         &client,
-        "record_only",
-        serde_json::json!({ "step": r#"{ action = "tapp" }"# }),
+        "act",
+        serde_json::json!({ "step": r#"{ action = "tapp" }"#, "run": false }),
     )
     .await;
     assert!(
