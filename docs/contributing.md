@@ -46,6 +46,8 @@ GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs
 
 `cargo t` fails when a page differs from its parts, or when a link or anchor in a page does not resolve.
 
+[`docs/mcp-context.md`](mcp-context.md) is generated too: everything an MCP client receives from `golem mcp` (the instructions, the tool list, and each `help` answer). After a change to a tool, its description, the instructions or a docs part, write it with `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-cli mcp_context`.
+
 ## Git hooks (optional)
 
 The repo ships a pre-push hook in [`.githooks/`](../.githooks) that runs `cargo fmt --all -- --check` before a push — the one gate that silently diverges between a local edit and CI. It's fmt-only on purpose: instant and deterministic, where a hook that compiled the workspace would make every push slow. Heavier gates (clippy, tests, e2e) stay in CI and the commit gate above.

@@ -457,6 +457,14 @@ fn json_format(format: Option<&str>) -> bool {
 
 #[tool_router]
 impl GolemMcp {
+    /// The tools as `tools/list` serves them, by name.
+    #[cfg(test)]
+    pub fn served_tools() -> Vec<rmcp::model::Tool> {
+        let mut tools = compact_schemas(Self::tool_router()).list_all();
+        tools.sort_by(|a, b| a.name.cmp(&b.name));
+        tools
+    }
+
     pub fn new(options: McpOptions) -> Self {
         GolemMcp {
             link: Arc::new(DaemonLink {

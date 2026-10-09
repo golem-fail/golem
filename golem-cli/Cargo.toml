@@ -51,6 +51,7 @@ rmcp = { version = "3.5", default-features = false, features = ["server", "macro
 schemars = "1"
 
 [dev-dependencies]
+golem-docs = { path = "../golem-docs" }
 tempfile = "3"
 # fd-level stdout/stderr capture in the in-process integration harness
 # (tests/common) — the streamed renderer writes from spawned tasks, so a

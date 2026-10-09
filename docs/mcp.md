@@ -606,3 +606,7 @@ session_close(teardown = false)
 - **Two golem versions,** such as an npm project version and a global brew version, interfere with each other. Use the same version for both, or set `GOLEM_SOCKET` to a different path for each one.
 - **`adb` or `xcrun` not found:** the client did not give golem your shell `PATH`. Set `PATH` and `ANDROID_HOME` in the server's `env`, as in the [Claude Desktop](#claude-desktop) example.
 - **The log** of the golem background process is `~/.golem/golem.log`. See [The daemon](cli-reference.md#the-daemon).
+
+---
+
+For golem developers: [MCP context](mcp-context.md) shows, on one page, everything an MCP client receives from `golem mcp`.

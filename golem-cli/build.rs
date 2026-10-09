@@ -12,12 +12,15 @@ fn main() {
     let mut out = String::from("pub static HELP_PARTS: &[HelpPart] = &[\n");
     for e in entries {
         let path = e.path.canonicalize().expect("a docs part path");
+        let docs = src.parent().expect("docs").canonicalize().expect("docs");
+        let source = path.strip_prefix(&docs).expect("a part under docs");
         let _ = writeln!(
             out,
-            "    HelpPart {{ address: {:?}, page: {:?}, anchor: {:?}, text: include_str!({:?}) }},",
+            "    HelpPart {{ address: {:?}, page: {:?}, anchor: {:?}, source: {:?}, text: include_str!({:?}) }},",
             e.address,
             e.page,
             e.anchor,
+            source.display().to_string(),
             path.display().to_string()
         );
     }

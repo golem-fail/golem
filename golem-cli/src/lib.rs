@@ -7,6 +7,8 @@ pub mod doctor;
 mod help;
 pub mod install_script_cmd;
 pub mod mcp;
+#[cfg(test)]
+mod mcp_context;
 pub mod probe_cmd;
 pub mod scaffold;
 pub mod session_cmd;
