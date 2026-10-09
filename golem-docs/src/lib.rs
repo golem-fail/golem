@@ -311,14 +311,53 @@ pub fn broken_links(docs: &Path, pages: &BTreeMap<String, String>) -> Vec<String
     out
 }
 
-/// Each part's address and the file the LLM reads: the `.llm.md` file
-/// when there is one, else the part.
-pub fn help_entries(src: &Path) -> io::Result<Vec<(String, PathBuf)>> {
-    Ok(pages(src)?
-        .into_iter()
-        .flat_map(|p| p.parts)
-        .map(|p| (p.address, p.llm.unwrap_or(p.path)))
-        .collect())
+/// A part as the MCP help serves it.
+#[derive(Debug, Clone)]
+pub struct HelpEntry {
+    /// e.g. `actions-reference/interaction/tap`.
+    pub address: String,
+    /// The page file, e.g. `actions-reference.md`.
+    pub page: String,
+    /// The anchor of the part's first heading in its page.
+    pub anchor: String,
+    /// The file the LLM reads: the `.llm.md` file when there is one, else
+    /// the part.
+    pub path: PathBuf,
+}
+
+impl Page {
+    /// Each part's first-heading anchor in the rendered page, in part order.
+    pub fn part_anchors(&self) -> Vec<String> {
+        let all = anchors(&self.render());
+        let mut at = 0;
+        self.parts
+            .iter()
+            .map(|p| {
+                let anchor = all.get(at).cloned().unwrap_or_default();
+                let toc = p.text.lines().any(|l| toc_depth(l).is_some());
+                at += headings(&p.text).len() + usize::from(toc);
+                anchor
+            })
+            .collect()
+    }
+}
+
+/// Every part under `src`, as the MCP help serves it.
+pub fn help_entries(src: &Path) -> io::Result<Vec<HelpEntry>> {
+    let mut out = Vec::new();
+    for page in pages(src)? {
+        let anchors = page.part_anchors();
+        let file = format!("{}.md", page.name);
+        for (part, anchor) in page.parts.into_iter().zip(anchors) {
+            out.push(HelpEntry {
+                address: part.address,
+                page: file.clone(),
+                anchor,
+                path: part.llm.unwrap_or(part.path),
+            });
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -397,9 +436,11 @@ mod tests {
         let entries = help_entries(&src).expect("entries");
         let _ = std::fs::remove_dir_all(&src);
 
-        let addresses: Vec<_> = entries.iter().map(|(a, _)| a.as_str()).collect();
+        let addresses: Vec<_> = entries.iter().map(|e| e.address.as_str()).collect();
         assert_eq!(addresses, ["p", "p/group", "p/group/one", "p/two"]);
-        assert!(entries[2].1.ends_with("10-one.llm.md"));
+        assert!(entries[2].path.ends_with("10-one.llm.md"));
+        let anchors: Vec<_> = entries.iter().map(|e| e.anchor.as_str()).collect();
+        assert_eq!(anchors, ["p", "group", "one-for-humans", "two"]);
         let page = pages[0].render();
         assert!(page.contains("### One, for humans"), "{page}");
         assert!(!page.contains("for the LLM"), "{page}");

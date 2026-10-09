@@ -9,12 +9,15 @@ fn main() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/src");
     println!("cargo:rerun-if-changed={}", src.display());
     let entries = golem_docs::help_entries(&src).expect("docs/src parts");
-    let mut out = String::from("pub static HELP_PARTS: &[(&str, &str)] = &[\n");
-    for (address, path) in entries {
-        let path = path.canonicalize().expect("a docs part path");
+    let mut out = String::from("pub static HELP_PARTS: &[HelpPart] = &[\n");
+    for e in entries {
+        let path = e.path.canonicalize().expect("a docs part path");
         let _ = writeln!(
             out,
-            "    ({address:?}, include_str!({:?})),",
+            "    HelpPart {{ address: {:?}, page: {:?}, anchor: {:?}, text: include_str!({:?}) }},",
+            e.address,
+            e.page,
+            e.anchor,
             path.display().to_string()
         );
     }

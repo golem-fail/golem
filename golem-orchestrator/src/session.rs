@@ -1610,6 +1610,17 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         Err(e) => return OpResult::Failed(format!("{e:#}")),
     };
     let timeout_ms = golem_runner::policy::effective_timeout(&step, work.base_timeout_ms);
+    // Read before the step runs: after a tap the element may be gone.
+    let text_alternative = if step.on_accessibility_label.is_some() {
+        match work.driver.get_hierarchy().await {
+            Ok((root, meta)) => {
+                golem_runner::probe::text_alternative(&root, meta.keyboard_height, &step)
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
     let Work {
         device,
         driver,
@@ -1671,14 +1682,20 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
     let mut toon = golem_report::toon::format_step_toon(&report)
         .trim_start()
         .to_string();
-    if let Some(warning) = passed
-        .then(|| slow_warning(report.duration_ms, timeout_ms))
-        .flatten()
-    {
+    let notes = [
+        passed
+            .then(|| slow_warning(report.duration_ms, timeout_ms))
+            .flatten(),
+        passed
+            .then(|| text_alternative.map(|text| label_hint(&text)))
+            .flatten(),
+        fix_line(&report.outcome),
+    ];
+    for note in notes.into_iter().flatten() {
         if !toon.ends_with('\n') {
             toon.push('\n');
         }
-        toon.push_str(&warning);
+        toon.push_str(&note);
         toon.push('\n');
     }
     OpResult::Act {
@@ -1866,6 +1883,24 @@ async fn draft_run(
 /// A warning for a step that passed in half its timeout or more: on a
 /// slower device or a busy host the same step can time out in `golem run`.
 /// It suggests about twice the time taken, rounded up to a second.
+/// A step that selected by `on_accessibility_label` where the visible
+/// text selects the same element.
+fn label_hint(text: &str) -> String {
+    format!(
+        "hint: on_text = {text:?} selects the same element; prefer it unless the test checks the accessibility label"
+    )
+}
+
+/// The usual fix for a failed or warned step's code.
+fn fix_line(outcome: &golem_report::StepOutcome) -> Option<String> {
+    let code = match outcome {
+        golem_report::StepOutcome::Failed { code, .. }
+        | golem_report::StepOutcome::Warning { code, .. } => *code,
+        _ => return None,
+    };
+    (code != golem_events::FailureCode::Uncoded).then(|| format!("fix: {}", code.fix()))
+}
+
 fn slow_warning(duration_ms: u64, timeout_ms: u64) -> Option<String> {
     if timeout_ms == 0 || duration_ms.saturating_mul(2) < timeout_ms {
         return None;
@@ -2623,6 +2658,34 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
         assert_eq!(
             slow_warning(9_000, 10_000).as_deref(),
             Some("warning: took 9s of its 10s timeout · consider timeout = 18000")
+        );
+    }
+
+    #[test]
+    fn a_failed_step_shows_the_fix_for_its_code() {
+        let failed = golem_report::StepOutcome::Failed {
+            message: "no match".into(),
+            code: golem_events::FailureCode::FlowElementNotFound,
+        };
+        assert_eq!(
+            fix_line(&failed),
+            Some(format!(
+                "fix: {}",
+                golem_events::FailureCode::FlowElementNotFound.fix()
+            ))
+        );
+        let uncoded = golem_report::StepOutcome::Failed {
+            message: "?".into(),
+            code: golem_events::FailureCode::Uncoded,
+        };
+        assert_eq!(fix_line(&uncoded), None);
+    }
+
+    #[test]
+    fn the_label_hint_names_the_text_selector() {
+        assert_eq!(
+            label_hint("Sign in"),
+            "hint: on_text = \"Sign in\" selects the same element; prefer it unless the test checks the accessibility label"
         );
     }
 

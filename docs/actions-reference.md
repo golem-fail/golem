@@ -78,6 +78,8 @@
 
 ## Interaction
 
+Touch and keyboard input on an element.
+
 ### `tap` — Tap an element
 
 Find an element matching the selectors and tap its center.
@@ -298,6 +300,8 @@ hides a step's target, golem dismisses the keyboard and looks again. Set
 
 ## Assertions
 
+Check what the screen shows. An assertion waits up to its timeout for the screen to match.
+
 ### `assert_visible` — Wait for / assert element exists
 
 Poll the hierarchy until an element matching the selectors is on screen, or `timeout` elapses (default 10s). Use a short `timeout` for instantaneous checks, a long one for waits. The assertion is driven by the selectors — add `on_enabled` / `on_checked` to assert state, not just presence.
@@ -329,6 +333,8 @@ Verify an alert/dialog is showing. Optionally match alert text with a glob patte
 
 ## Reading
 
+Read an element's text into a variable.
+
 ### `read` — Read element text
 
 Find an element and capture its text into a variable.
@@ -343,6 +349,8 @@ Find an element and capture its text into a variable.
 | `save_to` | Variable name to store the text value |
 
 ## App Lifecycle
+
+Start, stop and reset an app, and set its permissions.
 
 ### `launch` — Launch or foreground an app
 
@@ -435,6 +443,8 @@ goto = "wipe_via_app_ui"
 
 ## Device Controls
 
+Change device settings: dark mode, location, hardware buttons.
+
 ### `set_dark_mode` — Set dark mode
 
 Switch the device's system appearance to dark (`enabled = true`) or light (`enabled = false`).
@@ -477,6 +487,8 @@ An unsupported button fails the step.
 
 ## Capture
 
+Screenshots, screen recordings, and media files pushed to the device.
+
 ### `screenshot` — Take screenshot
 
 Capture the screen. With `path`, save it there; a relative path resolves from the directory where you run golem. Without `path`, the image is captured but not saved.
@@ -511,6 +523,8 @@ iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-
 
 ## Alerts
 
+Accept or dismiss a dialog from the app or the OS.
+
 ### `accept_alert` — Accept dialog
 
 Tap the positive button (OK, Yes, Allow) on the current alert. It also handles OS prompts, such as permission requests and "Open in …?" dialogs.
@@ -533,6 +547,8 @@ Tap the negative button (Cancel, No) on the current in-app alert. It may not rea
 The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a dialog that may not appear.
 
 ## External
+
+Work outside the screen: links, pushes, shell commands, email, fixtures, mixins and HTTP.
 
 ### `open_link` — Open URL or deep link
 
@@ -701,6 +717,8 @@ whole scenario as a child, use a [subflow](test-structure.md#subflow) instead.
 A non-2xx status fails the step.
 
 ## Browser
+
+Drive a host browser, for web state that the app depends on.
 
 Host-side browser automation, for flows whose mobile app depends on web state
 nothing else can reach — a supplier fulfilling an order through a portal with no
@@ -1027,6 +1045,8 @@ Identical to the local-storage pair, against `sessionStorage`.
 Optional. Every tab is closed when the flow ends; this hands one back sooner.
 
 ## Flow Control
+
+End the flow on purpose.
 
 ### `fail` — Fail the flow immediately
 

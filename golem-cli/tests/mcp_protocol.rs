@@ -81,7 +81,7 @@ async fn every_tool_works_against_a_stub_session() {
         "wait",
         "status",
         "cancel",
-        "actions_help",
+        "help",
         "draft_show",
         "draft_steps",
         "export_flow",
@@ -133,6 +133,10 @@ async fn every_tool_works_against_a_stub_session() {
     assert!(
         text_of(&c).contains("session open · android/Stub Device"),
         "{c}"
+    );
+    assert!(
+        c.to_string().contains("help() lists the docs"),
+        "an opened session SHALL point to help: {c}"
     );
 
     let (c, err) = call(&client, "tree", serde_json::json!({})).await;
@@ -188,17 +192,27 @@ async fn every_tool_works_against_a_stub_session() {
     let (c, _) = call(&client, "cancel", serde_json::json!({})).await;
     assert_eq!(text_of(&c), "nothing was running");
 
-    let (c, err) = call(&client, "actions_help", serde_json::json!({})).await;
+    let (c, err) = call(&client, "help", serde_json::json!({})).await;
     assert!(!err);
-    assert!(text_of(&c).contains("- tap: Tap an element"), "{c}");
+    assert!(text_of(&c).contains("- act: "), "{c}");
+    let (c, err) = call(&client, "help", serde_json::json!({ "topic": "act" })).await;
+    assert!(!err);
+    assert!(text_of(&c).contains("- interaction: "), "{c}");
     let (c, err) = call(
         &client,
-        "actions_help",
-        serde_json::json!({ "action": "type" }),
+        "help",
+        serde_json::json!({ "topic": "act", "item": "type" }),
     )
     .await;
     assert!(!err);
     assert!(text_of(&c).contains(r#"{ action = "type""#), "{c}");
+    let (c, err) = call(
+        &client,
+        "help",
+        serde_json::json!({ "topic": "act", "item": "explode" }),
+    )
+    .await;
+    assert!(err, "an unknown item SHALL be a tool error: {c}");
 
     let (c, err) = call(&client, "draft_show", serde_json::json!({})).await;
     assert!(!err, "{c}");

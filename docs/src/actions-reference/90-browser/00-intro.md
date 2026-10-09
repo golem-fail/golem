@@ -1,5 +1,7 @@
 ## Browser
 
+Drive a host browser, for web state that the app depends on.
+
 Host-side browser automation, for flows whose mobile app depends on web state
 nothing else can reach — a supplier fulfilling an order through a portal with no
 API, an admin console that flips a feature flag.

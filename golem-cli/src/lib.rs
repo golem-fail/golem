@@ -4,6 +4,7 @@ pub mod cli;
 pub mod dev_server;
 pub mod discovery;
 pub mod doctor;
+mod help;
 pub mod install_script_cmd;
 pub mod mcp;
 pub mod probe_cmd;
