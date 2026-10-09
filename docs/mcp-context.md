@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 347 |
-| Tool list (30 tools, as `tools/list` JSON) | 11967 |
-| Both, kept in context by most clients | 12314 |
+| Tool list (30 tools, as `tools/list` JSON) | 12020 |
+| Both, kept in context by most clients | 12367 |
 
 ## Instructions
 
@@ -154,7 +154,7 @@ Set [flow] fields of the draft.
 | `name` | string |  |
 | `start` | string | The first block. |
 | `tags` | array |  |
-| `vars` | object | Merged into [flow] vars. |
+| `vars` | object | Merged into [flow] vars, and set in the session for act. |
 
 ### `help`
 
@@ -220,7 +220,7 @@ Open a session on one device and app. A running device that fits wins; else gole
 | `stop_at` | string | With flow: stop before this step: block or block:step. |
 | `teardown` | boolean | With flow: false never runs its [[teardown]]. |
 | `type` | string | "phone" or "tablet". |
-| `vars` | object | With flow: variables, as golem run --var. |
+| `vars` | object | Variables, as golem run --var: act resolves ${name} from them. |
 
 ### `status`
 

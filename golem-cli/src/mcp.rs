@@ -178,7 +178,7 @@ pub struct OpenParams {
     pub break_on_failure: bool,
     /// With flow: false never runs its [[teardown]].
     pub teardown: Option<bool>,
-    /// With flow: variables, as golem run --var.
+    /// Variables, as golem run --var: act resolves ${name} from them.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
     /// The fake data's seed, as golem run --seed: replays a run's data.
     pub seed: Option<u64>,
@@ -231,7 +231,7 @@ pub struct WaitParams {
 pub struct FlowSetParams {
     pub name: Option<String>,
     pub tags: Option<Vec<String>>,
-    /// Merged into [flow] vars.
+    /// Merged into [flow] vars, and set in the session for act.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
     /// true: golem run without a path skips this flow.
     pub explicit_only: Option<bool>,

@@ -45,6 +45,8 @@ pub struct OpenRequest {
     pub boot: bool,
     /// Seed the fake data, as `golem run --seed` does, to replay a run.
     pub seed: Option<u64>,
+    /// Variables, as `golem run --var` sets them: above the flow's own.
+    pub vars: Vec<(String, String)>,
     /// Open on the device-free stub driver. Debug builds only, for the
     /// tests of session clients.
     pub stub: bool,
@@ -172,7 +174,6 @@ pub struct FlowOpen {
     pub break_on_failure: bool,
     /// Skip the flow's `[[teardown]]` on every way the session ends.
     pub no_teardown: bool,
-    pub vars: Vec<(String, String)>,
     /// Run the flow on the device-free stub driver. Debug builds only, for
     /// the tests.
     pub stub: bool,
@@ -1064,6 +1065,13 @@ async fn open(
         Ok((mut work, flow_report)) => {
             if req.flow.is_none() {
                 work.rng = golem_vars::seed::FakeRng::from_optional_seed(req.seed);
+                for (k, v) in &req.vars {
+                    work.vars.set_in_scope(
+                        golem_vars::ScopeLevel::Cli,
+                        k.clone(),
+                        golem_vars::VarValue::String(v.clone()),
+                    );
+                }
             }
             let bundle = if req.stub {
                 golem_driver::stub::STUB_BUNDLE_ID.to_string()
@@ -1225,7 +1233,7 @@ async fn open_flow(
         platform: Some(platform),
         stub_fail_on_runs: stub.then(Vec::new),
         seed: req.seed,
-        vars: f.vars.clone(),
+        vars: req.vars.clone(),
         output_dir: req.project_root.join(".golem/results"),
         project_root: req.project_root.clone(),
         project_apps: project.apps.clone(),
@@ -1527,7 +1535,10 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
             Ok(text) => OpResult::Draft(text),
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
-        Op::Edit(edit) => match edit.apply(&mut work.draft) {
+        Op::Edit(edit) => match edit
+            .apply(&mut work.draft)
+            .and_then(|r| set_flow_vars(work, edit).map(|()| r))
+        {
             Ok(None) => OpResult::Edited(format!(
                 "draft updated · next step goes at {}",
                 work.draft.describe_insertion()
@@ -1892,6 +1903,32 @@ async fn draft_run(
 /// A warning for a step that passed in half its timeout or more: on a
 /// slower device or a busy host the same step can time out in `golem run`.
 /// It suggests about twice the time taken, rounded up to a second.
+/// `flow_set(vars)` also sets the variables in the session, as the flow's
+/// own, so that `act` resolves them at once; a `${fake:…}` value draws
+/// from the session's seed, as `[flow.vars]` does in a run.
+fn set_flow_vars(work: &mut Work, edit: &DraftEdit) -> Result<()> {
+    let DraftEdit::FlowSet(crate::draft::FlowSet {
+        vars: Some(vars), ..
+    }) = edit
+    else {
+        return Ok(());
+    };
+    let mut pairs: Vec<(String, String)> = vars
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                v.as_str().map_or_else(|| v.to_string(), str::to_string),
+            )
+        })
+        .collect();
+    pairs.sort();
+    for (k, v) in golem_vars::evaluate::evaluate_generators(&pairs, &mut work.rng)? {
+        work.vars.set_in_scope(golem_vars::ScopeLevel::Flow, k, v);
+    }
+    Ok(())
+}
+
 /// A step that selected by `on_accessibility_label` where the visible
 /// text selects the same element.
 fn label_hint(text: &str) -> String {
@@ -2430,11 +2467,11 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                         .map(|s| golem_runner::context::StopAt::parse(s).expect("stop")),
                     break_on_failure,
                     no_teardown: false,
-                    vars: Vec::new(),
                     stub: true,
                 }),
                 boot: false,
                 seed: None,
+                vars: Vec::new(),
                 stub: false,
             },
             Arc::new(ResourceManager::new(
@@ -2447,6 +2484,10 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
 
     /// A stub session that takes its slot from `slots`.
     fn open_stub(slots: &Arc<Slots>) -> Session {
+        open_stub_with(slots, Vec::new())
+    }
+
+    fn open_stub_with(slots: &Arc<Slots>, vars: Vec<(String, String)>) -> Session {
         Session::start(
             OpenRequest {
                 query: TargetQuery::default(),
@@ -2456,6 +2497,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 flow: None,
                 boot: false,
                 seed: Some(42),
+                vars,
                 stub: true,
             },
             Arc::new(ResourceManager::new(
@@ -2474,6 +2516,56 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 ..
             })
         )
+    }
+
+    #[tokio::test]
+    async fn session_open_vars_resolve_in_act_without_a_flow() {
+        let slots = Arc::new(Slots::new(DEFAULT_MAX_SESSION_DEVICES));
+        let s = open_stub_with(&slots, vec![("target".into(), "Submit".into())]);
+        assert!(is_open(&s).await);
+        let step = run(
+            &s,
+            act(r#"{ action = "assert_visible", on_text = "${target}" }"#),
+        )
+        .await;
+        assert!(
+            matches!(step.result, OpResult::Act { passed: true, .. }),
+            "{step:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn flow_set_vars_resolve_in_act_and_the_draft_keeps_the_reference() {
+        let slots = Arc::new(Slots::new(DEFAULT_MAX_SESSION_DEVICES));
+        let s = open_stub(&slots);
+        assert!(is_open(&s).await);
+        let mut vars = serde_json::Map::new();
+        vars.insert("target".into(), serde_json::json!("Submit"));
+        let set = run(
+            &s,
+            Op::Edit(DraftEdit::FlowSet(crate::draft::FlowSet {
+                vars: Some(vars),
+                ..Default::default()
+            })),
+        )
+        .await;
+        assert!(matches!(set.result, OpResult::Edited(_)), "{set:?}");
+        let step = run(
+            &s,
+            act(r#"{ action = "assert_visible", on_text = "${target}" }"#),
+        )
+        .await;
+        assert!(
+            matches!(step.result, OpResult::Act { passed: true, .. }),
+            "{step:?}"
+        );
+        match run(&s, Op::DraftShow).await.result {
+            OpResult::Draft(text) => {
+                assert!(text.contains(r#"on_text = "${target}""#), "{text}");
+                assert!(text.contains(r#"target = "Submit""#), "{text}");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[tokio::test]

@@ -296,6 +296,19 @@ async fn open(msg: &serde_json::Value, home: &Home, resources: &Resources) -> se
             flow,
             boot: msg["boot"].as_bool().unwrap_or(true),
             seed: msg["seed"].as_u64(),
+            vars: msg["vars"]
+                .as_object()
+                .map(|m| {
+                    m.iter()
+                        .map(|(k, v)| {
+                            (
+                                k.clone(),
+                                v.as_str().map_or_else(|| v.to_string(), str::to_string),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             stub,
         },
         resource_mgr.clone(),
@@ -347,7 +360,7 @@ fn first_step(path: &std::path::Path) -> anyhow::Result<golem_runner::context::S
 }
 
 /// The flow part of a `session_open`: `flow`, `stop_at`, `run`,
-/// `break_on_failure`, `teardown` and `vars`.
+/// `break_on_failure` and `teardown`.
 /// A relative flow path is in the project, as `export_flow`'s is.
 fn parse_flow_open(
     msg: &serde_json::Value,
@@ -371,25 +384,11 @@ fn parse_flow_open(
         (None, Some(false)) => Some(first_step(&path)?),
         (None, _) => None,
     };
-    let vars = msg["vars"]
-        .as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        v.as_str().map_or_else(|| v.to_string(), str::to_string),
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
     Ok(Some(crate::session::FlowOpen {
         path,
         stop_at,
         break_on_failure: msg["break_on_failure"].as_bool().unwrap_or(false),
         no_teardown: msg["teardown"].as_bool() == Some(false),
-        vars,
         stub: cfg!(debug_assertions) && msg["stub"].as_bool() == Some(true),
     }))
 }
