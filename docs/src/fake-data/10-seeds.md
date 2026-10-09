@@ -3,7 +3,9 @@
 Generators draw from the run's random stream. Pass `--seed <N>` and every value
 is **reproducible** — the same seed replays the same data, so assertions on
 generated values stay stable. Without a seed, values are fresh each run, and the
-seed actually used is reported so any run can be replayed.
+seed actually used is reported so any run can be replayed. An MCP session takes
+the same seed: `session_open(seed = <N>)`. A `[flow] seed` in the flow file has
+no effect, and `golem run` warns about it.
 
 **Time-based generators track "now" *and* reproduce.** `fake:timestamp` and a
 card's expiry are anchored on a reference instant carried in the seed. A

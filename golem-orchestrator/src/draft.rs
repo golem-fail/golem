@@ -488,7 +488,6 @@ pub struct FlowSet {
     pub tags: Option<Vec<String>>,
     /// Merged into `[flow] vars`.
     pub vars: Option<serde_json::Map<String, serde_json::Value>>,
-    pub seed: Option<u64>,
     pub explicit_only: Option<bool>,
     pub start: Option<String>,
 }
@@ -514,12 +513,6 @@ impl Draft {
                 array.push(t.as_str());
             }
             flow.insert("tags", Item::Value(Value::Array(array)));
-        }
-        if let Some(seed) = set.seed {
-            flow.insert(
-                "seed",
-                toml_edit::value(i64::try_from(seed).context("seed is too large")?),
-            );
         }
         if let Some(explicit_only) = set.explicit_only {
             flow.insert("explicit_only", toml_edit::value(explicit_only));
@@ -1204,13 +1197,12 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             name: Some("Login, renamed".into()),
             tags: Some(vec!["smoke".into(), "auth".into()]),
             vars: Some(obj(serde_json::json!({ "email": "a@b.test" }))),
-            seed: Some(7),
             ..FlowSet::default()
         })
         .expect("flow_set");
         let want = INLINE.replace(
             "[flow]\nname = \"Login\"\n",
-            "[flow]\nname = \"Login, renamed\"\ntags = [\"smoke\", \"auth\"]\nseed = 7\nvars = { email = \"a@b.test\" }\n",
+            "[flow]\nname = \"Login, renamed\"\ntags = [\"smoke\", \"auth\"]\nvars = { email = \"a@b.test\" }\n",
         );
         assert_eq!(d.text(), want);
     }

@@ -180,6 +180,8 @@ pub struct OpenParams {
     pub teardown: Option<bool>,
     /// With flow: variables, as golem run --var.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
+    /// The fake data's seed, as golem run --seed: replays a run's data.
+    pub seed: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
@@ -231,8 +233,6 @@ pub struct FlowSetParams {
     pub tags: Option<Vec<String>>,
     /// Merged into [flow] vars.
     pub vars: Option<std::collections::BTreeMap<String, String>>,
-    /// The seed for fake: generators.
-    pub seed: Option<u64>,
     /// true: golem run without a path skips this flow.
     pub explicit_only: Option<bool>,
     /// The first block.
@@ -537,6 +537,7 @@ impl GolemMcp {
             "break_on_failure": p.break_on_failure,
             "teardown": p.teardown,
             "vars": p.vars,
+            "seed": p.seed,
             "wait_ms": self.soft_timeout().as_millis() as u64,
         });
         if self.options.stub {
@@ -791,7 +792,7 @@ impl GolemMcp {
     ) -> Result<CallToolResult, ErrorData> {
         self.edit(serde_json::json!({
             "edit": "flow_set", "name": p.name, "tags": p.tags, "vars": p.vars,
-            "seed": p.seed, "explicit_only": p.explicit_only, "start": p.start,
+            "explicit_only": p.explicit_only, "start": p.start,
         }))
         .await
     }

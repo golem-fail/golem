@@ -210,7 +210,7 @@ The server starts without device work.
 | `draft_steps(around?, context?, block?, limit?)` | The draft's steps near the cursor, or one block's steps, each with its `block:step` address and status |
 | `draft_run(restart?, stop_at?)` | Run the draft on the device without setup or teardown, from the start (`restart = true`) or from the cursor. Steps that pass become `✓`; the cursor goes where the run stops or fails |
 | `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, with the count of each status and the unverified steps |
-| `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
+| `flow_set(name?, tags?, vars?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
 | `apps_set(app)` | Add or replace a `[[flow.apps]]` entry: `bundle`, `devices`, `permissions`, `install_script` |
 | `block_begin(name, next?)` | Record the next steps into a block, creating it if needed |
 | `block_link(block, next?, branches?)` | Set a block's `next`, and add branches (`if_visible`, `if_not_visible` or `if_var`, then `goto`) |

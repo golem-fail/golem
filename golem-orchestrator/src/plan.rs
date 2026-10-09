@@ -349,6 +349,13 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
                 )
             }),
     );
+    if flow.flow.seed.is_some() {
+        warnings.push(format!(
+            "{}: `[flow] seed` is ignored. To replay a run's fake data, pass its seed to \
+             `golem run --seed`, or to MCP `session_open(seed)`.",
+            path.display()
+        ));
+    }
     warnings.extend(
         golem_parser::validation::lint_push_notification_phys(flow)
             .into_iter()
@@ -823,6 +830,21 @@ on_indx = 2
         ] {
             assert!(w.contains(needle), "warning SHALL contain {needle:?}: {w}");
         }
+    }
+
+    #[test]
+    fn lint_warnings_say_a_flow_seed_is_ignored() {
+        let flow = golem_parser::parse_flow(
+            "[flow]\nname = \"s\"\nseed = 42\n\n[[block]]\nname = \"b\"\nsteps = [{ action = \"tap\", on_text = \"Go\" }]\n",
+        )
+        .expect("a flow with a seed SHALL still parse");
+        let warnings = lint_warnings_for(Path::new("flows/s.test.toml"), &flow);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains("`[flow] seed` is ignored"),
+            "{warnings:?}"
+        );
+        assert!(warnings[0].contains("--seed"), "{warnings:?}");
     }
 
     /// A correct flow must stay silent — a lint that cries wolf on the
