@@ -19,11 +19,9 @@ Two rules make these behave the way a human reads layout:
   to **horizontally overlap** the anchor; `left_of`/`right_of` require **vertical
   overlap**. So "below the heading" means below *and in the heading's column* —
   an element in another column (e.g. a two-column tablet layout) is not matched.
-  A full-width anchor overlaps everything, so this is invisible in the common
-  case and only constrains narrow anchors. (Threshold: any positive overlap.)
+  Any positive overlap counts.
 - **Nearest-first.** Among matches, the one closest to the anchor (by gap along
   the relation's axis) comes first.
 
 The anchor must be **on-screen**. If it exists but is scrolled off, the
-relational match is treated as unresolved (empty) — which is the signal `within`
-uses to scroll the anchor into view first.
+relational match is treated as unresolved (empty).

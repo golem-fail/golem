@@ -1,8 +1,6 @@
 <!-- Generated from docs/src/actions-reference/ — edit the parts there, then run `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs`. -->
 # Actions Reference
 
-*Every word the golem knows.*
-
 ← [Back to README](../README.md) · See also [Test Structure](test-structure.md) for selectors, steps, and flow anatomy.
 
 ## Contents
@@ -91,19 +89,12 @@ Find an element matching the selectors and tap its center.
 { action = "tap", on_accessibility_label = "Increment" }
 ```
 
-Supports all selectors, `auto_scroll`, `timeout`, `if_fail`, `retry`.
-
-> **iOS timing note.** A `tap` is synthesised as `press(forDuration: 0.05)`
-> (50 ms), not a bare `tap()`. The bare call emits touch-up immediately after
-> touch-down, which a WebView can race-drop — leaving the click unfired. The
-> 50 ms hold makes XCUITest serialise down → hold → up reliably. The trade-off:
-> a page whose long-press recogniser triggers below ~50 ms may classify a
-> `tap` as a long-press. In that rare case use an explicit `long_press` (or a
-> coordinate tap) to disambiguate.
+On iOS a tap holds for about 50 ms. If the app reads that as a long press,
+use [`long_press`](#long_press--long-press-an-element) instead.
 
 ### `double_tap` — Double-tap an element
 
-Two rapid taps (40ms apart) at the element center.
+Two rapid taps at the element center.
 
 ```toml
 { action = "double_tap", on_text = "Zoom" }
@@ -114,10 +105,7 @@ Same selectors and options as `tap`.
 ### `type` — Type text into an element
 
 With a selector, taps the element to focus it, then types the `input`
-string. The selector is **optional**: with no selector, `type` sends the
-keystrokes to the currently focused field without tapping — useful for
-appending to the field the previous step left focused (the caret stays at
-the end), or for apps that respond to keypresses outside a text input.
+string. No selector = type into the focused field.
 
 ```toml
 { action = "type", on_text = "Email", input = "user@example.com" }
@@ -131,12 +119,9 @@ the end), or for apps that respond to keypresses outside a text input.
 
 ### `backspace` — Delete characters
 
-Deletes `count` characters from the **currently focused** text field. It
-takes **no selector** — `type` or `tap` the field
-first; the caret is left at the end of the text, so backspace removes from
-there. A selector is rejected: a tap-to-focus would re-place the caret at the
-tap point (mid-text on a filled field, deleting the wrong char), and there is
-no reliable cross-platform way to move the caret to the end.
+Deletes `count` characters before the caret in the **currently focused** text
+field. `type` or `tap` the field first; `type` leaves the caret at the end of
+the text. A selector is an error.
 
 ```toml
 { action = "type", on_text = "Email", input = "me@example.comm" },
@@ -163,17 +148,11 @@ remove a specific number of characters.
 
 Takes no fields.
 
-golem reads the focused field's length from the hierarchy and deletes exactly
-that many characters, so no companion-side "select all" is involved. Two
-consequences worth knowing:
-
-- **The caret must be at the end.** Deletes only remove what is behind the
-  caret, so a caret left mid-field can't reach the tail. golem detects this and
-  fails the step telling you to re-focus, rather than silently half-clearing.
-  `type` leaves the caret at the end; a `tap` places it where you tapped.
+- **The caret must be at the end.** If it isn't, the step fails and tells you
+  to re-focus the field. `type` leaves the caret at the end; a `tap` places it
+  where you tapped.
 - **A field whose contents exactly equal its placeholder reads as empty** and is
-  left alone. An empty field reports its placeholder as the text the user sees,
-  and the two cases are indistinguishable on the wire.
+  left alone.
 
 ### `long_press` — Long press an element
 
@@ -197,9 +176,9 @@ Press and hold at the element center.
 { action = "swipe", direction = "left" }
 
 # Path-based with selectors — start and end resolve to element centres
-{ action = "swipe", start = { text = "Slider" }, end = { text = "Max" }, duration = 500 }
+{ action = "swipe", start = { text = "Slider" }, end = { text = "Max" } }
 
-# Anchored to a container (no `within` for swipe — use `start` / `end`)
+# Anchored to a container: end is 30% of the element's height below its centre
 { action = "swipe",
   start = { below = "Scroll List" },
   end   = { below = "Scroll List", y = "30%" } }
@@ -208,12 +187,12 @@ Press and hold at the element center.
 | Field | Description |
 |-------|-------------|
 | `direction` | `"up"`, `"down"`, `"left"`, `"right"` |
-| `start` | Start position (SelectorGroup: text / accessibility_label / below / above + optional x / y offsets) |
-| `end` | End position (SelectorGroup) |
-| `points` | Array of intermediate points for complex paths |
-| `duration` | Gesture duration in ms |
+| `start` | Start position: a selector group (`text` / `accessibility_label` / `below` / `above`) plus optional `x` / `y`. With an element, `x` / `y` offset from its centre: pixels, or `"N%"` of the element's size (`"50%"` = edge). Without an element, `x` / `y` are screen pixels or `"N%"` of the screen. |
+| `end` | End position, same format as `start` |
+| `points` | Array of intermediate points, same format as `start` |
+| `duration` | Gesture duration in ms for a path of 3+ points (default `300`); a 2-point swipe ignores it |
 
-> **Note:** `within` is **not** consumed by `swipe` — only by `scroll` and by any step with `auto_scroll = true`. Use `start` / `end` to anchor a swipe inside a container. A `within` set on a swipe (or other unsupported action) emits a `[lint]` warning at plan time; a future `--validate` mode will reject it as an error.
+`within` is ignored on swipe (lint warning); use `start` / `end`.
 
 ### `scroll` — Scroll until element found
 
@@ -229,10 +208,11 @@ Scrolls the page (or a container) until the target element is visible.
 
 | Field | Default | Description |
 |-------|---------|-------------|
+| `to` | — | Target element: a selector group (alias of `on`), or use the flat `on_*` selectors |
 | `direction` | `"down"` | Scroll direction |
 | `within` | — | Constrain scrolling to an element's bounds |
 | `max_scrolls` | — | Limit iterations |
-| `timeout` | — | Overall scroll timeout |
+| `timeout` | 8× `step_timeout` (40 s); 12× (60 s) with `within` | Overall scroll timeout |
 
 ### `pinch` — Pinch zoom gesture
 
@@ -241,12 +221,15 @@ Two-finger pinch centered on an element or coordinates.
 ```toml
 { action = "pinch", scale = 2.0, duration = 500 }     # Zoom in
 { action = "pinch", scale = 0.5, duration = 500 }     # Zoom out
+{ action = "pinch", on_text = "Map", scale = 2.0 }    # Centered on an element
+{ action = "pinch", x = "50%", y = 300, scale = 0.5 } # Centered on a point
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `scale` | — | `>1.0` = zoom in, `<1.0` = zoom out |
 | `velocity` | `5.0` | Scale factor per second |
+| center | screen centre | An element (`on_text`, `on_accessibility_label` or `on = { … }`), or `x` / `y` as pixels or `"N%"` of the screen. With an element, `x` / `y` are ignored. |
 
 ### `gesture` — Multi-touch gesture
 
@@ -272,14 +255,19 @@ points = [
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `fingers` | — | Array of finger paths, each with `points` |
-| `duration` | `300` | Duration per finger (ms) |
+| `fingers` | — | Array of finger paths, each with `points` (at least 2 per finger) |
+| `duration` | `300` | Time (ms) each finger takes to travel its whole path |
+
+A point is `x` / `y` screen coordinates (pixels or `"N%"` of the screen), or a
+selector group (`text` / `accessibility_label` / `below` / `above`) plus
+optional `x` / `y` offsets from the element's centre (pixels, or `"N%"` of the
+element's size).
 
 ### `rotate` — Rotate gesture
 
 A two-finger **rotation gesture** centered on an element (or screen). `rotate` is a multi-touch gesture, **not** a device-orientation change — programmatic device orientation is [unsupported](unsupported.md).
 
-Two fingers orbit a center point — resolved from an element selector, or from explicit `x` / `y` coordinates.
+Two fingers orbit a center point: an element (`on_text`, `on_accessibility_label` or `on = { … }`), or `x` / `y` as pixels or `"N%"` of the screen. Without either, the screen centre. With an element, `x` / `y` are ignored.
 
 ```toml
 { action = "rotate", on_text = "Map", rotation = 90.0 }    # rotate 90° clockwise
@@ -299,25 +287,14 @@ Dismiss the on-screen keyboard. No-op if no keyboard is visible.
 { action = "hide_keyboard" }
 ```
 
-> **Automatic keyboard recovery.** You rarely need an explicit
-> `hide_keyboard` to reach a field the keyboard covers. During element
-> resolution, if a target is absent from the keyboard-aware viewport but
-> present in the unfiltered tree (i.e. the soft keyboard has occluded it),
-> the resolver dismisses the keyboard **once per resolve** and re-polls. On
-> Android the IME hide is animated and asynchronous, so the resolver waits
-> for the reported keyboard height to return to 0 (with a timeout) before
-> retrying, so the retap lands on the now-revealed field rather than the
-> still-sliding panel.
->
-> Set `keep_keyboard = true` on a step to opt out — of this recovery and of
-> the pre-tap dismissal both. Use it when the step targets a keyboard
-> accessory/toolbar control that acts on the focused field, or when the test
-> is *about* keyboard-up state. An occluded target then stays unresolved
-> rather than being reached by dismissing the keyboard:
->
-> ```toml
-> { action = "tap", on_text = "Done", keep_keyboard = true }
-> ```
+You rarely need it to reach a field the keyboard covers: when the keyboard
+hides a step's target, golem dismisses the keyboard and looks again. Set
+`keep_keyboard = true` on a step to opt out (see
+[Step Options](test-structure.md#step-options)):
+
+```toml
+{ action = "tap", on_text = "Done", keep_keyboard = true }
+```
 
 ## Assertions
 
@@ -328,16 +305,8 @@ Poll the hierarchy until an element matching the selectors is on screen, or `tim
 ```toml
 { action = "assert_visible", on_text = "Welcome" }
 { action = "assert_visible", on_text = "1", on_below = "Counter" }
-{ action = "assert_visible", on = { text = "Submit", traits = ["button"] } }
-
-# With auto-scroll for off-screen elements
-{ action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 }
-
-# Check enabled state
-{ action = "assert_visible", on_text = "Submit", on_enabled = true }
-
-# Check checked state
-{ action = "assert_visible", on_accessibility_label = "agree-checkbox", on_checked = true }
+{ action = "assert_visible", on_text = "Submit", on_enabled = true }                    # state, not just presence
+{ action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 }  # off-screen element
 ```
 
 ### `assert_not_visible` — Wait for / assert element absent
@@ -392,14 +361,14 @@ Bring an app to the foreground. Does not restart if already running. Use `restar
 | `restart` | `false` | Stop app first, then launch fresh |
 | `permissions` | — | Per-launch permission map (see [App permissions](#app-permissions)) |
 
-A `permissions` map on `launch` **always cold-starts** the app, even without `restart = true`: iOS TCC only applies a grant to a *stopped* process, so golem stops the app, applies the grant/revoke, then launches fresh. A soft foreground would read stale permission state. Use this to flip a permission mid-flow — relaunching with a new map is the supported way to test both the granted and denied paths in one flow.
+A `permissions` map always cold-starts the app, even without `restart = true`. Use it to flip a permission mid-flow and test both the granted and denied paths in one flow.
 
 ### App permissions
 
-Permissions are declared **on a launch**, not as a standalone step — the platform tooling (`pm grant` on Android, `simctl privacy` / `applesimutils` on iOS sims) terminates the app to apply a grant, so a permission change is inseparable from a (re)launch. Two places take the same `permission = mode` map:
+Permissions are set **on a launch**, not as a standalone step. Two places take the same `permission = mode` map:
 
 - **`[[flow.apps]].permissions`** — the baseline, applied once before the app's first launch (see [Test structure](test-structure.md#launch-time-permissions)).
-- **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow (a cold start, as above).
+- **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow. It always cold-starts the app.
 
 ```toml
 { action = "launch", app = "app", permissions = { camera = "allow" } }
@@ -408,45 +377,34 @@ Permissions are declared **on a launch**, not as a standalone step — the platf
 # ... exercise the denied path ...
 ```
 
-> **Migrating from `grant_permission` / `revoke_permission`:** those step-level actions were removed. Replace `{ action = "grant_permission", app = "app", permission = "camera" }` immediately followed by a `launch` with a single `{ action = "launch", app = "app", permissions = { camera = "allow" } }` (`"deny"` for revoke). They always forced an app restart anyway, so this is a faithful — and shorter — replacement.
-
 **Modes.** The value is a mode, not just on/off:
 
 | Mode | Applies to | Meaning |
 |------|-----------|---------|
-| `allow` / `deny` | any permission | grant / **explicit-denied** (`simctl privacy revoke` / `pm revoke`, not a not-determined reset). For `location`, `allow` grants foreground ("when in use"). |
-| `always` | `location` only | grant background + foreground location (the broader grant; `allow` is foreground-only) |
+| `allow` / `deny` | any permission | grant / explicitly denied (not reset to "not asked"). For `location`, `allow` grants foreground ("when in use"). |
+| `always` | `location` only | grant background + foreground location |
 | `limited` | `photos` only | partial photo-library access (iOS limited library; Android 14+ user-selected subset) |
 
 An invalid mode for a permission (e.g. `camera = "limited"`) is a parse-time error.
 
-**Cross-platform permissions.** One vocabulary, mapped per platform:
+**Permissions.** One vocabulary for both platforms: `camera`, `microphone`, `location`, `contacts`, `calendar`, `photos`. An unknown name is an error. On Android you can also pass a full `android.permission.*` string.
 
-| Permission | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
-|------------|-----------------------------------------------------------|------------------------|
-| `camera`   | `CAMERA`                                                  | `camera`               |
-| `microphone` | `RECORD_AUDIO`                                          | `microphone`           |
-| `location` | `ACCESS_FINE_LOCATION` (+ `ACCESS_BACKGROUND_LOCATION` when `= "always"`) | `location` / `location-always` (per mode) |
-| `contacts` | `READ_CONTACTS`                                           | `contacts`             |
-| `calendar` | `READ_CALENDAR`                                           | `calendar`             |
-| `photos`   | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+; `= "limited"` grants only the latter) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` (via `applesimutils` — see below) |
+Your app's `AndroidManifest.xml` must declare every permission you grant. For `photos`, declare `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED` and `READ_EXTERNAL_STORAGE`: golem grants a different one per Android version. `location = "always"` also needs `ACCESS_BACKGROUND_LOCATION`.
 
-Unknown permissions fail loudly (no silent passthrough). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+> **iOS `photos` needs [`applesimutils`](https://github.com/wix/AppleSimulatorUtils)** (`brew tap wix/brew && brew install wix/brew/applesimutils`) to grant without a prompt; `golem doctor` flags it if missing. Without it golem warns and the app prompts at runtime, so add `{ action = "accept_alert", if_fail = "ignore" }` after the step that triggers photo access.
 
-> **iOS photos needs `applesimutils`.** `simctl privacy grant photos` accepts the command but does **not** suppress the iOS 26 full-library-access prompt, so golem routes `photos` pre-grants through [`applesimutils`](https://github.com/wix/AppleSimulatorUtils) (`brew tap wix/brew && brew install wix/brew/applesimutils`), which does. It's optional-but-recommended — `golem doctor` flags it. Without it, a `photos` grant can't be applied prompt-free: golem warns and the app prompts at runtime, so add `{ action = "accept_alert", if_fail = "ignore" }` after the step that triggers photo access. All other iOS permissions use `simctl privacy` and need no extra tooling.
-
-> **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
+> **Notifications can't be pre-granted.** Both platforms show a system dialog the first time the app asks. Trigger the request from the app and accept the dialog:
 >
 > ```toml
 > { action = "tap", on_text = "Enable Notifications" }
 > { action = "accept_alert", if_fail = "ignore" }
 > ```
 >
-> `if_fail = "ignore"` keeps the step happy on warm sims/emulators that have already recorded the user's prior choice and skipped the prompt.
-
-Your app's `AndroidManifest.xml` must declare every permission you intend to grant — `pm grant` rejects undeclared permissions, and all three photo permissions need declaring because the shorthand resolves to a different one per SDK level. golem's own test app is generated by Tauri, which has no config for `<uses-permission>`, so it re-applies the declarations after generation in `scripts/patch-test-app-projects.sh` — that script's list is the set the shorthands above expand to.
+> `if_fail = "ignore"` covers a device that already recorded a choice and skips the prompt.
 
 ### `stop` — Terminate an app
+
+Terminate the app's process. The next `launch` starts it fresh.
 
 ```toml
 { action = "stop", app = "app" }
@@ -460,7 +418,7 @@ Clear the app's storage and cache.
 { action = "clear_data", app = "app" }
 ```
 
-**Simulator-only on iOS; Android works everywhere.** The iOS path clears the app's data container through a host filesystem path that `simctl` hands back, which only exists for a simulator — on a physical device the container lives on the device and `get_app_container` returns a path the host can't reach. Android uses `adb shell pm clear`, which is device-agnostic. On a physical iPhone the driver bails pointing at this paragraph.
+iOS: simulator only; gate on `_hardware`. Android works on emulators and physical devices.
 
 To reset state on a physical iOS device, either drive the app's own "sign out" / "reset" affordance, or reinstall it (the install script runs before every flow; `GOLEM_REBUILD` forces a fresh build). Gate the step on device class if one flow must cover both:
 
@@ -479,18 +437,24 @@ goto = "wipe_via_app_ui"
 
 ### `set_dark_mode` — Set dark mode
 
+Switch the device's system appearance to dark (`enabled = true`) or light (`enabled = false`).
+
 ```toml
 { action = "set_dark_mode", enabled = true }
 { action = "set_dark_mode", enabled = false }
 ```
 
+iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch).
+
 ### `set_location` — Set GPS coordinates
+
+Set the device's GPS position to `latitude` / `longitude` (decimal degrees).
 
 ```toml
 { action = "set_location", latitude = 37.7749, longitude = -122.4194 }
 ```
 
-> **The iOS device controls are simulator-backed.** `set_dark_mode`, `set_location` and `add_media` all drive `simctl`, which only addresses simulators — on a physical iPhone the driver refuses, naming the action and the device, rather than surfacing a raw `simctl` error. Gate the step on `_hardware` if a flow has to run on both shapes. The Android equivalents go through `adb` and work on emulators and physical devices alike.
+iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch).
 
 ### `press` — Press hardware button
 
@@ -502,23 +466,20 @@ goto = "wipe_via_app_ui"
 
 **Supported buttons (platform-specific):**
 
-| `button`      | Android (`input keyevent`) | iOS (`/press` → `XCUIDevice.press`) |
-|---------------|----------------------------|-------------------------------------|
-| `home`        | ✓ `HOME`                   | ✓ `.home`                           |
-| `back`        | ✓ `BACK`                   | — (no hardware back button)         |
-| `volume_up`   | ✓ `VOLUME_UP`              | —                                   |
-| `volume_down` | ✓ `VOLUME_DOWN`            | —                                   |
+| `button`      | Android | iOS |
+|---------------|---------|-----|
+| `home`        | ✓       | ✓   |
+| `back`        | ✓       | —   |
+| `volume_up`   | ✓       | —   |
+| `volume_down` | ✓       | —   |
 
-An unsupported button errors at action time. On iOS only `home` exists;
-`simctl ui … home` was dropped in Xcode 26, so golem drives it through the
-companion's `/press` endpoint (`XCUIDevice.shared.press(.home)`), the
-version-stable path.
-
-App permissions are declared on a launch, not as a device control — see [App permissions](#app-permissions) under App Lifecycle.
+An unsupported button fails the step.
 
 ## Capture
 
 ### `screenshot` — Take screenshot
+
+Capture the screen. With `path`, save it there; a relative path resolves from the directory where you run golem. Without `path`, the image is captured but not saved.
 
 ```toml
 { action = "screenshot" }
@@ -527,10 +488,7 @@ App permissions are declared on a launch, not as a device control — see [App p
 
 ### Screen recording — per-block via `record = true`
 
-Recording is configured at the project, flow, or block level — not as a
-step action. Cascade (highest priority wins): `--no-record` >
-`--record` > `[[block]] record` > `[flow.options] record` >
-`[options] record`. Output: `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
+Recording is configured with `record`, not as a step action (see [Flow Options](test-structure.md#flow-options)). Highest priority wins: `--no-record` > `--record` > `[[block]] record` > `[flow.options] record` > `[options] record`. Output: `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
 
 ```toml
 [[block]]
@@ -539,37 +497,46 @@ record = true     # record this block only
 steps = [ ... ]
 ```
 
-**Simulator-only on iOS** — `simctl io recordVideo` has no physical-device equivalent, so a recording request on a real iPhone fails. It degrades rather than breaking the run: the block records a warning and its steps execute normally, just without a video. Android records on physical devices and emulators alike. Tracked in [#60](https://github.com/golem-fail/golem/issues/60).
+iOS: simulator only. On a physical iPhone the block logs a warning and runs without a video.
 
 ### `add_media` — Push media to device
+
+Add an image or video file to the device's photo library. golem checks the file's contents: anything other than an image (png, jpeg, gif, webp, heif, bmp, tiff) or a video (mp4, mov) fails with P462. A relative `path` resolves from the directory where you run golem.
 
 ```toml
 { action = "add_media", path = "fixtures/photo.jpg" }
 ```
 
-**Simulator-only on iOS** — `simctl addmedia` can't address a physical device, so the driver refuses there; put the fixture in the device's library ahead of the run, or gate the step on `_hardware`. Android uses `adb push` plus a media-scanner broadcast and works on physical devices and emulators alike. See [Device Controls](#device-controls) for the other two simulator-backed actions.
+iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch), or put the file in the device's library before the run.
 
 ## Alerts
 
 ### `accept_alert` — Accept dialog
 
-Tap the positive button (OK, Yes) on the current alert.
+Tap the positive button (OK, Yes, Allow) on the current alert. It also handles OS prompts, such as permission requests and "Open in …?" dialogs.
 
 ```toml
 { action = "accept_alert" }
+{ action = "accept_alert", if_fail = "ignore" }   # prompt may not appear
 ```
+
+The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a prompt that may not appear.
 
 ### `dismiss_alert` — Dismiss dialog
 
-Tap the negative button (Cancel, No) on the current alert.
+Tap the negative button (Cancel, No) on the current in-app alert. It may not reach an OS prompt (an iOS permission dialog, for example); `accept_alert` handles those.
 
 ```toml
 { action = "dismiss_alert" }
 ```
 
+The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a dialog that may not appear.
+
 ## External
 
 ### `open_link` — Open URL or deep link
+
+Open a URL or deep link on the device.
 
 ```toml
 { action = "open_link", url = "https://example.com" }
@@ -578,55 +545,28 @@ Tap the negative button (Cancel, No) on the current alert.
 
 ### `push_notification` — Deliver a push to the app under test
 
-```toml
-{ action = "push_notification", title = "New message", body = "Hello!", app = "app" }
-```
+Deliver a push notification to the app under test without APNs or FCM. The app's own receive bridge must forward the payload into its UI or state.
 
-The action injects a push payload via the platform's developer backdoor — `xcrun simctl push` on iOS, `adb shell am broadcast` on Android — so the app's notification receiver fires in foreground. The app's own receive bridge (UNUserNotificationCenterDelegate on iOS, BroadcastReceiver on Android) handles the payload; the action exercises that bridge end-to-end without requiring real APNS / FCM infrastructure.
+```toml
+{ action = "push_notification", title = "New message", body = "Hello!" }
+```
 
 | Field | Description |
 |-------|-------------|
-| `app` | App registry name from `golem.toml` (required — resolves the bundle id) |
-| `title` | Notification title (whitespace and quotes safe on both platforms) |
+| `title` | Notification title |
 | `body` | Notification body |
-| `payload` | Optional structured payload — merged into the APNS dict as `custom` on iOS; ignored on Android |
+| `payload` | Optional. iOS only: a string holding a JSON object, added to the APNs payload as `custom`. Ignored on Android. |
+| `app` | Optional. Delivery always goes to the app under test; `app` only tells the lint below which app's `hardware` to check. |
 
-**Sim/emu only on both platforms.** Physical-device push delivery needs real APNS / FCM (provisioning keys, device tokens, network) which is outside this action's scope. On a physical device the driver bails with a clear error pointing at this paragraph.
+**Simulator and emulator only, on both platforms**; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch). On real hardware, send the push from your own backend with `post_http` in the `real` branch.
 
-Compose physical-device push tests by branching on `_hardware` and posting to your own backend via `*_http`:
+A flow whose app may run on real hardware (`hardware` unset or including `"real"`) gets a `[lint]` warning; set `hardware = "virtual"` to silence it.
 
-```toml
-[[block]]
-name = "trigger_push_virtual"
-[[block.branch]]
-if_var = "_hardware"
-equals = "virtual"
-goto = "send_via_simctl"
-[[block.branch]]
-if_var = "_hardware"
-equals = "real"
-goto = "send_via_backend"
-
-[[block]]
-name = "send_via_simctl"
-steps = [
-  { action = "push_notification", title = "Test", body = "Hello", app = "app" },
-]
-
-[[block]]
-name = "send_via_backend"
-steps = [
-  { action = "post_http", url = "https://your-test-backend/push", body = "{\"device\":\"${device.udid}\",\"body\":\"Hello\"}" },
-]
-```
-
-A `[lint]` warning fires at parse time when a flow uses `push_notification` and any of its apps could be scheduled onto real hardware — `hardware = "real"`, `["virtual", "real"]`, or `hardware` left unspecified (which accepts either shape). It's an early breadcrumb that the action will fail on the phys branch unless you wrap it in `branch` like above. Pin `hardware = "virtual"` to state that the flow is sim/emu-only and silence it.
-
-**Receive bridge.** The action only delivers — the app must wire up its native receiver to forward the payload into its UI / state. See `test-app-b/ios/GolemTestB/GolemTestBApp.swift` and `test-app-b/android/app/src/main/java/fail/golem/testb/MainActivity.kt` for a minimal SwiftUI / Compose implementation. Tauri 2.x's `@tauri-apps/plugin-notification` is for *local* notifications (app schedules its own); it doesn't expose remote-push delivery to JS today, which is why `test-app` (Tauri) doesn't carry the bridge and `test-app-b` (native) does.
+**Receive bridge.** The app must handle the delivered push: a `UNUserNotificationCenterDelegate` on iOS, and on Android a `BroadcastReceiver` for the action `<package>.PUSH_NOTIFICATION` that reads the `title` and `body` string extras. See `test-app-b/ios/GolemTestB/GolemTestBApp.swift` and `test-app-b/android/app/src/main/java/fail/golem/testb/MainActivity.kt` for a minimal implementation.
 
 ### `bash` — Run shell command
 
-Execute a command via `sh -c`. Fails if exit code is non-zero.
+Execute a command via `sh -c`. A non-zero exit code fails the step and reports the command's stderr. `save_to` stores stdout, trimmed.
 
 ```toml
 { action = "bash", run = "curl -s https://api.example.com/reset" }
@@ -643,6 +583,8 @@ Execute a script relative to the project root or flow directory. Rejects path tr
 ```
 
 Leading `/` = relative to project root. No leading `/` = relative to flow file directory.
+
+The script runs directly, not through a shell, so it must be executable (`chmod +x`) and start with a shebang. A non-zero exit code fails the step and reports stderr. `save_to` stores an object: `${output.stdout}` (trimmed) and `${output.exit_code}`.
 
 ### `create_inbox` — Provision a disposable email inbox
 
@@ -677,11 +619,9 @@ Saved object fields: `address` (= `user`, the email address), `user`, `pass`,
 Poll an inbox over IMAP (TLS) and wait for an email matching the filters, with
 optional regex extraction.
 
-`inbox` is **not** the email address — it is the **name of a variable** holding
-an inbox object (the one [`create_inbox`](#create_inbox--provision-a-disposable-email-inbox)
-saved, or a `[flow.vars]` table you wrote). The action reads four fields from
-that object by name: `imap_host`, `imap_port`, `user`, `pass`. So
-`create_inbox { save_to = "inbox" }` pairs with `await_email { inbox = "inbox" }`.
+`inbox` is the **name of a variable** holding an inbox object, not the email
+address. See [`create_inbox`](#create_inbox--provision-a-disposable-email-inbox)
+for how the two pair up.
 
 ```toml
 # Pairs with create_inbox { save_to = "inbox" }:
@@ -695,7 +635,7 @@ that object by name: `imap_host`, `imap_port`, `user`, `pass`. So
 | Field | Default | Description |
 |-------|---------|-------------|
 | `inbox` | — | Name of a variable holding an inbox object; the `imap_host` / `imap_port` / `user` / `pass` fields on it are used to connect |
-| `recipient` | — | Glob filter for the recipient address. Spelled `recipient`, not `to`: a step-level `to` is the grouped selector alias |
+| `recipient` | — | Glob filter for the recipient address (not `to`) |
 | `subject` | `"*"` | Subject glob pattern |
 | `extract` | — | Table of field names to regex patterns |
 | `timeout` | `30000` | Polling timeout (ms) |
@@ -714,6 +654,11 @@ Load variables from a TOML file in `__fixtures__/` (a `[vars]` table). See
 { action = "load_fixture", fixture = "users", as = "test_user" }
 # Access as ${test_user.email}, ${test_user.name}, etc.
 ```
+
+| Field | Description |
+|-------|-------------|
+| `fixture` | Fixture name: `__fixtures__/<fixture>.toml`, looked up from the flow's directory up to the project root (required) |
+| `as` | Variable name the fixture's vars are stored under (required) |
 
 ### `load_mixin` — Inline a reusable step sequence
 
@@ -746,7 +691,14 @@ whole scenario as a child, use a [subflow](test-structure.md#subflow) instead.
 { action = "get_http", url = "https://api.example.com/data", headers = { Authorization = "Bearer ${token}" } }
 ```
 
-Fails on non-2xx status codes.
+| Field | Description |
+|-------|-------------|
+| `url` | Request URL (required) |
+| `body` | Request body, as a string |
+| `headers` | Table of header name to string value |
+| `save_to` | Variable to store the response body under, as a string |
+
+A non-2xx status fails the step.
 
 ## Browser
 
@@ -755,36 +707,35 @@ nothing else can reach — a supplier fulfilling an order through a portal with 
 API, an admin console that flips a feature flag.
 
 **The browser is instrumentation, not the system under test.** The mobile app is
-what golem tests, so browser steps are not judged for coverage, never feed the
-accessibility audit, and assert on DOM presence rather than the
-[visible tree](architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints)
-— what a headless browser "sees" is not what a user sees, and pretending
-otherwise would be theatre.
+what golem tests, so browser steps are not judged for coverage and never feed
+the accessibility audit. They check **DOM presence, not visibility**: an element
+hidden by CSS still counts as present, unlike the mobile
+[visible tree](architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints).
 
 Targeting is **CSS only**. golem's mobile selectors (`text`, `on_below`, and the
 rest) describe a native view tree and are ignored by a browser step.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `selector` | — | CSS selector, passed to the page verbatim. Required by every action except `browse_navigate` and `browse_screenshot` |
+| `selector` | — | CSS selector, passed to the page verbatim. Required by the actions that act on an element: `browse_tap`, `browse_type`, `browse_read`, `browse_select`, `browse_scroll_to`, and the `browse_assert_*` and `browse_wait_*` actions |
 | `index` | `0` | Which match to act on when the selector matches several, 0-based — same numbering as [`on_index`](selectors.md) |
 | `session` | `_default` | `[context:]tab`. Tabs share a context's cookies, so a login carries between them; separate contexts share nothing |
-| `timeout` | `5000` | How long to keep looking for the element, in ms |
+| `timeout` | `5000`; `10000` for `browse_wait_exists` and `browse_wait_not_exists` | How long to keep looking for the element, in ms |
 
-**Requires a Chrome or Chromium on the host.** golem drives whichever one it
-finds (`$CHROME` points it at a specific binary) and never downloads one. macOS:
-install Google Chrome normally. Debian/Ubuntu: `apt install chromium` or
-Google's `google-chrome-stable` package. A suite whose flows contain no
-`browse_*` step never looks for one, so a mobile-only run needs nothing
-installed — and a browser flow on a machine without one fails at plan time with
-`H424`, before any device boots.
+**Requires a Chrome or Chromium on the host**, or `$CHROME` pointing at one;
+golem never downloads one. A browser flow on a machine without one fails at plan
+time with `H424`, before any device boots. A suite with no `browse_*` step never
+looks for one.
 Each flow gets its own browser, so concurrent flows never share cookies or
 storage, and it is closed when the flow ends whether it passed or failed.
+
+Storage and cookies need a real origin: a page reached by `browse_navigate` has
+one, but `about:blank` doesn't, and storage and cookie steps fail there.
 
 **Tabs and contexts.** `session = "admin"` opens a named tab. `session =
 "tenantB:admin"` opens that tab in a separate **context** — its own cookie jar —
 which is what the same site logged in as two different users at once requires,
-since tabs deliberately share a login:
+since tabs share a login:
 
 ```toml
 { action = "browse_navigate", url = "${portal}", session = "tenantA:main" }
@@ -792,10 +743,9 @@ since tabs deliberately share a login:
 # tenantA and tenantB can now hold different sessions on the same domain
 ```
 
-Contexts are created on first use and closed with the flow. Labels are
-flow-local, so two flows using the same name are already separate browsers. `:`
-is the separator, so neither label may contain one. There is no sticky context:
-a step without the prefix uses the flow's default one.
+Contexts are created on first use and closed with the flow. `:` is the
+separator, so neither label may contain one. There is no sticky context: a step
+without the prefix uses the flow's default one.
 
 ### `browse_navigate` — Load a URL
 
@@ -860,9 +810,10 @@ focus happened to be.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `attribute` | — | Read this attribute instead of the element's text. Useful when the rendered text is formatted for humans (`£14.99`) and the page already carries the value you want (`data-total="1499"`) |
+| `attribute` | — | Read this attribute instead of the element's text, e.g. `data-total="1499"` where the text says `£14.99` |
+| `save_to` | — | Variable to save the value in |
 
-Fails if the element has no such attribute, rather than saving an empty string.
+Fails with `F404` if the element has no such attribute, rather than saving an empty string.
 
 ### `browse_screenshot` — Capture the tab
 
@@ -889,8 +840,7 @@ Waits up to `timeout` for the element to appear. Fails with `F404` if it never d
 ```
 
 Checks once and fails with `F409` if the element is there. It does **not** wait
-for something to disappear — that's `browse_wait_not`; retrying here would spend
-the whole timeout confirming every absence, which is the case that usually passes.
+for something to disappear — that's `browse_wait_not_exists`.
 
 ### `browse_assert_text` — The element says what you expect
 
@@ -916,14 +866,8 @@ the page actually said.
 { action = "browse_wait_exists", selector = "#receipt", timeout = 30000 }
 ```
 
-Polls until the element is in the DOM. Default `timeout` is 10000ms here — a
-wait is an explicit "this may take a while", unlike the incidental lookup an
-ordinary action does.
-
-Running out reports `F408` (step timeout), not `F404`: a wait that expires means
-the page never got where the flow expected, while a failed
-`browse_assert_exists` means the page is wrong. Both poll identically; they
-differ in what the report tells you afterwards.
+Polls until the element is in the DOM. Default `timeout` is 10000ms. Running out
+fails with `F408` (step timeout), not `F404`.
 
 ### `browse_wait_not_exists` — Wait for an element to disappear
 
@@ -931,13 +875,9 @@ differ in what the report tells you afterwards.
 { action = "browse_wait_not_exists", selector = ".spinner" }
 ```
 
-The one thing no assertion does: `browse_assert_not_exists` answers "is it gone
-now", this answers "let it finish going". Spinners, toasts and progress rows are
-the reason it exists.
-
-These wait on **DOM presence**, not visibility — an element hidden by CSS still
-counts as present. Browser steps are instrumentation, and visibility judgements
-belong to the mobile app under test.
+Polls until the element is gone from the DOM. Default `timeout` is 10000ms.
+Running out fails with `F408`. To check absence once without waiting, use
+`browse_assert_not_exists`.
 
 ### `browse_scroll_by` — Scroll by a distance
 
@@ -952,15 +892,6 @@ belong to the mobile app under test.
 | `direction` | `"down"` | `up`, `down`, `left` or `right` — same values and default as the mobile `swipe`/`scroll` actions |
 | `amount` | `300` | Distance in CSS pixels |
 | `container` | — | Scroll this element instead of the window |
-
-Named after the DOM's `scrollBy`, and **not** called `browse_scroll`: the mobile
-`scroll` action keeps swiping until an element appears, and that search has no
-meaning here — a CSS selector reaches an element whether or not it's on screen.
-`_by` and `_to` say which of the two jobs each action does.
-
-`container` rather than `selector`, because every other browser action uses
-`selector` for the element the step acts on; here the scrolled element is the
-scenery, not the subject.
 
 ### `browse_scroll_to` — Bring an element into view
 
@@ -1007,8 +938,7 @@ declared.
 The script body runs inside an async function: `return` what you want to save,
 and `await` is available for anything the page has to fetch.
 
-Golem variables are interpolated into `script` but **not** into `file`: a shared
-helper shouldn't change meaning depending on which flow imported it. Both are
+Golem variables are interpolated into `script` but **not** into `file`. Both are
 JavaScript, not TypeScript.
 
 ### `browse_mcp_list_tools` — List the page's WebMCP tools
@@ -1033,20 +963,15 @@ with argument schemas. Saved as an object keyed by tool name, so
 | `tool` | — | Tool name, as listed by the page. Required |
 | `arguments` | `{}` | Inline table passed to the tool as JSON. Golem `${…}` variables resolve inside it |
 
-Driving a page's declared tools beats clicking through its UI where they exist:
-the page states its own contract, so the flow isn't coupled to a layout that may
-be redesigned next quarter. A tool the page doesn't register fails with `F404`.
+A tool the page doesn't register fails with `F404`.
 
 The `{ content: [{ type: "text", … }] }` envelope MCP tools return is unwrapped
 — a flow gets the answer, not the scaffolding — and a result that is itself JSON
 nests, so `${receipt.order_id}` works.
 
-**Availability.** WebMCP ships switched off. golem turns it on automatically for
-flows containing a `browse_mcp_*` step (it launches the browser, so nothing
-needs toggling in `chrome://flags`), and leaves it off otherwise, since an
-experimental browser feature changes what every page can feature-detect. It also
-needs a **secure origin**: an `https://` or `localhost` page. A browser too old
-to support it fails with `H505`.
+**Availability.** golem enables WebMCP automatically for flows that contain a
+`browse_mcp_*` step. It needs an `https://` or `localhost` page. A browser too
+old to support it fails with `H505`.
 
 ### `browse_set_cookie` / `browse_get_cookie` — Cookies
 
@@ -1063,9 +988,8 @@ to support it fails with `H505`.
 | `domain` | current page | Restrict the cookie to a domain |
 | `path` | current page | Restrict the cookie to a path |
 
-These go through CDP, not `document.cookie` — which is the point: the cookie a
-portal login hands out is usually `HttpOnly`, and script can neither read nor
-write those. A `browse_get_cookie` for a name that isn't set fails with `F404`.
+`browse_get_cookie` reads `HttpOnly` cookies too. A `browse_get_cookie` for a
+name that isn't set fails with `F404`.
 
 ### `browse_set_local_storage` / `browse_get_local_storage` — Local storage
 
@@ -1092,9 +1016,6 @@ with `F404`.
 ```
 
 Identical to the local-storage pair, against `sessionStorage`.
-
-Storage and cookies need a real origin: a page reached by `browse_navigate` has
-one, but `about:blank` doesn't, and both will fail there.
 
 ### `browse_close` — Close a tab early
 

@@ -12,7 +12,8 @@ Scrolls the page (or a container) until the target element is visible.
 
 | Field | Default | Description |
 |-------|---------|-------------|
+| `to` | — | Target element: a selector group (alias of `on`), or use the flat `on_*` selectors |
 | `direction` | `"down"` | Scroll direction |
 | `within` | — | Constrain scrolling to an element's bounds |
 | `max_scrolls` | — | Limit iterations |
-| `timeout` | — | Overall scroll timeout |
+| `timeout` | 8× `step_timeout` (40 s); 12× (60 s) with `within` | Overall scroll timeout |

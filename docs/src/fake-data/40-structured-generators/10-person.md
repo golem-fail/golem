@@ -100,7 +100,7 @@ just means that name has no stored Hanja.
 
 #### Parameters
 
-Three things are configurable, each overridable independently:
+Four parameters, each overridable independently:
 
 | Parameter | Sets | Example |
 |-----------|------|---------|
@@ -138,9 +138,9 @@ u = "${fake:person(local=[ascii, diacritics_fr, diacritics_pt]).given}"
 
 #### Per-country behaviour
 
-`country` presets live in the bundled locale data. The bracketed
-lists below are literal token lists — the same syntax you'd pass to `name=` /
-`reading=` / `local=`. A few:
+The bracketed lists below are literal token lists — the same syntax you'd pass
+to `name=` / `reading=` / `local=`. Every supported country is listed. A
+`country` not in the table is not an error: it behaves like no country.
 
 | `country` | `local` repertoire | primary `name` | `reading` |
 |-----------|--------------------|----------------|-----------|
@@ -157,7 +157,7 @@ lists below are literal token lists — the same syntax you'd pass to `name=` /
 | ES / MX | `ascii`, `diacritics_es` | `[local, ascii]` | — |
 | BR | `ascii`, `diacritics_pt` | `[local, ascii]` | — |
 | SE | `ascii`, `diacritics_sv` | `[local, ascii]` | — |
-| IE / NZ / PL / LT / NL | `ascii`, `diacritics_<lang>` | `[local, ascii]` | — |
+| IE / NZ / PL / LT / NL | `ascii`, `diacritics_<lang>` (ga / mi / pl / lt / nl) | `[local, ascii]` | — |
 | BE | `ascii` + French/Dutch/German accents | `[local, ascii]` | — |
 | US / GB / AU / ZA / SG | `ascii` | `[local, ascii]` | — |
 | (none) | accepts everything | `[native]` | — |

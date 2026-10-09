@@ -12,5 +12,5 @@ selector grammar. Two robust idioms for an inner list:
 { action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
 ```
 
-See [`min_matches`](#min_matches--the-container-of-repeated-items) above and
+See [`min_matches`](#min_matches--the-container-of-repeated-items) and
 [Actions Reference → scroll](actions-reference.md) for the full action.

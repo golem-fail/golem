@@ -9,12 +9,5 @@ Find an element matching the selectors and tap its center.
 { action = "tap", on_accessibility_label = "Increment" }
 ```
 
-Supports all selectors, `auto_scroll`, `timeout`, `if_fail`, `retry`.
-
-> **iOS timing note.** A `tap` is synthesised as `press(forDuration: 0.05)`
-> (50 ms), not a bare `tap()`. The bare call emits touch-up immediately after
-> touch-down, which a WebView can race-drop — leaving the click unfired. The
-> 50 ms hold makes XCUITest serialise down → hold → up reliably. The trade-off:
-> a page whose long-press recogniser triggers below ~50 ms may classify a
-> `tap` as a long-press. In that rare case use an explicit `long_press` (or a
-> coordinate tap) to disambiguate.
+On iOS a tap holds for about 50 ms. If the app reads that as a long press,
+use [`long_press`](#long_press--long-press-an-element) instead.

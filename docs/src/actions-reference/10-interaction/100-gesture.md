@@ -22,5 +22,10 @@ points = [
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `fingers` | — | Array of finger paths, each with `points` |
-| `duration` | `300` | Duration per finger (ms) |
+| `fingers` | — | Array of finger paths, each with `points` (at least 2 per finger) |
+| `duration` | `300` | Time (ms) each finger takes to travel its whole path |
+
+A point is `x` / `y` screen coordinates (pixels or `"N%"` of the screen), or a
+selector group (`text` / `accessibility_label` / `below` / `above`) plus
+optional `x` / `y` offsets from the element's centre (pixels, or `"N%"` of the
+element's size).

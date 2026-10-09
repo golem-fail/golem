@@ -20,8 +20,7 @@ steps = [
 ```
 
 Only the `for_each` block repeats — surrounding blocks run once, and the
-repeating block re-enters per row (`block:0`, `block:1`, … in step labels and
-recordings). An empty `[[data]]` table runs the block zero times.
+repeating block re-enters per row. An empty `[[data]]` table runs the block zero times.
 
 Iteration is **block-level only**: rows parameterise steps inside a flow, not
 whole flows. The block re-enters without relaunching the app, so a row that

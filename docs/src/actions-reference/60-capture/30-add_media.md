@@ -1,7 +1,9 @@
 ### `add_media` — Push media to device
 
+Add an image or video file to the device's photo library. golem checks the file's contents: anything other than an image (png, jpeg, gif, webp, heif, bmp, tiff) or a video (mp4, mov) fails with P462. A relative `path` resolves from the directory where you run golem.
+
 ```toml
 { action = "add_media", path = "fixtures/photo.jpg" }
 ```
 
-**Simulator-only on iOS** — `simctl addmedia` can't address a physical device, so the driver refuses there; put the fixture in the device's library ahead of the run, or gate the step on `_hardware`. Android uses `adb push` plus a media-scanner broadcast and works on physical devices and emulators alike. See [Device Controls](#device-controls) for the other two simulator-backed actions.
+iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch), or put the file in the device's library before the run.

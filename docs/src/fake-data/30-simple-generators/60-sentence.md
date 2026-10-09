@@ -9,10 +9,9 @@ comment / description fields. Default is **lorem ipsum**.
 
 `fake:sentence(language=ja)` → `古いゴーレムが石を砕く。`,
 `fake:sentence(language=fr)` → `Le gardien garde la pierre.` Sentences are
-golem-myth-themed (clay, stone, guardians) for amusement, script-correct
+golem-myth-themed (clay, stone, guardians), script-correct
 (CJK/Thai join without spaces, Arabic/Hebrew are right-to-left), and
 seed-reproducible.
 
 Grammar is deliberately simplified, and some less-common-script languages are
-machine-authored pending native review — see the [roadmap](roadmap.md) if a
-language's realism matters for your test.
+machine-authored pending native review.

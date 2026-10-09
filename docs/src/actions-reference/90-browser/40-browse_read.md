@@ -7,6 +7,7 @@
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `attribute` | — | Read this attribute instead of the element's text. Useful when the rendered text is formatted for humans (`£14.99`) and the page already carries the value you want (`data-total="1499"`) |
+| `attribute` | — | Read this attribute instead of the element's text, e.g. `data-total="1499"` where the text says `£14.99` |
+| `save_to` | — | Variable to save the value in |
 
-Fails if the element has no such attribute, rather than saving an empty string.
+Fails with `F404` if the element has no such attribute, rather than saving an empty string.

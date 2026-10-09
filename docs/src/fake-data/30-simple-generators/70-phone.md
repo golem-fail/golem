@@ -9,9 +9,3 @@
 
 Chain it off an address to keep them consistent:
 `phone = "${fake:phone(country=${addr.country_code})}"`.
-
-> **City / postcode / street** are not standalone generators. Use
-> [`fake:address`](#address) dot-notation — `${fake:address.city}`,
-> `${fake:address.postcode}`, `${fake:address.street}` — so all the parts of an
-> address stay consistent (same city). For names, use
-> [`fake:person`](#person).

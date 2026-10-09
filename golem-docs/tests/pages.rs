@@ -16,10 +16,39 @@ fn rendered() -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The error code registry part, from `FailureCode`.
+fn registry() -> String {
+    use golem_events::FailureCode;
+    let mut out = String::from(
+        "## Registry\n\n\
+         <!-- Generated from FailureCode in golem-events/src/code.rs (meaning, fix). -->\n\n\
+         | Code | Meaning | Fix |\n|------|---------|-----|\n",
+    );
+    for code in FailureCode::ALL {
+        out.push_str(&format!(
+            "| `{}` | {} | {} |\n",
+            code.fragment(),
+            code.meaning(),
+            code.fix()
+        ));
+    }
+    out
+}
+
+const REGISTRY_PART: &str = "src/error-codes/10-registry.md";
+
 #[test]
 fn each_generated_page_matches_its_parts() {
     let update = std::env::var_os("GOLEM_UPDATE_DOCS").is_some();
     let mut stale = Vec::new();
+    let part = docs().join(REGISTRY_PART);
+    if std::fs::read_to_string(&part).ok() != Some(registry()) {
+        if update {
+            std::fs::write(&part, registry()).expect("write the registry part");
+        } else {
+            stale.push(REGISTRY_PART.to_string());
+        }
+    }
     for (file, text) in rendered() {
         let path = docs().join(&file);
         if std::fs::read_to_string(&path).ok().as_deref() == Some(text.as_str()) {
@@ -33,8 +62,9 @@ fn each_generated_page_matches_its_parts() {
     }
     assert!(
         stale.is_empty(),
-        "docs/{stale:?} differ from docs/src. Edit the parts in docs/src, not the page, \
-         then run: GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs"
+        "docs/{stale:?} differ from their source. Edit the parts in docs/src (the error \
+         code registry: FailureCode), not the page, then run: \
+         GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs"
     );
 }
 

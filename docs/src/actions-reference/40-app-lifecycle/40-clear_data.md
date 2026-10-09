@@ -6,7 +6,7 @@ Clear the app's storage and cache.
 { action = "clear_data", app = "app" }
 ```
 
-**Simulator-only on iOS; Android works everywhere.** The iOS path clears the app's data container through a host filesystem path that `simctl` hands back, which only exists for a simulator — on a physical device the container lives on the device and `get_app_container` returns a path the host can't reach. Android uses `adb shell pm clear`, which is device-agnostic. On a physical iPhone the driver bails pointing at this paragraph.
+iOS: simulator only; gate on `_hardware`. Android works on emulators and physical devices.
 
 To reset state on a physical iOS device, either drive the app's own "sign out" / "reset" affordance, or reinstall it (the install script runs before every flow; `GOLEM_REBUILD` forces a fresh build). Gate the step on device class if one flow must cover both:
 

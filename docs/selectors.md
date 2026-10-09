@@ -7,7 +7,7 @@
 
 A selector describes *which* on-screen element a step targets. golem resolves it
 against the **visible tree** — the elements a human can actually see (clipped to
-ancestor containers; see the [visibility model](architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints)).
+ancestor containers).
 The same selector grammar is used everywhere an element is named: `tap`,
 `assert_visible`, `read`, `scroll`'s `to`/`within`, swipe points, etc.
 
@@ -32,16 +32,12 @@ The same selector grammar is used everywhere an element is named: `tap`,
 { action = "tap", on_text = "Submit", on_below = "Counter" }
 ```
 
-**Grouped** (`on = { … }`, also `to = { … }` / `within = { … }`) for anything
-with traits, containment, or nested anchors:
+**Grouped** (`on = { … }`, also `to = { … }` / `within = { … }`), required for
+`traits`, `contains`, `inside`, and nested anchors:
 
 ```toml
 { action = "tap", on = { text = "Submit", below = "Counter", enabled = true } }
 ```
-
-The grouped form is required for `traits`, `contains`, `inside`, and nested
-anchors; the flat form covers `text`/`accessibility_label`/`index`/state/the four
-directionals.
 
 ## Core selectors
 
@@ -51,8 +47,6 @@ directionals.
 | `on_accessibility_label` | `accessibility_label` | The element's accessibility label (aria-label, Android `contentDescription`) or its identifier (iOS `accessibilityIdentifier`, Android `resource-id`). `golem tree` shows these as `label=` and `id=`. **See the guidance below — prefer `text`.** |
 | `on_index` | `index` | The Nth match (0-based) after all other filters. |
 
-### Prefer visible `text`; use `accessibility_label` sparingly
-
 **What counts as text.** `text` is the text the platform reports as visible.
 When an element has no text of its own, its accessibility label is its text,
 on both platforms. Thus an icon-only button labelled `Close` matches
@@ -60,19 +54,16 @@ on both platforms. Thus an icon-only button labelled `Close` matches
 exception: its label describes a picture, so it is never text. In a webview,
 `text` is the DOM text only.
 
-golem's premise is **testing like a human** — a human reads and taps *visible
-text*, not an accessibility identifier they can't see. So default to `on_text`
-(or a positional/`contains` selector). Reach for `on_accessibility_label` only
-when:
+### Prefer visible `text`; use `accessibility_label` sparingly
 
-1. **You are explicitly testing the accessibility label itself** — e.g.
+Default to `on_text` (or a positional/`contains` selector). Use
+`on_accessibility_label` only:
+
+1. **When the test is about the accessibility label itself** — e.g.
    validating screen-reader semantics / a11y compliance. Here the label *is* the
    thing under test.
-2. **As a throwaway shortcut** to *navigate* to the part you actually want to
-   test, when the element you're tapping isn't itself the subject of the
-   assertion (e.g. opening a menu by its stable `menu-toggle` id so you can get
-   to the screen you care about). You're not testing the label, just using it to
-   get somewhere.
+2. **To navigate to the screen under test, when the tapped element is not what
+   the step checks** — e.g. opening a menu by its stable `menu-toggle` id.
 
 Outside those cases, an `accessibility_label` selector tests something the user
 never perceives, and silently passes even if the visible text is wrong. When in
@@ -84,13 +75,12 @@ doubt, use `text`.
 |----------|-------------|---------|
 | `on_enabled` | `enabled` | Enabled state (`true`/`false`). |
 | `on_checked` | `checked` | Checked/selected state (`true`/`false`). |
-| `on_clickable` | `clickable` | Clickability. |
+| `on_clickable` | `clickable` | Clickable state (`true`/`false`). |
 
 ## Traits
 
 Computed predicates on an element's geometry and content. All listed traits in a
-selector must hold (AND). Traits are coordinate/content-derived and
-cross-platform — they don't encode platform element types.
+selector must hold (AND).
 
 ```toml
 { action = "assert_visible", on = { text = "Submit", traits = ["button", "wide"] } }
@@ -128,20 +118,17 @@ Two rules make these behave the way a human reads layout:
   to **horizontally overlap** the anchor; `left_of`/`right_of` require **vertical
   overlap**. So "below the heading" means below *and in the heading's column* —
   an element in another column (e.g. a two-column tablet layout) is not matched.
-  A full-width anchor overlaps everything, so this is invisible in the common
-  case and only constrains narrow anchors. (Threshold: any positive overlap.)
+  Any positive overlap counts.
 - **Nearest-first.** Among matches, the one closest to the anchor (by gap along
   the relation's axis) comes first.
 
 The anchor must be **on-screen**. If it exists but is scrolled off, the
-relational match is treated as unresolved (empty) — which is the signal `within`
-uses to scroll the anchor into view first.
+relational match is treated as unresolved (empty).
 
 ## Geometric containment: `contains` / `inside`
 
-Select by spatial nesting — coordinate-based, *not* DOM structure (golem
-deliberately does not expose parent/child tree queries; a human perceives
-positions, not the document tree).
+Select by spatial nesting — coordinate-based, *not* DOM structure. There is no
+parent/child selector.
 
 | Grouped key | Keeps elements whose bounds… |
 |-------------|------------------------------|
@@ -155,31 +142,27 @@ positions, not the document tree).
 { action = "assert_visible", on = { text = "Item 0", inside = { accessibility_label = "section-scroll-list" } } }
 ```
 
-`contains` excludes the anchor itself (an element trivially contains itself) and
-coincident zero-margin wrappers, and resolves **smallest-enclosing first**.
+`contains` excludes the anchor itself and a wrapper with exactly the anchor's
+bounds, and resolves **smallest-enclosing first**.
 
 ### `min_matches` — the container of *repeated* items
 
 The smallest box enclosing a *single* item is often a per-item wrapper (a
-`<li>`, a list cell), not the scrollable list one level up. To target the
+`<li>`, a list cell), not the list one level up. To target the
 **container of several repeated items**, give the `contains` group form a
 `min_matches`:
 
 ```toml
-# the smallest element that encloses ≥2 "Row *" matches — i.e. the list,
-# not a single row's wrapper. The idiomatic way to scope a scroll to a list:
-{ action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
+# the smallest element that encloses ≥2 "Row *" matches — the list, not one row's wrapper
+{ action = "assert_visible", on = { contains = { text = "Row *", min_matches = 2 } } }
 ```
 
 Semantics: *the smallest visible element whose bounds enclose ≥ `min_matches`
-elements matching the anchor.* A human recognises a list by **repetition**
-(several similar items grouped), not by invisible scrollability — so this keeps
-`contains` purely about what's visible. It counts only **visible** matches
-(off-screen items are filtered), so the result is the scroll region's on-screen
-box. `min_matches` defaults to `1` (today's smallest-single-enclosing
-behaviour) and must be `1`–`100` (a larger value is rejected at parse time;
-2–3 is all you ever need). `min_matches` is valid **only** on `contains` — it is
-meaningless, and unwritable, elsewhere.
+elements matching the anchor.* It counts only **visible** matches
+(off-screen items are filtered), so the result is the list's on-screen
+box. `min_matches` defaults to `1` and must be `1`–`100` (a larger value is
+rejected at parse time). `min_matches` is valid **only** on `contains`. To scope
+a scroll to a list this way, see [`within`](#within-scoping-a-scroll).
 
 > If a list is so short that only one item is visible, `min_matches = 2` can't
 > resolve it — but neither could a human see it's a scrollable list. Make the
@@ -188,7 +171,7 @@ meaningless, and unwritable, elsewhere.
 ## Nesting and chaining
 
 **Nested anchors** — a relational/containment anchor can itself be a full
-selector group (one level), not just bare text:
+selector group, not just bare text. The anchor is its group's first match:
 
 ```toml
 { action = "tap", on = { text = "Left", below = { text = "Nested Layout", traits = ["has_text"] } } }
@@ -208,14 +191,14 @@ resolution order is:
 
 Genuine ties (e.g. a row of equal-distance icons under a full-width heading)
 resolve by pre-order — golem does **not** guess; disambiguate with `index` or an
-extra predicate. The pre-order tie-break also keeps `--seed` replay deterministic.
+extra predicate.
 
 ## Occlusion-aware tapping
 
 The visible tree tells golem what's *clipped or off-screen*, but not what's *covered*
 by something painted on top (a sticky header, a `z-index` overlay). So golem
 **hit-tests** the target before tapping and **routes around** an occluder: a plain
-`tap` lands on the first clear sample point (centre → arms → corners), so a button
+`tap` lands on the first clear sample point, so a button
 whose centre sits under a sticky header still gets hit on a clear edge. The routed
 coordinate shows in the `--verbose` `element_resolved` substep (`tap=(x,y)`).
 
@@ -229,8 +212,7 @@ Two guarantees:
   regardless of what's covering the element.
 
 This detects layout/paint occlusion only — an element under the OS status bar is a
-separate, system-level concern. For *how* the hit-test computes paint order on each
-platform, see [Architecture → occlusion & hit-testing](architecture.md#occlusion--hit-testing).
+separate, system-level concern.
 
 ## `within` (scoping a scroll)
 
@@ -246,27 +228,24 @@ selector grammar. Two robust idioms for an inner list:
 { action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
 ```
 
-See [`min_matches`](#min_matches--the-container-of-repeated-items) above and
+See [`min_matches`](#min_matches--the-container-of-repeated-items) and
 [Actions Reference → scroll](actions-reference.md) for the full action.
 
 ## Canvas-rendered UI (Compose, Compose Multiplatform, Flutter)
 
 Jetpack Compose, Compose Multiplatform and Flutter draw the whole UI into one
-platform view. They do not appear to golem as one opaque leaf, the way a WebView
-without enrichment does. Each framework copies its semantics tree into the
-platform accessibility tree, so golem sees one node for each widget. Text
-selectors, relational selectors and viewport filtering work on these nodes.
+platform view. Each framework copies its semantics tree into the platform
+accessibility tree, so golem sees one node for each widget. Text selectors,
+relational selectors and viewport filtering work on these nodes.
 
 What changes is *which* annotation reaches golem, and how coarse the tree is.
-The facts below come from Jetpack Compose (`test-app-b`), Compose Multiplatform
-1.11 (`test-app-k`) and Flutter 3.47 (`test-app-d`), on Android API 36 and
-iOS 26.
+The facts below were checked with Jetpack Compose, Compose Multiplatform 1.11
+and Flutter 3.47, on Android API 36 and iOS 26.
 
 ### Version floors
 
 - **Compose Multiplatform 1.8.0 or later on iOS.** From 1.8.0 the Compose
-  accessibility tree syncs to iOS automatically. Version 1.7.3 and earlier
-  needed `AccessibilitySyncOptions`, which 1.8.0 removed.
+  accessibility tree syncs to iOS automatically.
 - **Flutter 3.19 or later** for `Semantics(identifier:)`.
 
 ### Which annotation reaches golem
@@ -276,15 +255,13 @@ iOS 26.
 | Compose `contentDescription` | `accessibility_label`, on its own node, which has no other text, so the description is also that node's `text`. The visible text stays a separate text node. | Merged into the element's text. A button with text `+` and description `Increment` reads `"Increment, +"`. On a `Text`, the description **replaces** the visible text. |
 | Compose `Modifier.testTag` | Identifier (`resource-id`), only with `testTagsAsResourceId = true` on an ancestor. | Identifier (`accessibilityIdentifier`), with no opt-in. |
 | Flutter `Semantics(identifier:)` | Identifier (`resource-id`). | Identifier (`accessibilityIdentifier`). |
-| Flutter widget text (`Text`, button text) | The label; golem reads it as `text` (see [What counts as text](#prefer-visible-text-use-accessibility_label-sparingly)). | `text` |
+| Flutter widget text (`Text`, button text) | The label; golem reads it as `text` (see [What counts as text](#core-selectors)). | `text` |
 | Visible text | `text` | `text` |
 
-The `accessibility_label` selector matches the label or the identifier. The a11y
-audit counts only the label as an accessible name, because a screen reader never
-announces an identifier.
+The `accessibility_label` selector matches the label or the identifier.
 
-Visible text is the one path that works the same on both platforms. Use it, as
-[above](#prefer-visible-text-use-accessibility_label-sparingly). Do not put a
+Visible text is the one path that works the same on both platforms. Use it (see
+[Prefer visible `text`](#prefer-visible-text-use-accessibility_label-sparingly)). Do not put a
 `contentDescription` on a `Text` whose value a step checks, because on iOS the
 step then reads the description.
 
@@ -354,14 +331,10 @@ because the Android container has no text. Anchor on a child's text, or on a
 heading, instead.
 
 On Flutter, a merged child has no node of its own. Select the container by its
-joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. golem has no parent/child selector (there is no `child_of`).
-`inside` and `contains` are geometric, so a coarse tree does not change them.
+joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. `inside`
+and `contains` are geometric, so a coarse tree does not change them.
 
 ### Flutter
 
-Flutter creates semantics for its standard widgets (`Text`, `Icon` with a
-`semanticLabel`, Material buttons, text fields). A custom widget, for example a
-`GestureDetector` on a `Container` or a `CustomPaint`, exposes nothing until you
-wrap it in `Semantics`. Thus semantics are opt-in for each custom widget. This
-is a bigger task than on Compose, where most interactive modifiers add
-semantics.
+A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
+`CustomPaint`) is invisible to golem until you wrap it in `Semantics`.

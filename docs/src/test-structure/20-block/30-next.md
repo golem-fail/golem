@@ -1,6 +1,6 @@
 ### Block `next`
 
-Jump to a named block after completion (instead of falling through):
+Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
 
 ```toml
 [[block]]

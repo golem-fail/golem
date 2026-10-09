@@ -6,5 +6,8 @@ description = "Builds the user docs pages from the parts in docs/src."
 
 [dependencies]
 
+[dev-dependencies]
+golem-events = { path = "../golem-events" }
+
 [lints]
 workspace = true

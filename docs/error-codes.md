@@ -35,45 +35,50 @@ Codes appear in every output format:
 
 ## Registry
 
-| Code | Meaning |
-|------|---------|
-| `F400` | Explicit `fail` action invoked |
-| `F404` | Element not found within timeout |
-| `F405` | Element exists but off-screen / scroll exhausted |
-| `F408` | Step exceeded its timeout |
-| `F409` | `assert_not_visible`: element still present |
-| `F412` | Assertion mismatch (alert / text) |
-| `F417` | Alert/dialog present but interaction failed |
-| `F424` | External action failed (bash / run / http / await_email) |
-| `F504` | Flow `max_runtime` exceeded |
-| `F508` | `max_steps` exceeded |
-| `P400` | Unknown action keyword |
-| `P404` | Missing reference — block, sub-flow, or fixture |
-| `P422` | Required param missing or invalid (incl. gesture geometry, empty selector) |
-| `P450` | Variable syntax/type error, unknown generator |
-| `P460` | Flow file parse / mixin failure |
-| `P461` | Suite device-constraint unsatisfiable |
-| `A403` | Install script path traversal blocked |
-| `A404` | Install script / bundle not found |
-| `A408` | Install timed out |
-| `A500` | Install failed (non-zero exit) |
-| `A501` | The app is showing a React Native error overlay (native redbox or JS LogBox) instead of its UI. Fix the error the message names; reported instead of letting it read as a missing selector |
-| `A502` | App state query failed (post-install verify) |
-| `A503` | App launch / stop failed |
-| `D404` | Device not found / discovery failed |
-| `D408` | Device boot timeout |
-| `D409` | Device busy / `--max-device-wait` exceeded |
-| `D500` | Device / simulator creation failed |
-| `D502` | Webview driver comms failed (CDP / WebKit) |
-| `D503` | Companion wedged — alive but a main-thread call is stuck (incl. a `504` from the companion's own watchdog, or a client-side request timeout) |
-| `D504` | Companion registration timeout |
-| `D505` | Companion unreachable — connection refused mid-request (process gone / not yet accepting); death or cold-start drop |
-| `D520` | Driver op failed (adb forward, unsupported button) |
-| `H404` | Toolchain / artifact missing (avdmanager, iOS runtime, companion binary) |
-| `H424` | No Chrome / Chromium found for `browse_*` steps — install one, or point `$CHROME` at the binary |
-| `H429` | Port allocation exhausted |
-| `H501` | Flow uses `browse_*` but this golem was built `--no-default-features` (no `browser`) |
-| `H502` | Orchestrator socket / IPC failure |
-| `H503` | `--dev`: no dev server (Expo/Metro) answering — start it (`npx expo start`), or point `--dev-port` at the right port |
-| `H505` | The browser lacks a feature the flow needs (WebMCP) — upgrade it, or check `golem doctor` |
-| `X000` | Uncoded failure — unclassified, reached output without a domain tag |
+<!-- Generated from FailureCode in golem-events/src/code.rs (meaning, fix). -->
+
+| Code | Meaning | Fix |
+|------|---------|-----|
+| `F400` | A `fail` step ran. | Check the branch or condition that reached the `fail` step. |
+| `F404` | No visible element matched the selector before the timeout. | Fix the selector, add `auto_scroll = true`, or wait for the screen first. |
+| `F405` | The element exists, but scrolling did not bring it into view. | Set `within` to the scroll container that holds the element. |
+| `F408` | The step ran past its timeout. | Raise the step's `timeout`; if many steps time out, check the host and device. |
+| `F409` | `assert_not_visible`: the element is still present. | Wait for the screen change first, or report the app bug. |
+| `F412` | The alert or text did not match the expected value. | Fix the expected value, or report the app bug. |
+| `F417` | An alert is shown, but golem could not press its button. | Name a button that the alert has. |
+| `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |
+| `F504` | The flow ran past `max_runtime`. | Raise `max_runtime`, or find the slow or looping blocks. |
+| `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |
+| `X000` | golem did not classify this error. | Read the message, and report it to the golem maintainers. |
+| `P400` | The `action` is not a known action. | Fix the spelling; see the actions reference. |
+| `P404` | A block, subflow or fixture that the flow names does not exist. | Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`. |
+| `P422` | A required field is missing or not valid. | Add or fix the field that the message names. |
+| `P450` | A `${…}` reference has bad syntax or type, or names an unknown generator. | Fix the variable reference or the generator name. |
+| `P460` | The flow or mixin file is not valid TOML, or does not fit the schema. | Fix the file at the line that the message names. |
+| `P461` | No device can satisfy the flow's device constraints. | Relax the device constraints, or add a device that matches. |
+| `P462` | `add_media` got a file that is not a supported image or video. | Use a supported image or video file. |
+| `A403` | The install script path is outside the project. | Keep `install_script` inside the project directory. |
+| `A404` | The install script or the app bundle does not exist. | Fix the `install_script` or bundle path, or build the app first. |
+| `A408` | The app install ran past its timeout. | Make the install faster, or raise `install_timeout_ms`. |
+| `A500` | The install script exited with an error. | Read the script output, and fix the build or the install. |
+| `A501` | The app shows a React Native error overlay instead of its UI. | Fix the JavaScript error that the overlay names. |
+| `A502` | golem could not read the app's state after the install. | Check that the app installed; install it again. |
+| `A503` | The app did not launch or stop. | Check the bundle id and the app's crash log (`app_logs`). |
+| `D404` | No device matches. | Boot or connect a device; `golem devices` lists them. |
+| `D408` | The device did not finish booting in time. | Boot the simulator or emulator by hand once, and check its image. |
+| `D409` | Every matching device stayed busy past `--max-device-wait`. | Free a device, add a device, or raise `--max-device-wait`. |
+| `D500` | golem could not create the simulator or emulator. | Install the runtime or system image that the device needs. |
+| `D502` | golem could not talk to the webview inspector. | Make the webview debuggable, then try again. |
+| `D503` | The companion runs but is stuck on a call. | Try again; if it repeats, restart the device or the app. |
+| `D504` | The companion did not register with golem in time. | Check that the companion installed and launched; install it again. |
+| `D505` | The companion refused the connection; it is not running. | Try again; if it repeats, reduce the host load or restart the device. |
+| `D506` | The companion stopped after each restart, so golem gave up. | Restart the device, and check the host's free memory and CPU. |
+| `D507` | The companion connection closed during a request. | Check whether the step had its effect, then try again. |
+| `D520` | A device driver operation failed. | Read the message; for `press`, use a button that the device has. |
+| `H404` | A tool or file that golem needs is missing. | Install what the message names; `golem doctor` checks the host. |
+| `H429` | golem has no free ports. | Run fewer devices at once, or free ports. |
+| `H502` | The connection to the golem daemon failed. | Restart the daemon, and check `GOLEM_SOCKET`. |
+| `H424` | `browse_*` steps found no Chrome or Chromium. | Install Chrome, or set `$CHROME` to the browser binary. |
+| `H501` | This golem build has no browser support. | Use a default build (without `--no-default-features`). |
+| `H503` | `--dev`: no Expo or Metro dev server answers. | Start the dev server (`npx expo start`), or set `--dev-port`. |
+| `H505` | The browser lacks a feature that the flow needs (WebMCP). | Upgrade the browser; `golem doctor` checks it. |

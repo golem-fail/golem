@@ -6,4 +6,11 @@
 { action = "get_http", url = "https://api.example.com/data", headers = { Authorization = "Bearer ${token}" } }
 ```
 
-Fails on non-2xx status codes.
+| Field | Description |
+|-------|-------------|
+| `url` | Request URL (required) |
+| `body` | Request body, as a string |
+| `headers` | Table of header name to string value |
+| `save_to` | Variable to store the response body under, as a string |
+
+A non-2xx status fails the step.

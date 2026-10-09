@@ -1,6 +1,6 @@
 ### `bash` — Run shell command
 
-Execute a command via `sh -c`. Fails if exit code is non-zero.
+Execute a command via `sh -c`. A non-zero exit code fails the step and reports the command's stderr. `save_to` stores stdout, trimmed.
 
 ```toml
 { action = "bash", run = "curl -s https://api.example.com/reset" }
