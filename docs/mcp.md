@@ -422,6 +422,8 @@ Only an explicit `session_close` runs the teardown. A teardown can change the ap
 - `run = false` installs the app and does the setup, but runs no steps. The cursor is before the first step of the start block. Use it to edit a flow. Do not give `stop_at` with `run = false`.
 - A relative `flow` path is in the project directory.
 
+**Replay fake data.** `session_open` reports the seed of the session's fake data: `session open · … · seed 4711`. A failed `golem run` reports its seed too. `session_open(seed = 4711)` replays that data, as `golem run --seed 4711` does, with or without `flow`. A `[flow] seed` in a flow file has no effect.
+
 ### Long operations
 
 A session runs one operation at a time.
@@ -528,7 +530,7 @@ These tools change only the draft. They never touch the device, and they set no 
 
 | Tool | What it does |
 |------|--------------|
-| `flow_set(name?, tags?, vars?, seed?, explicit_only?, start?)` | Sets fields of `[flow]`. `vars` merges into the flow's variables. |
+| `flow_set(name?, tags?, vars?, explicit_only?, start?)` | Sets fields of `[flow]`. `vars` merges into the flow's variables. |
 | `apps_set(app)` | Adds a `[[flow.apps]]` entry, or replaces the fields of the entry with the same name. The entry can differ from the session's device. |
 | `teardown_add(step, comment?)` | Adds a step to the `[[teardown]]`. The step does not run now. |
 | `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` runs once for each row, and its steps read the fields as `${_each.field}`. |

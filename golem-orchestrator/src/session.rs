@@ -43,6 +43,8 @@ pub struct OpenRequest {
     pub flow: Option<FlowOpen>,
     /// Boot a shut-down device when no booted device fits.
     pub boot: bool,
+    /// Seed the fake data, as `golem run --seed` does, to replay a run.
+    pub seed: Option<u64>,
     /// Open on the device-free stub driver. Debug builds only, for the
     /// tests of session clients.
     pub stub: bool,
@@ -390,6 +392,8 @@ pub enum OpResult {
         bundle: String,
         /// For a flow open: the flow run's TOON report, and where it stopped.
         flow: Option<String>,
+        /// The fake data's seed: pass it to `seed` to replay this session.
+        seed: u64,
     },
     /// The operation could not run, or the driver failed under it.
     Failed(String),
@@ -1058,6 +1062,9 @@ async fn open(
     };
     match result {
         Ok((mut work, flow_report)) => {
+            if req.flow.is_none() {
+                work.rng = golem_vars::seed::FakeRng::from_optional_seed(req.seed);
+            }
             let bundle = if req.stub {
                 golem_driver::stub::STUB_BUNDLE_ID.to_string()
             } else {
@@ -1071,6 +1078,7 @@ async fn open(
                 udid: work.device.udid.clone(),
                 bundle: bundle.clone(),
                 flow: flow_report,
+                seed: work.rng.seed(),
             };
             held.hold(format!("{} ({})", work.device.name, work.device.udid));
             work.slot = Some(held);
@@ -1216,6 +1224,7 @@ async fn open_flow(
     let config = crate::suite::SuiteConfig {
         platform: Some(platform),
         stub_fail_on_runs: stub.then(Vec::new),
+        seed: req.seed,
         vars: f.vars.clone(),
         output_dir: req.project_root.join(".golem/results"),
         project_root: req.project_root.clone(),
@@ -2425,6 +2434,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                     stub: true,
                 }),
                 boot: false,
+                seed: None,
                 stub: false,
             },
             Arc::new(ResourceManager::new(
@@ -2445,6 +2455,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 idle_timeout: DEFAULT_IDLE_TIMEOUT,
                 flow: None,
                 boot: false,
+                seed: Some(42),
                 stub: true,
             },
             Arc::new(ResourceManager::new(
@@ -2463,6 +2474,33 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 ..
             })
         )
+    }
+
+    #[tokio::test]
+    async fn a_session_opened_with_a_seed_reports_it_and_draws_from_it() {
+        let slots = Arc::new(Slots::new(DEFAULT_MAX_SESSION_DEVICES));
+        let s = open_stub(&slots);
+        match s.wait(Duration::from_secs(5)).await {
+            Waited::Done(Outcome {
+                result: OpResult::Opened { seed, .. },
+                ..
+            }) => assert_eq!(seed, 42),
+            other => panic!("not opened: {other:?}"),
+        }
+        let draw = |rng: &mut golem_vars::seed::FakeRng| {
+            let uuid = golem_vars::GeneratorDef {
+                name: "uuid".into(),
+                params: Default::default(),
+                positional: Vec::new(),
+            };
+            golem_vars::generators::generate_simple(&uuid, rng)
+                .map(|v| format!("{v:?}"))
+                .expect("a uuid")
+        };
+        let mut slot = s.work.lock().await;
+        let work = slot.as_mut().expect("work");
+        let mut run = golem_vars::seed::FakeRng::from_optional_seed(Some(42));
+        assert_eq!(draw(&mut work.rng), draw(&mut run));
     }
 
     #[tokio::test]

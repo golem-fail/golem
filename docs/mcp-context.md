@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 347 |
-| Tool list (30 tools, as `tools/list` JSON) | 11933 |
-| Both, kept in context by most clients | 12280 |
+| Tool list (30 tools, as `tools/list` JSON) | 11967 |
+| Both, kept in context by most clients | 12314 |
 
 ## Instructions
 
@@ -152,7 +152,6 @@ Set [flow] fields of the draft.
 |-----------|------|-------------|
 | `explicit_only` | boolean | true: golem run without a path skips this flow. |
 | `name` | string |  |
-| `seed` | integer | The seed for fake: generators. |
 | `start` | string | The first block. |
 | `tags` | array |  |
 | `vars` | object | Merged into [flow] vars. |
@@ -217,6 +216,7 @@ Open a session on one device and app. A running device that fits wins; else gole
 | `os` | string | "ios", "android", "ios:26", "ios:26+" or "ios:latest". Default: any. |
 | `project` | string | The directory with golem.toml. Default: the server's project. |
 | `run` | boolean | With flow: false does the setup but runs no steps. |
+| `seed` | integer | The fake data's seed, as golem run --seed: replays a run's data. |
 | `stop_at` | string | With flow: stop before this step: block or block:step. |
 | `teardown` | boolean | With flow: false never runs its [[teardown]]. |
 | `type` | string | "phone" or "tablet". |
@@ -423,7 +423,7 @@ Topics:
 ### fake
 
 - `help("fake")` · [Fake Data Generators](fake-data.md#fake-data-generators) · 1171
-- `help("fake", "seeds")` · [Determinism and seeds (LLM text)](src/fake-data/10-seeds.llm.md) · 488
+- `help("fake", "seeds")` · [Determinism and seeds (LLM text)](src/fake-data/10-seeds.llm.md) · 578
 - `help("fake", "all-generators")` · [All generators](fake-data.md#all-generators) · 1090
 - `help("fake", "simple-generators")` · [Simple generators](fake-data.md#simple-generators) · 224
   - `help("fake", "email")` · [email](fake-data.md#email) · 837

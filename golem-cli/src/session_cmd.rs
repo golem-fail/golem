@@ -260,13 +260,17 @@ pub(crate) fn note_text(reply: &serde_json::Value) -> Option<String> {
     }
     if r["opened"] == true {
         let mut out = format!(
-            "session open · {} ({}) · app {}\n",
+            "session open · {} ({}) · app {}{}\n",
             r["device"].as_str().unwrap_or_default(),
             r["udid"].as_str().unwrap_or_default(),
             r["bundle"]
                 .as_str()
                 .filter(|b| !b.is_empty())
                 .unwrap_or("(last launched)"),
+            r["seed"]
+                .as_u64()
+                .map(|s| format!(" · seed {s}"))
+                .unwrap_or_default(),
         );
         if let Some(flow) = r["flow"].as_str() {
             out.push_str(flow);
