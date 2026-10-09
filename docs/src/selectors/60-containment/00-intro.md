@@ -1,8 +1,7 @@
 ## Geometric containment: `contains` / `inside`
 
-Select by spatial nesting — coordinate-based, *not* DOM structure (golem
-deliberately does not expose parent/child tree queries; a human perceives
-positions, not the document tree).
+Select by spatial nesting — coordinate-based, *not* DOM structure. There is no
+parent/child selector.
 
 | Grouped key | Keeps elements whose bounds… |
 |-------------|------------------------------|
@@ -16,5 +15,5 @@ positions, not the document tree).
 { action = "assert_visible", on = { text = "Item 0", inside = { accessibility_label = "section-scroll-list" } } }
 ```
 
-`contains` excludes the anchor itself (an element trivially contains itself) and
-coincident zero-margin wrappers, and resolves **smallest-enclosing first**.
+`contains` excludes the anchor itself and a wrapper with exactly the anchor's
+bounds, and resolves **smallest-enclosing first**.

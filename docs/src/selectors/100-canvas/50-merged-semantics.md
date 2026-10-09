@@ -22,5 +22,5 @@ because the Android container has no text. Anchor on a child's text, or on a
 heading, instead.
 
 On Flutter, a merged child has no node of its own. Select the container by its
-joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. golem has no parent/child selector (there is no `child_of`).
-`inside` and `contains` are geometric, so a coarse tree does not change them.
+joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. `inside`
+and `contains` are geometric, so a coarse tree does not change them.

@@ -1,10 +1,6 @@
 ## Variables
 
-Set variables from the CLI, flow metadata, data rows, `read` actions, or fixtures:
-
-```bash
-golem run flows/login.test.toml --var EMAIL=test@example.com
-```
+Set variables with `--var NAME=value` on the CLI, in `[flow.vars]`, from data rows, with a step's `save_to`, or from fixtures. Reference them as `${name}`:
 
 ```toml
 [flow.vars]
@@ -16,3 +12,5 @@ steps = [
   { action = "bash", run = "echo ${current_status}", save_to = "result" },
 ]
 ```
+
+When the CLI, `golem.toml` and the flow set the same name, see [Project config](#project-config-golemtoml) for which one wins.

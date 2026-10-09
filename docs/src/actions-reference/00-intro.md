@@ -1,7 +1,5 @@
 # Actions Reference
 
-*Every word the golem knows.*
-
 ← [Back to README](../README.md) · See also [Test Structure](test-structure.md) for selectors, steps, and flow anatomy.
 
 <!-- toc -->

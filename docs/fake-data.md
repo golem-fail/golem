@@ -54,11 +54,10 @@ generated values stay stable. Without a seed, values are fresh each run, and the
 seed actually used is reported so any run can be replayed.
 
 **Time-based generators track "now" *and* reproduce.** `fake:timestamp` and a
-card's expiry are anchored on a reference instant packed into the seed's high
-bits (a 4-hour bucket since 2020). A no-`--seed` run anchors on the real current
-time; replaying the reported seed reproduces the same dates bit-for-bit, because
-the anchor rides inside the seed. (A hand-typed small seed like `--seed 42`
-anchors at 2020 — consistent, just not "now".)
+card's expiry are anchored on a reference instant carried in the seed. A
+no-`--seed` run anchors on the real current time; replaying the reported seed
+reproduces the same dates. A small seed like `--seed 42` anchors at 2020 —
+consistent, just not "now".
 
 ## All generators
 
@@ -71,47 +70,37 @@ Everything `${fake:…}` supports, at a glance:
 | `${fake:uuid}` | scalar | UUID v4 |
 | `${fake:number}` | scalar | Random integer |
 | `${fake:one_of}` | scalar | Random pick from a caller-supplied set |
-| `${fake:sentence}` | scalar | One-sentence filler; `language=` (en/fr/ja/ar), lorem default |
+| `${fake:sentence}` | scalar | One-sentence filler; `language=` takes an ISO 639-1 code (114 languages), lorem default |
 | `${fake:phone}` | scalar | Country-formatted phone number |
 | `${fake:person}` | object | Names across scripts: `.given` / `.family` / `.reading` / `.ascii` / per-script branches |
 | `${fake:address}` | object | `.street` / `.city` / `.state` / `.postcode` / `.country` / `.country_code` / `.lat` / `.lon` |
-| `${fake:credit_card}` | object | Luhn-valid card: `.number` / `.expiry` / `.cvv` / `.brand` / `.status` |
+| `${fake:credit_card}` | object | Luhn-valid card: `.number` / `.expiry` / `.cvv` / `.brand` / `.provider` / `.status` / `.threeds` |
 | `${fake:timestamp}` | object | Date/time: `.datetime` / `.date` / `.time` / `.year` / `.month` / `.day`; window + age params |
-
-Specifics below: [simple generators](#simple-generators) ·
-[person](#person) · [address](#address) ·
-[credit_card](#credit_card).
 
 ## Simple generators
 
-One value each; all scalar except `timestamp`, which returns a small object
-(its fields are below). Defaults are shown for each.
+Each returns one string. Defaults are shown for each.
 
 ### email
 
-`${fake:email}` → `<random>@example.com`. One string out, but the params cover
-the common signup / inbox patterns:
+`${fake:email}` → `<random>@example.com`.
 
 | Param | Effect |
 |-------|--------|
 | `domain` | Replace `example.com` — `fake:email(domain=acme.test)` → `<random>@acme.test` |
 | `prefix` | Prepend to the random local part — `fake:email(prefix=qa_)` → `qa_<random>@example.com` |
 
-**Real-inbox / plus-addressing.** Put a `+` in `prefix` to keep every address
-unique while delivering to a single real mailbox (Gmail-style aliasing):
-`fake:email(prefix=alice+)` → `alice+<random>@example.com`, all routed to
-`alice@…`. Combine with the [`await_email`](actions-reference.md#await_email--poll-imap-inbox)
-action to verify mail end-to-end.
+**Real-inbox / plus-addressing.** Put a `+` in `prefix` and your mailbox's domain
+in `domain` to keep every address unique while delivering to one real mailbox:
+`fake:email(prefix=alice+, domain=gmail.com)` → `alice+<random>@gmail.com`, all
+delivered to `alice@gmail.com`. Combine with the
+[`await_email`](actions-reference.md#await_email--poll-imap-inbox) action to
+verify mail end-to-end.
 
-**Disposable real inbox.** `${fake:email}` is a synthetic string — no inbox
-exists behind it. To provision a *live* throwaway mailbox you can actually
-receive at (for OTP / verification-link flows), use the
+**Disposable real inbox.** `${fake:email}` has no inbox behind it; to receive
+mail at a throwaway address, use the
 [`create_inbox`](actions-reference.md#create_inbox--provision-a-disposable-email-inbox)
-action instead — it's a network side effect, not a seed-reproducible generator,
-so it lives as an action rather than a `${fake:…}` value.
-
-The random local part is 10–14 base-36 characters (~52–72 bits), comfortably
-collision-free at golem's scale.
+action.
 
 ### password
 
@@ -131,11 +120,9 @@ Example: `fake:password(length=20, symbols=false)`.
 ### one_of
 
 `${fake:one_of(free|pro|enterprise)}` → one value picked at random from the set.
-The natural fit for radio buttons, dropdowns, and enum fields — and a building
-block for anything golem doesn't generate directly (a plan tier, a gender, a
-subset of countries). Choices are `|`-delimited (commas also work, since `|`
-sidesteps the param separator): `fake:one_of(yes|no)`, `fake:one_of(JP, US, GB)`.
-Seeded like every other generator.
+Separate choices with `|` or `,`: `fake:one_of(yes|no)`, `fake:one_of(JP, US, GB)`.
+Spaces around a choice are trimmed and empty choices are dropped. A choice
+cannot contain `|`, `,` or `=`. Seeded like every other generator.
 
 ### sentence
 
@@ -148,13 +135,12 @@ comment / description fields. Default is **lorem ipsum**.
 
 `fake:sentence(language=ja)` → `古いゴーレムが石を砕く。`,
 `fake:sentence(language=fr)` → `Le gardien garde la pierre.` Sentences are
-golem-myth-themed (clay, stone, guardians) for amusement, script-correct
+golem-myth-themed (clay, stone, guardians), script-correct
 (CJK/Thai join without spaces, Arabic/Hebrew are right-to-left), and
 seed-reproducible.
 
 Grammar is deliberately simplified, and some less-common-script languages are
-machine-authored pending native review — see the [roadmap](roadmap.md) if a
-language's realism matters for your test.
+machine-authored pending native review.
 
 ### phone
 
@@ -167,12 +153,6 @@ language's realism matters for your test.
 
 Chain it off an address to keep them consistent:
 `phone = "${fake:phone(country=${addr.country_code})}"`.
-
-> **City / postcode / street** are not standalone generators. Use
-> [`fake:address`](#address) dot-notation — `${fake:address.city}`,
-> `${fake:address.postcode}`, `${fake:address.street}` — so all the parts of an
-> address stay consistent (same city). For names, use
-> [`fake:person`](#person).
 
 ## Structured generators
 
@@ -280,7 +260,7 @@ just means that name has no stored Hanja.
 
 #### Parameters
 
-Three things are configurable, each overridable independently:
+Four parameters, each overridable independently:
 
 | Parameter | Sets | Example |
 |-----------|------|---------|
@@ -318,9 +298,9 @@ u = "${fake:person(local=[ascii, diacritics_fr, diacritics_pt]).given}"
 
 #### Per-country behaviour
 
-`country` presets live in the bundled locale data. The bracketed
-lists below are literal token lists — the same syntax you'd pass to `name=` /
-`reading=` / `local=`. A few:
+The bracketed lists below are literal token lists — the same syntax you'd pass
+to `name=` / `reading=` / `local=`. Every supported country is listed. A
+`country` not in the table is not an error: it behaves like no country.
 
 | `country` | `local` repertoire | primary `name` | `reading` |
 |-----------|--------------------|----------------|-----------|
@@ -337,7 +317,7 @@ lists below are literal token lists — the same syntax you'd pass to `name=` /
 | ES / MX | `ascii`, `diacritics_es` | `[local, ascii]` | — |
 | BR | `ascii`, `diacritics_pt` | `[local, ascii]` | — |
 | SE | `ascii`, `diacritics_sv` | `[local, ascii]` | — |
-| IE / NZ / PL / LT / NL | `ascii`, `diacritics_<lang>` | `[local, ascii]` | — |
+| IE / NZ / PL / LT / NL | `ascii`, `diacritics_<lang>` (ga / mi / pl / lt / nl) | `[local, ascii]` | — |
 | BE | `ascii` + French/Dutch/German accents | `[local, ascii]` | — |
 | US / GB / AU / ZA / SG | `ascii` | `[local, ascii]` | — |
 | (none) | accepts everything | `[native]` | — |
@@ -345,16 +325,22 @@ lists below are literal token lists — the same syntax you'd pass to `name=` /
 ### address
 
 `${fake:address}` returns a coherent address for one place — all fields come from
-the same city, so they stay consistent. Params: `country` (ISO code; unset → a
-random country, an unrecognised code is an error), `state`, `region` (filter to a
-state name / region tag). The `state` filter accepts either the native or the
-romanised name (`東京` or `Tokyo`, case-insensitive).
+the same city, so they stay consistent. There are no standalone city, postcode or
+street generators: read the field you need (`${fake:address.city}`).
+
+| Param | Effect |
+|-------|--------|
+| `country` | ISO 3166-1 alpha-2 code, case-insensitive. Unset → a random country. An unrecognised code is an error. Supported: AE, AU, BE, BR, CA, CN, DE, EG, ES, FR, GB, IE, IL, IN, JP, KR, LT, MX, NL, NZ, PL, RU, SE, SG, TH, US, ZA. |
+| `state` | Limit to one state, by its native or romanised name (`東京` or `Tokyo`), case-insensitive. |
+| `region` | Limit to the states tagged with this region, case-insensitive — e.g. `Kansai` / `Kanto` (JP), `New England` (US), `Scotland` (GB). The tags for each country are the `region_tags` in `data/geo/<code>.json`. |
+
+`state` and `region` need `country`; without it they are ignored. A filter that
+matches no state is an error.
 
 The text fields default to the place's **native script**; an `ascii` sub-object
 carries the romanised forms — exactly like `${fake:person}` (native default,
 `.ascii` branch). Romanisations are ASCII folds of the native, never English
-exonyms (`Bayern`, not "Bavaria"). Latin places (diacritics included) fold
-programmatically; non-Latin places carry a stored romanisation.
+exonyms (`Bayern`, not "Bavaria").
 
 #### Fields
 
@@ -384,7 +370,9 @@ country (e.g. GB) reads identically in both: native `42 Baker Street` ==
   and length).
 - `provider` — `stripe` / `adyen` / `square` / … selects that payment provider's
   published **test-card** set, so `number` and `status` match what the provider's
-  sandbox expects. Without it, a generic Luhn-valid card is produced.
+  sandbox expects. Without it, a generic Luhn-valid card is produced. An unknown
+  provider is an error, and the error message lists the valid providers (one per
+  file in `data/cards/`, e.g. `pay_jp`, `checkout_com`).
 - `status` — the simulated outcome (see below).
 
 #### Fields
@@ -395,14 +383,24 @@ country (e.g. GB) reads identically in both: native `42 Baker Street` ==
 | `expiry` | 03/28 |
 | `cvv` | 123 |
 | `brand` | visa |
-| `status` | `""` (empty unless declined) |
+| `provider` | `stripe`; `""` without a provider |
+| `status` | `""` for an approved card without a provider; otherwise the status |
+| `threeds` | `true` — present only when `status` is `threeds` (with a provider, any status starting with `threeds`) |
+
+Some provider test cards carry extra fields the provider's form needs, such as
+`name`, `postal_code`, `otp` or `pin`.
 
 #### Statuses
 
-An approved card has an **empty** `status` (`""`). To simulate a failure, pass
-`status=`; without a provider the options are `approved`,
-`declined:invalid_number`, `declined:expired`, `declined:invalid_cvv`, `threeds`.
-Provider-specific statuses vary by provider.
+Without a provider, an approved card has an **empty** `status` (`""`). To
+simulate a failure, pass `status=`; without a provider the options are
+`approved`, `declined:invalid_number`, `declined:expired`,
+`declined:invalid_cvv`, `threeds`. Any other status needs a provider.
+
+With a provider, `status` defaults to `approved`, and the valid statuses are the
+keys of that provider's `statuses` table in `data/cards/<provider>.json` (Stripe,
+for example, adds `declined:insufficient_funds`, `declined:lost`, `fraud`,
+`threeds:failed`). A status the provider has no test card for is an error.
 
 ### timestamp
 

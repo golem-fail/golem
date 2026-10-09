@@ -1,9 +1,9 @@
 ### App permissions
 
-Permissions are declared **on a launch**, not as a standalone step — the platform tooling (`pm grant` on Android, `simctl privacy` / `applesimutils` on iOS sims) terminates the app to apply a grant, so a permission change is inseparable from a (re)launch. Two places take the same `permission = mode` map:
+Permissions are set **on a launch**, not as a standalone step. Two places take the same `permission = mode` map:
 
 - **`[[flow.apps]].permissions`** — the baseline, applied once before the app's first launch (see [Test structure](test-structure.md#launch-time-permissions)).
-- **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow (a cold start, as above).
+- **`launch` action `permissions =`** — a per-launch override for changing a permission later in the flow. It always cold-starts the app.
 
 ```toml
 { action = "launch", app = "app", permissions = { camera = "allow" } }
@@ -12,40 +12,27 @@ Permissions are declared **on a launch**, not as a standalone step — the platf
 # ... exercise the denied path ...
 ```
 
-> **Migrating from `grant_permission` / `revoke_permission`:** those step-level actions were removed. Replace `{ action = "grant_permission", app = "app", permission = "camera" }` immediately followed by a `launch` with a single `{ action = "launch", app = "app", permissions = { camera = "allow" } }` (`"deny"` for revoke). They always forced an app restart anyway, so this is a faithful — and shorter — replacement.
-
 **Modes.** The value is a mode, not just on/off:
 
 | Mode | Applies to | Meaning |
 |------|-----------|---------|
-| `allow` / `deny` | any permission | grant / **explicit-denied** (`simctl privacy revoke` / `pm revoke`, not a not-determined reset). For `location`, `allow` grants foreground ("when in use"). |
-| `always` | `location` only | grant background + foreground location (the broader grant; `allow` is foreground-only) |
+| `allow` / `deny` | any permission | grant / explicitly denied (not reset to "not asked"). For `location`, `allow` grants foreground ("when in use"). |
+| `always` | `location` only | grant background + foreground location |
 | `limited` | `photos` only | partial photo-library access (iOS limited library; Android 14+ user-selected subset) |
 
 An invalid mode for a permission (e.g. `camera = "limited"`) is a parse-time error.
 
-**Cross-platform permissions.** One vocabulary, mapped per platform:
+**Permissions.** One vocabulary for both platforms: `camera`, `microphone`, `location`, `contacts`, `calendar`, `photos`. An unknown name is an error. On Android you can also pass a full `android.permission.*` string.
 
-| Permission | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
-|------------|-----------------------------------------------------------|------------------------|
-| `camera`   | `CAMERA`                                                  | `camera`               |
-| `microphone` | `RECORD_AUDIO`                                          | `microphone`           |
-| `location` | `ACCESS_FINE_LOCATION` (+ `ACCESS_BACKGROUND_LOCATION` when `= "always"`) | `location` / `location-always` (per mode) |
-| `contacts` | `READ_CONTACTS`                                           | `contacts`             |
-| `calendar` | `READ_CALENDAR`                                           | `calendar`             |
-| `photos`   | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+; `= "limited"` grants only the latter) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` (via `applesimutils` — see below) |
+Your app's `AndroidManifest.xml` must declare every permission you grant. For `photos`, declare `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED` and `READ_EXTERNAL_STORAGE`: golem grants a different one per Android version. `location = "always"` also needs `ACCESS_BACKGROUND_LOCATION`.
 
-Unknown permissions fail loudly (no silent passthrough). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+> **iOS `photos` needs [`applesimutils`](https://github.com/wix/AppleSimulatorUtils)** (`brew tap wix/brew && brew install wix/brew/applesimutils`) to grant without a prompt; `golem doctor` flags it if missing. Without it golem warns and the app prompts at runtime, so add `{ action = "accept_alert", if_fail = "ignore" }` after the step that triggers photo access.
 
-> **iOS photos needs `applesimutils`.** `simctl privacy grant photos` accepts the command but does **not** suppress the iOS 26 full-library-access prompt, so golem routes `photos` pre-grants through [`applesimutils`](https://github.com/wix/AppleSimulatorUtils) (`brew tap wix/brew && brew install wix/brew/applesimutils`), which does. It's optional-but-recommended — `golem doctor` flags it. Without it, a `photos` grant can't be applied prompt-free: golem warns and the app prompts at runtime, so add `{ action = "accept_alert", if_fail = "ignore" }` after the step that triggers photo access. All other iOS permissions use `simctl privacy` and need no extra tooling.
-
-> **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
+> **Notifications can't be pre-granted.** Both platforms show a system dialog the first time the app asks. Trigger the request from the app and accept the dialog:
 >
 > ```toml
 > { action = "tap", on_text = "Enable Notifications" }
 > { action = "accept_alert", if_fail = "ignore" }
 > ```
 >
-> `if_fail = "ignore"` keeps the step happy on warm sims/emulators that have already recorded the user's prior choice and skipped the prompt.
-
-Your app's `AndroidManifest.xml` must declare every permission you intend to grant — `pm grant` rejects undeclared permissions, and all three photo permissions need declaring because the shorthand resolves to a different one per SDK level. golem's own test app is generated by Tauri, which has no config for `<uses-permission>`, so it re-applies the declarations after generation in `scripts/patch-test-app-projects.sh` — that script's list is the set the shorthands above expand to.
+> `if_fail = "ignore"` covers a device that already recorded a choice and skips the prompt.

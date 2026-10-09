@@ -5,14 +5,6 @@ Poll the hierarchy until an element matching the selectors is on screen, or `tim
 ```toml
 { action = "assert_visible", on_text = "Welcome" }
 { action = "assert_visible", on_text = "1", on_below = "Counter" }
-{ action = "assert_visible", on = { text = "Submit", traits = ["button"] } }
-
-# With auto-scroll for off-screen elements
-{ action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 }
-
-# Check enabled state
-{ action = "assert_visible", on_text = "Submit", on_enabled = true }
-
-# Check checked state
-{ action = "assert_visible", on_accessibility_label = "agree-checkbox", on_checked = true }
+{ action = "assert_visible", on_text = "Submit", on_enabled = true }                    # state, not just presence
+{ action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 }  # off-screen element
 ```

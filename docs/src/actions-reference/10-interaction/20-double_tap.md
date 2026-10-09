@@ -1,6 +1,6 @@
 ### `double_tap` — Double-tap an element
 
-Two rapid taps (40ms apart) at the element center.
+Two rapid taps at the element center.
 
 ```toml
 { action = "double_tap", on_text = "Zoom" }

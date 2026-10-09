@@ -20,6 +20,5 @@ declared.
 The script body runs inside an async function: `return` what you want to save,
 and `await` is available for anything the page has to fetch.
 
-Golem variables are interpolated into `script` but **not** into `file`: a shared
-helper shouldn't change meaning depending on which flow imported it. Both are
+Golem variables are interpolated into `script` but **not** into `file`. Both are
 JavaScript, not TypeScript.

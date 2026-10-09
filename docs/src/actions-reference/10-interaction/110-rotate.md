@@ -2,7 +2,7 @@
 
 A two-finger **rotation gesture** centered on an element (or screen). `rotate` is a multi-touch gesture, **not** a device-orientation change — programmatic device orientation is [unsupported](unsupported.md).
 
-Two fingers orbit a center point — resolved from an element selector, or from explicit `x` / `y` coordinates.
+Two fingers orbit a center point: an element (`on_text`, `on_accessibility_label` or `on = { … }`), or `x` / `y` as pixels or `"N%"` of the screen. Without either, the screen centre. With an element, `x` / `y` are ignored.
 
 ```toml
 { action = "rotate", on_text = "Map", rotation = 90.0 }    # rotate 90° clockwise

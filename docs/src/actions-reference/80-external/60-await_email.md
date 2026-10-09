@@ -3,11 +3,9 @@
 Poll an inbox over IMAP (TLS) and wait for an email matching the filters, with
 optional regex extraction.
 
-`inbox` is **not** the email address — it is the **name of a variable** holding
-an inbox object (the one [`create_inbox`](#create_inbox--provision-a-disposable-email-inbox)
-saved, or a `[flow.vars]` table you wrote). The action reads four fields from
-that object by name: `imap_host`, `imap_port`, `user`, `pass`. So
-`create_inbox { save_to = "inbox" }` pairs with `await_email { inbox = "inbox" }`.
+`inbox` is the **name of a variable** holding an inbox object, not the email
+address. See [`create_inbox`](#create_inbox--provision-a-disposable-email-inbox)
+for how the two pair up.
 
 ```toml
 # Pairs with create_inbox { save_to = "inbox" }:
@@ -21,7 +19,7 @@ that object by name: `imap_host`, `imap_port`, `user`, `pass`. So
 | Field | Default | Description |
 |-------|---------|-------------|
 | `inbox` | — | Name of a variable holding an inbox object; the `imap_host` / `imap_port` / `user` / `pass` fields on it are used to connect |
-| `recipient` | — | Glob filter for the recipient address. Spelled `recipient`, not `to`: a step-level `to` is the grouped selector alias |
+| `recipient` | — | Glob filter for the recipient address (not `to`) |
 | `subject` | `"*"` | Subject glob pattern |
 | `extract` | — | Table of field names to regex patterns |
 | `timeout` | `30000` | Polling timeout (ms) |

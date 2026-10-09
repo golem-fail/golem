@@ -1031,6 +1031,9 @@ dependencies = [
 [[package]]
 name = "golem-docs"
 version = "0.15.0"
+dependencies = [
+ "golem-events",
+]
 
 [[package]]
 name = "golem-driver"

@@ -1,8 +1,7 @@
 ## Traits
 
 Computed predicates on an element's geometry and content. All listed traits in a
-selector must hold (AND). Traits are coordinate/content-derived and
-cross-platform — they don't encode platform element types.
+selector must hold (AND).
 
 ```toml
 { action = "assert_visible", on = { text = "Submit", traits = ["button", "wide"] } }

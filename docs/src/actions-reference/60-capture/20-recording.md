@@ -1,9 +1,6 @@
 ### Screen recording — per-block via `record = true`
 
-Recording is configured at the project, flow, or block level — not as a
-step action. Cascade (highest priority wins): `--no-record` >
-`--record` > `[[block]] record` > `[flow.options] record` >
-`[options] record`. Output: `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
+Recording is configured with `record`, not as a step action (see [Flow Options](test-structure.md#flow-options)). Highest priority wins: `--no-record` > `--record` > `[[block]] record` > `[flow.options] record` > `[options] record`. Output: `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
 
 ```toml
 [[block]]
@@ -12,4 +9,4 @@ record = true     # record this block only
 steps = [ ... ]
 ```
 
-**Simulator-only on iOS** — `simctl io recordVideo` has no physical-device equivalent, so a recording request on a real iPhone fails. It degrades rather than breaking the run: the block records a warning and its steps execute normally, just without a video. Android records on physical devices and emulators alike. Tracked in [#60](https://github.com/golem-fail/golem/issues/60).
+iOS: simulator only. On a physical iPhone the block logs a warning and runs without a video.

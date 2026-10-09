@@ -1,7 +1,7 @@
 ## Nesting and chaining
 
 **Nested anchors** — a relational/containment anchor can itself be a full
-selector group (one level), not just bare text:
+selector group, not just bare text. The anchor is its group's first match:
 
 ```toml
 { action = "tap", on = { text = "Left", below = { text = "Nested Layout", traits = ["has_text"] } } }
@@ -21,4 +21,4 @@ resolution order is:
 
 Genuine ties (e.g. a row of equal-distance icons under a full-width heading)
 resolve by pre-order — golem does **not** guess; disambiguate with `index` or an
-extra predicate. The pre-order tie-break also keeps `--seed` replay deterministic.
+extra predicate.

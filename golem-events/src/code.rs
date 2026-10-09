@@ -144,7 +144,7 @@ pub enum FailureCode {
     DeviceNotFound,
     /// D408: device boot timeout.
     DeviceBootTimeout,
-    /// D409: device busy / --max-wait exceeded.
+    /// D409: device busy / --max-device-wait exceeded.
     DeviceBusy,
     /// D500: device/simulator creation failed.
     DeviceCreateFailed,
@@ -325,6 +325,193 @@ impl FailureCode {
         }
     }
 
+    /// Every code, in registry order.
+    pub const ALL: [FailureCode; 43] = [
+        Self::FlowExplicitFail,
+        Self::FlowElementNotFound,
+        Self::FlowElementOffscreen,
+        Self::FlowStepTimeout,
+        Self::FlowUnexpectedlyPresent,
+        Self::FlowAssertionMismatch,
+        Self::FlowAlertInteraction,
+        Self::FlowExternalFailed,
+        Self::FlowMaxRuntime,
+        Self::FlowMaxSteps,
+        Self::Uncoded,
+        Self::ParseUnknownAction,
+        Self::ParseMissingReference,
+        Self::ParseMissingParam,
+        Self::ParseVariable,
+        Self::ParseFlowFile,
+        Self::ParseDeviceConstraint,
+        Self::ParseUnsupportedMedia,
+        Self::AppInstallPathBlocked,
+        Self::AppInstallScriptNotFound,
+        Self::AppInstallTimeout,
+        Self::AppInstallFailed,
+        Self::AppDevBundleError,
+        Self::AppStateQueryFailed,
+        Self::AppLifecycleFailed,
+        Self::DeviceNotFound,
+        Self::DeviceBootTimeout,
+        Self::DeviceBusy,
+        Self::DeviceCreateFailed,
+        Self::DeviceWebviewComms,
+        Self::DeviceCompanionWedged,
+        Self::DeviceRegistrationTimeout,
+        Self::DeviceCompanionUnreachable,
+        Self::DeviceCompanionUnrecoverable,
+        Self::DeviceCompanionDropped,
+        Self::DeviceDriverOpFailed,
+        Self::HostToolchainMissing,
+        Self::HostPortsExhausted,
+        Self::HostOrchestratorIpc,
+        Self::HostBrowserMissing,
+        Self::HostBrowserUnsupported,
+        Self::HostDevServerUnavailable,
+        Self::HostBrowserFeatureMissing,
+    ];
+
+    /// What happened, for the person who reads the failure.
+    pub fn meaning(self) -> &'static str {
+        use FailureCode::*;
+        match self {
+            FlowExplicitFail => "A `fail` step ran.",
+            FlowElementNotFound => "No visible element matched the selector before the timeout.",
+            FlowElementOffscreen => "The element exists, but scrolling did not bring it into view.",
+            FlowStepTimeout => "The step ran past its timeout.",
+            FlowUnexpectedlyPresent => "`assert_not_visible`: the element is still present.",
+            FlowAssertionMismatch => "The alert or text did not match the expected value.",
+            FlowAlertInteraction => "An alert is shown, but golem could not press its button.",
+            FlowExternalFailed => {
+                "A `bash`, `run` or HTTP step failed, or `await_email` found no match."
+            }
+            FlowMaxRuntime => "The flow ran past `max_runtime`.",
+            FlowMaxSteps => "The flow ran more than `max_steps` steps, usually in a loop.",
+            Uncoded => "golem did not classify this error.",
+            ParseUnknownAction => "The `action` is not a known action.",
+            ParseMissingReference => {
+                "A block, subflow or fixture that the flow names does not exist."
+            }
+            ParseMissingParam => "A required field is missing or not valid.",
+            ParseVariable => {
+                "A `${…}` reference has bad syntax or type, or names an unknown generator."
+            }
+            ParseFlowFile => {
+                "The flow or mixin file is not valid TOML, or does not fit the schema."
+            }
+            ParseDeviceConstraint => "No device can satisfy the flow's device constraints.",
+            ParseUnsupportedMedia => {
+                "`add_media` got a file that is not a supported image or video."
+            }
+            AppInstallPathBlocked => "The install script path is outside the project.",
+            AppInstallScriptNotFound => "The install script or the app bundle does not exist.",
+            AppInstallTimeout => "The app install ran past its timeout.",
+            AppInstallFailed => "The install script exited with an error.",
+            AppDevBundleError => "The app shows a React Native error overlay instead of its UI.",
+            AppStateQueryFailed => "golem could not read the app's state after the install.",
+            AppLifecycleFailed => "The app did not launch or stop.",
+            DeviceNotFound => "No device matches.",
+            DeviceBootTimeout => "The device did not finish booting in time.",
+            DeviceBusy => "Every matching device stayed busy past `--max-device-wait`.",
+            DeviceCreateFailed => "golem could not create the simulator or emulator.",
+            DeviceWebviewComms => "golem could not talk to the webview inspector.",
+            DeviceCompanionWedged => "The companion runs but is stuck on a call.",
+            DeviceRegistrationTimeout => "The companion did not register with golem in time.",
+            DeviceCompanionUnreachable => {
+                "The companion refused the connection; it is not running."
+            }
+            DeviceCompanionUnrecoverable => {
+                "The companion stopped after each restart, so golem gave up."
+            }
+            DeviceCompanionDropped => "The companion connection closed during a request.",
+            DeviceDriverOpFailed => "A device driver operation failed.",
+            HostToolchainMissing => "A tool or file that golem needs is missing.",
+            HostPortsExhausted => "golem has no free ports.",
+            HostOrchestratorIpc => "The connection to the golem daemon failed.",
+            HostBrowserMissing => "`browse_*` steps found no Chrome or Chromium.",
+            HostBrowserUnsupported => "This golem build has no browser support.",
+            HostDevServerUnavailable => "`--dev`: no Expo or Metro dev server answers.",
+            HostBrowserFeatureMissing => {
+                "The browser lacks a feature that the flow needs (WebMCP)."
+            }
+        }
+    }
+
+    /// The usual fix, for the party that owns the domain.
+    pub fn fix(self) -> &'static str {
+        use FailureCode::*;
+        match self {
+            FlowExplicitFail => "Check the branch or condition that reached the `fail` step.",
+            FlowElementNotFound => {
+                "Fix the selector, add `auto_scroll = true`, or wait for the screen first."
+            }
+            FlowElementOffscreen => "Set `within` to the scroll container that holds the element.",
+            FlowStepTimeout => {
+                "Raise the step's `timeout`; if many steps time out, check the host and device."
+            }
+            FlowUnexpectedlyPresent => "Wait for the screen change first, or report the app bug.",
+            FlowAssertionMismatch => "Fix the expected value, or report the app bug.",
+            FlowAlertInteraction => "Name a button that the alert has.",
+            FlowExternalFailed => {
+                "Read the output or response; fix the script, endpoint or email filter."
+            }
+            FlowMaxRuntime => "Raise `max_runtime`, or find the slow or looping blocks.",
+            FlowMaxSteps => "Fix the `next` or branch loop, or raise `max_steps`.",
+            Uncoded => "Read the message, and report it to the golem maintainers.",
+            ParseUnknownAction => "Fix the spelling; see the actions reference.",
+            ParseMissingReference => {
+                "Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`."
+            }
+            ParseMissingParam => "Add or fix the field that the message names.",
+            ParseVariable => "Fix the variable reference or the generator name.",
+            ParseFlowFile => "Fix the file at the line that the message names.",
+            ParseDeviceConstraint => "Relax the device constraints, or add a device that matches.",
+            ParseUnsupportedMedia => "Use a supported image or video file.",
+            AppInstallPathBlocked => "Keep `install_script` inside the project directory.",
+            AppInstallScriptNotFound => {
+                "Fix the `install_script` or bundle path, or build the app first."
+            }
+            AppInstallTimeout => "Make the install faster, or raise `install_timeout_ms`.",
+            AppInstallFailed => "Read the script output, and fix the build or the install.",
+            AppDevBundleError => "Fix the JavaScript error that the overlay names.",
+            AppStateQueryFailed => "Check that the app installed; install it again.",
+            AppLifecycleFailed => "Check the bundle id and the app's crash log (`app_logs`).",
+            DeviceNotFound => "Boot or connect a device; `golem devices` lists them.",
+            DeviceBootTimeout => {
+                "Boot the simulator or emulator by hand once, and check its image."
+            }
+            DeviceBusy => "Free a device, add a device, or raise `--max-device-wait`.",
+            DeviceCreateFailed => "Install the runtime or system image that the device needs.",
+            DeviceWebviewComms => "Make the webview debuggable, then try again.",
+            DeviceCompanionWedged => "Try again; if it repeats, restart the device or the app.",
+            DeviceRegistrationTimeout => {
+                "Check that the companion installed and launched; install it again."
+            }
+            DeviceCompanionUnreachable => {
+                "Try again; if it repeats, reduce the host load or restart the device."
+            }
+            DeviceCompanionUnrecoverable => {
+                "Restart the device, and check the host's free memory and CPU."
+            }
+            DeviceCompanionDropped => "Check whether the step had its effect, then try again.",
+            DeviceDriverOpFailed => {
+                "Read the message; for `press`, use a button that the device has."
+            }
+            HostToolchainMissing => {
+                "Install what the message names; `golem doctor` checks the host."
+            }
+            HostPortsExhausted => "Run fewer devices at once, or free ports.",
+            HostOrchestratorIpc => "Restart the daemon, and check `GOLEM_SOCKET`.",
+            HostBrowserMissing => "Install Chrome, or set `$CHROME` to the browser binary.",
+            HostBrowserUnsupported => "Use a default build (without `--no-default-features`).",
+            HostDevServerUnavailable => {
+                "Start the dev server (`npx expo start`), or set `--dev-port`."
+            }
+            HostBrowserFeatureMissing => "Upgrade the browser; `golem doctor` checks it.",
+        }
+    }
+
     /// Severity-less fragment, e.g. `F404`. Used as the `CodedError`
     /// Display so untagged `{e:#}` call sites degrade to `F404: msg`.
     pub fn fragment(self) -> String {
@@ -395,6 +582,26 @@ pub fn clean_msg(e: &anyhow::Error) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn all_lists_every_code_once() {
+        use super::FailureCode;
+        use std::collections::HashSet;
+        let src = include_str!("code.rs");
+        let body = src
+            .split_once("pub enum FailureCode {")
+            .and_then(|(_, rest)| rest.split_once("\n}"))
+            .map(|(body, _)| body)
+            .expect("the FailureCode enum");
+        let variants = body
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.ends_with(',') && l.starts_with(|c: char| c.is_ascii_uppercase()))
+            .count();
+        assert_eq!(FailureCode::ALL.len(), variants, "ALL misses a variant");
+        let fragments: HashSet<String> = FailureCode::ALL.iter().map(|c| c.fragment()).collect();
+        assert_eq!(fragments.len(), variants, "a code is listed twice");
+    }
 
     // is_install_blocked is narrower than Domain::App: it marks "the app never
     // reached the device", not "the app misbehaved once running".

@@ -13,6 +13,5 @@
 | `domain` | current page | Restrict the cookie to a domain |
 | `path` | current page | Restrict the cookie to a path |
 
-These go through CDP, not `document.cookie` — which is the point: the cookie a
-portal login hands out is usually `HttpOnly`, and script can neither read nor
-write those. A `browse_get_cookie` for a name that isn't set fails with `F404`.
+`browse_get_cookie` reads `HttpOnly` cookies too. A `browse_get_cookie` for a
+name that isn't set fails with `F404`.

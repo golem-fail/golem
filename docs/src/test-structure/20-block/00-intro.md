@@ -17,3 +17,5 @@ steps = [
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
 ]
 ```
+
+`record = true` / `false` on a block overrides the flow's `record` default for that block (`--no-record` still wins).
