@@ -10,6 +10,7 @@ Prefer **GitHub Issues** for any work with a clear problem, reproduction, and ac
 - iOS companion Swift logic changed (`companions/ios`): `./scripts/test-ios-companion.sh` (Swift Testing on a sim; `cargo t` does NOT cover Swift — not part of nextest).
 - Lint: `cargo clippy --workspace --all-targets` (workspace denies `unwrap_used`, and `print!`/`println!`/`stdout()` outside the command renderers — stdout carries command output and `golem mcp`'s JSON-RPC; see `clippy.toml`). A child process golem spawns gets a piped or null stdout, never an inherited one.
 - Format: `cargo fmt --all -- --check` (uses the pinned toolchain; matches CI). Opt-in pre-push hook: `git config core.hooksPath .githooks`.
+- Docs: `docs/{actions-reference,selectors,test-structure,fake-data,error-codes}.md` are generated. Edit the parts in `docs/src/`, then `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs` (see `docs/contributing.md`).
 - E2E per matrix, live on sim/emu.
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.
@@ -29,7 +30,7 @@ Before adding a comment ask: "is this *why not*, or just *why* (excuse for a cha
 ## Matrix — by change type
 | Change | unit+clippy | e2e | bump |
 |---|---|---|---|
-| Docs / non-code only | skip | skip | — |
+| Docs / non-code only | skip (`docs/src`: `cargo nextest run -p golem-docs`) | skip | — |
 | Rust tests only (no non-test code touched) | ✓ | skip | — |
 | `*.test.toml` only | skip | that flow, both platforms | — |
 | Test app (`test-app`/`test-app-b`/`test-app-e`) | only if app has own tests (none yet) | ✓ | — |

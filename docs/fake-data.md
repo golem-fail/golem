@@ -1,3 +1,4 @@
+<!-- Generated from docs/src/fake-data/ — edit the parts there, then run `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs`. -->
 # Fake Data Generators
 
 *Deterministic, seed-stable test data.*

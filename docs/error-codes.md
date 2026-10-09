@@ -1,3 +1,4 @@
+<!-- Generated from docs/src/error-codes/ — edit the parts there, then run `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs`. -->
 # Error Codes
 
 *Every failure and warning carries a short code so you can grep, triage, and route by who owns the fix.*

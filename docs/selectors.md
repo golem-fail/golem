@@ -1,3 +1,4 @@
+<!-- Generated from docs/src/selectors/ — edit the parts there, then run `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs`. -->
 # Selectors
 
 *How golem finds the element a step acts on.*

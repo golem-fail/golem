@@ -20,7 +20,7 @@ New features SHALL add or amend Rust tests — the goal is full unit + e2e cover
 
 | Change | unit + clippy | e2e | version bump |
 |---|---|---|---|
-| Docs / non-code only | skip | skip | — |
+| Docs / non-code only | skip (except `docs/src`, below) | skip | — |
 | Rust tests only (no non-test code touched) | ✓ | skip | — |
 | `*.test.toml` only | skip | that flow, both platforms | — |
 | Test app (`test-app` / `test-app-b` / `test-app-e`) | only if app has own tests | ✓ | — |
@@ -30,6 +30,21 @@ New features SHALL add or amend Rust tests — the goal is full unit + e2e cover
 | Both companions / companion + core | ✓ | both | ✓ |
 
 Any non-test code change — even making a `fn` `pub` — counts as its real category, not "tests only". Prefer an e2e flow relevant to the change; otherwise run a generic flow such as `e2e/tap.test.toml`.
+
+## Docs built from parts
+
+Five pages are built from parts in [`docs/src`](src): `actions-reference`, `selectors`, `test-structure`, `fake-data` and `error-codes`. Do not edit `docs/<page>.md` itself. Edit the part in `docs/src/<page>/`, then write the page:
+
+```bash
+GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs
+```
+
+- A part is one section: `<order>-<name>.md`. The number sets the order; `00-intro.md` comes first in its folder.
+- The page's table of contents is generated at `<!-- toc -->` (`<!-- toc depth=2 -->` for `##` only).
+- The path without the numbers is the part's address for the MCP help, for example `actions-reference/interaction/tap`.
+- A `<name>.llm.md` next to a part replaces that part for the MCP help only. Add one only when the human text is right for humans but too long for an LLM.
+
+`cargo t` fails when a page differs from its parts, or when a link or anchor in a page does not resolve.
 
 ## Git hooks (optional)
 

@@ -1,3 +1,4 @@
+<!-- Generated from docs/src/test-structure/ — edit the parts there, then run `GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs`. -->
 # Test Structure
 
 *Anatomy of a flow.*
@@ -8,15 +9,26 @@ Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-le
 
 ## Contents
 
-- [Flow](#flow) — [Options](#flow-options), [Coverage Strategies](#coverage-strategies), [Performance Monitoring](#performance-monitoring)
-- [Block](#block) — [Platform-specific](#platform-specific-blocks), [Branching](#branching), [`next`](#block-next)
-- [Step](#step) — [Selectors](#selectors), [Options](#step-options), [Timeout multipliers](#timeout-multipliers)
+- [Flow](#flow)
+  - [Flow Options](#flow-options)
+  - [Accessibility Audit](#accessibility-audit)
+  - [Coverage Strategies](#coverage-strategies)
+  - [Performance Monitoring](#performance-monitoring)
+- [Block](#block)
+  - [Platform-Specific Blocks](#platform-specific-blocks)
+  - [Branching](#branching)
+  - [Block `next`](#block-next)
+- [Step](#step)
+  - [Selectors](#selectors)
+  - [Step Options](#step-options)
+  - [Timeout Multipliers](#timeout-multipliers)
 - [Subflow](#subflow)
 - [Reuse: Subflow vs Mixin vs Fixture](#reuse-subflow-vs-mixin-vs-fixture)
 - [Lifecycle: Setup & Teardown](#lifecycle-setup--teardown)
 - [Teardown](#teardown)
 - [Data-Driven Tests](#data-driven-tests)
-- [Variables](#variables) — [Built-in variables](#built-in-variables)
+- [Variables](#variables)
+  - [Built-in variables](#built-in-variables)
 - [Fake Data Generators](#fake-data-generators)
 - [Multi-App Flows](#multi-app-flows)
 - [Project config (`golem.toml`)](#project-config-golemtoml)

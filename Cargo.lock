@@ -985,6 +985,7 @@ dependencies = [
  "golem-browser",
  "golem-common",
  "golem-devices",
+ "golem-docs",
  "golem-driver",
  "golem-element",
  "golem-events",
@@ -1026,6 +1027,10 @@ dependencies = [
  "serde_json",
  "tokio",
 ]
+
+[[package]]
+name = "golem-docs"
+version = "0.15.0"
 
 [[package]]
 name = "golem-driver"
