@@ -98,6 +98,9 @@ async fn every_tool_works_against_a_stub_session() {
         "step_move",
         "block_rename",
         "block_delete",
+        "options_set",
+        "block_set",
+        "teardown_delete",
         "mixins_list",
         "app_logs",
     ] {
@@ -353,6 +356,41 @@ async fn every_tool_works_against_a_stub_session() {
     .await;
     assert!(err, "a block that next names SHALL stay: {c}");
     assert!(text_of(&c).contains("block \"main\" next"), "{c}");
+
+    for (tool, args) in [
+        (
+            "options_set",
+            serde_json::json!({ "options": { "step_timeout": 8000 } }),
+        ),
+        (
+            "block_set",
+            serde_json::json!({ "name": "third", "fields": { "record": true } }),
+        ),
+        (
+            "teardown_add",
+            serde_json::json!({ "step": r#"{ action = "stop", app = "app" }"# }),
+        ),
+        ("teardown_delete", serde_json::json!({ "n": 2 })),
+    ] {
+        let (c, err) = call(&client, tool, args).await;
+        assert!(!err, "{tool}: {c}");
+    }
+    let (c, _) = call(&client, "draft_show", serde_json::json!({})).await;
+    let draft = text_of(&c);
+    assert!(
+        draft.contains("[flow.options]\nstep_timeout = 8000"),
+        "{draft}"
+    );
+    assert!(draft.contains("record = true"), "{draft}");
+    assert!(!draft.contains(r#"action = "stop""#), "{draft}");
+    assert!(draft.contains(r#"{ action = "screenshot" }"#), "{draft}");
+    let (c, err) = call(
+        &client,
+        "options_set",
+        serde_json::json!({ "options": { "step_timout": 1 } }),
+    )
+    .await;
+    assert!(err, "an unknown option SHALL be refused: {c}");
 
     let (c, err) = call(
         &client,

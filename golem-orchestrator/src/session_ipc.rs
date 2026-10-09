@@ -504,6 +504,17 @@ fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEd
         "block_delete" => DraftEdit::BlockDelete {
             name: need("name")?,
         },
+        "options_set" => DraftEdit::OptionsSet(object("options")?),
+        "block_set" => DraftEdit::BlockSet {
+            name: need("name")?,
+            fields: object("fields")?,
+        },
+        "teardown_delete" => DraftEdit::TeardownDelete(
+            msg["n"]
+                .as_u64()
+                .ok_or_else(|| anyhow::anyhow!("this edit needs `n`, the teardown step from 1"))?
+                as usize,
+        ),
         other => anyhow::bail!("unknown draft edit: {other:?}"),
     })
 }

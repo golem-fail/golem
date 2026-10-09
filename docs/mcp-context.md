@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 347 |
-| Tool list (30 tools, as `tools/list` JSON) | 12020 |
-| Both, kept in context by most clients | 12367 |
+| Tool list (33 tools, as `tools/list` JSON) | 13220 |
+| Both, kept in context by most clients | 13567 |
 
 ## Instructions
 
@@ -83,6 +83,15 @@ Rename a block, and each next, goto and start that names it.
 | `name` (required) | string |  |
 | `to` (required) | string |  |
 
+### `block_set`
+
+Set a block's own fields: app, for_each, where (the device filter), run_flow, vars, save_to, record. block_link sets next and branches. The block's steps then become ? and ~.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `fields` (required) | object | { "for_each": "data", "where": { "os": "ios" } }; null removes a key. |
+| `name` (required) | string |  |
+
 ### `cancel`
 
 Stop the running operation. No teardown runs.
@@ -97,7 +106,7 @@ Add a comment line at the cursor.
 
 ### `data_add`
 
-Add a [[data]] row. A block with for_each = "data" runs once per row; its steps read ${_each.field}.
+Add a [[data]] row. A block with for_each = "data" (block_set) runs once per row; its steps read ${_each.field}.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -168,6 +177,14 @@ The docs, one piece at a time: help() lists the topics, help(topic) a topic's it
 ### `mixins_list`
 
 The project's mixins and the vars each uses. Run one with act: { action = "load_mixin", mixin = "name", vars = { … } }.
+
+### `options_set`
+
+Set [flow.options] keys of the draft, such as step_timeout, app_lifecycle, max_runtime, record or coverage. help("flow", "flow/options") lists them. An unknown key or a wrong type is refused.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `options` (required) | object | { "step_timeout": 8000, "app_lifecycle": "manual" }; null removes a key. |
 
 ### `probe`
 
@@ -261,6 +278,14 @@ Add a step to the draft's [[teardown]]. It does not run.
 |-----------|------|-------------|
 | `comment` | string |  |
 | `step` (required) | string |  |
+
+### `teardown_delete`
+
+Remove a [[teardown]] step. To change one, remove it and teardown_add the new one.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `n` (required) | integer | The teardown step, from 1. |
 
 ### `tree`
 

@@ -16,6 +16,7 @@ use anyhow::{bail, Context, Result};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
 
 mod edit;
+mod setup;
 mod status;
 pub use status::{StatusCounts, StepStatus, StepsQuery};
 
@@ -971,7 +972,7 @@ name = "end"
 steps = [{ action = "assert_visible", on_text = "Done" }]
 "#;
 
-    fn draft_of(text: &str) -> (tempfile::TempDir, Draft) {
+    pub(super) fn draft_of(text: &str) -> (tempfile::TempDir, Draft) {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("f.test.toml");
         std::fs::write(&path, text).expect("write");
