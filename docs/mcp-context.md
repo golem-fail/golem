@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (32 tools, as `tools/list` JSON) | 12196 |
-| Both, kept in context by most clients | 12536 |
+| Tool list (31 tools, as `tools/list` JSON) | 12075 |
+| Both, kept in context by most clients | 12415 |
 
 ## Instructions
 
@@ -25,6 +25,7 @@ Run one step on the device: a one-line TOML inline table, e.g. { action = "tap",
 |-----------|------|-------------|
 | `comment` | string | Line above the step in the draft. |
 | `format` | string | "toon" (default) or "json". |
+| `run` | boolean | false: record without running, for a path the session does not take; it and the next step become ?. Default true. |
 | `step` (required) | string |  |
 | `tree` | boolean | Also return the visible tree after the step. |
 
@@ -187,15 +188,6 @@ What a selector matches, without acting: each visible match, which one act picks
 | `format` | string | "toon" (default) or "json". |
 | `selector` (required) | string | { on_text = "Sign in" }; a whole step works too. |
 | `timeout_ms` | integer | Poll this long while nothing matches. Default 0. |
-
-### `record_only`
-
-Record a step at the cursor without running it, for a path the session does not take. It and the next step become ?.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `comment` | string |  |
-| `step` (required) | string |  |
 
 ### `screenshot`
 
