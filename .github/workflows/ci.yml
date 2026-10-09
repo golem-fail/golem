@@ -50,9 +50,10 @@ jobs:
               - '.github/workflows/ci.yml'
             # Data compiled into crates via include_str!/build.rs. Not .rs, so it
             # never trips fmt/clippy, but a change here can break a runtime test —
-            # so it must still fire `cargo t`. `docs/actions-reference.md` is the
-            # odd one out: it's a doc file that a doc-consistency test reads, so it
-            # cannot ride the usual "docs-only = skip" path.
+            # so it must still fire `cargo t`. The docs below are the odd ones out:
+            # golem-docs builds the pages from docs/src and checks each against its
+            # parts, and golem-cli embeds the parts, so they cannot ride the usual
+            # "docs-only = skip" path.
             data:
               - 'data/cards/**/*.json'
               - 'data/geo/**/*.json'
@@ -61,7 +62,12 @@ jobs:
               - 'golem-driver/src/ios_display.toml'
               - 'golem-driver/src/dom_traversal.js'
               - 'golem-cli/templates/install-scripts/**/*.sh'
+              - 'docs/src/**'
               - 'docs/actions-reference.md'
+              - 'docs/error-codes.md'
+              - 'docs/fake-data.md'
+              - 'docs/selectors.md'
+              - 'docs/test-structure.md'
             # The workflow file itself counts: a change to a companion lane
             # should run that lane, or its config is only ever tested by the
             # next PR that happens to touch a companion — which is how the

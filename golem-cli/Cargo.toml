@@ -19,6 +19,9 @@ default = ["browser"]
 # reports H501 on the first browser step.
 browser = ["golem-orchestrator/browser", "golem-runner/browser"]
 
+[build-dependencies]
+golem-docs = { path = "../golem-docs" }
+
 [dependencies]
 golem-browser = { path = "../golem-browser" }
 golem-runner = { path = "../golem-runner" }

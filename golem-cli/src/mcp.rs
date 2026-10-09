@@ -1065,7 +1065,38 @@ fn running_line(status: &str, r: &serde_json::Value) -> String {
     )
 }
 
-const ACTIONS_REFERENCE: &str = include_str!("../../docs/actions-reference.md");
+include!(concat!(env!("OUT_DIR"), "/help_parts.rs"));
+
+/// The docs part at `address` (`docs/src`): the LLM's text when the part has
+/// one.
+pub fn help_part(address: &str) -> Option<&'static str> {
+    HELP_PARTS
+        .iter()
+        .find(|(a, _)| *a == address)
+        .map(|(_, text)| *text)
+}
+
+/// The action parts: each part under `actions-reference` whose heading
+/// names actions, as (names, summary, text).
+fn action_parts() -> impl Iterator<Item = (Vec<String>, String, &'static str)> {
+    HELP_PARTS
+        .iter()
+        .filter(|(a, _)| a.starts_with("actions-reference/"))
+        .filter_map(|(_, text)| {
+            let heading = text.lines().next()?.strip_prefix("### ")?;
+            if !heading.starts_with('`') {
+                return None;
+            }
+            let (names, summary) = heading.split_once(" — ").unwrap_or((heading, ""));
+            let names = names
+                .split('`')
+                .enumerate()
+                .filter(|(i, _)| i % 2 == 1)
+                .map(|(_, n)| n.to_string())
+                .collect();
+            Some((names, summary.to_string(), *text))
+        })
+}
 
 /// The notation and every action with its one-line summary.
 fn actions_overview() -> String {
@@ -1077,12 +1108,12 @@ fn actions_overview() -> String {
          Common options: timeout (ms), auto_scroll = true, if_fail = \"warn\", retry.\n\
          Call actions_help(action) for one action's fields and examples.\n\nActions:\n",
     );
-    let summaries = section_titles();
+    let summaries: Vec<_> = action_parts().collect();
     for action in golem_parser::validation::known_actions() {
         let summary = summaries
             .iter()
-            .find(|(names, _)| names.iter().any(|n| n == action))
-            .map(|(_, s)| s.as_str())
+            .find(|(names, _, _)| names.iter().any(|n| n == action))
+            .map(|(_, s, _)| s.as_str())
             .unwrap_or("");
         out.push_str(&format!(
             "- {action}{}\n",
@@ -1096,41 +1127,11 @@ fn actions_overview() -> String {
     out
 }
 
-/// Each `### \`action\` — summary` heading: its action names and summary.
-fn section_titles() -> Vec<(Vec<String>, String)> {
-    ACTIONS_REFERENCE
-        .lines()
-        .filter_map(|l| l.strip_prefix("### "))
-        .filter(|l| l.starts_with('`'))
-        .map(|l| {
-            let (names, summary) = l.split_once(" — ").unwrap_or((l, ""));
-            let names = names
-                .split('`')
-                .enumerate()
-                .filter(|(i, _)| i % 2 == 1)
-                .map(|(_, n)| n.to_string())
-                .collect();
-            (names, summary.to_string())
-        })
-        .collect()
-}
-
-/// The reference section for `action`, from its heading to the next.
+/// The reference part for `action`.
 fn action_section(action: &str) -> Option<String> {
-    let lines: Vec<&str> = ACTIONS_REFERENCE.lines().collect();
-    let start = lines.iter().position(|l| {
-        l.strip_prefix("### ").is_some_and(|h| {
-            h.split(" — ")
-                .next()
-                .unwrap_or("")
-                .contains(&format!("`{action}`"))
-        })
-    })?;
-    let end = lines[start + 1..]
-        .iter()
-        .position(|l| l.starts_with("### ") || l.starts_with("## "))
-        .map_or(lines.len(), |i| start + 1 + i);
-    Some(lines[start..end].join("\n").trim_end().to_string() + "\n")
+    action_parts()
+        .find(|(names, _, _)| names.iter().any(|n| n == action))
+        .map(|(_, _, text)| text.trim_end().to_string() + "\n")
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -1566,6 +1567,15 @@ mod tests {
         );
         assert!(!tap.contains("### `double_tap`"), "{tap}");
         assert!(action_section("explode").is_none());
+    }
+
+    #[test]
+    fn a_docs_part_is_found_by_its_address() {
+        let browser = help_part("actions-reference/browser").expect("the browser intro");
+        assert!(browser.starts_with("## Browser"), "{browser}");
+        let tap = help_part("actions-reference/interaction/tap").expect("tap");
+        assert!(tap.starts_with("### `tap`"), "{tap}");
+        assert!(help_part("actions-reference/interaction/explode").is_none());
     }
 
     #[test]

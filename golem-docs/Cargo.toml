@@ -1,0 +1,10 @@
+[package]
+name = "golem-docs"
+version.workspace = true
+edition = "2021"
+description = "Builds the user docs pages from the parts in docs/src."
+
+[dependencies]
+
+[lints]
+workspace = true

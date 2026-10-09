@@ -13,6 +13,7 @@ members = [
     "golem-orchestrator",
     "golem-common",
     "golem-browser",
+    "golem-docs",
 ]
 exclude = ["test-app/src-tauri"]
 resolver = "2"

@@ -1,0 +1,6 @@
+# Built from docs/src by golem-docs; GitHub collapses them in PR diffs.
+docs/actions-reference.md linguist-generated=true
+docs/error-codes.md linguist-generated=true
+docs/fake-data.md linguist-generated=true
+docs/selectors.md linguist-generated=true
+docs/test-structure.md linguist-generated=true
