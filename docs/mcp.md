@@ -481,6 +481,8 @@ A change, such as a new step from `act` or `record_only`, sets these statuses:
 
 Only `?` goes into the file, as a `# unverified` line above the step. A step that passes in the session loses the line. `export_flow` gives the count of each status and lists the unverified steps.
 
+`export_flow` checks the draft as `golem run` does before it boots a device: with `golem.toml` merged in and mixins expanded, each step's action and required keys, each block that `start` or a `goto` names, and each branch. If the check fails, the tool writes nothing and lists the errors. If it passes, the tool writes the file and returns the warnings that `golem run` would give. `act`, `record_only`, `teardown_add` and `step_edit` already refuse a step that fails the check. `block_link` refuses a branch that fails it, but a `goto` can name a block that you add later.
+
 `draft_steps` takes these arguments:
 
 - `around`: `cursor` (the default), or a step address.
@@ -515,7 +517,7 @@ A flow is a list of blocks. After a block's last step, the flow goes to the firs
 | Tool | What it does |
 |------|--------------|
 | `block_begin(name, next?)` | Moves the cursor to the end of block `name`. If the draft has no block with that name, the tool creates it at the end of the draft. |
-| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`) and a `goto`. |
+| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`) and a `goto`. The tool refuses a branch with two conditions, or with `if_var` and no comparison. |
 | `block_rename(name, to)` | Renames the block, and each `next`, `goto` and `[flow] start` that names it. |
 | `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
 
@@ -546,7 +548,6 @@ These tools change only the draft. They never touch the device, and they set no 
 | `options_set(options)` | Sets `[flow.options]` keys, such as `step_timeout`, `app_lifecycle`, `max_runtime`, `record` or `coverage`. A null value removes a key. The tool refuses an unknown key, or a value of the wrong type. |
 | `block_set(name, fields)` | Sets a block's own fields: `app`, `for_each`, `where` (the device filter), `run_flow`, `vars`, `save_to` and `record`. A null value removes a field. The block's steps then become `?` and `~`. `block_link` sets `next` and branches. |
 | `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` (set it with `block_set`) runs once for each row, and its steps read the fields as `${_each.field}`. |
-| `comment_add(text)` | Adds a comment line at the cursor. |
 | `mixins_list` | Lists the project's mixins and the variables each uses. To use a mixin, run `act` with `{ action = "load_mixin", mixin = "name", vars = { … } }`. The draft records the `load_mixin` step, not the mixin's steps. |
 
 ## Example: write a new flow

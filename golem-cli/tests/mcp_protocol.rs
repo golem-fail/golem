@@ -91,7 +91,6 @@ async fn every_tool_works_against_a_stub_session() {
         "block_link",
         "teardown_add",
         "data_add",
-        "comment_add",
         "record_only",
         "step_edit",
         "step_delete",
@@ -269,7 +268,6 @@ async fn every_tool_works_against_a_stub_session() {
             serde_json::json!({ "app": { "name": "app", "bundle": golem_driver::stub::STUB_BUNDLE_ID, "devices": [{ "os": "android:latest" }] } }),
         ),
         ("block_begin", serde_json::json!({ "name": "second" })),
-        ("comment_add", serde_json::json!({ "text": "Check it" })),
         (
             "record_only",
             serde_json::json!({ "step": r#"{ action = "tap", on_text = "Maybe" }"#, "comment": "error path" }),

@@ -248,7 +248,6 @@ pub enum DraftEdit {
         comment: Option<String>,
     },
     DataAdd(serde_json::Map<String, serde_json::Value>),
-    CommentAdd(String),
     /// A step that does not run, for a path the live session does not take.
     RecordOnly {
         step: String,
@@ -295,7 +294,6 @@ impl DraftEdit {
             DraftEdit::BlockLink { .. } => "block_link",
             DraftEdit::TeardownAdd { .. } => "teardown_add",
             DraftEdit::DataAdd(_) => "data_add",
-            DraftEdit::CommentAdd(_) => "comment_add",
             DraftEdit::RecordOnly { .. } => "record_only",
             DraftEdit::StepEdit { .. } => "step_edit",
             DraftEdit::StepDelete { .. } => "step_delete",
@@ -356,7 +354,6 @@ impl DraftEdit {
                 draft.teardown_add(&line(step)?, comment.as_deref())
             }
             DraftEdit::DataAdd(row) => draft.data_add(row),
-            DraftEdit::CommentAdd(text) => draft.comment_add(text),
             DraftEdit::RecordOnly { step, comment } => {
                 draft.record_unverified(&line(step)?, comment.as_deref())
             }
@@ -400,6 +397,7 @@ pub enum OpResult {
         /// The count of steps with each status, as text.
         counts: String,
         unverified: Vec<String>,
+        warnings: Vec<String>,
     },
     /// The session holds its device now.
     Opened {
@@ -1571,12 +1569,13 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
                     .unwrap_or_else(|| work.project_root.clone())
                     .join(path)
             };
-            match work.draft.export(&path, *overwrite) {
+            match work.draft.export(&path, *overwrite, &work.project_root) {
                 Ok(done) => OpResult::Exported {
                     path: done.path,
                     steps: done.steps,
                     counts: done.counts.to_string(),
                     unverified: done.unverified,
+                    warnings: done.warnings,
                 },
                 Err(e) => OpResult::Failed(format!("{e:#}")),
             }
@@ -1750,17 +1749,13 @@ async fn draft_run(
     stop_at: Option<&str>,
     status: &Arc<Mutex<Status>>,
 ) -> Result<OpResult> {
-    let mut flow = golem_parser::parse_flow(&work.draft.text())
-        .context("the draft does not parse as a flow")?;
-    let errors = golem_parser::validation::validate_flow(&flow);
-    if !errors.is_empty() {
-        let detail: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-        anyhow::bail!("the draft does not validate: {}", detail.join("; "));
-    }
+    let text = work.draft.text();
+    let mut flow = golem_parser::parse_flow(&text).context("the draft does not parse as a flow")?;
     let flow_dir = work
         .draft
         .source_dir()
         .map_or_else(|| work.project_root.clone(), Path::to_path_buf);
+    crate::plan::check_flow_text(&text, &flow_dir.join("draft.test.toml"), &work.project_root)?;
     for block in &mut flow.block {
         block.steps =
             golem_parser::mixin::expand_mixins(&block.steps, &flow_dir, &work.project_root)?;

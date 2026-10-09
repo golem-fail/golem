@@ -43,13 +43,21 @@ pub const BLOCK_KEYS: &[&str] = &[
 ];
 
 impl Draft {
-    /// Run `change`; if the draft then does not parse as a flow, undo it.
-    fn checked(&mut self, change: impl FnOnce(&mut Self) -> Result<()>) -> Result<()> {
+    /// Run `change`; if the draft then does not parse as a flow, or has a
+    /// validation error it did not have before, undo it.
+    pub(super) fn checked(&mut self, change: impl FnOnce(&mut Self) -> Result<()>) -> Result<()> {
         let before = self.doc.clone();
+        let had = edit_errors(&self.text()).unwrap_or_default();
         let result = change(self).and_then(|()| {
-            golem_parser::parse_flow(&self.text())
-                .map(|_| ())
-                .map_err(|e| anyhow::anyhow!("the flow would not parse: {e:#}"))
+            let new: Vec<String> = edit_errors(&self.text())?
+                .into_iter()
+                .filter(|e| !had.contains(e))
+                .collect();
+            if new.is_empty() {
+                Ok(())
+            } else {
+                bail!("{}", new.join("; "))
+            }
         });
         if result.is_err() {
             self.doc = before;
@@ -129,6 +137,25 @@ impl Draft {
         array.remove(n - 1);
         self.reparse()
     }
+}
+
+/// The validation errors an edit can be refused for. Not a missing block,
+/// which a later `block_begin` can add, nor an app's missing devices, which
+/// golem.toml can supply: export checks those.
+fn edit_errors(text: &str) -> Result<Vec<String>> {
+    use golem_parser::validation::ValidationErrorKind as Kind;
+    let flow = golem_parser::parse_flow(text)
+        .map_err(|e| anyhow::anyhow!("the flow would not parse: {e:#}"))?;
+    Ok(golem_parser::validation::validate_flow(&flow)
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.kind,
+                Kind::InvalidGotoTarget | Kind::InvalidStartBlock | Kind::MissingDevices
+            )
+        })
+        .map(|e| e.message)
+        .collect())
 }
 
 fn set_keys(

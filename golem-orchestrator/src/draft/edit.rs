@@ -262,7 +262,6 @@ impl Draft {
         let (step, comments) = self.remove_step(fb, fi)?;
         self.reparse()?;
         self.after_change(fb, fi, fi)?;
-        let pending = self.pending_comment.take();
         let at = self.insert_step(
             &Insertion {
                 block: tb,
@@ -271,7 +270,6 @@ impl Draft {
             step,
             None,
         );
-        self.pending_comment = pending;
         let at = at?;
         self.reparse()?;
         if let Some(s) = self.status.get_mut(tb) {

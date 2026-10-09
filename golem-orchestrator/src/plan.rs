@@ -286,8 +286,28 @@ fn parse_one(
 ) -> Result<(FlowFile, Vec<String>)> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading flow file {}", path.display()))?;
+    prepare_flow(
+        &text,
+        path,
+        project_apps,
+        project_defaults,
+        project_root,
+        active_profile,
+    )
+}
+
+/// Parse + merge + mixin-expand a flow's text, as if it were the file at
+/// `path`: mixins resolve from that file's directory.
+fn prepare_flow(
+    text: &str,
+    path: &Path,
+    project_apps: &[ProjectAppConfig],
+    project_defaults: Option<&golem_parser::config::ProjectConfig>,
+    project_root: &Path,
+    active_profile: Option<&str>,
+) -> Result<(FlowFile, Vec<String>)> {
     let mut flow =
-        parse_flow(&text).with_context(|| format!("parsing flow file {}", path.display()))?;
+        parse_flow(text).with_context(|| format!("parsing flow file {}", path.display()))?;
     // Project defaults lose to anything the flow states itself, so the merge
     // happens before profile resolution and mixin expansion — both of which
     // read the flow's own values.
@@ -304,6 +324,33 @@ fn parse_one(
     }
 
     Ok((flow, profile_notes))
+}
+
+/// Check a flow that is not yet a file as `golem run` checks it before any
+/// device work: golem.toml merged, mixins expanded, `validate_flow`.
+/// Returns the warnings the run would print.
+pub fn check_flow_text(text: &str, path: &Path, project_root: &Path) -> Result<Vec<String>> {
+    let (project, _) = crate::project::ProjectConfig::load_from(project_root)?;
+    let defaults = golem_parser::config::load_project_config(project_root)
+        .ok()
+        .flatten();
+    let (flow, notes) = prepare_flow(
+        text,
+        path,
+        &project.apps,
+        defaults.as_ref(),
+        project_root,
+        None,
+    )?;
+    let errors = golem_parser::validation::validate_flow(&flow);
+    if !errors.is_empty() {
+        let detail: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+        anyhow::bail!("the flow does not validate: {}", detail.join("; "));
+    }
+    Ok(notes
+        .into_iter()
+        .chain(lint_warnings_for(path, &flow))
+        .collect())
 }
 
 /// Soft lints — warnings but not failures. A future `--validate` mode

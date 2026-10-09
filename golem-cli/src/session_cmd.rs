@@ -256,6 +256,12 @@ pub(crate) fn note_text(reply: &serde_json::Value) -> Option<String> {
                 out.push_str(&format!("  {}\n", step.as_str().unwrap_or_default()));
             }
         }
+        for warning in r["warnings"].as_array().into_iter().flatten() {
+            out.push_str(&format!(
+                "warning: {}\n",
+                warning.as_str().unwrap_or_default()
+            ));
+        }
         return Some(out);
     }
     if r["opened"] == true {
