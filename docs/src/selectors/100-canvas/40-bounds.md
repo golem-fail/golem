@@ -13,8 +13,8 @@ them into view. Compose has two differences between the platforms:
 A lazy Flutter `ListView` leaves its off-screen items out of the Android tree.
 On iOS it keeps them, with a zero-size frame at the origin.
 
-`assert_not_visible` searches the full tree, not the visible tree. Thus on iOS it
-treats these nodes as present and waits until its timeout: an off-screen node
-of a non-lazy Compose layout, and an off-screen item of a Flutter `ListView`. A
-Compose lazy layout (`LazyColumn`) disposes of off-screen items, so
-`assert_not_visible` works there on both platforms.
+Both kinds of node fall outside the viewport, so `assert_not_visible` treats
+them as absent on both platforms, as a user would. One caveat remains on iOS:
+a non-lazy Compose node that its scroll container hides but that is still
+inside the screen keeps its full `visible_bounds`, so golem counts it as on
+screen.

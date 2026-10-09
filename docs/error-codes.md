@@ -43,7 +43,7 @@ Codes appear in every output format:
 | `F404` | No visible element matched the selector before the timeout. | Fix the selector, add `auto_scroll = true`, or wait for the screen first. |
 | `F405` | The element exists, but scrolling did not bring it into view. | Set `within` to the scroll container that holds the element. |
 | `F408` | The step ran past its timeout. | Raise the step's `timeout`; if many steps time out, check the host and device. |
-| `F409` | `assert_not_visible`: the element is still present. | Wait for the screen change first, or report the app bug. |
+| `F409` | `assert_not_visible`: the element is still on screen. | Wait for the screen change first, or report the app bug. |
 | `F412` | The alert or text did not match the expected value. | Fix the expected value, or report the app bug. |
 | `F417` | An alert is shown, but golem could not press its button. | Name a button that the alert has. |
 | `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |

@@ -1,6 +1,6 @@
 ### `assert_not_visible` — Wait for / assert element absent
 
-Poll the hierarchy until no element matches the selectors, or `timeout` elapses (default 10s).
+Poll until no element matching the selectors is visible on screen, or `timeout` elapses (default 10s). An element still in the hierarchy but scrolled off screen, clipped by its container, or behind the keyboard counts as not visible.
 
 ```toml
 { action = "assert_not_visible", on_text = "Error" }

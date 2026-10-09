@@ -86,7 +86,7 @@ pub enum FailureCode {
     FlowElementOffscreen,
     /// F408: step exceeded its effective timeout.
     FlowStepTimeout,
-    /// F409: assert_not_visible — element still present.
+    /// F409: assert_not_visible — element still visible on screen.
     FlowUnexpectedlyPresent,
     /// F412: assertion mismatch (alert/text).
     FlowAssertionMismatch,
@@ -380,7 +380,7 @@ impl FailureCode {
             FlowElementNotFound => "No visible element matched the selector before the timeout.",
             FlowElementOffscreen => "The element exists, but scrolling did not bring it into view.",
             FlowStepTimeout => "The step ran past its timeout.",
-            FlowUnexpectedlyPresent => "`assert_not_visible`: the element is still present.",
+            FlowUnexpectedlyPresent => "`assert_not_visible`: the element is still on screen.",
             FlowAssertionMismatch => "The alert or text did not match the expected value.",
             FlowAlertInteraction => "An alert is shown, but golem could not press its button.",
             FlowExternalFailed => {

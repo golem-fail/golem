@@ -471,10 +471,12 @@ pub async fn resolve_element_full_tree(
     Ok((first.element.clone(), (first.tap_x, first.tap_y)))
 }
 
-/// Poll until NO element matches the step's selectors, or timeout.
+/// Poll until NO element matches the step's selectors in the **visible**
+/// tree, or timeout.
 ///
-/// Searches the **full** hierarchy (not viewport-filtered) — an element that
-/// exists anywhere in the tree counts as present.
+/// Judges with [`visible_matches`], the same tree [`resolve_element`] acts
+/// on: an element that is still in the hierarchy but off screen, clipped by
+/// an ancestor, or behind the keyboard counts as absent.
 ///
 /// Returns `Ok(())` as soon as the element disappears. If still present at
 /// timeout, returns an error. First check runs immediately — zero overhead
@@ -485,7 +487,7 @@ pub async fn poll_for_absence(step: &Step, driver: &dyn PlatformDriver) -> Resul
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
     loop {
-        let (root, _meta) = match get_hierarchy_bounded(driver).await {
+        let (root, meta) = match get_hierarchy_bounded(driver).await {
             Ok((root, meta)) => {
                 crate::record_tree_fetch(meta.node_count);
                 (root, meta)
@@ -500,7 +502,7 @@ pub async fn poll_for_absence(step: &Step, driver: &dyn PlatformDriver) -> Resul
             }
             Err(e) => return Err(e),
         };
-        let results = find_elements(&root, &selector);
+        let (_, _, results) = visible_matches(&root, meta.keyboard_height, &selector);
 
         if results.is_empty() {
             return Ok(());
@@ -510,7 +512,7 @@ pub async fn poll_for_absence(step: &Step, driver: &dyn PlatformDriver) -> Resul
             let elapsed_secs = timeout_ms as f64 / 1000.0;
             crate::fail_code!(
                 golem_events::FailureCode::FlowUnexpectedlyPresent,
-                "Expected no element matching selector after {elapsed_secs:.1}s, \
+                "Expected no element matching selector on screen after {elapsed_secs:.1}s, \
                  but found {}: text={:?}, id={:?}",
                 results.len(),
                 selector.text,
@@ -1408,26 +1410,71 @@ mod tests {
         );
     }
 
-    // ── 27. poll_for_absence finds element off-screen too (full tree) ─
+    // ── 27. poll_for_absence judges the visible tree, not the full tree ─
+
+    fn absence_step(text: &str) -> Step {
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some(text.to_string());
+        step.timeout = Some(50);
+        step
+    }
 
     #[tokio::test]
-    async fn poll_for_absence_searches_full_tree_offscreen() {
+    async fn poll_for_absence_treats_offscreen_element_as_absent() {
         let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
-        // Element far off-screen (y = 5000) — viewport filter would hide it,
-        // but poll_for_absence searches the full tree, so it counts present.
         root.children.push(make_element_with_text(
             "Label",
             "OffScreen",
             Bounds::new(0, 5000, 100, 30),
         ));
         let driver = MockPlatformDriver::new(root);
-        let mut step = make_step("assert_not_visible");
-        step.on_text = Some("OffScreen".to_string());
-        step.timeout = Some(50);
-        let result = poll_for_absence(&step, &driver).await;
+        poll_for_absence(&absence_step("OffScreen"), &driver)
+            .await
+            .expect("an element in the tree but outside the viewport SHALL count as absent");
+    }
+
+    #[tokio::test]
+    async fn poll_for_absence_treats_ancestor_clipped_element_as_absent() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        let mut container = make_element("ScrollView", Bounds::new(0, 100, 400, 200));
+        // On screen by its own bounds, but its scroll container clips it
+        // away entirely: the companions report a fully clipped node as the
+        // empty rect at the origin.
+        let mut clipped = make_element_with_text("Label", "Clipped", Bounds::new(10, 350, 100, 30));
+        clipped.visible_bounds = Some(Bounds::new(0, 0, 0, 0));
+        container.children.push(clipped);
+        root.children.push(container);
+        let driver = MockPlatformDriver::new(root);
+        poll_for_absence(&absence_step("Clipped"), &driver)
+            .await
+            .expect("an element clipped away by an ancestor SHALL count as absent");
+    }
+
+    #[tokio::test]
+    async fn poll_for_absence_fails_f409_when_element_on_screen() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        root.children.push(make_element_with_text(
+            "Label",
+            "OnScreen",
+            Bounds::new(0, 5000, 100, 30),
+        ));
+        root.children.push(make_element_with_text(
+            "Label",
+            "OnScreen",
+            Bounds::new(0, 200, 100, 30),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let err = poll_for_absence(&absence_step("OnScreen"), &driver)
+            .await
+            .expect_err("an on-screen element SHALL fail the absence poll");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowUnexpectedlyPresent),
+            "SHALL fail with F409, got: {err}"
+        );
         assert!(
-            result.is_err(),
-            "off-screen element SHALL count as present in full-tree absence poll"
+            format!("{err}").contains("found 1:"),
+            "SHALL count only the on-screen match, got: {err}"
         );
     }
 
