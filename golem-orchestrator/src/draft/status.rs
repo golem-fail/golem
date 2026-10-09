@@ -1048,7 +1048,7 @@ steps = [{ action = "tap", on_text = "Lead" }]
     fn export_reports_the_counts_and_each_unverified_step() {
         let (dir, mut d) = draft_of(FLOW);
         let done = d
-            .export(&dir.path().join("f.test.toml"), false)
+            .export(&dir.path().join("f.test.toml"), false, dir.path())
             .expect("export");
         assert_eq!(done.counts.to_string(), "5 · not run, 1 ? unverified");
         assert_eq!(

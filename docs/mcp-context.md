@@ -5,51 +5,51 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 
 | Text | Characters |
 |------|-----------:|
-| Instructions | 347 |
-| Tool list (33 tools, as `tools/list` JSON) | 13220 |
-| Both, kept in context by most clients | 13567 |
+| Instructions | 340 |
+| Tool list (32 tools, as `tools/list` JSON) | 12196 |
+| Both, kept in context by most clients | 12536 |
 
 ## Instructions
 
 ```text
-golem (MCP server): Mobile e2e testing on iOS and Android simulators and emulators. Use it when the user wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs. Start with session_open; help() explains the steps and the flow file.
+golem (MCP server): Mobile e2e testing on iOS and Android simulators and emulators. Use when the user wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs. Start with session_open; help() explains steps and the flow file.
 ```
 
 ## Tools
 
 ### `act`
 
-Run one step on the device: a one-line TOML inline table, such as { action = "tap", on_text = "Sign in" }; help("act") lists the actions. Prefer on_text, the text a user reads; use on_accessibility_label only to test that label. A step that passes goes into the flow draft at the cursor, as written (a ${var} stays a reference); a failed step does not.
+Run one step on the device: a one-line TOML inline table, e.g. { action = "tap", on_text = "Sign in" }; help("act") lists actions. Prefer on_text (text a user reads); on_accessibility_label only to test that label. A passing step goes into the draft at the cursor as written (${var} stays a reference); a failed one does not.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `comment` | string | Goes above the step in the draft. |
-| `format` | string | "toon" (compact text, default) or "json". |
+| `comment` | string | Line above the step in the draft. |
+| `format` | string | "toon" (default) or "json". |
 | `step` (required) | string |  |
 | `tree` | boolean | Also return the visible tree after the step. |
 
 ### `app_logs`
 
-The app's device log (Android logcat, iOS simulator; not physical iOS): crash lines first, then the newest. Answers while another operation runs.
+App's device log (Android logcat, iOS simulator; not physical iOS): crash lines first, then newest. Answers while another operation runs.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `app` | string | An app name or bundle id. Default: the session's app. |
-| `filter` | string | Only lines with this text, in any case. |
-| `limit` | integer | Lines besides crash lines. Default 200, the newest. |
-| `since` | integer | Seconds back. Default: since the session opened. |
+| `app` | string | App name or bundle id. Default: session's app. |
+| `filter` | string | Only lines with this text, any case. |
+| `limit` | integer | Lines besides crash lines. Default 200 newest. |
+| `since` | integer | Seconds back. Default: since session opened. |
 
 ### `apps_set`
 
-Add or replace a [[flow.apps]] entry in the draft. The session does not change.
+Add or replace a draft [[flow.apps]] entry. Session unchanged.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `app` (required) | object | { "name": "app", "bundle": "com.acme", "devices": [{ "os": "ios:latest" }] }; also permissions, install_script. The same name replaces those fields. |
+| `app` (required) | object | { "name": "app", "bundle": "com.acme", "devices": [{ "os": "ios:latest" }] }; also permissions, install_script. Same name replaces given fields. |
 
 ### `block_begin`
 
-Move the cursor to the end of a block; a new name adds the block at the end.
+Move the cursor to the end of a block; a new name adds a block at the end.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -66,7 +66,7 @@ Remove a block and its steps. Refused while a next, goto or start names it.
 
 ### `block_link`
 
-Set a block's next, and add branches. After its steps a block takes the first branch that holds. A block with branches ignores next: with no match it goes to the next block in the file. Without branches: next, else the next block.
+Set a block's next; add branches. After its steps a block takes the first branch that holds; with branches, next is ignored and no match goes to the next block in the file. Without branches: next, else the next block.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -76,7 +76,7 @@ Set a block's next, and add branches. After its steps a block takes the first br
 
 ### `block_rename`
 
-Rename a block, and each next, goto and start that names it.
+Rename a block and each next, goto and start naming it.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -85,7 +85,7 @@ Rename a block, and each next, goto and start that names it.
 
 ### `block_set`
 
-Set a block's own fields: app, for_each, where (the device filter), run_flow, vars, save_to, record. block_link sets next and branches. The block's steps then become ? and ~.
+Set a block's own fields: app, for_each, where (device filter), run_flow, vars, save_to, record. Its steps then become ? and ~.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -95,14 +95,6 @@ Set a block's own fields: app, for_each, where (the device filter), run_flow, va
 ### `cancel`
 
 Stop the running operation. No teardown runs.
-
-### `comment_add`
-
-Add a comment line at the cursor.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `text` (required) | string |  |
 
 ### `data_add`
 
@@ -118,69 +110,69 @@ Devices in any state: platform, id, name, OS, state, live companion port.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `os` | string | "ios", "android", "ios:26", "ios:26+" or "ios:latest". |
+| `os` | string | As session_open's os. |
 
 ### `draft_run`
 
-Run the draft on the device: no setup, no teardown, the app as it is. Steps that pass become ✓, also from ? or ~. Stops before stop_at, at a failed step, or at the end; the cursor goes there.
+Run the draft on the device: no setup, no teardown, app as is. Passing steps become ✓. Stops before stop_at, at a failed step, or at the end; cursor goes there.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `restart` | boolean | true: from the start. Default false: from the cursor. |
-| `stop_at` | string | Stop before this step: block or block:step. |
+| `restart` | boolean | true: from the start. Default: from the cursor. |
+| `stop_at` | string | Stop before block or block:step. |
 
 ### `draft_show`
 
-The flow draft as .test.toml text: the opened flow, or a new flow with block main.
+Draft as .test.toml text: the opened flow, or a new flow with block main.
 
 ### `draft_steps`
 
-The draft's steps near the cursor, or one block's, each as block:step (from 1), status, step and comment. Status: ✓ passed here, · not run here, ? unverified (# unverified in the file), ~ stale. A change (a new, edited, moved or deleted step) makes the next step ? and later steps ~. Block headers show next and branches.
+Draft steps near the cursor, or one block's: block:step (from 1), status, step, comment. Status: ✓ passed here, · not run here, ? unverified (# unverified in file), ~ stale. A change (new, edited, moved or deleted step) makes the next step ? and later steps ~. Block headers show next and branches.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `around` | string | "cursor" (default) or block:step. |
 | `block` | string | List this block instead. |
-| `context` | integer | Steps on each side. Default 5. |
+| `context` | integer | Steps each side. Default 5. |
 | `limit` | integer |  |
 
 ### `export_flow`
 
-Validate the draft as golem run does; if valid, write it. Reports the status counts and the unverified steps.
+Check the draft as golem run does (golem.toml merged; actions, required keys, block names, branches); if it passes, write it. Returns status counts, unverified steps, run warnings.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `overwrite` | boolean | Needed to replace a file this session did not open or export. |
-| `path` (required) | string | Relative to the project, or absolute. |
+| `path` (required) | string | Relative to project, or absolute. |
 
 ### `flow_set`
 
-Set [flow] fields of the draft.
+Set draft [flow] fields.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `explicit_only` | boolean | true: golem run without a path skips this flow. |
+| `explicit_only` | boolean | true: golem run without a path skips it. |
 | `name` | string |  |
 | `start` | string | The first block. |
 | `tags` | array |  |
-| `vars` | object | Merged into [flow] vars, and set in the session for act. |
+| `vars` | object | Merged into [flow] vars; also set in session for act. |
 
 ### `help`
 
-The docs, one piece at a time: help() lists the topics, help(topic) a topic's items, help(topic, item) one item, such as help("act", "tap").
+Docs, one piece at a time: help() lists topics, help(topic) a topic's items, help(topic, item) one item, e.g. help("act", "tap").
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `item` | string | An action, a group, a section or a code. |
+| `item` | string | Action, group, section or code. |
 | `topic` | string | act, selectors, flow, fake or codes. |
 
 ### `mixins_list`
 
-The project's mixins and the vars each uses. Run one with act: { action = "load_mixin", mixin = "name", vars = { … } }.
+Project mixins and the vars each uses. Run one with act: { action = "load_mixin", mixin = "name", vars = { … } }.
 
 ### `options_set`
 
-Set [flow.options] keys of the draft, such as step_timeout, app_lifecycle, max_runtime, record or coverage. help("flow", "flow/options") lists them. An unknown key or a wrong type is refused.
+Set draft [flow.options] keys, e.g. step_timeout, app_lifecycle, max_runtime, record, coverage; help("flow", "flow/options") lists all. Unknown key or wrong type refused.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -198,7 +190,7 @@ What a selector matches, without acting: each visible match, which one act picks
 
 ### `record_only`
 
-Record a step at the cursor without running it, for a path the session does not take. It is ? (unverified), and so is the step after it.
+Record a step at the cursor without running it, for a path the session does not take. It and the next step become ?.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -207,72 +199,72 @@ Record a step at the cursor without running it, for a path the session does not 
 
 ### `screenshot`
 
-The screen as a PNG.
+Screen as PNG.
 
 ### `session_close`
 
-Close the session; release the device.
+Close session; release device.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `teardown` | boolean | Run the flow's [[teardown]]. Default true. |
+| `teardown` | boolean | Run flow's [[teardown]]. Default true. |
 
 ### `session_open`
 
-Open a session on one device and app. A running device that fits wins; else golem boots one. The session ends at session_close, when this server stops, or after idle_timeout_s idle.
+Open a session on one device and app. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `app` | string | The app's name in golem.toml [[apps]]. |
-| `boot` | boolean | Boot a device when no running one fits. Default true. |
+| `app` | string | App name in golem.toml [[apps]]. |
+| `boot` | boolean | Boot a device if no running one fits. Default true. |
 | `break_on_failure` | boolean | With flow: open at a failed step instead of ending. |
-| `bundle` | string | The app's bundle id. |
-| `device` | string | A UDID, a serial, a name, or part of one. |
-| `flow` | string | Run this .test.toml first, as golem run does; the session opens where it stops. Its [[teardown]] runs at session_close. |
-| `idle_timeout_s` | integer | End the session after this many idle seconds. Default 1800. |
+| `bundle` | string | App bundle id. |
+| `device` | string | UDID, serial, name, or part of one. |
+| `flow` | string | Run this .test.toml first, as golem run does; session opens where it stops. Its [[teardown]] runs at session_close. |
+| `idle_timeout_s` | integer | Idle seconds before the session ends. Default 1800. |
 | `os` | string | "ios", "android", "ios:26", "ios:26+" or "ios:latest". Default: any. |
-| `project` | string | The directory with golem.toml. Default: the server's project. |
-| `run` | boolean | With flow: false does the setup but runs no steps. |
-| `seed` | integer | The fake data's seed, as golem run --seed: replays a run's data. |
-| `stop_at` | string | With flow: stop before this step: block or block:step. |
-| `teardown` | boolean | With flow: false never runs its [[teardown]]. |
+| `project` | string | Dir with golem.toml. Default: server's project. |
+| `run` | boolean | With flow: false = setup only, no steps. |
+| `seed` | integer | Fake data seed, as golem run --seed: replays a run's data. |
+| `stop_at` | string | With flow: stop before block or block:step. |
+| `teardown` | boolean | With flow: false = never run its [[teardown]]. |
 | `type` | string | "phone" or "tablet". |
-| `vars` | object | Variables, as golem run --var: act resolves ${name} from them. |
+| `vars` | object | As golem run --var; act resolves ${name}. |
 
 ### `status`
 
-Idle or busy, without waiting: the running operation and its phase, or the last result. While busy, only status, wait, cancel, app_logs and session_close answer.
+Idle or busy, without waiting: running operation and phase, or last result. While busy only status, wait, cancel, app_logs, session_close answer.
 
 ### `step_delete`
 
-Remove a draft step and its comment. The next step becomes ?, and later steps ~.
+Remove a draft step and its comment. Next step becomes ?, later ~.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `at` (required) | string | block:step, from 1. |
+| `at` (required) | string | block:step. |
 
 ### `step_edit`
 
-Change a draft step without running it. Only a new comment or a larger timeout keeps its status; any other change makes it and the next step ?, and later steps ~.
+Change a draft step without running it. Only a new comment or larger timeout keeps its status; else it and the next step become ?, later ~.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `at` (required) | string | block:step, from 1. |
+| `at` (required) | string | block:step. |
 | `comment` | string | "" removes it. |
-| `step` | string | The whole new step. |
+| `step` | string | Whole new step. |
 
 ### `step_move`
 
-Move a draft step. Where it was counts as a delete; where it lands it is ?.
+Move a draft step. Old place counts as a delete; at the new place it is ?.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `from` (required) | string | block:step, from 1. |
-| `to` (required) | string | Its block:step after the move, counted without the moved step; one past a block's last step appends. |
+| `from` (required) | string | block:step. |
+| `to` (required) | string | block:step after the move, counted without the moved step; one past a block's last step appends. |
 
 ### `teardown_add`
 
-Add a step to the draft's [[teardown]]. It does not run.
+Add a step to draft [[teardown]]. Not run.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -281,28 +273,28 @@ Add a step to the draft's [[teardown]]. It does not run.
 
 ### `teardown_delete`
 
-Remove a [[teardown]] step. To change one, remove it and teardown_add the new one.
+Remove a [[teardown]] step. To change one: remove, then teardown_add.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `n` (required) | integer | The teardown step, from 1. |
+| `n` (required) | integer | Teardown step, from 1. |
 
 ### `tree`
 
-The screen: one line per element you can target. full adds off-screen elements, as a hint only. Target an element by selector keys, not by its index.
+The screen: one line per targetable element. Target by selector keys, not index.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `format` | string | "toon" (default) or "json". |
-| `full` | boolean | Add off-screen elements: a hint, never proof. |
+| `full` | boolean | Add off-screen elements: hint, never proof. |
 
 ### `wait`
 
-Wait for the operation that answered pending, and return its result (or the last result). It can answer pending again.
+Wait for the operation that answered pending; return its result (or the last result). Can answer pending again.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `timeout_s` | integer | Default: the server's soft timeout. |
+| `timeout_s` | integer | Default: server's soft timeout. |
 
 ## Help
 

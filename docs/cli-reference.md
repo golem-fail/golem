@@ -209,7 +209,7 @@ The server starts without device work.
 | `draft_show` | The flow draft: the steps that passed in `act`, as `.test.toml` text |
 | `draft_steps(around?, context?, block?, limit?)` | The draft's steps near the cursor, or one block's steps, each with its `block:step` address and status |
 | `draft_run(restart?, stop_at?)` | Run the draft on the device without setup or teardown, from the start (`restart = true`) or from the cursor. Steps that pass become `✓`; the cursor goes where the run stops or fails |
-| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, with the count of each status and the unverified steps |
+| `export_flow(path, overwrite?)` | Check the draft as `golem run` would, then write it, with the count of each status, the unverified steps and the run's warnings |
 | `flow_set(name?, tags?, vars?, explicit_only?, start?)` | Set `[flow]` fields of the draft |
 | `apps_set(app)` | Add or replace a `[[flow.apps]]` entry: `bundle`, `devices`, `permissions`, `install_script` |
 | `block_begin(name, next?)` | Record the next steps into a block, creating it if needed |
@@ -219,7 +219,6 @@ The server starts without device work.
 | `teardown_delete(n)` | Remove `[[teardown]]` step `n` (from 1) |
 | `options_set(options)` | Set `[flow.options]` keys; a null removes one |
 | `block_set(name, fields)` | Set a block's `app`, `for_each`, `where`, `run_flow`, `vars`, `save_to` or `record`; a null removes one |
-| `comment_add(text)` | Add a comment line where the next step goes |
 | `record_only(step, comment?)` | Record a step without running it, marked `# unverified`, for a path the session does not take |
 | `step_edit(at, step?, comment?)` | Change a draft step without running it. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified |
 | `step_delete(at)` | Remove a draft step and its comment. The next active step becomes unverified |

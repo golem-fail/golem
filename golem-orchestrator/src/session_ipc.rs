@@ -482,7 +482,6 @@ fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEd
             comment: text("comment"),
         },
         "data_add" => DraftEdit::DataAdd(object("row")?),
-        "comment_add" => DraftEdit::CommentAdd(need("text")?),
         "record_only" => DraftEdit::RecordOnly {
             step: need("step")?,
             comment: text("comment"),
@@ -607,11 +606,13 @@ pub(crate) fn outcome_json(o: &Outcome) -> serde_json::Value {
             steps,
             counts,
             unverified,
+            warnings,
         } => serde_json::json!({
             "exported": path.display().to_string(),
             "steps": steps,
             "counts": counts,
             "unverified": unverified,
+            "warnings": warnings,
         }),
         OpResult::Failed(message) => serde_json::json!({ "error": message }),
         OpResult::Cancelled => serde_json::json!({ "cancelled": true }),

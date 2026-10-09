@@ -40,9 +40,6 @@ pub struct Draft {
     /// The status of each step, by block index then step index; kept in
     /// step with the `[[block]]` tables.
     status: Vec<Vec<StepStatus>>,
-    /// A comment for the next step into a `[[block.steps]]` block, which
-    /// has no place for a standalone comment between tables.
-    pending_comment: Option<String>,
 }
 
 /// What an export wrote.
@@ -54,6 +51,8 @@ pub struct Exported {
     pub counts: StatusCounts,
     /// Each unverified step, as `block:step line`.
     pub unverified: Vec<String>,
+    /// What `golem run` would warn about the flow.
+    pub warnings: Vec<String>,
 }
 
 impl Draft {
@@ -74,7 +73,6 @@ impl Draft {
             own: Vec::new(),
             insertion: None,
             status: Vec::new(),
-            pending_comment: None,
         }
     }
 
@@ -89,7 +87,6 @@ impl Draft {
             own: vec![path.to_path_buf()],
             insertion: None,
             status: Vec::new(),
-            pending_comment: None,
         };
         draft.status = (0..draft.block_count())
             .map(|b| {
@@ -235,14 +232,15 @@ impl Draft {
     /// Check the draft as `golem run` would, then write it to `path`.
     /// Refuses to replace a file the session did not open from unless
     /// `overwrite`.
-    pub fn export(&mut self, path: &Path, overwrite: bool) -> Result<Exported> {
+    pub fn export(
+        &mut self,
+        path: &Path,
+        overwrite: bool,
+        project_root: &Path,
+    ) -> Result<Exported> {
         let text = self.text();
         let flow = golem_parser::parse_flow(&text).context("the draft does not parse as a flow")?;
-        let errors = golem_parser::validation::validate_flow(&flow);
-        if !errors.is_empty() {
-            let detail: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            bail!("the draft does not validate: {}", detail.join("; "));
-        }
+        let warnings = crate::plan::check_flow_text(&text, path, project_root)?;
         let same_as_source = self.own.iter().any(|s| same_file(s, path));
         if path.exists() && !same_as_source && !overwrite {
             bail!(
@@ -270,6 +268,7 @@ impl Draft {
             steps: flow.block.iter().map(|b| b.steps.len()).sum(),
             counts: self.counts(),
             unverified,
+            warnings,
         })
     }
 
@@ -378,10 +377,9 @@ impl Draft {
             v.decor_mut().clear();
             table.insert(key, Item::Value(v));
         }
-        let pending = self.pending_comment.take().map(|c| format!("# {c}\n"));
         table.decor_mut().set_prefix(match comment {
-            Some(c) => format!("\n{}# {}\n", pending.unwrap_or_default(), one_line(c)),
-            None => format!("\n{}", pending.unwrap_or_default()),
+            Some(c) => format!("\n# {}\n", one_line(c)),
+            None => "\n".to_string(),
         });
         table.set_position(position);
         self.doc
@@ -631,6 +629,17 @@ impl Draft {
         let index = self
             .block_index(name)
             .with_context(|| format!("the draft has no block named {name:?}"))?;
+        self.checked(|d| d.link(index, name, next, branches))?;
+        self.reparse()
+    }
+
+    fn link(
+        &mut self,
+        index: usize,
+        name: &str,
+        next: Option<&str>,
+        branches: &[serde_json::Value],
+    ) -> Result<()> {
         let block = self
             .doc
             .get_mut("block")
@@ -674,7 +683,7 @@ impl Draft {
                 }
             }
         }
-        self.reparse()
+        Ok(())
     }
 
     /// Add a step to the first `[[teardown]]`, creating one when the draft
@@ -733,73 +742,6 @@ impl Draft {
             .as_array_of_tables_mut()
             .context("`data` is not [[data]] tables")?
             .push(t);
-        self.reparse()
-    }
-
-    /// Add a standalone comment line at the insertion point.
-    pub fn comment_add(&mut self, text: &str) -> Result<()> {
-        let insertion = match self.insertion.clone() {
-            Some(i) => i,
-            None => {
-                self.new_block("main")?;
-                self.insertion
-                    .clone()
-                    .context("a new block sets the insertion point")?
-            }
-        };
-        let text = one_line(text);
-        let block = self
-            .doc
-            .get_mut("block")
-            .and_then(Item::as_array_of_tables_mut)
-            .and_then(|b| b.get_mut(insertion.block))
-            .context("the insertion point names a block the draft no longer has")?;
-        if !block.contains_key("steps") {
-            let mut steps = toml_edit::Array::new();
-            steps.set_trailing("\n");
-            steps.set_trailing_comma(true);
-            block.insert("steps", Item::Value(Value::Array(steps)));
-        }
-        match block.get_mut("steps") {
-            Some(Item::Value(Value::Array(steps))) => {
-                let indent = element_indent(steps);
-                match insertion.at.filter(|at| *at < steps.len()) {
-                    Some(at) => {
-                        let v = steps
-                            .get_mut(at)
-                            .context("no element at the insertion point")?;
-                        let prefix = v
-                            .decor()
-                            .prefix()
-                            .and_then(|p| p.as_str())
-                            .unwrap_or("\n")
-                            .to_string();
-                        v.decor_mut()
-                            .set_prefix(format!("\n{indent}# {text}{prefix}"));
-                    }
-                    None => {
-                        let trailing = steps.trailing().as_str().unwrap_or("\n").to_string();
-                        let kept = trailing.trim_end_matches([' ', '\t']);
-                        let kept = if kept.ends_with('\n') {
-                            kept.to_string()
-                        } else {
-                            format!("{kept}\n")
-                        };
-                        steps.set_trailing(format!("{kept}{indent}# {text}\n"));
-                    }
-                }
-            }
-            _ => {
-                // Between `[[block.steps]]` tables a comment can only lead
-                // the next table.
-                let pending = self.pending_comment.take();
-                self.pending_comment = Some(match pending {
-                    Some(p) => format!("{p}\n# {text}"),
-                    None => text,
-                });
-                return Ok(());
-            }
-        }
         self.reparse()
     }
 
@@ -1120,7 +1062,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         )
         .expect("record");
         let out = dir.path().join("flows/r.test.toml");
-        let done = d.export(&out, false).expect("export");
+        let done = d.export(&out, false, dir.path()).expect("export");
         assert_eq!(done.steps, 2);
         let flow =
             golem_parser::parse_flow(&std::fs::read_to_string(&out).expect("read")).expect("parse");
@@ -1141,10 +1083,33 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         d.record(r#"{ action = "open_link" }"#, None)
             .expect("record");
         let err = d
-            .export(&dir.path().join("b.test.toml"), false)
+            .export(&dir.path().join("b.test.toml"), false, dir.path())
             .expect_err("invalid")
             .to_string();
         assert!(err.contains("open_link requires 'url'"), "{err}");
+    }
+
+    #[test]
+    fn export_takes_devices_from_golem_toml_and_returns_the_run_warnings() {
+        let (dir, mut d) = draft_of(
+            "[flow]\nname = \"Login\"\nseed = 7\n\n[[flow.apps]]\nname = \"app\"\n\n\
+             [[block]]\nname = \"main\"\nsteps = [\n  { action = \"tap\", on_text = \"Go\" },\n]\n",
+        );
+        std::fs::write(
+            dir.path().join("golem.toml"),
+            "[[apps]]\nname = \"app\"\nbundle = \"com.acme\"\ndevices = [{ os = \"ios:latest\" }]\n",
+        )
+        .expect("golem.toml");
+        let done = d
+            .export(&dir.path().join("f.test.toml"), false, dir.path())
+            .expect("golem.toml gives the app its devices");
+        assert!(
+            done.warnings
+                .iter()
+                .any(|w| w.contains("`[flow] seed` is ignored")),
+            "{:?}",
+            done.warnings
+        );
     }
 
     #[test]
@@ -1152,11 +1117,14 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         let (dir, mut d) = draft_of(INLINE);
         let other = dir.path().join("other.test.toml");
         std::fs::write(&other, "keep me").expect("write");
-        let err = d.export(&other, false).expect_err("protected").to_string();
+        let err = d
+            .export(&other, false, dir.path())
+            .expect_err("protected")
+            .to_string();
         assert!(err.contains("overwrite = true"), "{err}");
         assert_eq!(std::fs::read_to_string(&other).expect("read"), "keep me");
-        d.export(&other, true).expect("overwrite");
-        d.export(&dir.path().join("f.test.toml"), false)
+        d.export(&other, true, dir.path()).expect("overwrite");
+        d.export(&dir.path().join("f.test.toml"), false, dir.path())
             .expect("the source file SHALL take an export without overwrite");
     }
 
@@ -1176,7 +1144,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             d.text()
         );
         let done = d
-            .export(&dir.path().join("u.test.toml"), false)
+            .export(&dir.path().join("u.test.toml"), false, dir.path())
             .expect("export");
         assert_eq!(
             done.unverified,
@@ -1269,6 +1237,35 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     }
 
     #[test]
+    fn block_link_refuses_a_bad_branch_but_not_a_goto_to_a_later_block() {
+        let (_dir, mut d) = draft_of(INLINE);
+        for (branch, says) in [
+            (
+                serde_json::json!({ "if_var": "n", "goto": "after" }),
+                "if_var without a comparison",
+            ),
+            (
+                serde_json::json!({ "if_visible": "A", "if_var": "n", "equals": "1", "goto": "after" }),
+                "both visibility check and if_var",
+            ),
+            (
+                serde_json::json!({ "if_visibel": "A", "goto": "after" }),
+                "would not parse",
+            ),
+        ] {
+            let err = d.block_link("main", None, &[branch]).expect_err(says);
+            assert!(format!("{err:#}").contains(says), "{err:#}");
+            assert_eq!(d.text(), INLINE);
+        }
+        d.block_link(
+            "main",
+            None,
+            &[serde_json::json!({ "if_visible": "Error", "goto": "retry" })],
+        )
+        .expect("retry comes later");
+    }
+
+    #[test]
     fn teardown_add_creates_a_teardown_at_the_end() {
         let (_dir, mut d) = draft_of(INLINE);
         d.teardown_add(
@@ -1297,43 +1294,6 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         );
         let flow = golem_parser::parse_flow(&d.text()).expect("parse");
         assert_eq!(flow.data[0].get("age").map(String::as_str), Some("30"));
-    }
-
-    #[test]
-    fn comment_add_writes_a_line_at_the_insertion_point() {
-        let (_dir, mut d) = draft_of(INLINE);
-        d.insert_at("main", None).expect("insert");
-        d.comment_add("Now the form").expect("comment");
-        d.record(r#"{ action = "tap", on_text = "Next" }"#, None)
-            .expect("record");
-        assert!(
-            d.text().contains("# the header button\n  # Now the form\n  { action = \"tap\", on_text = \"Next\" },\n]"),
-            "{}",
-            d.text()
-        );
-        d.insert_at("main", Some(1)).expect("insert");
-        d.comment_add("Before launch").expect("comment");
-        assert!(
-            d.text()
-                .contains("steps = [\n  # Before launch\n  # Launch fresh.\n"),
-            "{}",
-            d.text()
-        );
-    }
-
-    #[test]
-    fn a_comment_in_a_tables_block_leads_the_next_table() {
-        let (_dir, mut d) = draft_of(TABLES);
-        d.insert_at("main", None).expect("insert");
-        d.comment_add("Standalone").expect("comment");
-        d.record(r#"{ action = "hide_keyboard" }"#, None)
-            .expect("record");
-        assert!(
-            d.text()
-                .contains("# Standalone\n[[block.steps]]\naction = \"hide_keyboard\""),
-            "{}",
-            d.text()
-        );
     }
 
     #[test]
@@ -1366,7 +1326,6 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         d.app_set(&obj(serde_json::json!({ "name": "other", "bundle": "com.other", "devices": [{ "os": "ios:latest" }] })))
             .expect("app");
         d.block_begin("main", Some("done")).expect("main");
-        d.comment_add("Open").expect("comment");
         d.record(r#"{ action = "launch", app = "app" }"#, None)
             .expect("launch");
         d.record_unverified(
@@ -1391,7 +1350,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         d.data_add(&obj(serde_json::json!({ "who": "Bob" })))
             .expect("data");
         let out = dir.path().join("all.test.toml");
-        let done = d.export(&out, false).expect("export");
+        let done = d.export(&out, false, dir.path()).expect("export");
         assert_eq!(done.unverified.len(), 1);
         let flow =
             golem_parser::parse_flow(&std::fs::read_to_string(&out).expect("read")).expect("parse");
