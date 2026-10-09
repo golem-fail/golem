@@ -13,6 +13,10 @@ pub struct HelpPart {
     pub page: &'static str,
     /// The anchor of the part's first heading in its page.
     pub anchor: &'static str,
+    /// The file `text` comes from, relative to `docs/`: the part, or its
+    /// `.llm.md` file. Only `docs/mcp-context.md`'s test reads it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub source: &'static str,
     pub text: &'static str,
 }
 
@@ -375,6 +379,51 @@ fn failure_code(item: &str) -> Option<String> {
                 c.fix()
             )
         })
+}
+
+/// The Help section of `docs/mcp-context.md`: each help call, linked to
+/// the text it answers with, and the answer's size.
+#[cfg(test)]
+pub fn context_section() -> String {
+    let mut out = String::from(
+        "## Help\n\nEach call that `help` answers, linked to its text: the section of the docs \
+         page, or the `.llm.md` file that replaces it for the LLM. The size is the answer's, in \
+         characters.\n\n```text\n",
+    );
+    out.push_str(&index());
+    out.push_str("```\n");
+    for (topic, page, _) in TOPICS {
+        out.push_str(&format!("\n### {topic}\n\n"));
+        for p in HELP_PARTS
+            .iter()
+            .filter(|p| p.address == *page || p.address.starts_with(&format!("{page}/")))
+        {
+            let depth = p.address.matches('/').count();
+            let call = if depth == 0 {
+                format!("help(\"{topic}\")")
+            } else {
+                format!("help(\"{topic}\", \"{}\")", item_name(p.address))
+            };
+            let heading = p
+                .text
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim_start_matches('#')
+                .trim();
+            let target = if p.source.ends_with(".llm.md") {
+                format!("{} (LLM text)]({})", heading, p.source)
+            } else {
+                format!("{heading}]({}#{})", p.page, p.anchor)
+            };
+            out.push_str(&format!(
+                "{}- `{call}` · [{target} · {}\n",
+                "  ".repeat(depth.saturating_sub(1)),
+                render(p.address).len()
+            ));
+        }
+    }
+    out
 }
 
 #[cfg(test)]

@@ -68,6 +68,7 @@ jobs:
               - 'docs/fake-data.md'
               - 'docs/selectors.md'
               - 'docs/test-structure.md'
+              - 'docs/mcp-context.md'
             # The workflow file itself counts: a change to a companion lane
             # should run that lane, or its config is only ever tested by the
             # next PR that happens to touch a companion — which is how the
