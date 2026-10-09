@@ -369,11 +369,26 @@ A step is one TOML inline table on one line. It is the same text as a step in a 
 
 ```toml
 { action = "tap", on_text = "Sign in" }
-{ action = "type", on_accessibility_label = "Email", input = "ada@example.test" }
+{ action = "type", on_text = "Email", input = "ada@example.test" }
 { action = "assert_visible", on_text = "Welcome" }
 ```
 
-`act` runs one step. `probe` takes the same table without `action`, and shows what the selector matches. `actions_help` lists every action, and `actions_help(action)` shows the fields and examples of one action.
+`act` runs one step. `probe` takes the same table without `action`, and shows what the selector matches.
+
+Select by `on_text`, the text that a user reads. Use `on_accessibility_label` only when the test checks that label, or when the element has no text. When a step that selects by its label passes, and `on_text` with the element's text selects the same element, `act` adds a hint with that `on_text`.
+
+`help` serves the docs one piece at a time, so the LLM reads only what it needs:
+
+| Call | Answer |
+|------|--------|
+| `help()` | The topics: `act`, `selectors`, `flow`, `fake`, `codes` |
+| `help("act")` | The step notation, the common actions, and each group of actions |
+| `help("act", "browser")` | One group, as a list of its actions |
+| `help("act", "tap")` | One action: its fields and examples |
+| `help("flow", "branching")` | One section of the flow file docs |
+| `help("codes", "EF404")` | One failure code: its meaning and its fix |
+
+An item is the last part of a section's name (`tap`), its path (`interaction/tap`), or an action name in its heading (`post_http`). The text comes from the parts in [`docs/src`](src). Where a part has an `.llm.md` version, `help` gives that shorter text.
 
 ## The visible tree decides
 
@@ -484,7 +499,7 @@ The cursor does not move. `act` still records at the cursor, which is where the 
 
 ### Blocks
 
-A flow is a list of blocks. After a block's last step, the flow goes to the first `branch` whose condition is true, else to `next`, else to the next block in the file.
+A flow is a list of blocks. After a block's last step, the flow goes to the first `branch` whose condition is true. A block with branches ignores `next`: when no branch matches, the flow goes to the next block in the file. A block without branches goes to `next`, else to the next block in the file.
 
 | Tool | What it does |
 |------|--------------|
@@ -528,9 +543,9 @@ The LLM writes a login flow for the app `app` in `golem.toml`:
 session_open(os = "android", app = "app")
 act(step = '{ action = "launch", app = "app", restart = true }', comment = "Start from a clean launch")
 tree()
-probe(selector = '{ on_accessibility_label = "Email" }')
-act(step = '{ action = "type", on_accessibility_label = "Email", input = "ada@example.test" }')
-act(step = '{ action = "type", on_accessibility_label = "Password", input = "${password}" }')
+probe(selector = '{ on_text = "Email" }')
+act(step = '{ action = "type", on_text = "Email", input = "ada@example.test" }')
+act(step = '{ action = "type", on_text = "Password", input = "${password}" }')
 act(step = '{ action = "tap", on_text = "Sign in" }', comment = "Sign in with the test account")
 act(step = '{ action = "assert_visible", on_text = "Welcome" }')
 flow_set(name = "Login", tags = ["smoke"])
@@ -541,21 +556,21 @@ session_close()
 
 Then the LLM runs `golem run flows/login.test.toml` in a shell to prove that the flow passes.
 
-- A step that fails does not go into the draft. The LLM fixes the selector with `probe` and runs `act` again.
+- A step that fails does not go into the draft. Its result has the failure code, such as `EF404`, and a `fix:` line with the usual fix. The LLM fixes the selector with `probe` and runs `act` again.
 - If a step passes but takes half its timeout or more, `act` adds a warning with a suggested timeout: `warning: took 4.1s of its 5s timeout · consider timeout = 9000`. The step is in the draft. On a slower device or a busy host, the same step can time out in `golem run`. To raise the timeout, use `step_edit`. A larger timeout keeps the step's status.
 - `record_only` adds a step that does not run, for a path that the session does not take. The step gets an `# unverified` marker, and `export_flow` lists it.
 - To add steps to a flow that exists, open the session from that flow with `stop_at`. The new steps go in where the flow stopped. The export keeps the file's comments, key order and whitespace.
 
 ## Example: edit a flow that exists
 
-The selector of a step in `flows/login.test.toml` no longer matches. The LLM fixes it, proves the flow again, and saves the file:
+The app renamed its "Sign in" button to "Log in", so step 3 of `flows/login.test.toml` no longer matches. The LLM fixes it, proves the flow again, and saves the file:
 
 ```text
 session_open(os = "android", flow = "flows/login.test.toml", run = false)
 draft_steps(block = "login")
 draft_run(stop_at = "login:3")
-probe(selector = '{ on_accessibility_label = "Sign in" }')
-step_edit(at = "login:3", step = '{ action = "tap", on_accessibility_label = "Sign in" }')
+probe(selector = '{ on_text = "Log in" }')
+step_edit(at = "login:3", step = '{ action = "tap", on_text = "Log in" }')
 draft_run(restart = true)
 draft_steps()
 export_flow(path = "flows/login.test.toml")
@@ -574,7 +589,7 @@ The user reports that the app crashes after Save on the profile screen:
 ```text
 session_open(os = "ios", app = "app", flow = "flows/profile.test.toml", stop_at = "edit")
 screenshot()
-act(step = '{ action = "type", on_accessibility_label = "Name", input = "Ada" }')
+act(step = '{ action = "type", on_text = "Name", input = "Ada" }')
 act(step = '{ action = "tap", on_text = "Save" }', tree = true)
 app_logs(since = 60)
 session_close(teardown = false)

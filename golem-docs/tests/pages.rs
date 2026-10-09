@@ -78,7 +78,19 @@ fn each_link_in_a_generated_page_resolves() {
 fn each_part_has_its_own_address() {
     let entries = golem_docs::help_entries(&docs().join("src")).expect("docs/src reads");
     let mut seen = BTreeSet::new();
-    for (address, _) in &entries {
-        assert!(seen.insert(address), "two parts have the address {address}");
+    let pages = rendered();
+    for e in &entries {
+        assert!(
+            seen.insert(&e.address),
+            "two parts have the address {}",
+            e.address
+        );
+        let anchors = golem_docs::anchors(&pages[&e.page]);
+        assert!(
+            anchors.contains(&e.anchor),
+            "{}: no anchor #{}",
+            e.address,
+            e.anchor
+        );
     }
 }

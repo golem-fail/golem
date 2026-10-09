@@ -1,5 +1,7 @@
 ## Browser
 
+Drive a host browser, for web state that the app depends on.
+
 `browse_*` steps drive a host Chrome/Chromium (or `$CHROME`); none found → plan fails with `H424`. Each flow gets its own browser, closed when the flow ends.
 
 Targeting is **CSS only** (`selector`); mobile selectors (`text`, `on_below`, …) are ignored. Steps check DOM presence, not visibility: an element hidden by CSS counts as present.

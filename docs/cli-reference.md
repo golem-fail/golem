@@ -224,7 +224,7 @@ The server starts without device work.
 | `block_rename(name, to)` | Rename a draft block, and each `next`, `goto` and `[flow] start` that names it |
 | `block_delete(name)` | Remove a draft block and its steps. Refused while a `next`, `goto` or `[flow] start` names it |
 | `mixins_list` | The project's mixins and the vars each expects; run one with `act` and `action = "load_mixin"` |
-| `actions_help(action?)` | The step notation and every action, or one action's reference |
+| `help(topic?, item?)` | The docs, one piece at a time: the topics, a topic's items, or one item (an action, a section, a failure code) |
 
 **A session from a flow.** `session_open(flow = "e2e/checkout.test.toml")` runs the flow on the chosen device, then keeps the device, the driver and the flow's variables for the session:
 

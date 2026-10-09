@@ -348,8 +348,10 @@ pub struct DraftStepsParams {
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct HelpParams {
-    /// Default: list every action.
-    pub action: Option<String>,
+    /// act, selectors, flow, fake or codes.
+    pub topic: Option<String>,
+    /// An action, a group, a section or a code.
+    pub item: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
@@ -384,8 +386,12 @@ macro_rules! when_to_use {
 pub const INSTRUCTIONS: &str = concat!(
     "golem (MCP server): ",
     when_to_use!(),
-    " Start with session_open; actions_help explains the step notation."
+    " Start with session_open; help() explains the steps and the flow file."
 );
+
+/// The last line of an opened session: where the docs are.
+const OPENED_HINT: &str =
+    "help() lists the docs: actions, selectors, the flow file, fake data, failure codes.";
 
 /// The instructions as an Agent Skill, for a client that does not pass a
 /// server's instructions to the model: the skill's description is what
@@ -555,7 +561,11 @@ impl GolemMcp {
             t.abort();
         }
         let reply = reply?;
-        self.render(&reply, false)
+        let mut result = self.render(&reply, false)?;
+        if result.is_error != Some(true) && reply["status"] == "done" {
+            result.content.push(ContentBlock::text(OPENED_HINT));
+        }
+        Ok(result)
     }
 
     #[tool(description = "Close the session; release the device.")]
@@ -579,7 +589,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Run one step on the device. The step is a one-line TOML inline table; actions_help lists the actions and keys. Examples: { action = \"tap\", on_text = \"Sign in\" } · { action = \"type\", on_text = \"Email\", input = \"a@b.test\" } · { action = \"assert_visible\", on_text = \"Welcome\" }. A step that passes goes into the flow draft at the cursor, as written (a ${var} stays a reference), and the cursor moves after it; a failed step does not. Warns when a step passes in half its timeout or more."
+        description = "Run one step on the device: a one-line TOML inline table, such as { action = \"tap\", on_text = \"Sign in\" }; help(\"act\") lists the actions. Prefer on_text, the text a user reads; use on_accessibility_label only to test that label. A step that passes goes into the flow draft at the cursor, as written (a ${var} stays a reference); a failed step does not."
     )]
     async fn act(&self, Parameters(p): Parameters<ActParams>) -> Result<CallToolResult, ErrorData> {
         let reply = self
@@ -608,7 +618,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The screen: one indexed line per element you can target. Only the visible tree decides what is on screen; full adds off-screen elements as a hint. Target an element with selector keys (actions_help), not its index."
+        description = "The screen: one line per element you can target. full adds off-screen elements, as a hint only. Target an element by selector keys, not by its index."
     )]
     async fn tree(
         &self,
@@ -634,7 +644,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "A tool whose operation outlasts the soft timeout answers pending. wait waits for that operation and returns its result (the last result when none runs); it can answer pending again."
+        description = "Wait for the operation that answered pending, and return its result (or the last result). It can answer pending again."
     )]
     async fn wait(
         &self,
@@ -708,7 +718,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "The flow draft as .test.toml text: the flow file the session opened, or a new flow with the session's app whose first step starts block main."
+        description = "The flow draft as .test.toml text: the opened flow, or a new flow with block main."
     )]
     async fn draft_show(
         &self,
@@ -801,7 +811,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's next, and add branches. A flow is named blocks of steps. After a block's last step the flow takes the first branch whose condition holds, else next, else the next block in the file; after the last block it ends."
+        description = "Set a block's next, and add branches. After its steps a block takes the first branch that holds. A block with branches ignores next: with no match it goes to the next block in the file. Without branches: next, else the next block."
     )]
     async fn block_link(
         &self,
@@ -942,19 +952,16 @@ impl GolemMcp {
         text(out)
     }
 
-    #[tool(description = "Every action, or one action's keys and examples.")]
-    async fn actions_help(
+    #[tool(
+        description = "The docs, one piece at a time: help() lists the topics, help(topic) a topic's items, help(topic, item) one item, such as help(\"act\", \"tap\")."
+    )]
+    async fn help(
         &self,
         Parameters(p): Parameters<HelpParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        match p.action {
-            None => text(actions_overview()),
-            Some(action) => match action_section(&action) {
-                Some(section) => text(section),
-                None => tool_error(format!(
-                    "unknown action: {action}; call actions_help without an action for the list"
-                )),
-            },
+        match crate::help::help(p.topic.as_deref(), p.item.as_deref()) {
+            Ok(answer) => text(answer),
+            Err(why) => tool_error(why),
         }
     }
 }
@@ -1063,75 +1070,6 @@ fn running_line(status: &str, r: &serde_json::Value) -> String {
         r["phase"].as_str().unwrap_or_default(),
         r["elapsed_ms"].as_u64().unwrap_or(0) / 1000
     )
-}
-
-include!(concat!(env!("OUT_DIR"), "/help_parts.rs"));
-
-/// The docs part at `address` (`docs/src`): the LLM's text when the part has
-/// one.
-pub fn help_part(address: &str) -> Option<&'static str> {
-    HELP_PARTS
-        .iter()
-        .find(|(a, _)| *a == address)
-        .map(|(_, text)| *text)
-}
-
-/// The action parts: each part under `actions-reference` whose heading
-/// names actions, as (names, summary, text).
-fn action_parts() -> impl Iterator<Item = (Vec<String>, String, &'static str)> {
-    HELP_PARTS
-        .iter()
-        .filter(|(a, _)| a.starts_with("actions-reference/"))
-        .filter_map(|(_, text)| {
-            let heading = text.lines().next()?.strip_prefix("### ")?;
-            if !heading.starts_with('`') {
-                return None;
-            }
-            let (names, summary) = heading.split_once(" — ").unwrap_or((heading, ""));
-            let names = names
-                .split('`')
-                .enumerate()
-                .filter(|(i, _)| i % 2 == 1)
-                .map(|(_, n)| n.to_string())
-                .collect();
-            Some((names, summary.to_string(), *text))
-        })
-}
-
-/// The notation and every action with its one-line summary.
-fn actions_overview() -> String {
-    let mut out = String::from(
-        "A step is one TOML inline table, the same text as a step in a flow file:\n\
-         { action = \"tap\", on_text = \"Sign in\" }\n\
-         Selectors: on_text, on_accessibility_label (label or id), on_index, on_below, on_above, \
-         on_right_of, on_left_of, or a group on = { text = …, contains = …, inside = …, traits = [...] }.\n\
-         Common options: timeout (ms), auto_scroll = true, if_fail = \"warn\", retry.\n\
-         Call actions_help(action) for one action's fields and examples.\n\nActions:\n",
-    );
-    let summaries: Vec<_> = action_parts().collect();
-    for action in golem_parser::validation::known_actions() {
-        let summary = summaries
-            .iter()
-            .find(|(names, _, _)| names.iter().any(|n| n == action))
-            .map(|(_, s, _)| s.as_str())
-            .unwrap_or("");
-        out.push_str(&format!(
-            "- {action}{}\n",
-            if summary.is_empty() {
-                String::new()
-            } else {
-                format!(": {summary}")
-            }
-        ));
-    }
-    out
-}
-
-/// The reference part for `action`.
-fn action_section(action: &str) -> Option<String> {
-    action_parts()
-        .find(|(names, _, _)| names.iter().any(|n| n == action))
-        .map(|(_, _, text)| text.trim_end().to_string() + "\n")
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -1548,42 +1486,5 @@ mod tests {
         );
         assert_eq!(golem["env"]["ANDROID_HOME"], "/sdk");
         assert_eq!(golem["env"]["PATH"], "/usr/bin:/sdk/platform-tools");
-    }
-
-    #[test]
-    fn every_known_action_has_a_reference_section() {
-        for action in golem_parser::validation::known_actions() {
-            assert!(action_section(action).is_some(), "no section for {action}");
-        }
-    }
-
-    #[test]
-    fn a_section_starts_at_its_heading_and_stops_at_the_next() {
-        let tap = action_section("tap").expect("tap");
-        assert!(tap.starts_with("### `tap`"), "{tap}");
-        assert!(
-            tap.contains(r#"{ action = "tap", on_text = "Submit" }"#),
-            "{tap}"
-        );
-        assert!(!tap.contains("### `double_tap`"), "{tap}");
-        assert!(action_section("explode").is_none());
-    }
-
-    #[test]
-    fn a_docs_part_is_found_by_its_address() {
-        let browser = help_part("actions-reference/browser").expect("the browser intro");
-        assert!(browser.starts_with("## Browser"), "{browser}");
-        let tap = help_part("actions-reference/interaction/tap").expect("tap");
-        assert!(tap.starts_with("### `tap`"), "{tap}");
-        assert!(help_part("actions-reference/interaction/explode").is_none());
-    }
-
-    #[test]
-    fn the_overview_lists_every_action_with_its_summary() {
-        let o = actions_overview();
-        assert!(o.contains("- tap: Tap an element"), "{o}");
-        for action in golem_parser::validation::known_actions() {
-            assert!(o.contains(&format!("- {action}")), "{action}");
-        }
     }
 }

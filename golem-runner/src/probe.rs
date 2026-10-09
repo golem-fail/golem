@@ -159,6 +159,37 @@ pub async fn probe(
     }
 }
 
+/// The visible text of the element that a step selects by
+/// `on_accessibility_label` alone, when `on_text` with that text selects
+/// the same element and nothing else: the selector a user would read.
+/// `None` for any other step.
+pub fn text_alternative(
+    root: &Element,
+    keyboard_height: i32,
+    step: &golem_parser::Step,
+) -> Option<String> {
+    if step.on_accessibility_label.is_none() || step.on_text.is_some() || step.on.is_some() {
+        return None;
+    }
+    let (_, _, picked) = visible_matches(root, keyboard_height, &build_selector(step));
+    let element = &picked.first()?.element;
+    let text = element.text.as_deref()?.trim();
+    // A `*` or `?` would make the text a glob that matches more.
+    if text.is_empty() || text.contains(['*', '?']) {
+        return None;
+    }
+    let by_text = golem_parser::Step {
+        on_accessibility_label: None,
+        on_text: Some(text.to_string()),
+        ..step.clone()
+    };
+    let (_, _, found) = visible_matches(root, keyboard_height, &build_selector(&by_text));
+    match found.as_slice() {
+        [one] if one.element.bounds == element.bounds => Some(text.to_string()),
+        _ => None,
+    }
+}
+
 /// The report as TOON text.
 pub fn render_toon(report: &ProbeReport) -> String {
     let mut out = format!("probe {} · ", report.selector);
@@ -548,5 +579,42 @@ mod tests {
                 resolved.text
             );
         }
+    }
+
+    fn by_label(label: &str) -> golem_parser::Step {
+        golem_parser::Step {
+            action: "tap".into(),
+            on_accessibility_label: Some(label.into()),
+            ..golem_parser::Step::default()
+        }
+    }
+
+    fn labelled(text: &str, label: &str, y: i32) -> Element {
+        let mut e = make_element_with_text("Button", text, Bounds::new(20, y, 360, 60));
+        e.accessibility_label = Some(label.into());
+        e
+    }
+
+    #[test]
+    fn a_label_selector_gets_the_text_that_selects_the_same_element() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        root.children.push(labelled("Sign in", "login", 100));
+        assert_eq!(
+            text_alternative(&root, 0, &by_label("login")).as_deref(),
+            Some("Sign in")
+        );
+    }
+
+    #[test]
+    fn no_text_alternative_when_the_text_is_shared_or_missing() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        root.children.push(labelled("OK", "first", 100));
+        root.children.push(labelled("OK", "second", 200));
+        root.children.push(labelled("", "icon", 300));
+        assert_eq!(text_alternative(&root, 0, &by_label("second")), None);
+        assert_eq!(text_alternative(&root, 0, &by_label("icon")), None);
+        let mut both = by_label("first");
+        both.on_text = Some("OK".into());
+        assert_eq!(text_alternative(&root, 0, &both), None);
     }
 }
