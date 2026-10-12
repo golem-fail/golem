@@ -20,10 +20,10 @@ pub fn page() -> String {
          | Instructions | {} |\n| Tool list ({} tools, as `tools/list` JSON) | {} |\n\
          | Both, kept in context by most clients | {} |\n\n\
          ## Instructions\n\n```text\n{INSTRUCTIONS}\n```\n\n## Tools\n",
-        INSTRUCTIONS.len(),
+        INSTRUCTIONS.chars().count(),
         tools.len(),
-        list.len(),
-        INSTRUCTIONS.len() + list.len()
+        list.chars().count(),
+        INSTRUCTIONS.chars().count() + list.chars().count()
     );
     for tool in &tools {
         out.push_str(&format!(

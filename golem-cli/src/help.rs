@@ -387,7 +387,8 @@ fn failure_code(item: &str) -> Option<String> {
 pub fn context_section() -> String {
     let mut out = String::from(
         "## Help\n\nEach call that `help` answers, linked to its text: the section of the docs \
-         page, or the `.llm.md` file that replaces it for the LLM. The size is the answer's, in \
+         page, or the `.llm.md` file that replaces it for the LLM. An item with items of its own \
+         answers its text, then the list of them (+ items). The size is the whole answer's, in \
          characters.\n\n```text\n",
     );
     out.push_str(&index());
@@ -416,10 +417,15 @@ pub fn context_section() -> String {
             } else {
                 format!("{heading}]({}#{})", p.page, p.anchor)
             };
+            let items = if children(p.address).next().is_some() {
+                " + items"
+            } else {
+                ""
+            };
             out.push_str(&format!(
-                "{}- `{call}` · [{target} · {}\n",
+                "{}- `{call}` · [{target}{items} · {}\n",
                 "  ".repeat(depth.saturating_sub(1)),
-                render(p.address).len()
+                render(p.address).chars().count()
             ));
         }
     }

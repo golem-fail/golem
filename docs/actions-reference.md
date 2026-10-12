@@ -548,7 +548,7 @@ The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` 
 
 ## External
 
-Work outside the screen: links, pushes, shell commands, email, fixtures, mixins and HTTP.
+Links, pushes, shell commands, email, fixtures, mixins and HTTP.
 
 ### `open_link` — Open URL or deep link
 
