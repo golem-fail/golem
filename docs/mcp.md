@@ -452,7 +452,7 @@ A session runs one operation at a time.
 
 ## The draft and step status
 
-Each step that passes in `act` goes into the session's flow draft, at the cursor. A session from a flow puts the cursor where the flow stopped. A new session starts a block named `main`.
+Each step that passes in `act` goes into the session's flow draft, at the cursor. `act(run = false)` puts a step there without running it, as `?`. A session from a flow puts the cursor where the flow stopped. A new session starts a block named `main`.
 
 `draft_show` returns the whole draft as `.test.toml` text. `draft_steps` lists the steps near the cursor. Each line has the step's address (`block:step`, steps count from 1), its status, the step and its comment:
 
@@ -474,14 +474,14 @@ draft · 4 steps: 2 ✓ passed, 1 ? unverified, 1 ~ stale · cursor before login
 | `?` | Unverified: the step did not run in its current form, or it is the first step after a change. |
 | `~` | Stale: a step before it changed after it passed or was saved. |
 
-A change, such as a new step from `act` or `record_only`, sets these statuses:
+A change, such as a new step from `act`, sets these statuses:
 
 - The next active step becomes `?`, because the screen before it is different now. A `screenshot` is not an active step, so the step after it becomes `?`.
 - Each later step that can run after the change becomes `~`. That is the rest of the block, then each block that a `branch`, `next` or the next block in the file leads to.
 
 Only `?` goes into the file, as a `# unverified` line above the step. A step that passes in the session loses the line. `export_flow` gives the count of each status and lists the unverified steps.
 
-`export_flow` checks the draft as `golem run` does before it boots a device: with `golem.toml` merged in and mixins expanded, each step's action and required keys, each block that `start` or a `goto` names, and each branch. If the check fails, the tool writes nothing and lists the errors. If it passes, the tool writes the file and returns the warnings that `golem run` would give. `act`, `record_only`, `teardown_add` and `step_edit` already refuse a step that fails the check. `block_link` refuses a branch that fails it, but a `goto` can name a block that you add later.
+`export_flow` checks the draft as `golem run` does before it boots a device: with `golem.toml` merged in and mixins expanded, each step's action and required keys, each block that `start` or a `goto` names, and each branch. If the check fails, the tool writes nothing and lists the errors. If it passes, the tool writes the file and returns the warnings that `golem run` would give. `act`, `teardown_add` and `step_edit` already refuse a step that fails the check. `block_link` refuses a branch that fails it, but a `goto` can name a block that you add later.
 
 `draft_steps` takes these arguments:
 
@@ -521,7 +521,7 @@ A flow is a list of blocks. After a block's last step, the flow goes to the firs
 | `block_rename(name, to)` | Renames the block, and each `next`, `goto` and `[flow] start` that names it. |
 | `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
 
-A step that `act` records in a new block passed on the device. But the session does not run the other ways through a branch. Use `record_only` for the steps of a way that the session does not take.
+A step that `act` records in a new block passed on the device. But the session does not run the other ways through a branch. Use `act(run = false)` for the steps of a way that the session does not take.
 
 ### Run the draft again
 
@@ -573,7 +573,7 @@ Then the LLM runs `golem run flows/login.test.toml` in a shell to prove that the
 
 - A step that fails does not go into the draft. Its result has the failure code, such as `EF404`, and a `fix:` line with the usual fix. The LLM fixes the selector with `probe` and runs `act` again.
 - If a step passes but takes half its timeout or more, `act` adds a warning with a suggested timeout: `warning: took 4.1s of its 5s timeout · consider timeout = 9000`. The step is in the draft. On a slower device or a busy host, the same step can time out in `golem run`. To raise the timeout, use `step_edit`. A larger timeout keeps the step's status.
-- `record_only` adds a step that does not run, for a path that the session does not take. The step gets an `# unverified` marker, and `export_flow` lists it.
+- `act(run = false)` adds a step that does not run, for a path that the session does not take. The step gets an `# unverified` marker, and `export_flow` lists it.
 - To add steps to a flow that exists, open the session from that flow with `stop_at`. The new steps go in where the flow stopped. The export keeps the file's comments, key order and whitespace.
 
 ## Example: edit a flow that exists

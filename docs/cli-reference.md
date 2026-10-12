@@ -200,7 +200,7 @@ The server starts without device work.
 | `devices(os?)` | Every device in any state, with the port of a live companion. `os` filters as in `session_open` |
 | `session_open(os?, type?, device?, boot?, bundle?, app?, project?, idle_timeout_s?, flow?, stop_at?, run?, break_on_failure?, teardown?, vars?)` | Open a session on one device and app; see "The device" below. It ends after `idle_timeout_s` (default 1800) with no operation. With `flow`, golem first runs that flow as `golem run` would (install, apps, launch, steps) and opens the session where it stops; see below |
 | `session_close(teardown?)` | Close the session and release the device. For a session opened from a flow, the flow's `[[teardown]]` runs unless `teardown = false` |
-| `act(step, comment?, tree?, format?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step. A step that passes in half its timeout or more gets a warning with a suggested `timeout` |
+| `act(step, comment?, tree?, format?, run?)` | Run one step, with the same element resolution, auto-scroll, settle and timeout as a step in a flow. `tree = true` adds the visible tree after the step. A step that passes in half its timeout or more gets a warning with a suggested `timeout`. `run = false` records the step without running it, marked `# unverified`, for a path the session does not take |
 | `probe(selector, timeout_ms?, format?)` | As `golem probe` |
 | `tree(full?, format?)` | The [TOON tree](output-formats.md#toon-tree); `full = true` is a hint only |
 | `screenshot` | The screen as a PNG image |
@@ -219,7 +219,6 @@ The server starts without device work.
 | `teardown_delete(n)` | Remove `[[teardown]]` step `n` (from 1) |
 | `options_set(options)` | Set `[flow.options]` keys; a null removes one |
 | `block_set(name, fields)` | Set a block's `app`, `for_each`, `where`, `run_flow`, `vars`, `save_to` or `record`; a null removes one |
-| `record_only(step, comment?)` | Record a step without running it, marked `# unverified`, for a path the session does not take |
 | `step_edit(at, step?, comment?)` | Change a draft step without running it. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified |
 | `step_delete(at)` | Remove a draft step and its comment. The next active step becomes unverified |
 | `step_move(from, to)` | Move a draft step so that it becomes step `to`. Where it left counts as a delete; the step is unverified where it lands |
@@ -247,7 +246,7 @@ The server starts without device work.
 
 **The flow draft.** Each step that passes in `act` goes into the session's draft, as written (a `${var}` stays a reference), with `comment` on its own line above it. A step that fails does not. A session opened from a flow drafts that file: steps go in where the flow stopped (before `stop_at`, or before the failed step), else at the end of the last block, and the file's comments, key order and whitespace stay as they were. A step takes the form its block already uses, `steps = [ … ]` or `[[block.steps]]`; a one-line `steps = [{ … }]` becomes one step per line. A new session drafts a new flow with its app and a `main` block. `export_flow` refuses a draft that does not validate, and refuses to replace a file the session did not open from unless `overwrite = true`.
 
-**Step status.** Each step of the draft has a status, which `draft_steps` and `export_flow` show: `✓` passed in this session, `·` comes from the file and did not run in this session, `?` unverified, `~` stale. A change to the draft (a step from `act`, `record_only`) makes the next active step `?`, because the screen before it changed. Each later step that can run after the change becomes `~`: the rest of the block, then each block that a `branch` target, `next` or the next block in the file leads to. A `screenshot` is not an active step. Only `?` is in the file, as a `# unverified` line above the step; a step that passes in the session loses it.
+**Step status.** Each step of the draft has a status, which `draft_steps` and `export_flow` show: `✓` passed in this session, `·` comes from the file and did not run in this session, `?` unverified, `~` stale. A change to the draft (a step from `act`, run or not) makes the next active step `?`, because the screen before it changed. Each later step that can run after the change becomes `~`: the rest of the block, then each block that a `branch` target, `next` or the next block in the file leads to. A `screenshot` is not an active step. Only `?` is in the file, as a `# unverified` line above the step; a step that passes in the session loses it.
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
 

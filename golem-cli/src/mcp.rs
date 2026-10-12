@@ -200,6 +200,9 @@ pub struct ActParams {
     pub tree: bool,
     /// "toon" (default) or "json".
     pub format: Option<String>,
+    /// false: record without running, for a path the session does not
+    /// take; it and the next step become ?. Default true.
+    pub run: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -627,6 +630,11 @@ impl GolemMcp {
         description = "Run one step on the device: a one-line TOML inline table, e.g. { action = \"tap\", on_text = \"Sign in\" }; help(\"act\") lists actions. Prefer on_text (text a user reads); on_accessibility_label only to test that label. A passing step goes into the draft at the cursor as written (${var} stays a reference); a failed one does not."
     )]
     async fn act(&self, Parameters(p): Parameters<ActParams>) -> Result<CallToolResult, ErrorData> {
+        if p.run == Some(false) {
+            return self
+                .edit(serde_json::json!({ "edit": "record_only", "step": p.step, "comment": p.comment }))
+                .await;
+        }
         let reply = self
             .op(
                 "session_act",
@@ -907,19 +915,6 @@ impl GolemMcp {
     ) -> Result<CallToolResult, ErrorData> {
         self.edit(serde_json::json!({ "edit": "data_add", "row": p.row }))
             .await
-    }
-
-    #[tool(
-        description = "Record a step at the cursor without running it, for a path the session does not take. It and the next step become ?."
-    )]
-    async fn record_only(
-        &self,
-        Parameters(p): Parameters<StepNoteParams>,
-    ) -> Result<CallToolResult, ErrorData> {
-        self.edit(
-            serde_json::json!({ "edit": "record_only", "step": p.step, "comment": p.comment }),
-        )
-        .await
     }
 
     #[tool(
