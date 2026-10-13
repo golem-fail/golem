@@ -28,3 +28,5 @@ test-app-e/
 *.md
 setup-golem/
 docker/
+# …except the docs parts: golem-cli's build.rs embeds them for the MCP help.
+!docs/src/
