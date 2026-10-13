@@ -20,6 +20,10 @@ pub enum ValidationErrorKind {
     UnknownAction,
     InvalidGotoTarget,
     InvalidStartBlock,
+    /// A block's `next` names no block.
+    InvalidNextTarget,
+    /// A block's `for_each` is not `"data"`, the one table a block iterates.
+    InvalidForEach,
     DuplicateBlockName,
     InvalidOnFail,
     MissingGoto,
@@ -624,6 +628,24 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
         for branch in &block.branch {
             validate_branch(branch, &block_names, &mut errors);
         }
+
+        let name = block.name.as_deref().unwrap_or("<unnamed>");
+        if let Some(next) = &block.next {
+            if !block_names.contains(next.as_str()) {
+                errors.push(ValidationError {
+                    message: format!("Block '{name}': next block '{next}' does not exist"),
+                    kind: ValidationErrorKind::InvalidNextTarget,
+                });
+            }
+        }
+        if let Some(target) = block.for_each.as_deref().filter(|t| *t != "data") {
+            errors.push(ValidationError {
+                message: format!(
+                    "Block '{name}': for_each = \"{target}\" is not supported; only \"data\" (the flow's [[data]] rows)"
+                ),
+                kind: ValidationErrorKind::InvalidForEach,
+            });
+        }
     }
 
     errors
@@ -798,6 +820,36 @@ goto = "nowhere"
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].kind, ValidationErrorKind::InvalidGotoTarget);
         assert!(errors[0].message.contains("nowhere"));
+    }
+
+    #[test]
+    fn a_next_to_a_missing_block_and_a_for_each_other_than_data_fail() {
+        let toml_str = r#"
+[flow]
+name = "bad next"
+
+[[block]]
+name = "main"
+next = "nope"
+
+[[block]]
+name = "rows"
+for_each = "rows"
+next = "main"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<_> = errors.iter().map(|e| e.kind.clone()).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ValidationErrorKind::InvalidNextTarget,
+                ValidationErrorKind::InvalidForEach
+            ],
+            "{errors:?}"
+        );
+        assert!(errors[0].message.contains("'main'") && errors[0].message.contains("'nope'"));
+        assert!(errors[1].message.contains("\"rows\""));
     }
 
     // 5. Start block doesn't exist

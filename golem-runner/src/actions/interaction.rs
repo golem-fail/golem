@@ -1955,6 +1955,48 @@ mod tests {
         assert_eq!(g_calls[0].1, vec!["2pts@300ms"]);
     }
 
+    #[tokio::test]
+    async fn gesture_point_whose_selector_matches_nothing_fails_f404() {
+        // Any selector key counts, not only text: a right_of-only point
+        // that matches nothing must not become a screen coordinate.
+        for point in [
+            golem_parser::SelectorGroup {
+                text: Some("Nope".to_string()),
+                ..Default::default()
+            },
+            golem_parser::SelectorGroup {
+                right_of: Some(golem_parser::Anchor::Text("Nope".to_string())),
+                x: Some(golem_parser::CoordValue::Pixels(5)),
+                ..Default::default()
+            },
+        ] {
+            let driver = MockPlatformDriver::new(root_with_button("Map"));
+            let mut step = make_step("gesture");
+            step.fingers = vec![golem_parser::Finger {
+                points: vec![
+                    golem_parser::SelectorGroup {
+                        text: Some("Map".to_string()),
+                        ..Default::default()
+                    },
+                    point,
+                ],
+            }];
+            let err = handle_gesture(&step, &driver)
+                .await
+                .expect_err("a point that matches nothing SHALL fail");
+            assert_eq!(
+                golem_events::extract_code(&err),
+                Some(golem_events::FailureCode::FlowElementNotFound),
+                "{err:#}"
+            );
+            assert!(format!("{err:#}").contains("gesture point 2"), "{err:#}");
+            assert!(
+                !driver.get_calls().iter().any(|c| c.0 == "gesture"),
+                "no gesture SHALL run"
+            );
+        }
+    }
+
     // ── 27. swipe with a 3+ point coordinate path uses a continuous gesture ──
 
     #[tokio::test]

@@ -181,13 +181,9 @@ pub async fn plan(
                 // Reported as a ParseFailure rather than aborting: one bad
                 // flow file fails on its own and the rest of the suite still
                 // runs, which is how an unparseable file already behaves.
-                let errors = golem_parser::validation::validate_flow(&flow);
+                let errors = flow_errors(&flow, path);
                 if !errors.is_empty() {
-                    let detail = errors
-                        .iter()
-                        .map(|e| e.message.as_str())
-                        .collect::<Vec<_>>()
-                        .join("; ");
+                    let detail = errors.join("; ");
                     parse_failures.push(ParseFailure {
                         path: path.clone(),
                         error: format!(
@@ -326,6 +322,26 @@ fn prepare_flow(
     Ok((flow, profile_notes))
 }
 
+/// What stops the flow at `path` from running: `validate_flow`'s errors,
+/// and each `run_flow` file that does not exist, which the executor would
+/// find only when it reaches the block.
+fn flow_errors(flow: &FlowFile, path: &Path) -> Vec<String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    golem_parser::validation::validate_flow(flow)
+        .into_iter()
+        .map(|e| e.message)
+        .chain(flow.block.iter().filter_map(|b| {
+            let child = b.run_flow.as_deref()?;
+            (!dir.join(child).is_file()).then(|| {
+                format!(
+                    "Block '{}': run_flow file '{child}' does not exist",
+                    b.name.as_deref().unwrap_or("<unnamed>")
+                )
+            })
+        }))
+        .collect()
+}
+
 /// Check a flow that is not yet a file as `golem run` checks it before any
 /// device work: golem.toml merged, mixins expanded, `validate_flow`.
 /// Returns the warnings the run would print.
@@ -342,10 +358,9 @@ pub fn check_flow_text(text: &str, path: &Path, project_root: &Path) -> Result<V
         project_root,
         None,
     )?;
-    let errors = golem_parser::validation::validate_flow(&flow);
+    let errors = flow_errors(&flow, path);
     if !errors.is_empty() {
-        let detail: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-        anyhow::bail!("the flow does not validate: {}", detail.join("; "));
+        anyhow::bail!("the flow does not validate: {}", errors.join("; "));
     }
     Ok(notes
         .into_iter()
@@ -892,6 +907,28 @@ on_indx = 2
             "{warnings:?}"
         );
         assert!(warnings[0].contains("--seed"), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_run_flow_file_that_does_not_exist_fails_the_check() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("child.test.toml"), "[flow]\nname = \"c\"\n")
+            .expect("child");
+        let flow = |child: &str| {
+            format!(
+                "[flow]\nname = \"p\"\n\n[[flow.apps]]\nname = \"app\"\nbundle = \"com.acme\"\n\
+                 devices = [{{ os = \"android:latest\" }}]\n\n[[block]]\nname = \"sub\"\nrun_flow = \"{child}\"\n"
+            )
+        };
+        let path = dir.path().join("parent.test.toml");
+        check_flow_text(&flow("child.test.toml"), &path, dir.path()).expect("the child exists");
+        let err = check_flow_text(&flow("gone.test.toml"), &path, dir.path())
+            .expect_err("the child is missing");
+        assert!(
+            err.to_string()
+                .contains("Block 'sub': run_flow file 'gone.test.toml' does not exist"),
+            "{err:#}"
+        );
     }
 
     /// A correct flow must stay silent — a lint that cries wolf on the

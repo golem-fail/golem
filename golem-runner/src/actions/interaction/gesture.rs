@@ -34,11 +34,8 @@ pub(crate) async fn resolve_gesture_center(
         vp.height -= meta.keyboard_height;
     }
 
-    let has_selector =
-        step.on_text.is_some() || step.on.is_some() || step.on_accessibility_label.is_some();
-
-    if has_selector {
-        let sel = build_selector(step);
+    let sel = build_selector(step);
+    if !sel.is_unconstrained() {
         let visible = golem_element::filter_viewport(&root, &vp);
         let results = golem_element::selector::find_elements(&visible, &sel);
         if let Some(first) = results.first() {
@@ -167,49 +164,49 @@ pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> 
         }
         let mut points = Vec::new();
         for group in &finger.points {
-            let has_element = group.text.is_some()
-                || group.accessibility_label.is_some()
-                || group.below.is_some()
-                || group.above.is_some();
-
-            if has_element {
-                let sel = crate::resolution::build_selector_from_group(group);
+            let sel = crate::resolution::build_selector_from_group(group);
+            if !sel.is_unconstrained() {
                 let visible = golem_element::filter_viewport(&root, &vp);
                 let results = golem_element::selector::find_elements(&visible, &sel);
-                if let Some(first) = results.first() {
-                    let base_x = first.element.effective_bounds().center_x();
-                    let base_y = first.element.effective_bounds().center_y();
-                    let w = first.element.effective_bounds().width;
-                    let h = first.element.effective_bounds().height;
-                    let x = group
-                        .x
-                        .as_ref()
-                        .map(|xv| {
-                            crate::resolution::resolve_coord_public(
-                                xv,
-                                vp.width,
-                                Some(base_x),
-                                Some(w),
-                                Some(first.element.effective_bounds().x),
-                            )
-                        })
-                        .unwrap_or(base_x);
-                    let y = group
-                        .y
-                        .as_ref()
-                        .map(|yv| {
-                            crate::resolution::resolve_coord_public(
-                                yv,
-                                vp.height,
-                                Some(base_y),
-                                Some(h),
-                                Some(first.element.effective_bounds().y),
-                            )
-                        })
-                        .unwrap_or(base_y);
-                    points.push((x, y));
-                    continue;
-                }
+                let Some(first) = results.first() else {
+                    crate::fail_code!(
+                        golem_events::FailureCode::FlowElementNotFound,
+                        "gesture point {}: no visible element matches its selector",
+                        points.len() + 1
+                    );
+                };
+                let base_x = first.element.effective_bounds().center_x();
+                let base_y = first.element.effective_bounds().center_y();
+                let w = first.element.effective_bounds().width;
+                let h = first.element.effective_bounds().height;
+                let x = group
+                    .x
+                    .as_ref()
+                    .map(|xv| {
+                        crate::resolution::resolve_coord_public(
+                            xv,
+                            vp.width,
+                            Some(base_x),
+                            Some(w),
+                            Some(first.element.effective_bounds().x),
+                        )
+                    })
+                    .unwrap_or(base_x);
+                let y = group
+                    .y
+                    .as_ref()
+                    .map(|yv| {
+                        crate::resolution::resolve_coord_public(
+                            yv,
+                            vp.height,
+                            Some(base_y),
+                            Some(h),
+                            Some(first.element.effective_bounds().y),
+                        )
+                    })
+                    .unwrap_or(base_y);
+                points.push((x, y));
+                continue;
             }
 
             let x = group
