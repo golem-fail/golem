@@ -189,7 +189,12 @@ fn render(address: &str) -> String {
         let topic = topic_of(address).unwrap_or_default();
         out.push_str(&format!("\n\nItems (help(\"{topic}\", item)):\n"));
         for c in below {
-            out.push_str(&format!("- {}: {}\n", item_name(c.address), summary(c)));
+            let about = summary(c);
+            if about.is_empty() {
+                out.push_str(&format!("- {}\n", item_name(c.address)));
+            } else {
+                out.push_str(&format!("- {}: {about}\n", item_name(c.address)));
+            }
         }
     }
     out.trim_end().to_string() + "\n"
@@ -206,7 +211,8 @@ fn nested_names(address: &str) -> usize {
 }
 
 /// One line for a part in a list: its heading's summary, and for a part
-/// with parts below it, their names.
+/// with parts below it, their names. Empty when the heading only repeats
+/// the item's name, which the list already shows.
 fn summary(p: &HelpPart) -> String {
     let heading = p
         .text
@@ -236,10 +242,21 @@ fn summary(p: &HelpPart) -> String {
             }
         })
         .collect();
-    if names.is_empty() {
-        about
+    let letters = |s: &str| -> String {
+        s.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    };
+    let about = if letters(&about) == letters(last(p.address)) {
+        String::new()
     } else {
-        format!("{about} — {}", names.join(", "))
+        about
+    };
+    match (about.is_empty(), names.is_empty()) {
+        (_, true) => about,
+        (true, false) => names.join(", "),
+        (false, false) => format!("{about} — {}", names.join(", ")),
     }
 }
 
@@ -533,6 +550,18 @@ mod tests {
         let act = help(Some("act"), None).expect("act");
         assert!(act.contains("- interaction: "), "{act}");
         assert!(act.contains("tap, double_tap"), "{act}");
+    }
+
+    #[test]
+    fn a_list_drops_a_summary_that_only_repeats_the_name() {
+        let codes = help(Some("codes"), None).expect("codes");
+        assert!(codes.ends_with("- registry\n"), "{codes}");
+        let selectors = help(Some("selectors"), None).expect("selectors");
+        assert!(selectors.contains("- two-syntaxes\n"), "{selectors}");
+        assert!(
+            selectors.contains("- chaining: Nesting and chaining\n"),
+            "{selectors}"
+        );
     }
 
     #[test]

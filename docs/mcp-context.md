@@ -325,12 +325,12 @@ Topics:
   - `help("act", "assert_alert")` · [`assert_alert` — Assert alert is displayed](src/actions-reference/20-assertions/30-assert_alert.md) · 228
 - `help("act", "reading")` · [Reading](src/actions-reference/30-reading/00-intro.md) + 1 item · 106
   - `help("act", "read")` · [`read` — Read element text](src/actions-reference/30-reading/10-read.md) · 342
-- `help("act", "app-lifecycle")` · [App Lifecycle](src/actions-reference/40-app-lifecycle/00-intro.md) + 4 items · 228
+- `help("act", "app-lifecycle")` · [App Lifecycle](src/actions-reference/40-app-lifecycle/00-intro.md) + 4 items · 211
   - `help("act", "launch")` · [`launch` — Launch or foreground an app](src/actions-reference/40-app-lifecycle/10-launch.md) · 898
   - `help("act", "app-permissions")` · [App permissions (LLM text)](src/actions-reference/40-app-lifecycle/20-app-permissions.llm.md) · 1620
   - `help("act", "stop")` · [`stop` — Terminate an app](src/actions-reference/40-app-lifecycle/30-stop.md) · 141
   - `help("act", "clear_data")` · [`clear_data` — Clear app data](src/actions-reference/40-app-lifecycle/40-clear_data.md) · 652
-- `help("act", "device-controls")` · [Device Controls](src/actions-reference/50-device-controls/00-intro.md) + 3 items · 209
+- `help("act", "device-controls")` · [Device Controls](src/actions-reference/50-device-controls/00-intro.md) + 3 items · 194
   - `help("act", "set_dark_mode")` · [`set_dark_mode` — Set dark mode](src/actions-reference/50-device-controls/10-set_dark_mode.md) · 341
   - `help("act", "set_location")` · [`set_location` — Set GPS coordinates](src/actions-reference/50-device-controls/20-set_location.md) · 308
   - `help("act", "press")` · [`press` — Press hardware button](src/actions-reference/50-device-controls/30-press.md) · 477
@@ -377,7 +377,7 @@ Topics:
 
 ### selectors
 
-- `help("selectors")` · [Selectors](src/selectors/00-intro.md) + 10 items, 8 sub-items · 889
+- `help("selectors")` · [Selectors](src/selectors/00-intro.md) + 10 items, 8 sub-items · 852
 - `help("selectors", "two-syntaxes")` · [Two syntaxes](src/selectors/10-two-syntaxes.md) · 359
 - `help("selectors", "core")` · [Core selectors](src/selectors/20-core/00-intro.md) + 1 item · 1116
   - `help("selectors", "prefer-text")` · [Prefer visible `text`; use `accessibility_label` sparingly](src/selectors/20-core/10-prefer-text.md) · 664
@@ -389,7 +389,7 @@ Topics:
 - `help("selectors", "chaining")` · [Nesting and chaining (LLM text)](src/selectors/70-chaining.llm.md) · 648
 - `help("selectors", "occlusion")` · [Occlusion-aware tapping](src/selectors/80-occlusion.md) · 1045
 - `help("selectors", "within")` · [`within` (scoping a scroll)](src/selectors/90-within.md) · 700
-- `help("selectors", "canvas")` · [Canvas-rendered UI (Compose, Compose Multiplatform, Flutter) (LLM text)](src/selectors/100-canvas/00-intro.llm.md) + 6 items · 2155
+- `help("selectors", "canvas")` · [Canvas-rendered UI (Compose, Compose Multiplatform, Flutter) (LLM text)](src/selectors/100-canvas/00-intro.llm.md) + 6 items · 2097
   - `help("selectors", "version-floors")` · [Version floors](src/selectors/100-canvas/10-version-floors.md) · 201
   - `help("selectors", "annotations")` · [Which annotation reaches golem](src/selectors/100-canvas/20-annotations.md) · 1264
   - `help("selectors", "element-types")` · [Element types](src/selectors/100-canvas/30-element-types.md) · 1086
@@ -399,17 +399,17 @@ Topics:
 
 ### flow
 
-- `help("flow")` · [Test Structure](src/test-structure/00-intro.md) + 13 items, 15 sub-items · 730
-- `help("flow", "flow")` · [Flow](src/test-structure/10-flow/00-intro.md) + 4 items · 1268
+- `help("flow")` · [Test Structure](src/test-structure/00-intro.md) + 13 items, 15 sub-items · 675
+- `help("flow", "flow")` · [Flow](src/test-structure/10-flow/00-intro.md) + 4 items · 1223
   - `help("flow", "launch-permissions")` · [Launch-time permissions](src/test-structure/10-flow/05-launch-permissions.md) · 827
   - `help("flow", "flow/options")` · [Flow Options](src/test-structure/10-flow/10-options.md) · 1984
   - `help("flow", "accessibility-audit")` · [Accessibility Audit](src/test-structure/10-flow/20-accessibility-audit.md) · 602
   - `help("flow", "performance-monitoring")` · [Performance Monitoring](src/test-structure/10-flow/30-performance-monitoring.md) · 609
-- `help("flow", "block")` · [Block](src/test-structure/20-block/00-intro.md) + 3 items · 629
+- `help("flow", "block")` · [Block](src/test-structure/20-block/00-intro.md) + 3 items · 618
   - `help("flow", "platform")` · [Platform-Specific Blocks](src/test-structure/20-block/10-platform.md) · 663
   - `help("flow", "branching")` · [Branching](src/test-structure/20-block/20-branching.md) · 1292
   - `help("flow", "next")` · [Block `next`](src/test-structure/20-block/30-next.md) · 334
-- `help("flow", "step")` · [Step](src/test-structure/30-step/00-intro.md) + 3 items · 488
+- `help("flow", "step")` · [Step](src/test-structure/30-step/00-intro.md) + 3 items · 456
   - `help("flow", "selectors")` · [Selectors](src/test-structure/30-step/10-selectors.md) · 675
   - `help("flow", "step/options")` · [Step Options](src/test-structure/30-step/20-options.md) · 851
   - `help("flow", "timeout-multipliers")` · [Timeout Multipliers](src/test-structure/30-step/30-timeout-multipliers.md) · 1251
@@ -431,10 +431,10 @@ Topics:
 
 ### fake
 
-- `help("fake")` · [Fake Data Generators](src/fake-data/00-intro.md) + 5 items, 11 sub-items · 1159
+- `help("fake")` · [Fake Data Generators](src/fake-data/00-intro.md) + 5 items, 11 sub-items · 1125
 - `help("fake", "seeds")` · [Determinism and seeds (LLM text)](src/fake-data/10-seeds.llm.md) · 576
 - `help("fake", "all-generators")` · [All generators](src/fake-data/20-all-generators.md) · 1088
-- `help("fake", "simple-generators")` · [Simple generators](src/fake-data/30-simple-generators/00-intro.md) + 7 items · 224
+- `help("fake", "simple-generators")` · [Simple generators](src/fake-data/30-simple-generators/00-intro.md) + 7 items · 168
   - `help("fake", "email")` · [email](src/fake-data/30-simple-generators/10-email.md) · 825
   - `help("fake", "password")` · [password](src/fake-data/30-simple-generators/20-password.md) · 213
   - `help("fake", "uuid")` · [uuid](src/fake-data/30-simple-generators/30-uuid.md) · 94
@@ -442,7 +442,7 @@ Topics:
   - `help("fake", "one_of")` · [one_of](src/fake-data/30-simple-generators/50-one_of.md) · 319
   - `help("fake", "sentence")` · [sentence](src/fake-data/30-simple-generators/60-sentence.md) · 820
   - `help("fake", "phone")` · [phone](src/fake-data/30-simple-generators/70-phone.md) · 572
-- `help("fake", "structured-generators")` · [Structured generators](src/fake-data/40-structured-generators/00-intro.md) + 4 items · 190
+- `help("fake", "structured-generators")` · [Structured generators](src/fake-data/40-structured-generators/00-intro.md) + 4 items · 149
   - `help("fake", "person")` · [person (LLM text)](src/fake-data/40-structured-generators/10-person.llm.md) · 2749
   - `help("fake", "address")` · [address](src/fake-data/40-structured-generators/20-address.md) · 2028
   - `help("fake", "credit_card")` · [credit_card](src/fake-data/40-structured-generators/30-credit_card.md) · 1719
@@ -451,5 +451,5 @@ Topics:
 
 ### codes
 
-- `help("codes")` · [Error Codes (LLM text)](src/error-codes/00-intro.llm.md) + 1 item · 762
+- `help("codes")` · [Error Codes (LLM text)](src/error-codes/00-intro.llm.md) + 1 item · 752
 - `help("codes", "registry")` · [Registry](src/error-codes/10-registry.md) · 5215
