@@ -445,57 +445,79 @@ fn failure_code(item: &str) -> Option<String> {
         })
 }
 
-/// The Help section of `docs/mcp-context.md`: each help call, linked to
-/// the text it answers with, and the answer's size.
+/// The Help section of `docs/mcp-context.md`: each help call with its
+/// answer, its size and the part it serves.
 #[cfg(test)]
 pub fn context_section() -> String {
     let mut out = String::from(
-        "## Help\n\nEach call that `help` answers, linked to the part in `docs/src` that it \
-         serves: the part, or the `.llm.md` file that replaces it for the LLM. An item with items \
-         of its own answers its text, then a list of them that `help` builds from their headings \
-         (+ items, counted; sub-items are the names on those items' lines). The size is the whole answer's, in characters.\n\n```text\n",
+        "## Help\n\nEach call that `help` answers, folded, with the answer as the LLM gets it \
+         and the part in `docs/src` that it serves: the part, or the `.llm.md` file that \
+         replaces it for the LLM. An item with items of its own answers its text, then a list \
+         of them that `help` builds from their headings (+ items, counted; sub-items are the \
+         names on those items' lines). Sizes are in characters.\n\n`help()`:\n\n```text\n",
     );
     out.push_str(&index());
     out.push_str("```\n");
     for (topic, page, _) in TOPICS {
         out.push_str(&format!("\n### {topic}\n\n"));
-        for p in HELP_PARTS
-            .iter()
-            .filter(|p| p.address == *page || p.address.starts_with(&format!("{page}/")))
-        {
-            let depth = p.address.matches('/').count();
-            let call = if depth == 0 {
-                format!("help(\"{topic}\")")
-            } else {
-                format!("help(\"{topic}\", \"{}\")", item_name(p.address))
-            };
-            let heading = p
-                .text
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .trim_start_matches('#')
-                .trim();
-            let llm = if p.source.ends_with(".llm.md") {
-                " (LLM text)"
-            } else {
-                ""
-            };
-            let target = format!("{heading}{llm}]({})", p.source);
-            let count =
-                |n: usize, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
-            let items = match (children(p.address).count(), nested_names(p.address)) {
-                (0, _) => String::new(),
-                (n, 0) => format!(" + {}", count(n, "item")),
-                (n, m) => format!(" + {}, {}", count(n, "item"), count(m, "sub-item")),
-            };
-            out.push_str(&format!(
-                "{}- `{call}` · [{target}{items} · {}\n",
-                "  ".repeat(depth.saturating_sub(1)),
-                render(p.address).chars().count()
-            ));
+        if let Some(p) = part(page) {
+            out.push_str(&answer_block(topic, p));
         }
     }
+    out
+}
+
+/// One help answer for `docs/mcp-context.md`: folded, with the answers
+/// of the parts below it folded inside.
+#[cfg(test)]
+fn answer_block(topic: &str, p: &HelpPart) -> String {
+    let call = if p.address.contains('/') {
+        format!("help(\"{topic}\", \"{}\")", item_name(p.address))
+    } else {
+        format!("help(\"{topic}\")")
+    };
+    let heading = p
+        .text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim_start_matches('#')
+        .trim()
+        .replace('`', "")
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let count = |n: usize, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
+    let items = match (children(p.address).count(), nested_names(p.address)) {
+        (0, _) => String::new(),
+        (n, 0) => format!(" · + {}", count(n, "item")),
+        (n, m) => format!(" · + {}, {}", count(n, "item"), count(m, "sub-item")),
+    };
+    let answer = render(p.address);
+    // A fence longer than any run of backticks in the answer, so its own
+    // code blocks stay inside.
+    let longest = answer
+        .split(|c| c != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or_default();
+    let fence = "`".repeat(longest.max(2) + 1);
+    let llm = if p.source.ends_with(".llm.md") {
+        " (LLM text)"
+    } else {
+        ""
+    };
+    let mut out = format!(
+        "<details><summary><code>{call}</code> · {heading} · {} chars{items}</summary>\n\n\
+         Source: [{}]({}){llm}\n\n{fence}text\n{answer}{fence}\n\n",
+        answer.chars().count(),
+        p.source,
+        p.source,
+    );
+    for c in children(p.address) {
+        out.push_str(&answer_block(topic, c));
+    }
+    out.push_str("</details>\n\n");
     out
 }
 
