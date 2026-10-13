@@ -880,7 +880,7 @@ impl PlatformDriver for IosDriver {
                 "set_dark_mode is simulator-only on iOS — `{}` is a physical \
                  device, and `simctl ui appearance` can't address one. Set \
                  the appearance in Settings on the device, or gate the step \
-                 on `_hardware`; see docs/actions-reference.md §Device Controls.",
+                 on `_hardware`; see docs/actions-reference.md §set_dark_mode.",
                 self.device_id,
             );
         }
@@ -897,7 +897,7 @@ impl PlatformDriver for IosDriver {
                  device, and `simctl location` can't address one. Mocking GPS \
                  on real hardware needs a signed location provider, which is \
                  outside this action's scope; gate the step on `_hardware`. \
-                 See docs/actions-reference.md §Device Controls.",
+                 See docs/actions-reference.md §set_location.",
                 self.device_id,
             );
         }
@@ -931,7 +931,7 @@ impl PlatformDriver for IosDriver {
         // Refuse on physical devices — `simctl push` is sim-only. Real
         // APNS delivery needs provisioning + Apple's push servers + a
         // device token, which is outside this action's scope. See
-        // README §push_notification for the cross-device pattern using
+        // docs/actions-reference.md §push_notification for the cross-device pattern using
         // `branch` + `*_http` to your own APNS backend.
         if self.physical {
             bail!(
