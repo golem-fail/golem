@@ -53,4 +53,6 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 [[profile.default.overrides]]
 filter = 'test(/(^|::)live_/)'
 test-group = 'browser'
-slow-timeout = { period = "15s", terminate-after = 4 }
+# The kill comes after the browser's own 60 s launch timeout, so a slow
+# launch fails with its message rather than as a killed test.
+slow-timeout = { period = "15s", terminate-after = 6 }
