@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "golem-browser"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "chromiumoxide",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "golem-cli"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "golem-common"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "async-trait",
  "libc",
@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "golem-devices"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "golem-common",
@@ -1030,14 +1030,14 @@ dependencies = [
 
 [[package]]
 name = "golem-docs"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "golem-events",
 ]
 
 [[package]]
 name = "golem-driver"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "golem-element"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1067,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "golem-email"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-imap",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "golem-events"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -1096,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "golem-orchestrator"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "golem-parser"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -1135,7 +1135,7 @@ dependencies = [
 
 [[package]]
 name = "golem-report"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "golem-runner"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1179,7 +1179,7 @@ dependencies = [
 
 [[package]]
 name = "golem-vars"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "chrono",
