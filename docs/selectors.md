@@ -41,7 +41,7 @@ The same selector grammar is used everywhere an element is named: `tap`,
 ```
 
 ## Core selectors
-<!-- summary: on_text, on_accessibility_label, on_index; what counts as text -->
+<!-- summary: on_text, on_accessibility_label, on_index; what counts as text; when to prefer text -->
 
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|
@@ -57,7 +57,6 @@ exception: its label describes a picture, so it is never text. In a webview,
 `text` is the DOM text only.
 
 ### Prefer visible `text`; use `accessibility_label` sparingly
-<!-- summary: Prefer visible text; use accessibility_label sparingly -->
 
 Default to `on_text` (or a positional/`contains` selector). Use
 `on_accessibility_label` only:
@@ -132,7 +131,7 @@ The anchor must be **on-screen**. If it exists but is scrolled off, the
 relational match is treated as unresolved (empty).
 
 ## Geometric containment: `contains` / `inside`
-<!-- summary: contains or inside: select by nested bounds, not DOM -->
+<!-- summary: contains or inside: select by nested bounds, not DOM; min_matches for a list -->
 
 Select by spatial nesting — coordinate-based, *not* DOM structure. There is no
 parent/child selector.
@@ -252,11 +251,15 @@ The facts below were checked with Jetpack Compose, Compose Multiplatform 1.11
 and Flutter 3.47, on Android API 36 and iOS 26.
 
 ### Version floors
-<!-- summary: Compose Multiplatform 1.8.0+ on iOS; Flutter 3.19+ for identifier -->
 
 - **Compose Multiplatform 1.8.0 or later on iOS.** From 1.8.0 the Compose
   accessibility tree syncs to iOS automatically.
 - **Flutter 3.19 or later** for `Semantics(identifier:)`.
+
+### Flutter
+
+A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
+`CustomPaint`) is invisible to golem until you wrap it in `Semantics`.
 
 ### Which annotation reaches golem
 <!-- summary: Which Compose or Flutter annotation becomes text or label -->
@@ -347,9 +350,3 @@ heading, instead.
 On Flutter, a merged child has no node of its own. Select the container by its
 joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. `inside`
 and `contains` are geometric, so a coarse tree does not change them.
-
-### Flutter
-<!-- summary: Wrap a custom Flutter widget in Semantics so golem sees it -->
-
-A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
-`CustomPaint`) is invisible to golem until you wrap it in `Semantics`.

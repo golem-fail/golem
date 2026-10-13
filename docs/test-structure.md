@@ -439,7 +439,7 @@ case — each with a fresh app launch and its own pass/fail line — write it as
 its own flow, or as a subflow invoked with different `[block.vars]`.
 
 ## Variables
-<!-- summary: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name} -->
+<!-- summary: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name}; built-ins such as _device, _os -->
 
 Set variables with `--var NAME=value` on the CLI, in `[flow.vars]`, from data rows, with a step's `save_to`, or from fixtures. Reference them as `${name}`:
 
@@ -457,7 +457,6 @@ steps = [
 When the CLI, `golem.toml` and the flow set the same name, see [Project config](#project-config-golemtoml) for which one wins.
 
 ### Built-in variables
-<!-- summary: _device, _os, _platform, _hardware and other per-step values -->
 
 golem reserves the `_` prefix and fills these in per step:
 
