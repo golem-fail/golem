@@ -887,7 +887,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's own fields: for_each, where (device filter), record, run_flow and its vars and save_to. Its steps then become ? and ~."
+        description = "Set a block's own fields: for_each, where (device filter), record, max_iterations, run_flow and its vars and save_to. Its steps then become ? and ~."
     )]
     async fn block_set(
         &self,

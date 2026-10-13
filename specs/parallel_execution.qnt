@@ -355,9 +355,14 @@ module parallel_execution {
     devices.keys().forall(did => devices.get(did).block_index == block_idx),
     // All targeted devices must be at the barrier (completed, skipped, or failed).
     all_devices_at_barrier(devices, blk),
-    if (has_error) all {
+    // A block looping past its max_iterations fails the flow, as golem's
+    // executor does (EF509): leaving the loop instead would let a loop that
+    // never reached its exit pass silently.
+    val loops_past_max = at_max and next_idx == block_idx
+    if (has_error or loops_past_max) all {
       // Failure propagation: any device fail with on_fail="error" fails the flow.
-      flow_result' = FlowFailed("device_error_at_barrier"),
+      flow_result' = if (has_error) FlowFailed("device_error_at_barrier")
+                     else FlowFailed("max_iterations"),
       // Commit pending writes even on failure (vars persist).
       devices' = devices.keys().fold(devices, (acc, did) =>
         val d = acc.get(did)
@@ -380,12 +385,10 @@ module parallel_execution {
         val d = acc.get(did)
         val pw = if (pending_writes.keys().contains(did)) pending_writes.get(did) else Map()
         val fully_merged = pw.keys().fold(d.vars, (v, k) => v.put(k, pw.get(k)))
-        // at_max forces the loop to exit: the device moves on, so its
-        // per-block counters reset just like any other block change.
-        val is_looping = next_idx == block_idx and not(at_max)
+        val is_looping = next_idx == block_idx
         val new_loop = if (is_looping) d.loop_counter + 1 else 0
         val new_iters = if (is_looping) d.iterations_used + 1 else 0
-        val effective_next = if (at_max and next_idx == block_idx) block_idx + 1 else next_idx
+        val effective_next = next_idx
         acc.put(did, { ...d,
           vars: fully_merged,
           status: Idle,
@@ -395,8 +398,7 @@ module parallel_execution {
           iterations_used: new_iters,
         })
       ),
-      flow_result' = if (next_idx >= blocks.length() and not(at_max)) FlowCompleted
-                     else if (at_max and block_idx + 1 >= blocks.length()) FlowCompleted
+      flow_result' = if (next_idx >= blocks.length()) FlowCompleted
                      else Running,
       blocks'             = blocks,
       for_each_cursor'    = for_each_cursor,

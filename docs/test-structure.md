@@ -176,6 +176,8 @@ steps = [
 
 `record = true` / `false` on a block overrides the flow's `record` default for that block (`--no-record` still wins).
 
+`max_iterations = N` on a block fails the flow with `EF509` when the flow would run the block an (N+1)th time. It guards a block that loops through `next`, a branch `goto` or `[[data]]` rows: each row counts as one run. To leave a loop on purpose instead, branch on `_loop` (see [Branching](#branching)).
+
 ### Platform-Specific Blocks
 <!-- summary: where: run a block only on devices that match -->
 

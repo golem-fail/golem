@@ -6355,6 +6355,7 @@ mod tests {
             FlowExplicitFail,        // EF400
             FlowMaxRuntime,          // EF504
             FlowMaxSteps,            // EF508
+            FlowMaxIterations,       // EF509
         ] {
             assert!(
                 !code_warrants_recovery(Some(code)),

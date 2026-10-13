@@ -676,6 +676,14 @@ pub async fn execute_flow<'a>(
             .name
             .clone()
             .unwrap_or_else(|| format!("block_{current_idx}"));
+        if let Some(max) = block.max_iterations.filter(|m| u64::from(*iteration) >= *m) {
+            return Err(golem_events::coded(
+                golem_events::FailureCode::FlowMaxIterations,
+                anyhow::anyhow!(
+                    "block `{block_label}` already ran {max} times, its max_iterations, and the flow entered it again"
+                ),
+            ));
+        }
         let block_iter_for_recording = *iteration;
         // Data-driven binding: a `for_each = "data"` block re-enters once per
         // `[[data]]` row (see "Determine next block"). A fresh entry (not a
@@ -3653,6 +3661,57 @@ mod tests {
         assert!(
             err_msg.contains("max_steps"),
             "error SHALL mention max_steps: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_block_entered_past_its_max_iterations_fails_f509() {
+        let run = |max: u64| async move {
+            let driver = MockPlatformDriver::new(empty_hierarchy());
+            let mut vars = VariableStore::new();
+            let mut ctx = test_ctx(Path::new("."));
+            // `next` to itself loops until max_steps (20) stops it, unless
+            // max_iterations stops it first.
+            let mut block = make_block(Some("again"), vec![make_success_step()]);
+            block.next = Some("again".to_string());
+            block.max_iterations = Some(max);
+            let flow = make_flow_with_options(
+                vec![block],
+                FlowOptions {
+                    max_steps: Some(20),
+                    ..FlowOptions::default()
+                },
+            );
+            let result = execute_flow(
+                &flow,
+                &driver,
+                &mut vars,
+                None,
+                DEFAULT_TIMEOUT,
+                &mut ctx,
+                None,
+            )
+            .await;
+            result
+        };
+        let result = run(3).await;
+        let err = result.expect_err("the 4th entry SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowMaxIterations),
+            "{err:#}"
+        );
+        assert!(
+            err.to_string()
+                .contains("block `again` already ran 3 times, its max_iterations"),
+            "{err:#}"
+        );
+        let result = run(50).await;
+        let err = result.expect_err("max_steps SHALL stop it first");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowMaxSteps),
+            "a limit the loop never reaches SHALL NOT fire: {err:#}"
         );
     }
 

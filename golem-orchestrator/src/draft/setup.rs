@@ -39,7 +39,15 @@ pub const OPTION_KEYS: &[&str] = &[
 /// The keys of a `[[block]]` that `block_set` sets: the ones that are not
 /// its name, steps, `next` or branches, which other tools own. Not `app`:
 /// the parser accepts it, but nothing reads it.
-pub const BLOCK_KEYS: &[&str] = &["for_each", "where", "run_flow", "vars", "save_to", "record"];
+pub const BLOCK_KEYS: &[&str] = &[
+    "for_each",
+    "where",
+    "run_flow",
+    "vars",
+    "save_to",
+    "record",
+    "max_iterations",
+];
 
 impl Draft {
     /// Run `change`; if the draft then does not parse as a flow, or has a
