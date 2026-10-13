@@ -20,10 +20,10 @@ pub fn page() -> String {
          | Instructions | {} |\n| Tool list ({} tools, as `tools/list` JSON) | {} |\n\
          | Both, kept in context by most clients | {} |\n\n\
          ## Instructions\n\n```text\n{INSTRUCTIONS}\n```\n\n## Tools\n",
-        INSTRUCTIONS.len(),
+        INSTRUCTIONS.chars().count(),
         tools.len(),
-        list.len(),
-        INSTRUCTIONS.len() + list.len()
+        list.chars().count(),
+        INSTRUCTIONS.chars().count() + list.chars().count()
     );
     for tool in &tools {
         out.push_str(&format!(
@@ -36,41 +36,58 @@ pub fn page() -> String {
             .as_object()
             .cloned()
             .unwrap_or_default();
-        if props.is_empty() {
-            continue;
-        }
-        let required: Vec<&str> = schema["required"]
-            .as_array()
-            .map(|r| r.iter().filter_map(|v| v.as_str()).collect())
-            .unwrap_or_default();
-        out.push_str("\n| Parameter | Type | Description |\n|-----------|------|-------------|\n");
-        for (name, p) in props {
-            let kind = match &p["type"] {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Array(a) => a
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" or "),
-                _ => "object".to_string(),
-            };
-            out.push_str(&format!(
-                "| `{name}`{} | {kind} | {} |\n",
-                if required.contains(&name.as_str()) {
-                    " (required)"
-                } else {
-                    ""
-                },
-                p["description"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .replace('|', "\\|")
-                    .replace('\n', " ")
-            ));
-        }
+        out.push_str(&parameter_table(&schema, props));
+        let entry = serde_json::to_string(tool).unwrap_or_default();
+        out.push_str(&format!(
+            "\n<details><summary>As <code>tools/list</code> sends it · {} chars</summary>\n\n\
+             ```json\n{}\n```\n\n</details>\n",
+            entry.chars().count(),
+            entry
+        ));
     }
     out.push('\n');
     out.push_str(&crate::help::context_section());
+    out
+}
+
+/// A tool's parameters as a table; empty for a tool without any.
+fn parameter_table(
+    schema: &serde_json::Value,
+    props: serde_json::Map<String, serde_json::Value>,
+) -> String {
+    if props.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    let required: Vec<&str> = schema["required"]
+        .as_array()
+        .map(|r| r.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    out.push_str("\n| Parameter | Type | Description |\n|-----------|------|-------------|\n");
+    for (name, p) in props {
+        let kind = match &p["type"] {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Array(a) => a
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" or "),
+            _ => "object".to_string(),
+        };
+        out.push_str(&format!(
+            "| `{name}`{} | {kind} | {} |\n",
+            if required.contains(&name.as_str()) {
+                " (required)"
+            } else {
+                ""
+            },
+            p["description"]
+                .as_str()
+                .unwrap_or_default()
+                .replace('|', "\\|")
+                .replace('\n', " ")
+        ));
+    }
     out
 }
 

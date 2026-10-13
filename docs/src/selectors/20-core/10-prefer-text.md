@@ -1,4 +1,5 @@
 ### Prefer visible `text`; use `accessibility_label` sparingly
+<!-- summary: Prefer visible text; use accessibility_label sparingly -->
 
 Default to `on_text` (or a positional/`contains` selector). Use
 `on_accessibility_label` only:

@@ -43,6 +43,8 @@ GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs
 - The page's table of contents is generated at `<!-- toc -->` (`<!-- toc depth=2 -->` for `##` only).
 - The path without the numbers is the part's address for the MCP help, for example `actions-reference/interaction/tap`.
 - A `<name>.llm.md` next to a part replaces that part for the MCP help only. Add one only when the human text is right for humans but too long for an LLM.
+- A `<!-- summary: … -->` line under a part's heading is the part's line in a `help` list. Write one when the heading says no more than the part's name. Put it in the file that `help` serves: the `.llm.md` file, if the part has one. A test lists each part that needs one.
+- A `<!-- collapsed -->` line in a group's file makes its parent's `help` list give the group's summary and how to open it, not the names of its items. Use it for a group that few flows need, or whose own text each of its items depends on. In `act`, `help("act")` lists the actions of every other group, so an agent skips the group's own text: a test requires that a group with more than a sentence of its own text be collapsed.
 
 `cargo t` fails when a page differs from its parts, or when a link or anchor in a page does not resolve.
 

@@ -1,4 +1,5 @@
 ### address
+<!-- summary: .street, .city, .postcode, .country and more -->
 
 `${fake:address}` returns a coherent address for one place — all fields come from
 the same city, so they stay consistent. There are no standalone city, postcode or

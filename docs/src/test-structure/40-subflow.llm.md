@@ -1,4 +1,5 @@
 ## Subflow
+<!-- summary: run_flow: a block runs another flow file on the same device -->
 
 A block with `run_flow` runs another flow file instead of its own steps. The child sees the parent's variables and runs on the same device.
 

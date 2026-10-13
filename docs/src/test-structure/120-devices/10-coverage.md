@@ -1,4 +1,5 @@
 ### Coverage Strategies
+<!-- summary: How multi-valued device axes expand into runs: smart, min and more -->
 
 `coverage` in [Flow Options](#flow-options) controls how multi-valued `[[flow.apps.devices]]` axes expand into FlowRuns.
 

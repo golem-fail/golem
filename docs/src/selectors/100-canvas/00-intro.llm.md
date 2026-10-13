@@ -1,4 +1,6 @@
 ## Canvas-rendered UI (Compose, Compose Multiplatform, Flutter)
+<!-- collapsed -->
+<!-- summary: Compose and Flutter UIs: what works and what differs by platform -->
 
 Compose, Compose Multiplatform and Flutter copy their semantics tree into the platform accessibility tree, so golem sees one node per widget. Text, relational and containment selectors work on these nodes.
 

@@ -1,4 +1,5 @@
 ## State filters
+<!-- summary: Filter by enabled, checked or clickable -->
 
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|

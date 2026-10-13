@@ -1,4 +1,5 @@
 ## Reuse: Subflow vs Mixin vs Fixture
+<!-- summary: When to use a subflow, a mixin or a fixture -->
 
 Three ways to share pieces across flows, by what they contain:
 

@@ -1,4 +1,5 @@
 ## Variables
+<!-- summary: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name} -->
 
 Set variables with `--var NAME=value` on the CLI, in `[flow.vars]`, from data rows, with a step's `save_to`, or from fixtures. Reference them as `${name}`:
 

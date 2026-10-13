@@ -39,6 +39,7 @@ Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-le
 - [Project config (`golem.toml`)](#project-config-golemtoml)
 
 ## Flow
+<!-- summary: [flow] fields, [[flow.apps]], vars and options -->
 
 A flow is a complete test scenario: metadata, app configuration, device targets, execution blocks, and optional teardown.
 
@@ -75,6 +76,7 @@ steps = [
 The `name` you give an app here is how any action with an `app` field (`launch`, `stop`, `clear_data`, `push_notification`, …) refers to it: `app = "app"`. Bundle ids also work. See [Multi-App Flows](#multi-app-flows).
 
 ### Launch-time permissions
+<!-- summary: Grant app permissions before the app launches -->
 
 An app entry may declare `permissions`. golem grants them **before the app is launched**, so they are in place from process start. A grant that fails is a warning, not a failure: the app then shows its permission prompt when it needs the permission.
 
@@ -87,6 +89,7 @@ permissions = { photos = "allow", camera = "deny" }
 Keys use the cross-platform permission names (`camera`, `microphone`, `location`, `photos`, …). The value is a **mode**: `"allow"` or `"deny"` for any permission, plus `location = "always"` (background; `allow` is foreground) and `photos = "limited"`. To change a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map. [App permissions](actions-reference.md#app-permissions) owns the full permission and mode reference.
 
 ### Flow Options
+<!-- summary: [flow.options]: timeouts, limits, recording, coverage, perf -->
 
 ```toml
 [flow.options]
@@ -121,6 +124,7 @@ a11y_min_confidence = 0.8           # Drop a11y findings below this confidence (
 ```
 
 ### Accessibility Audit
+<!-- summary: Per-block audit of the visible tree; levels and thresholds -->
 
 After each block, Golem audits the **visible** UI tree for accessibility issues
 (zero config, on by default at `relaxed`). Findings appear inline in the live run
@@ -133,6 +137,7 @@ Full guide — the checks, per-level thresholds, the confidence model, and how t
 read the annotated screenshot — in **[accessibility.md](accessibility.md)**.
 
 ### Performance Monitoring
+<!-- summary: Per-block memory, CPU, threads and fds; warn and error limits -->
 
 Golem captures app performance metrics after each block (unless `--no-perf` or `perf = false`).
 
@@ -172,6 +177,7 @@ steps = [
 `record = true` / `false` on a block overrides the flow's `record` default for that block (`--no-record` still wins).
 
 ### Platform-Specific Blocks
+<!-- summary: where: run a block only on devices that match -->
 
 `where` runs a block only on devices that match it; on other devices the block is skipped:
 
@@ -193,6 +199,7 @@ steps = [
 A device must match every key given. A skipped block's `next` and `[[block.branch]]` are not evaluated: the flow continues with the next block in document order.
 
 ### Branching
+<!-- summary: if_visible, if_not_visible or if_var, then goto a block -->
 
 Control flow between blocks with conditions:
 
@@ -225,6 +232,7 @@ Branches are checked after the block's steps finish (for a `for_each` block, aft
 `if_var` without `equals`, `matches` or `gte` never matches. A block with any `[[block.branch]]` ignores its `next`, even when no branch matches — put an unconditional `goto` last instead.
 
 ### Block `next`
+<!-- summary: Go to a named block after this one; ignored with branches -->
 
 Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
 
@@ -244,6 +252,7 @@ steps = [...]    # Executed after step_a
 ```
 
 ## Step
+<!-- summary: One action with selectors, timeout and error handling -->
 
 A step is a single action with optional selectors, timeouts, and error handling.
 
@@ -255,6 +264,7 @@ A step is a single action with optional selectors, timeouts, and error handling.
 ```
 
 ### Selectors
+<!-- summary: Selector keys on a step; prefer on_text -->
 
 Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` only to test the a11y label.
 
@@ -271,6 +281,7 @@ Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` 
 **See [Selectors](selectors.md)** for every selector, state filter and trait, the grouped `on = { … }` form, containment, and how a match is resolved.
 
 ### Step Options
+<!-- summary: timeout, auto_scroll, if_fail, retry, save_to and other step fields -->
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -286,6 +297,7 @@ Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` 
 | `app` | — | Target a specific app (for multi-app flows) |
 
 ### Timeout Multipliers
+<!-- summary: Each action's default timeout, as a multiple of step_timeout -->
 
 Each action has a built-in multiplier applied to the base timeout (`step_timeout`, default 5000ms). Per-step `timeout` always overrides.
 
@@ -349,6 +361,7 @@ A subflow is a normal flow, so `golem run` (no path) would otherwise discover an
 In short: `explicit_only` suppresses only the tag-less discovery sweep. Tag it to include it in specific `--tag` runs; name its path to run it directly. Set `app_lifecycle = "manual"` so the child inherits the parent's already-launched app (see [Lifecycle](#lifecycle-setup--teardown)).
 
 ## Reuse: Subflow vs Mixin vs Fixture
+<!-- summary: When to use a subflow, a mixin or a fixture -->
 
 Three ways to share pieces across flows, by what they contain:
 
@@ -362,6 +375,7 @@ Three ways to share pieces across flows, by what they contain:
 `__mixins__/` and `__fixtures__/` are excluded from flow discovery, so their files never run as tests on their own.
 
 ## Lifecycle: Setup & Teardown
+<!-- summary: Setup is implicit: install, then app_lifecycle reset or launch -->
 
 **There is no `[[setup]]` block.** A flow's setup is implicit and happens automatically before the first block:
 
@@ -378,6 +392,7 @@ Any additional setup you need (e.g. creating a user) is just normal steps, or a 
 Cleanup after the flow belongs in [Teardown](#teardown).
 
 ## Teardown
+<!-- summary: [[teardown]] steps run after the flow, even when it fails -->
 
 Teardown blocks run after the flow completes, regardless of pass/fail — running **even when the flow fails** is the point: it cleans up external state (test data, created users) that a failed run would otherwise leak. Failures in teardown don't affect the test result (they surface as `Teardown:` warnings on the report). Teardown runs before the automatic device-state reset (dark mode, mocked location, recording), so it still sees the app as the flow left it.
 
@@ -392,6 +407,7 @@ steps = [
 Skip teardown with `--no-teardown`.
 
 ## Data-Driven Tests
+<!-- summary: [[data]] rows; for_each = "data" runs a block per row -->
 
 A `[[data]]` table holds the rows, and a block iterates them with
 `for_each = "data"`. The block runs once per row, and each row's fields are
@@ -423,6 +439,7 @@ case — each with a fresh app launch and its own pass/fail line — write it as
 its own flow, or as a subflow invoked with different `[block.vars]`.
 
 ## Variables
+<!-- summary: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name} -->
 
 Set variables with `--var NAME=value` on the CLI, in `[flow.vars]`, from data rows, with a step's `save_to`, or from fixtures. Reference them as `${name}`:
 
@@ -440,6 +457,7 @@ steps = [
 When the CLI, `golem.toml` and the flow set the same name, see [Project config](#project-config-golemtoml) for which one wins.
 
 ### Built-in variables
+<!-- summary: _device, _os, _platform, _hardware and other per-step values -->
 
 golem reserves the `_` prefix and fills these in per step:
 
@@ -460,6 +478,7 @@ golem reserves the `_` prefix and fills these in per step:
 builtins resolve in `${…}` interpolation only.
 
 ## Fake Data Generators
+<!-- summary: ${fake:…} in short; help("fake") has the rest -->
 
 `${fake:…}` generates random but valid test data: `email`, `password`, `uuid`, `number`, `one_of`, `sentence`, `timestamp`, `phone`, and the structured `person`, `address` and `credit_card`. `--seed <N>` replays the same values.
 
@@ -473,6 +492,7 @@ addr  = "${fake:address(country=GB)}"
 **See [Fake Data Generators](fake-data.md)** for every generator, its parameters and fields.
 
 ## Multi-App Flows
+<!-- summary: Several apps in one flow; switch with launch app = "…" -->
 
 Test interactions across multiple apps:
 
@@ -502,6 +522,7 @@ steps = [
 Each `[[flow.apps]]` entry lists device constraints in `[[flow.apps.devices]]`: OS and version (`os`), shape (`type`), virtual or physical (`hardware`), or an exact device (`name`). golem turns the constraints into device slots, and the `coverage` strategy decides how many devices run the flow. For each slot it picks a free booted device that matches, boots a shut-down one if no match is booted, and creates one only when nothing matches and `create_if_missing` is set. With no `[[flow.apps.devices]]` at all, the flow runs on whatever is already booted.
 
 ### Coverage Strategies
+<!-- summary: How multi-valued device axes expand into runs: smart, min and more -->
 
 `coverage` in [Flow Options](#flow-options) controls how multi-valued `[[flow.apps.devices]]` axes expand into FlowRuns.
 
@@ -560,6 +581,7 @@ Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, pho
 **No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted), on a device of either shape — a simulator is preferred when one is free. Fails fast if nothing is booted.
 
 ### Hardware Axis (virtual / real)
+<!-- summary: hardware = "virtual" or "real", or either -->
 
 ```toml
 [[flow.apps.devices]]
@@ -584,6 +606,7 @@ Under `coverage = "one"` / `"smart"`, `hardware = ["virtual", "real"]` degrades 
 `create_if_missing` is a `[flow.options]` (or `golem.toml` `[options]`) key, default `false`. When no booted or shut-down device matches a slot, `true` makes golem create and boot a simulator/emulator from the slot's `os` and `type` (a phone if `type` is unset); `false` fails the slot with "No … devices found". It needs an `os` that names a platform. When no matching real device is connected, `hardware = "real"` with `create_if_missing = true` errors: golem cannot create physical hardware.
 
 ### Pinning a Specific Device by Name
+<!-- summary: name = "…": pin one device by its display name -->
 
 ```toml
 [[flow.apps.devices]]
@@ -595,12 +618,14 @@ name = "iPhone 15"
 With `create_if_missing`, an unknown name errors instead of creating a simulator.
 
 ### Auto-Boot Behaviour
+<!-- summary: golem boots a matching shut-down device; headless on Android -->
 
 When no booted device matches a slot but a matching simulator/emulator is shut down, golem boots it and waits until it is ready.
 
 Emulators that golem boots on Android run headless — no window. To watch a device, boot it yourself before the run (golem reuses a booted device instead of starting another), or on iOS open `Simulator.app`, which shows the simulators golem boots.
 
 ## Project config (`golem.toml`)
+<!-- summary: golem.toml: project defaults that every flow inherits -->
 
 `golem.toml` sits at the project root (golem walks up from the working
 directory to find it) and holds the defaults every flow inherits. A flow

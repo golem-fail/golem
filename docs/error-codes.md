@@ -34,6 +34,7 @@ Codes appear in every output format:
 - **junit**: the `type` attribute of `<failure type="EF408" …>`; warnings prefix `[WF…]` in `system-out`.
 
 ## Registry
+<!-- summary: Every code with its meaning and fix -->
 
 <!-- Generated from FailureCode in golem-events/src/code.rs (meaning, fix). -->
 

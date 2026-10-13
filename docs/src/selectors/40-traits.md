@@ -1,4 +1,5 @@
 ## Traits
+<!-- summary: Shape and text predicates: button, wide, tall, has_text and more -->
 
 Computed predicates on an element's geometry and content. All listed traits in a
 selector must hold (AND).

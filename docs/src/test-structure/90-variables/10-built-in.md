@@ -1,4 +1,5 @@
 ### Built-in variables
+<!-- summary: _device, _os, _platform, _hardware and other per-step values -->
 
 golem reserves the `_` prefix and fills these in per step:
 

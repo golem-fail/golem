@@ -1,4 +1,5 @@
 ## Project config (`golem.toml`)
+<!-- summary: golem.toml: project defaults that every flow inherits -->
 
 `golem.toml` sits at the project root (golem walks up from the working
 directory to find it) and holds the defaults every flow inherits. A flow

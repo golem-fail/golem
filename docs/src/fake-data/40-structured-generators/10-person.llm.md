@@ -1,4 +1,5 @@
 ### person
+<!-- summary: Name parts in many scripts: .given, .family, .ascii -->
 
 `${fake:person}` is an object of name parts. Read a field; the bare object is an error in a string.
 

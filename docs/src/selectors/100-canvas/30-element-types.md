@@ -1,4 +1,5 @@
 ### Element types
+<!-- summary: element_type and the button trait are unreliable on canvas UIs -->
 
 `element_type`, and the `button` trait that reads it, are not reliable on a
 canvas UI:

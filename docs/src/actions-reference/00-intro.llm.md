@@ -28,4 +28,4 @@ The common actions:
 { action = "read", on_right_of = "Total:", save_to = "total" }
 ```
 
-help("act", action) gives one action's fields and examples. help("act", group) lists a group.
+help("act", action) gives one action's fields and examples.

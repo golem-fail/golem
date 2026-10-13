@@ -20,7 +20,8 @@ fn rendered() -> BTreeMap<String, String> {
 fn registry() -> String {
     use golem_events::FailureCode;
     let mut out = String::from(
-        "## Registry\n\n\
+        "## Registry\n\
+         <!-- summary: Every code with its meaning and fix -->\n\n\
          <!-- Generated from FailureCode in golem-events/src/code.rs (meaning, fix). -->\n\n\
          | Code | Meaning | Fix |\n|------|---------|-----|\n",
     );

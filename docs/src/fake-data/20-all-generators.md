@@ -1,4 +1,5 @@
 ## All generators
+<!-- summary: Table of every generator and what it returns -->
 
 Everything `${fake:…}` supports, at a glance:
 

@@ -189,14 +189,39 @@ fn render(address: &str) -> String {
         let topic = topic_of(address).unwrap_or_default();
         out.push_str(&format!("\n\nItems (help(\"{topic}\", item)):\n"));
         for c in below {
-            out.push_str(&format!("- {}: {}\n", item_name(c.address), summary(c)));
+            let about = summary(c);
+            if about.is_empty() {
+                out.push_str(&format!("- {}\n", item_name(c.address)));
+            } else {
+                out.push_str(&format!("- {}: {about}\n", item_name(c.address)));
+            }
         }
     }
     out.trim_end().to_string() + "\n"
 }
 
+/// How many names the item list under `address` shows on its items'
+/// lines: one per part below each item, or each name its heading gives.
+#[cfg(test)]
+fn nested_names(address: &str) -> usize {
+    children(address)
+        .filter(|c| !collapsed(c.text))
+        .map(|c| listed_names(c.address))
+        .sum()
+}
+
+/// How many names a list of the parts below `address` gives: one per
+/// part, or each name its heading gives.
+#[cfg(test)]
+fn listed_names(address: &str) -> usize {
+    children(address)
+        .map(|c| heading_names(c.text).len().max(1))
+        .sum()
+}
+
 /// One line for a part in a list: its heading's summary, and for a part
-/// with parts below it, their names.
+/// with parts below it, their names. Empty when the heading only repeats
+/// the item's name, which the list already shows.
 fn summary(p: &HelpPart) -> String {
     let heading = p
         .text
@@ -205,8 +230,9 @@ fn summary(p: &HelpPart) -> String {
         .unwrap_or_default()
         .trim_start_matches('#')
         .trim();
-    let about = match first_sentence(p.text) {
-        Some(s)
+    let about = match (summary_line(p.text), first_sentence(p.text)) {
+        (Some(s), _) => s.to_string(),
+        (None, Some(s))
             if s.len() <= 70 && p.address.contains('/') && children(p.address).next().is_some() =>
         {
             s
@@ -226,11 +252,49 @@ fn summary(p: &HelpPart) -> String {
             }
         })
         .collect();
-    if names.is_empty() {
-        about
+    let letters = |s: &str| -> String {
+        s.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    };
+    let about = if letters(&about) == letters(last(p.address)) {
+        String::new()
     } else {
-        format!("{about} — {}", names.join(", "))
+        about
+    };
+    if collapsed(p.text) && !names.is_empty() {
+        return format!(
+            "{about} — {} items: help(\"{}\", \"{}\") lists them; read it first",
+            children(p.address).count(),
+            topic_of(p.address).unwrap_or_default(),
+            item_name(p.address)
+        );
     }
+    match (about.is_empty(), names.is_empty()) {
+        (_, true) => about,
+        (true, false) => names.join(", "),
+        (false, false) => format!("{about} — {}", names.join(", ")),
+    }
+}
+
+/// A group marked `<!-- collapsed -->`: its parent's list gives its
+/// summary and how to open it, not the names below it. For a group that
+/// few flows need, or whose own text each of its items depends on.
+fn collapsed(text: &str) -> bool {
+    text.lines().any(|l| l.trim() == "<!-- collapsed -->")
+}
+
+/// A part's `<!-- summary: … -->` line: its line in a list, for a part
+/// whose heading says no more than its name. A comment, so the docs page
+/// does not show it and its heading and anchor stay.
+fn summary_line(text: &str) -> Option<&str> {
+    text.lines().find_map(|l| {
+        l.trim()
+            .strip_prefix("<!-- summary:")
+            .and_then(|l| l.strip_suffix("-->"))
+            .map(str::trim)
+    })
 }
 
 /// The first sentence of a part's prose, after its heading.
@@ -239,7 +303,7 @@ fn first_sentence(text: &str) -> Option<String> {
         .lines()
         .skip(1)
         .map(str::trim)
-        .find(|l| !l.is_empty())?;
+        .find(|l| !l.is_empty() && !l.starts_with("<!--"))?;
     if line.starts_with(['|', '`', '#', '<', '-', '*', '{']) {
         return None;
     }
@@ -381,48 +445,79 @@ fn failure_code(item: &str) -> Option<String> {
         })
 }
 
-/// The Help section of `docs/mcp-context.md`: each help call, linked to
-/// the text it answers with, and the answer's size.
+/// The Help section of `docs/mcp-context.md`: each help call with its
+/// answer, its size and the part it serves.
 #[cfg(test)]
 pub fn context_section() -> String {
     let mut out = String::from(
-        "## Help\n\nEach call that `help` answers, linked to its text: the section of the docs \
-         page, or the `.llm.md` file that replaces it for the LLM. The size is the answer's, in \
-         characters.\n\n```text\n",
+        "## Help\n\nEach call that `help` answers, folded, with the answer as the LLM gets it \
+         and the part in `docs/src` that it serves: the part, or the `.llm.md` file that \
+         replaces it for the LLM. An item with items of its own answers its text, then a list \
+         of them that `help` builds from their headings (+ items, counted; sub-items are the \
+         names on those items' lines). Sizes are in characters.\n\n`help()`:\n\n```text\n",
     );
     out.push_str(&index());
     out.push_str("```\n");
     for (topic, page, _) in TOPICS {
         out.push_str(&format!("\n### {topic}\n\n"));
-        for p in HELP_PARTS
-            .iter()
-            .filter(|p| p.address == *page || p.address.starts_with(&format!("{page}/")))
-        {
-            let depth = p.address.matches('/').count();
-            let call = if depth == 0 {
-                format!("help(\"{topic}\")")
-            } else {
-                format!("help(\"{topic}\", \"{}\")", item_name(p.address))
-            };
-            let heading = p
-                .text
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .trim_start_matches('#')
-                .trim();
-            let target = if p.source.ends_with(".llm.md") {
-                format!("{} (LLM text)]({})", heading, p.source)
-            } else {
-                format!("{heading}]({}#{})", p.page, p.anchor)
-            };
-            out.push_str(&format!(
-                "{}- `{call}` · [{target} · {}\n",
-                "  ".repeat(depth.saturating_sub(1)),
-                render(p.address).len()
-            ));
+        if let Some(p) = part(page) {
+            out.push_str(&answer_block(topic, p));
         }
     }
+    out
+}
+
+/// One help answer for `docs/mcp-context.md`: folded, with the answers
+/// of the parts below it folded inside.
+#[cfg(test)]
+fn answer_block(topic: &str, p: &HelpPart) -> String {
+    let call = if p.address.contains('/') {
+        format!("help(\"{topic}\", \"{}\")", item_name(p.address))
+    } else {
+        format!("help(\"{topic}\")")
+    };
+    let heading = p
+        .text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim_start_matches('#')
+        .trim()
+        .replace('`', "")
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let count = |n: usize, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
+    let items = match (children(p.address).count(), nested_names(p.address)) {
+        (0, _) => String::new(),
+        (n, 0) => format!(" · + {}", count(n, "item")),
+        (n, m) => format!(" · + {}, {}", count(n, "item"), count(m, "sub-item")),
+    };
+    let answer = render(p.address);
+    // A fence longer than any run of backticks in the answer, so its own
+    // code blocks stay inside.
+    let longest = answer
+        .split(|c| c != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or_default();
+    let fence = "`".repeat(longest.max(2) + 1);
+    let llm = if p.source.ends_with(".llm.md") {
+        " (LLM text)"
+    } else {
+        ""
+    };
+    let mut out = format!(
+        "<details><summary><code>{call}</code> · {heading} · {} chars{items}</summary>\n\n\
+         Source: [{}]({}){llm}\n\n{fence}text\n{answer}{fence}\n\n",
+        answer.chars().count(),
+        p.source,
+        p.source,
+    );
+    for c in children(p.address) {
+        out.push_str(&answer_block(topic, c));
+    }
+    out.push_str("</details>\n\n");
     out
 }
 
@@ -516,6 +611,89 @@ mod tests {
         assert!(act.contains("tap, double_tap"), "{act}");
     }
 
+    #[test]
+    fn an_item_listed_by_its_bare_heading_has_a_summary_line() {
+        let bare: Vec<&str> = HELP_PARTS
+            .iter()
+            .filter(|p| p.address.contains('/') && summary_line(p.text).is_none())
+            .filter(|p| heading_names(p.text).is_empty())
+            .filter(|p| {
+                let heading = p.text.lines().next().unwrap_or_default();
+                let from_sentence = children(p.address).next().is_some()
+                    && first_sentence(p.text).is_some_and(|s| s.len() <= 70);
+                !from_sentence && !heading.contains(" — ")
+            })
+            .map(|p| p.address)
+            .collect();
+        assert!(
+            bare.is_empty(),
+            "these items list as their heading alone; add a `<!-- summary: … -->` line under it:\n{}",
+            bare.join("\n")
+        );
+    }
+
+    #[test]
+    fn an_action_group_with_its_own_rules_is_collapsed() {
+        // help("act") lists an expanded group's actions, so an agent goes
+        // straight to them and never reads the group's own text.
+        let long: Vec<&str> = HELP_PARTS
+            .iter()
+            .filter(|p| p.address.starts_with("actions-reference/"))
+            .filter(|p| children(p.address).next().is_some() && !collapsed(p.text))
+            .filter(|p| {
+                let own = clean(p.text, p.page);
+                own.lines()
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .len()
+                    > 120
+            })
+            .map(|p| p.address)
+            .collect();
+        assert!(
+            long.is_empty(),
+            "these action groups have text that help(\"act\") does not show; mark them \
+             `<!-- collapsed -->`, or move the text into their actions:\n{}",
+            long.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_collapsed_group_lists_as_its_summary_and_how_to_open_it() {
+        let act = help(Some("act"), None).expect("act");
+        assert!(
+            act.contains("- browser: Drive a host browser, for web state that the app depends on — 20 items: help(\"act\", \"browser\") lists them; read it first\n"),
+            "{act}"
+        );
+        assert!(!act.contains("browse_tap"), "{act}");
+        let browser = help(Some("act"), Some("browser")).expect("browser");
+        assert!(browser.contains("- browse_tap: "), "{browser}");
+    }
+
+    #[test]
+    fn a_list_drops_a_summary_that_only_repeats_the_name() {
+        let part = |text| HelpPart {
+            address: "selectors/two-syntaxes",
+            page: "selectors.md",
+            anchor: "two-syntaxes",
+            source: "selectors/10-two-syntaxes.md",
+            text,
+        };
+        assert_eq!(summary(&part("## Two syntaxes\n\nFlat or grouped.\n")), "");
+        assert_eq!(
+            summary(&part(
+                "## Two syntaxes\n<!-- summary: Flat or grouped keys -->\n"
+            )),
+            "Flat or grouped keys"
+        );
+        let codes = help(Some("codes"), None).expect("codes");
+        assert!(
+            codes.ends_with("- registry: Every code with its meaning and fix\n"),
+            "{codes}"
+        );
+    }
     #[test]
     fn a_link_to_a_part_becomes_the_help_call() {
         let line = rewrite_links(

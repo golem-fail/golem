@@ -1,4 +1,5 @@
 ### App permissions
+<!-- summary: Grant or deny camera, photos, location and other permissions -->
 
 Set permissions with a `permission = mode` map, in `[[flow.apps]].permissions` (applied before the first launch) or on a `launch` step (always cold-starts the app). There is no standalone permission step.
 

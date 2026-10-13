@@ -1,4 +1,5 @@
 ### Block `next`
+<!-- summary: Go to a named block after this one; ignored with branches -->
 
 Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
 

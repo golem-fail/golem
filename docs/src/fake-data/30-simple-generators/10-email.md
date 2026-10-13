@@ -1,4 +1,5 @@
 ### email
+<!-- summary: Random email address -->
 
 `${fake:email}` → `<random>@example.com`.
 

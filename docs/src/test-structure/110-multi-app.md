@@ -1,4 +1,5 @@
 ## Multi-App Flows
+<!-- summary: Several apps in one flow; switch with launch app = "…" -->
 
 Test interactions across multiple apps:
 

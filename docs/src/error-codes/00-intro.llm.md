@@ -12,4 +12,4 @@ A failed or warned step carries a code such as `EF404`: `<severity><domain><numb
   - `X`: golem did not classify the error.
 - Number: the cause, the same for `E` and `W`.
 
-help("codes", "EF404") gives one code's meaning and fix.
+help("codes", "EF404") gives one code's meaning and fix. help("codes", "registry") lists every code, its meaning and its fix.

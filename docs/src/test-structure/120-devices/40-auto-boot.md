@@ -1,4 +1,5 @@
 ### Auto-Boot Behaviour
+<!-- summary: golem boots a matching shut-down device; headless on Android -->
 
 When no booted device matches a slot but a matching simulator/emulator is shut down, golem boots it and waits until it is ready.
 

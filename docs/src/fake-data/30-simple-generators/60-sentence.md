@@ -1,4 +1,5 @@
 ### sentence
+<!-- summary: One sentence of filler, in a language you choose -->
 
 `${fake:sentence}` → a short one-sentence filler string for textarea / bio /
 comment / description fields. Default is **lorem ipsum**.

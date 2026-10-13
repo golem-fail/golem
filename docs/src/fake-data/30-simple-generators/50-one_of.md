@@ -1,4 +1,5 @@
 ### one_of
+<!-- summary: Random pick from values you give -->
 
 `${fake:one_of(free|pro|enterprise)}` → one value picked at random from the set.
 Separate choices with `|` or `,`: `fake:one_of(yes|no)`, `fake:one_of(JP, US, GB)`.

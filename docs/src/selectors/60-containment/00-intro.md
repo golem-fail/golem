@@ -1,4 +1,5 @@
 ## Geometric containment: `contains` / `inside`
+<!-- summary: contains or inside: select by nested bounds, not DOM -->
 
 Select by spatial nesting — coordinate-based, *not* DOM structure. There is no
 parent/child selector.
