@@ -25,6 +25,7 @@ The same selector grammar is used everywhere an element is named: `tap`,
 - [Canvas-rendered UI (Compose, Compose Multiplatform, Flutter)](#canvas-rendered-ui-compose-compose-multiplatform-flutter)
 
 ## Two syntaxes
+<!-- summary: Flat on_* keys, or grouped on = { … } for traits, contains, inside -->
 
 **Flat** (`on_*` fields) for simple cases:
 
@@ -40,6 +41,7 @@ The same selector grammar is used everywhere an element is named: `tap`,
 ```
 
 ## Core selectors
+<!-- summary: on_text, on_accessibility_label, on_index; what counts as text -->
 
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|
@@ -55,6 +57,7 @@ exception: its label describes a picture, so it is never text. In a webview,
 `text` is the DOM text only.
 
 ### Prefer visible `text`; use `accessibility_label` sparingly
+<!-- summary: Prefer visible text; use accessibility_label sparingly -->
 
 Default to `on_text` (or a positional/`contains` selector). Use
 `on_accessibility_label` only:
@@ -70,6 +73,7 @@ never perceives, and silently passes even if the visible text is wrong. When in
 doubt, use `text`.
 
 ## State filters
+<!-- summary: Filter by enabled, checked or clickable -->
 
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|
@@ -78,6 +82,7 @@ doubt, use `text`.
 | `on_clickable` | `clickable` | Clickable state (`true`/`false`). |
 
 ## Traits
+<!-- summary: Shape and text predicates: button, wide, tall, has_text and more -->
 
 Computed predicates on an element's geometry and content. All listed traits in a
 selector must hold (AND).
@@ -98,6 +103,7 @@ selector must hold (AND).
 | `tall` | Height > 2 × width. |
 
 ## Relational (positional) selectors
+<!-- summary: below, above, right_of or left_of a visible anchor -->
 
 Locate an element by its position relative to a visible **anchor**:
 
@@ -126,6 +132,7 @@ The anchor must be **on-screen**. If it exists but is scrolled off, the
 relational match is treated as unresolved (empty).
 
 ## Geometric containment: `contains` / `inside`
+<!-- summary: contains or inside: select by nested bounds, not DOM -->
 
 Select by spatial nesting — coordinate-based, *not* DOM structure. There is no
 parent/child selector.
@@ -194,6 +201,7 @@ resolve by pre-order — golem does **not** guess; disambiguate with `index` or 
 extra predicate.
 
 ## Occlusion-aware tapping
+<!-- summary: tap hit-tests and routes around overlays such as sticky headers -->
 
 The visible tree tells golem what's *clipped or off-screen*, but not what's *covered*
 by something painted on top (a sticky header, a `z-index` overlay). So golem
@@ -215,6 +223,7 @@ This detects layout/paint occlusion only — an element under the OS status bar 
 separate, system-level concern.
 
 ## `within` (scoping a scroll)
+<!-- summary: Scope a scroll to a region: below a heading, or a list container -->
 
 `scroll`'s `within = { … }` names the region to scroll inside. It uses the same
 selector grammar. Two robust idioms for an inner list:
@@ -243,12 +252,14 @@ The facts below were checked with Jetpack Compose, Compose Multiplatform 1.11
 and Flutter 3.47, on Android API 36 and iOS 26.
 
 ### Version floors
+<!-- summary: Compose Multiplatform 1.8.0+ on iOS; Flutter 3.19+ for identifier -->
 
 - **Compose Multiplatform 1.8.0 or later on iOS.** From 1.8.0 the Compose
   accessibility tree syncs to iOS automatically.
 - **Flutter 3.19 or later** for `Semantics(identifier:)`.
 
 ### Which annotation reaches golem
+<!-- summary: Which Compose or Flutter annotation becomes text or label -->
 
 | Annotation | Android | iOS |
 |------------|---------|-----|
@@ -266,6 +277,7 @@ Visible text is the one path that works the same on both platforms. Use it (see
 step then reads the description.
 
 ### Element types
+<!-- summary: element_type and the button trait are unreliable on canvas UIs -->
 
 `element_type`, and the `button` trait that reads it, are not reliable on a
 canvas UI:
@@ -287,6 +299,7 @@ As a result, on Compose `{ text = "+", traits = ["button"] }` matches nothing on
 either platform. Select by text alone: `{ action = "tap", on_text = "+" }`.
 
 ### Bounds and visibility
+<!-- summary: Off-screen nodes: left out on Android, kept on iOS -->
 
 Every Compose and Flutter node carries `bounds` and `visible_bounds` on both
 platforms. golem's viewport filter drops off-screen nodes, and `scroll` brings
@@ -308,6 +321,7 @@ inside the screen keeps its full `visible_bounds`, so golem counts it as on
 screen.
 
 ### Merged semantics
+<!-- summary: How merged nodes report their text, by framework and platform -->
 
 `Modifier.semantics(mergeDescendants = true)`, `Modifier.clickable` and Material
 components merge their children into one accessibility node. Flutter's
@@ -335,6 +349,7 @@ joined text, with a glob: `{ action = "tap", on_text = "Merged A*" }`. `inside`
 and `contains` are geometric, so a coarse tree does not change them.
 
 ### Flutter
+<!-- summary: Wrap a custom Flutter widget in Semantics so golem sees it -->
 
 A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
 `CustomPaint`) is invisible to golem until you wrap it in `Semantics`.

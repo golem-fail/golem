@@ -1,4 +1,5 @@
 ### Timeout Multipliers
+<!-- summary: Each action's default timeout, as a multiple of step_timeout -->
 
 Each action has a built-in multiplier applied to the base timeout (`step_timeout`, default 5000ms). Per-step `timeout` always overrides.
 

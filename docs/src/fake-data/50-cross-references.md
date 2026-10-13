@@ -1,4 +1,5 @@
 ## Cross-references
+<!-- summary: A generator argument can read an earlier variable -->
 
 Later generators can reference earlier variables:
 

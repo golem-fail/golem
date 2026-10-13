@@ -1,4 +1,5 @@
 ## Step
+<!-- summary: One action with selectors, timeout and error handling -->
 
 A step is a single action with optional selectors, timeouts, and error handling.
 

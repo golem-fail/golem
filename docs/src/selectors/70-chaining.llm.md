@@ -1,4 +1,5 @@
 ## Nesting and chaining
+<!-- summary: Nested anchors, AND of keys, how ties sort and index picks -->
 
 - An anchor (`below`, `above`, `left_of`, `right_of`, `contains`, `inside`) is bare text or a full selector group, and a group may have its own anchors: `{ text = "Left", below = { text = "Nested Layout", traits = ["has_text"] } }`. The anchor is the group's first match, and it must be on screen.
 - Every key in a group is combined with AND.

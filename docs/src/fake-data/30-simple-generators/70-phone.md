@@ -1,4 +1,5 @@
 ### phone
+<!-- summary: Phone number formatted for a country -->
 
 `${fake:phone}` → a plausibly-formatted phone number.
 

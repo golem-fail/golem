@@ -62,6 +62,7 @@ reproduces the same dates. A small seed like `--seed 42` anchors at 2020 —
 consistent, just not "now".
 
 ## All generators
+<!-- summary: Table of every generator and what it returns -->
 
 Everything `${fake:…}` supports, at a glance:
 
@@ -84,6 +85,7 @@ Everything `${fake:…}` supports, at a glance:
 Each returns one string. Defaults are shown for each.
 
 ### email
+<!-- summary: Random email address -->
 
 `${fake:email}` → `<random>@example.com`.
 
@@ -105,21 +107,25 @@ mail at a throwaway address, use the
 action.
 
 ### password
+<!-- summary: Random password -->
 
 `${fake:password}` → a random password. Params: `length` (default 12);
 `symbols` (default `true` — set `symbols=false` for letters + digits only).
 Example: `fake:password(length=20, symbols=false)`.
 
 ### uuid
+<!-- summary: UUID v4 -->
 
 `${fake:uuid}` → a v4 UUID, e.g. `f47ac10b-58cc-4372-a567-0e02b2c3d479`. No params.
 
 ### number
+<!-- summary: Random integer in a range -->
 
 `${fake:number}` → a random integer (as a string). Params: `min` (default 0) and
 `max` (default 100), inclusive. Example: `fake:number(min=1, max=6)`.
 
 ### one_of
+<!-- summary: Random pick from values you give -->
 
 `${fake:one_of(free|pro|enterprise)}` → one value picked at random from the set.
 Separate choices with `|` or `,`: `fake:one_of(yes|no)`, `fake:one_of(JP, US, GB)`.
@@ -127,6 +133,7 @@ Spaces around a choice are trimmed and empty choices are dropped. A choice
 cannot contain `|`, `,` or `=`. Seeded like every other generator.
 
 ### sentence
+<!-- summary: One sentence of filler, in a language you choose -->
 
 `${fake:sentence}` → a short one-sentence filler string for textarea / bio /
 comment / description fields. Default is **lorem ipsum**.
@@ -145,6 +152,7 @@ Grammar is deliberately simplified, and some less-common-script languages are
 machine-authored pending native review.
 
 ### phone
+<!-- summary: Phone number formatted for a country -->
 
 `${fake:phone}` → a plausibly-formatted phone number.
 
@@ -325,6 +333,7 @@ to `name=` / `reading=` / `local=`. Every supported country is listed. A
 | (none) | accepts everything | `[native]` | — |
 
 ### address
+<!-- summary: .street, .city, .postcode, .country and more -->
 
 `${fake:address}` returns a coherent address for one place — all fields come from
 the same city, so they stay consistent. There are no standalone city, postcode or
@@ -365,6 +374,7 @@ country (e.g. GB) reads identically in both: native `42 Baker Street` ==
 `ascii.street`.
 
 ### credit_card
+<!-- summary: Luhn-valid card: .number, .expiry, .cvv, .brand -->
 
 `${fake:credit_card}` generates a Luhn-valid card. Params:
 
@@ -405,6 +415,7 @@ for example, adds `declined:insufficient_funds`, `declined:lost`, `fraud`,
 `threeds:failed`). A status the provider has no test card for is an error.
 
 ### timestamp
+<!-- summary: Date and time in a window or by age: .date, .time, .year -->
 
 `${fake:timestamp}` returns a date/time object — read the field the form needs:
 
@@ -435,6 +446,7 @@ anchor. A **future** date (a licence/subscription expiry up to 5 years out) uses
 negatives: `fake:timestamp(min_years=-5, max_years=0).date`.
 
 ## Cross-references
+<!-- summary: A generator argument can read an earlier variable -->
 
 Later generators can reference earlier variables:
 

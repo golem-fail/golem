@@ -1,4 +1,5 @@
 ## Occlusion-aware tapping
+<!-- summary: tap hit-tests and routes around overlays such as sticky headers -->
 
 The visible tree tells golem what's *clipped or off-screen*, but not what's *covered*
 by something painted on top (a sticky header, a `z-index` overlay). So golem

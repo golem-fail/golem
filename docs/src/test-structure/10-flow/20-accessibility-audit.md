@@ -1,4 +1,5 @@
 ### Accessibility Audit
+<!-- summary: Per-block audit of the visible tree; levels and thresholds -->
 
 After each block, Golem audits the **visible** UI tree for accessibility issues
 (zero config, on by default at `relaxed`). Findings appear inline in the live run

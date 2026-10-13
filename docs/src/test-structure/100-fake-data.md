@@ -1,4 +1,5 @@
 ## Fake Data Generators
+<!-- summary: ${fake:…} in short; help("fake") has the rest -->
 
 `${fake:…}` generates random but valid test data: `email`, `password`, `uuid`, `number`, `one_of`, `sentence`, `timestamp`, `phone`, and the structured `person`, `address` and `credit_card`. `--seed <N>` replays the same values.
 

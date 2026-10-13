@@ -1,4 +1,5 @@
 ## Relational (positional) selectors
+<!-- summary: below, above, right_of or left_of a visible anchor -->
 
 Locate an element by its position relative to a visible **anchor**:
 

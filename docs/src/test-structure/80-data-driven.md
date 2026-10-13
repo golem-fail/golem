@@ -1,4 +1,5 @@
 ## Data-Driven Tests
+<!-- summary: [[data]] rows; for_each = "data" runs a block per row -->
 
 A `[[data]]` table holds the rows, and a block iterates them with
 `for_each = "data"`. The block runs once per row, and each row's fields are

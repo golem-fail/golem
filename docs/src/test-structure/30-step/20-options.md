@@ -1,4 +1,5 @@
 ### Step Options
+<!-- summary: timeout, auto_scroll, if_fail, retry, save_to and other step fields -->
 
 | Field | Default | Description |
 |-------|---------|-------------|

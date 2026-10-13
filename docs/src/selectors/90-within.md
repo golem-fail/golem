@@ -1,4 +1,5 @@
 ## `within` (scoping a scroll)
+<!-- summary: Scope a scroll to a region: below a heading, or a list container -->
 
 `scroll`'s `within = { … }` names the region to scroll inside. It uses the same
 selector grammar. Two robust idioms for an inner list:

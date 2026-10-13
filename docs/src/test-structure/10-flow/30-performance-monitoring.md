@@ -1,4 +1,5 @@
 ### Performance Monitoring
+<!-- summary: Per-block memory, CPU, threads and fds; warn and error limits -->
 
 Golem captures app performance metrics after each block (unless `--no-perf` or `perf = false`).
 

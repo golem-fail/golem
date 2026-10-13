@@ -1,4 +1,5 @@
 ### Pinning a Specific Device by Name
+<!-- summary: name = "…": pin one device by its display name -->
 
 ```toml
 [[flow.apps.devices]]

@@ -1,4 +1,5 @@
 ### Launch-time permissions
+<!-- summary: Grant app permissions before the app launches -->
 
 An app entry may declare `permissions`. golem grants them **before the app is launched**, so they are in place from process start. A grant that fails is a warning, not a failure: the app then shows its permission prompt when it needs the permission.
 

@@ -1,4 +1,5 @@
 ### Branching
+<!-- summary: if_visible, if_not_visible or if_var, then goto a block -->
 
 Control flow between blocks with conditions:
 

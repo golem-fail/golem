@@ -1,4 +1,5 @@
 ### Flow Options
+<!-- summary: [flow.options]: timeouts, limits, recording, coverage, perf -->
 
 ```toml
 [flow.options]

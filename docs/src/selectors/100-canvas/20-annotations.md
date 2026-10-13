@@ -1,4 +1,5 @@
 ### Which annotation reaches golem
+<!-- summary: Which Compose or Flutter annotation becomes text or label -->
 
 | Annotation | Android | iOS |
 |------------|---------|-----|

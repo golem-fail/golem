@@ -1,4 +1,5 @@
 ## Devices
+<!-- summary: [[flow.apps.devices]]: os, type, hardware and name constraints -->
 
 Most flows need no device settings: with no `[[flow.apps.devices]]`, the flow runs on whatever is booted (both platforms if both are booted). Set constraints only when the flow must run on a specific OS, shape or device.
 

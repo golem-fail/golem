@@ -221,8 +221,9 @@ fn summary(p: &HelpPart) -> String {
         .unwrap_or_default()
         .trim_start_matches('#')
         .trim();
-    let about = match first_sentence(p.text) {
-        Some(s)
+    let about = match (summary_line(p.text), first_sentence(p.text)) {
+        (Some(s), _) => s.to_string(),
+        (None, Some(s))
             if s.len() <= 70 && p.address.contains('/') && children(p.address).next().is_some() =>
         {
             s
@@ -258,6 +259,18 @@ fn summary(p: &HelpPart) -> String {
         (true, false) => names.join(", "),
         (false, false) => format!("{about} — {}", names.join(", ")),
     }
+}
+
+/// A part's `<!-- summary: … -->` line: its line in a list, for a part
+/// whose heading says no more than its name. A comment, so the docs page
+/// does not show it and its heading and anchor stay.
+fn summary_line(text: &str) -> Option<&str> {
+    text.lines().find_map(|l| {
+        l.trim()
+            .strip_prefix("<!-- summary:")
+            .and_then(|l| l.strip_suffix("-->"))
+            .map(str::trim)
+    })
 }
 
 /// The first sentence of a part's prose, after its heading.
@@ -553,17 +566,48 @@ mod tests {
     }
 
     #[test]
-    fn a_list_drops_a_summary_that_only_repeats_the_name() {
-        let codes = help(Some("codes"), None).expect("codes");
-        assert!(codes.ends_with("- registry\n"), "{codes}");
-        let selectors = help(Some("selectors"), None).expect("selectors");
-        assert!(selectors.contains("- two-syntaxes\n"), "{selectors}");
+    fn an_item_listed_by_its_bare_heading_has_a_summary_line() {
+        let bare: Vec<&str> = HELP_PARTS
+            .iter()
+            .filter(|p| p.address.contains('/') && summary_line(p.text).is_none())
+            .filter(|p| heading_names(p.text).is_empty())
+            .filter(|p| {
+                let heading = p.text.lines().next().unwrap_or_default();
+                let from_sentence = children(p.address).next().is_some()
+                    && first_sentence(p.text).is_some_and(|s| s.len() <= 70);
+                !from_sentence && !heading.contains(" — ")
+            })
+            .map(|p| p.address)
+            .collect();
         assert!(
-            selectors.contains("- chaining: Nesting and chaining\n"),
-            "{selectors}"
+            bare.is_empty(),
+            "these items list as their heading alone; add a `<!-- summary: … -->` line under it:\n{}",
+            bare.join("\n")
         );
     }
 
+    #[test]
+    fn a_list_drops_a_summary_that_only_repeats_the_name() {
+        let part = |text| HelpPart {
+            address: "selectors/two-syntaxes",
+            page: "selectors.md",
+            anchor: "two-syntaxes",
+            source: "selectors/10-two-syntaxes.md",
+            text,
+        };
+        assert_eq!(summary(&part("## Two syntaxes\n\nFlat or grouped.\n")), "");
+        assert_eq!(
+            summary(&part(
+                "## Two syntaxes\n<!-- summary: Flat or grouped keys -->\n"
+            )),
+            "Flat or grouped keys"
+        );
+        let codes = help(Some("codes"), None).expect("codes");
+        assert!(
+            codes.ends_with("- registry: Every code with its meaning and fix\n"),
+            "{codes}"
+        );
+    }
     #[test]
     fn a_link_to_a_part_becomes_the_help_call() {
         let line = rewrite_links(

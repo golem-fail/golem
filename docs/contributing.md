@@ -43,6 +43,7 @@ GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs
 - The page's table of contents is generated at `<!-- toc -->` (`<!-- toc depth=2 -->` for `##` only).
 - The path without the numbers is the part's address for the MCP help, for example `actions-reference/interaction/tap`.
 - A `<name>.llm.md` next to a part replaces that part for the MCP help only. Add one only when the human text is right for humans but too long for an LLM.
+- A `<!-- summary: … -->` line under a part's heading is the part's line in a `help` list. Write one when the heading says no more than the part's name. Put it in the file that `help` serves: the `.llm.md` file, if the part has one. A test lists each part that needs one.
 
 `cargo t` fails when a page differs from its parts, or when a link or anchor in a page does not resolve.
 

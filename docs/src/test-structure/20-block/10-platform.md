@@ -1,4 +1,5 @@
 ### Platform-Specific Blocks
+<!-- summary: where: run a block only on devices that match -->
 
 `where` runs a block only on devices that match it; on other devices the block is skipped:
 

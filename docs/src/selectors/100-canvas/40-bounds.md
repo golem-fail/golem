@@ -1,4 +1,5 @@
 ### Bounds and visibility
+<!-- summary: Off-screen nodes: left out on Android, kept on iOS -->
 
 Every Compose and Flutter node carries `bounds` and `visible_bounds` on both
 platforms. golem's viewport filter drops off-screen nodes, and `scroll` brings

@@ -1,4 +1,5 @@
 ## Lifecycle: Setup & Teardown
+<!-- summary: Setup is implicit: install, then app_lifecycle reset or launch -->
 
 **There is no `[[setup]]` block.** A flow's setup is implicit and happens automatically before the first block:
 

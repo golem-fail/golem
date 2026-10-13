@@ -1,4 +1,5 @@
 ### Merged semantics
+<!-- summary: How merged nodes report their text, by framework and platform -->
 
 `Modifier.semantics(mergeDescendants = true)`, `Modifier.clickable` and Material
 components merge their children into one accessibility node. Flutter's

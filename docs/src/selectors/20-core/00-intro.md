@@ -1,4 +1,5 @@
 ## Core selectors
+<!-- summary: on_text, on_accessibility_label, on_index; what counts as text -->
 
 | Selector | Grouped key | Matches |
 |----------|-------------|---------|

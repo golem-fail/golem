@@ -1,4 +1,5 @@
 ## Two syntaxes
+<!-- summary: Flat on_* keys, or grouped on = { … } for traits, contains, inside -->
 
 **Flat** (`on_*` fields) for simple cases:
 

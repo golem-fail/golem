@@ -1,4 +1,5 @@
 ### credit_card
+<!-- summary: Luhn-valid card: .number, .expiry, .cvv, .brand -->
 
 `${fake:credit_card}` generates a Luhn-valid card. Params:
 

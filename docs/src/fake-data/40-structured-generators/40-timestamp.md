@@ -1,4 +1,5 @@
 ### timestamp
+<!-- summary: Date and time in a window or by age: .date, .time, .year -->
 
 `${fake:timestamp}` returns a date/time object — read the field the form needs:
 

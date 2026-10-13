@@ -1,4 +1,5 @@
 ## Flow
+<!-- summary: [flow] fields, [[flow.apps]], vars and options -->
 
 A flow is a complete test scenario: metadata, app configuration, device targets, execution blocks, and optional teardown.
 

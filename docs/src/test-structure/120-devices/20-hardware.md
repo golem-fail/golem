@@ -1,4 +1,5 @@
 ### Hardware Axis (virtual / real)
+<!-- summary: hardware = "virtual" or "real", or either -->
 
 ```toml
 [[flow.apps.devices]]

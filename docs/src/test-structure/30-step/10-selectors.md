@@ -1,4 +1,5 @@
 ### Selectors
+<!-- summary: Selector keys on a step; prefer on_text -->
 
 Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` only to test the a11y label.
 
