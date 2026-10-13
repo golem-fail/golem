@@ -491,12 +491,26 @@ pub struct FlowSet {
     pub start: Option<String>,
 }
 
-/// A mixin the project has: its name, its file and the `${var}`s it uses.
+/// The three ways a flow reuses another file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReuseKind {
+    Mixin,
+    Fixture,
+    Subflow,
+}
+
+/// A file a flow can reuse: a mixin with the `${var}`s it uses, a fixture
+/// with its keys, or a subflow (`explicit_only = true`) with the
+/// `${var}`s it reads but does not set itself.
 #[derive(Debug, Clone)]
-pub struct Mixin {
+pub struct Reusable {
+    pub kind: ReuseKind,
     pub name: String,
     pub path: PathBuf,
-    pub vars: Vec<String>,
+    /// Vars for a mixin or subflow, keys for a fixture.
+    pub names: Vec<String>,
+    /// Why the file could not be read, when it could not.
+    pub problem: Option<String>,
 }
 
 impl Draft {
@@ -812,49 +826,85 @@ fn json_to_value(v: &serde_json::Value) -> Result<Value> {
     })
 }
 
-/// The mixins under every `__mixins__/` directory in the project, each
-/// with the `${var}`s it uses (golem's own `${_…}` builtins and `fake:`
-/// generators left out).
-pub fn mixins(project_root: &Path) -> Vec<Mixin> {
-    fn walk(dir: &Path, out: &mut Vec<Mixin>, depth: usize) {
+/// The mixins and fixtures under every `__mixins__/` and `__fixtures__/`
+/// directory in the project, and every subflow. Lists a fixture's keys,
+/// never its values: a fixture can hold credentials, and the list goes to
+/// an LLM.
+pub fn reusables(project_root: &Path) -> Vec<Reusable> {
+    fn stem(file: &Path) -> String {
+        file.file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+    fn toml_files(dir: &Path) -> Vec<PathBuf> {
+        let Ok(files) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        files
+            .flatten()
+            .map(|f| f.path())
+            .filter(|f| f.extension().and_then(|e| e.to_str()) == Some("toml"))
+            .collect()
+    }
+    fn walk(dir: &Path, out: &mut Vec<Reusable>, depth: usize) {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
         for entry in entries.flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
-            if !path.is_dir()
-                || name.starts_with('.')
+            if name.starts_with('.')
                 || matches!(name.as_str(), "node_modules" | "target" | "build" | "dist")
             {
                 continue;
             }
-            if name == "__mixins__" {
-                let Ok(files) = std::fs::read_dir(&path) else {
-                    continue;
-                };
-                for f in files.flatten() {
-                    let file = f.path();
-                    if file.extension().and_then(|e| e.to_str()) != Some("toml") {
-                        continue;
+            if !path.is_dir() {
+                if name.ends_with(".test.toml") {
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    if let Ok(flow) = golem_parser::parse_flow(&text) {
+                        if flow.flow.explicit_only {
+                            let names = var_refs(&text)
+                                .into_iter()
+                                .filter(|v| !flow.flow.vars.contains_key(v))
+                                .collect();
+                            out.push(Reusable {
+                                kind: ReuseKind::Subflow,
+                                name: name.trim_end_matches(".test.toml").to_string(),
+                                path,
+                                names,
+                                problem: None,
+                            });
+                        }
                     }
+                }
+                continue;
+            }
+            if name == "__mixins__" {
+                for file in toml_files(&path) {
                     let text = std::fs::read_to_string(&file).unwrap_or_default();
-                    let mut vars: Vec<String> = text
-                        .split("${")
-                        .skip(1)
-                        .filter_map(|rest| rest.split('}').next())
-                        .filter(|v| !v.starts_with('_') && !v.starts_with("fake:"))
-                        .map(str::to_string)
-                        .collect();
-                    vars.sort();
-                    vars.dedup();
-                    out.push(Mixin {
-                        name: file
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_default(),
+                    out.push(Reusable {
+                        kind: ReuseKind::Mixin,
+                        name: stem(&file),
+                        names: var_refs(&text),
                         path: file,
-                        vars,
+                        problem: None,
+                    });
+                }
+            } else if name == "__fixtures__" {
+                for file in toml_files(&path) {
+                    let parsed = std::fs::read_to_string(&file)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|t| golem_parser::fixture::parse_fixture(&t));
+                    let (names, problem) = match parsed {
+                        Ok(f) => (f.vars.keys().cloned().collect(), None),
+                        Err(e) => (Vec::new(), Some(format!("{e:#}"))),
+                    };
+                    out.push(Reusable {
+                        kind: ReuseKind::Fixture,
+                        name: stem(&file),
+                        path: file,
+                        names,
+                        problem,
                     });
                 }
             } else if depth < 6 {
@@ -864,8 +914,26 @@ pub fn mixins(project_root: &Path) -> Vec<Mixin> {
     }
     let mut out = Vec::new();
     walk(project_root, &mut out, 0);
-    out.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.path.cmp(&b.path)));
+    out.sort_by(|a, b| (a.kind, &a.name, &a.path).cmp(&(b.kind, &b.name, &b.path)));
     out
+}
+
+/// The `${var}`s a file reads, by their root name (`user` for
+/// `${user.email}`), without golem's `${_…}` builtins and `fake:`
+/// generators.
+fn var_refs(text: &str) -> Vec<String> {
+    let mut vars: Vec<String> = text
+        .split("${")
+        .skip(1)
+        .filter_map(|rest| rest.split('}').next())
+        .filter(|v| !v.starts_with('_') && !v.starts_with("fake:"))
+        .filter_map(|v| v.split(['.', '[']).next())
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .collect();
+    vars.sort();
+    vars.dedup();
+    vars
 }
 
 #[cfg(test)]
@@ -1297,21 +1365,65 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     }
 
     #[test]
-    fn mixins_lists_each_mixin_with_its_vars() {
+    fn reusables_lists_mixins_fixture_keys_and_subflows() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let m = dir.path().join("e2e/__mixins__");
-        std::fs::create_dir_all(&m).expect("mkdir");
+        let e2e = dir.path().join("e2e");
+        std::fs::create_dir_all(e2e.join("__mixins__")).expect("mkdir");
+        std::fs::create_dir_all(e2e.join("__fixtures__")).expect("mkdir");
+        std::fs::create_dir_all(e2e.join("subflows")).expect("mkdir");
         std::fs::write(
-            m.join("login.toml"),
-            "[[step]]\naction = \"type\"\non_text = \"${field}\"\ninput = \"${value}\"\n[[step]]\naction = \"assert_visible\"\non_text = \"${_device} ${fake:name}\"\n",
+            e2e.join("__mixins__/login.toml"),
+            "[[step]]\naction = \"type\"\non_text = \"${field}\"\ninput = \"${user.email}\"\n[[step]]\naction = \"assert_visible\"\non_text = \"${_device} ${fake:name}\"\n",
         )
-        .expect("write");
-        let found = mixins(dir.path());
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].name, "login");
-        assert_eq!(found[0].vars, ["field", "value"]);
+        .expect("mixin");
+        std::fs::write(
+            e2e.join("__fixtures__/qa.toml"),
+            "[vars]\nusername = \"qa\"\npassword = \"s3cret\"\n",
+        )
+        .expect("fixture");
+        std::fs::write(e2e.join("__fixtures__/photo.png"), "png").expect("media");
+        std::fs::write(e2e.join("__fixtures__/broken.toml"), "vars = 3").expect("broken");
+        std::fs::write(
+            e2e.join("subflows/sign_in.test.toml"),
+            "[flow]\nname = \"s\"\nexplicit_only = true\n[flow.vars]\nurl = \"x\"\n\n[[block]]\nname = \"b\"\nsteps = [{ action = \"type\", on_text = \"${url}\", input = \"${who}\" }]\n",
+        )
+        .expect("subflow");
+        std::fs::write(
+            e2e.join("login.test.toml"),
+            "[flow]\nname = \"l\"\n\n[[block]]\nname = \"b\"\nsteps = [{ action = \"tap\", on_text = \"Go\" }]\n",
+        )
+        .expect("flow");
+        let found = reusables(dir.path());
+        let summary: Vec<(ReuseKind, &str, Vec<&str>, bool)> = found
+            .iter()
+            .map(|r| {
+                (
+                    r.kind,
+                    r.name.as_str(),
+                    r.names.iter().map(String::as_str).collect(),
+                    r.problem.is_some(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (ReuseKind::Mixin, "login", vec!["field", "user"], false),
+                (ReuseKind::Fixture, "broken", vec![], true),
+                (
+                    ReuseKind::Fixture,
+                    "qa",
+                    vec!["username", "password"],
+                    false
+                ),
+                (ReuseKind::Subflow, "sign_in", vec!["who"], false),
+            ]
+        );
+        assert!(
+            !format!("{found:?}").contains("s3cret"),
+            "a fixture's values SHALL NOT be listed"
+        );
     }
-
     #[test]
     fn a_draft_built_with_every_tool_validates_and_parses() {
         let dir = tempfile::tempdir().expect("tempdir");

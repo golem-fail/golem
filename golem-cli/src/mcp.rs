@@ -969,34 +969,55 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Project mixins and the vars each uses. Run one with act: { action = \"load_mixin\", mixin = \"name\", vars = { … } }."
+        description = "Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read."
     )]
-    async fn mixins_list(
+    async fn reuse_list(
         &self,
         Parameters(_): Parameters<NoParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let found = golem_orchestrator::draft::mixins(&self.options.project_root);
+        use golem_orchestrator::draft::ReuseKind;
+        let root = &self.options.project_root;
+        let found = golem_orchestrator::draft::reusables(root);
         if found.is_empty() {
-            return text("no mixins: the project has no __mixins__/ directory");
+            return text(
+                "nothing to reuse: no __mixins__/ or __fixtures__/ directory, and no flow with explicit_only = true",
+            );
         }
         let mut out = String::new();
-        for m in found {
-            let rel = m
-                .path
-                .strip_prefix(&self.options.project_root)
-                .unwrap_or(&m.path)
-                .display()
-                .to_string();
-            out.push_str(&format!(
-                "{} ({rel}){}\n",
-                m.name,
-                if m.vars.is_empty() {
-                    String::new()
-                } else {
-                    format!(" · vars: {}", m.vars.join(", "))
-                }
-            ));
+        for (kind, how) in [
+            (
+                ReuseKind::Mixin,
+                "mixins · act: { action = \"load_mixin\", mixin = \"<name>\", vars = { … } }",
+            ),
+            (
+                ReuseKind::Fixture,
+                "fixtures · act: { action = \"load_fixture\", fixture = \"<name>\", as = \"x\" }, then ${x.<key>}",
+            ),
+            (
+                ReuseKind::Subflow,
+                "subflows · block_set(\"<block>\", { \"run_flow\": \"<path from the flow>\", \"vars\": { … } })",
+            ),
+        ] {
+            let of_kind: Vec<_> = found.iter().filter(|r| r.kind == kind).collect();
+            if of_kind.is_empty() {
+                continue;
+            }
+            out.push_str(how);
+            out.push('\n');
+            for r in of_kind {
+                let rel = r.path.strip_prefix(root).unwrap_or(&r.path).display();
+                let label = if kind == ReuseKind::Fixture { "keys" } else { "vars" };
+                let detail = match (&r.problem, r.names.is_empty()) {
+                    (Some(p), _) => format!(" · does not parse: {p}"),
+                    (None, true) => String::new(),
+                    (None, false) => format!(" · {label}: {}", r.names.join(", ")),
+                };
+                out.push_str(&format!("  {} ({rel}){detail}\n", r.name));
+            }
         }
+        out.push_str(
+            "Mixins and fixtures are found from the flow's directory up to the project root.\n",
+        );
         text(out)
     }
 
