@@ -3,8 +3,8 @@
 Two-finger pinch centered on an element or coordinates.
 
 ```toml
-{ action = "pinch", scale = 2.0, duration = 500 }     # Zoom in
-{ action = "pinch", scale = 0.5, duration = 500 }     # Zoom out
+{ action = "pinch", scale = 2.0 }                     # Zoom in
+{ action = "pinch", scale = 0.5, velocity = 2.0 }     # Zoom out, slowly
 { action = "pinch", on_text = "Map", scale = 2.0 }    # Centered on an element
 { action = "pinch", x = "50%", y = 300, scale = 0.5 } # Centered on a point
 ```

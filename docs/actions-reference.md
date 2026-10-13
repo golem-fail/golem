@@ -213,7 +213,7 @@ Scrolls the page (or a container) until the target element is visible.
 | `to` | — | Target element: a selector group (alias of `on`), or use the flat `on_*` selectors |
 | `direction` | `"down"` | Scroll direction |
 | `within` | — | Constrain scrolling to an element's bounds |
-| `max_scrolls` | — | Limit iterations |
+| `scroll_timeout` | — | Stop scrolling after this many ms, within the step `timeout` |
 | `timeout` | 8× `step_timeout` (40 s); 12× (60 s) with `within` | Overall scroll timeout |
 
 ### `pinch` — Pinch zoom gesture
@@ -221,8 +221,8 @@ Scrolls the page (or a container) until the target element is visible.
 Two-finger pinch centered on an element or coordinates.
 
 ```toml
-{ action = "pinch", scale = 2.0, duration = 500 }     # Zoom in
-{ action = "pinch", scale = 0.5, duration = 500 }     # Zoom out
+{ action = "pinch", scale = 2.0 }                     # Zoom in
+{ action = "pinch", scale = 0.5, velocity = 2.0 }     # Zoom out, slowly
 { action = "pinch", on_text = "Map", scale = 2.0 }    # Centered on an element
 { action = "pinch", x = "50%", y = 300, scale = 0.5 } # Centered on a point
 ```
