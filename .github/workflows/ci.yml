@@ -35,6 +35,7 @@ jobs:
       data: ${{ steps.filter.outputs.data }} # non-.rs files embedded into the binary
       ios: ${{ steps.filter.outputs.ios }}
       android: ${{ steps.filter.outputs.android }}
+      release: ${{ steps.filter.outputs.release }}
     steps:
       - id: filter
         uses: dorny/paths-filter@v3
@@ -79,6 +80,11 @@ jobs:
             android:
               - 'companions/android/**'
               - '.github/workflows/ci.yml'
+            # A release bump PR: every one changes the npm package's version.
+            # Not ci.yml: the Linux build costs ~12 minutes, and a lane edit
+            # here can wait for the next bump PR to prove itself.
+            release:
+              - 'npm/package.json'
 
   fmt:
     needs: classify
@@ -219,6 +225,21 @@ jobs:
             ./gradlew connectedDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.class=fail.golem.companion.CompanionSmokeTest
 
+  linux-release-build:
+    needs: classify
+    if: ${{ needs.classify.outputs.release == 'true' }}
+    # The Linux release binaries build inside Docker, which sees only what
+    # .dockerignore lets through, and no other job runs that build. A build
+    # input the image cannot see (docs/src, for v0.16.0) would otherwise fail
+    # the Release workflow after the tag is pushed and half the channels have
+    # published. Runs on the release bump PR only, so the tag waits for it.
+    # x86_64 only: aarch64 shares the Docker context and needs QEMU.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/build-linux.sh
+
   gate:
     # The single REQUIRED status check. It always runs (independent of the path
     # filter), so a docs-only PR — where every job above is skipped — still reports
@@ -226,7 +247,7 @@ jobs:
     # a skipped job never reports, so the PR could never merge. This collates
     # instead: pass unless a dependency actually failed or was cancelled (skipped
     # is fine).
-    needs: [classify, fmt, clippy, test, doctest, ios-tests, android-tests]
+    needs: [classify, fmt, clippy, test, doctest, ios-tests, android-tests, linux-release-build]
     if: ${{ always() }}
     runs-on: ubuntu-slim
     timeout-minutes: 5

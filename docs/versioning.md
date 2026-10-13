@@ -17,7 +17,7 @@ It updates all locations listed below and verifies the result. The manual list i
 
 A release is cut by **pushing a `vX.Y.Z` tag** — the `Release` workflow (`.github/workflows/release.yml`) does everything else. **Do not run `scripts/release.sh` by hand:** the workflow is live (gated on the `RELEASE_ENABLED` repo variable, currently `true`) and invokes `release.sh` itself from the tag; running it locally too would double-publish.
 
-1. **Bump** on a branch — `./scripts/bump-version.sh --patch` (or an explicit `X.Y.Z`) — then open a PR and merge it. The bump edits the companions, so CI runs `android-tests`/`ios-tests` (they're path-gated and skipped on pure-Rust PRs); that's expected and fast (`android-tests` is compile-only).
+1. **Bump** on a branch — `./scripts/bump-version.sh --patch` (or an explicit `X.Y.Z`) — then open a PR and merge it. The bump edits the companions, so CI runs `android-tests`/`ios-tests` (they're path-gated and skipped on pure-Rust PRs); that's expected and fast (`android-tests` is compile-only). The bump also changes `npm/package.json`, so CI runs `linux-release-build`: the Linux release build in Docker, as the Release workflow runs it (about 12 minutes). If it fails, do not merge: a tag would publish the macOS half of the release before the Linux build fails.
 2. **Tag the merged commit** and push:
 
    ```bash
