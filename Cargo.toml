@@ -58,3 +58,10 @@ chromiumoxide = { version = "0.9.1", default-features = false, features = ["byte
 # to 73G; our own crates keep full debug info via the default dev profile.
 [profile.dev.package."*"]
 debug = false
+
+# `strip = "symbols"`, not "debuginfo": release builds already drop debug
+# info, so the symbol names would only add function names to a backtrace.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
