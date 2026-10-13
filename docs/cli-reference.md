@@ -218,7 +218,7 @@ The server starts without device work.
 | `data_add(row)` | Add a `[[data]]` row |
 | `teardown_delete(n)` | Remove `[[teardown]]` step `n` (from 1) |
 | `options_set(options)` | Set `[flow.options]` keys; a null removes one |
-| `block_set(name, fields)` | Set a block's `for_each`, `where`, `record`, or `run_flow` with its `vars` and `save_to`; a null removes one |
+| `block_set(name, fields)` | Set a block's `for_each`, `where`, `record`, `max_iterations`, or `run_flow` with its `vars` and `save_to`; a null removes one |
 | `step_edit(at, step?, comment?)` | Change a draft step without running it. A new comment, or only a larger timeout, keeps its status; any other change makes it unverified |
 | `step_delete(at)` | Remove a draft step and its comment. The next active step becomes unverified |
 | `step_move(from, to)` | Move a draft step so that it becomes step `to`. Where it left counts as a delete; the step is unverified where it lands |

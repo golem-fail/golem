@@ -98,6 +98,8 @@ pub enum FailureCode {
     FlowMaxRuntime,
     /// F508: max_steps exceeded (loop guard).
     FlowMaxSteps,
+    /// F509: a block's max_iterations exceeded (loop guard for one block).
+    FlowMaxIterations,
     /// X000: fallback for errors that reached output without a tag —
     /// renders in the `Unknown` domain so coverage gaps stay visible
     /// instead of being absorbed into the Flow bucket.
@@ -224,7 +226,8 @@ impl FailureCode {
             | FlowAlertInteraction
             | FlowExternalFailed
             | FlowMaxRuntime
-            | FlowMaxSteps => Domain::Flow,
+            | FlowMaxSteps
+            | FlowMaxIterations => Domain::Flow,
             Uncoded => Domain::Unknown,
             ParseUnknownAction
             | ParseMissingReference
@@ -289,6 +292,7 @@ impl FailureCode {
             FlowExternalFailed => 424,
             FlowMaxRuntime => 504,
             FlowMaxSteps => 508,
+            FlowMaxIterations => 509,
             Uncoded => 0,
             ParseUnknownAction => 400,
             ParseMissingReference => 404,
@@ -326,7 +330,7 @@ impl FailureCode {
     }
 
     /// Every code, in registry order.
-    pub const ALL: [FailureCode; 43] = [
+    pub const ALL: [FailureCode; 44] = [
         Self::FlowExplicitFail,
         Self::FlowElementNotFound,
         Self::FlowElementOffscreen,
@@ -337,6 +341,7 @@ impl FailureCode {
         Self::FlowExternalFailed,
         Self::FlowMaxRuntime,
         Self::FlowMaxSteps,
+        Self::FlowMaxIterations,
         Self::Uncoded,
         Self::ParseUnknownAction,
         Self::ParseMissingReference,
@@ -388,6 +393,7 @@ impl FailureCode {
             }
             FlowMaxRuntime => "The flow ran past `max_runtime`.",
             FlowMaxSteps => "The flow ran more than `max_steps` steps, usually in a loop.",
+            FlowMaxIterations => "A block ran more times than its `max_iterations`.",
             Uncoded => "golem did not classify this error.",
             ParseUnknownAction => "The `action` is not a known action.",
             ParseMissingReference => {
@@ -458,6 +464,9 @@ impl FailureCode {
             }
             FlowMaxRuntime => "Raise `max_runtime`, or find the slow or looping blocks.",
             FlowMaxSteps => "Fix the `next` or branch loop, or raise `max_steps`.",
+            FlowMaxIterations => {
+                "Fix the loop that re-enters the block, or raise its `max_iterations`."
+            }
             Uncoded => "Read the message, and report it to the golem maintainers.",
             ParseUnknownAction => "Fix the spelling; see the actions reference.",
             ParseMissingReference => {
@@ -822,6 +831,7 @@ mod tests {
         assert_eq!(FailureCode::FlowExternalFailed.number(), 424);
         assert_eq!(FailureCode::FlowMaxRuntime.number(), 504);
         assert_eq!(FailureCode::FlowMaxSteps.number(), 508);
+        assert_eq!(FailureCode::FlowMaxIterations.number(), 509);
         assert_eq!(FailureCode::ParseMissingReference.number(), 404);
         assert_eq!(FailureCode::ParseVariable.number(), 450);
         assert_eq!(FailureCode::ParseFlowFile.number(), 460);

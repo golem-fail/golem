@@ -24,6 +24,8 @@ pub enum ValidationErrorKind {
     InvalidNextTarget,
     /// A block's `for_each` is not `"data"`, the one table a block iterates.
     InvalidForEach,
+    /// A block's `max_iterations` is 0.
+    InvalidMaxIterations,
     DuplicateBlockName,
     InvalidOnFail,
     MissingGoto,
@@ -630,6 +632,14 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
         }
 
         let name = block.name.as_deref().unwrap_or("<unnamed>");
+        if block.max_iterations == Some(0) {
+            errors.push(ValidationError {
+                message: format!(
+                    "Block '{name}': max_iterations SHALL be >= 1 (0 would fail the block's first run)"
+                ),
+                kind: ValidationErrorKind::InvalidMaxIterations,
+            });
+        }
         if let Some(next) = &block.next {
             if !block_names.contains(next.as_str()) {
                 errors.push(ValidationError {
@@ -823,7 +833,7 @@ goto = "nowhere"
     }
 
     #[test]
-    fn a_next_to_a_missing_block_and_a_for_each_other_than_data_fail() {
+    fn a_bad_next_for_each_or_max_iterations_fails() {
         let toml_str = r#"
 [flow]
 name = "bad next"
@@ -836,6 +846,7 @@ next = "nope"
 name = "rows"
 for_each = "rows"
 next = "main"
+max_iterations = 0
 "#;
         let flow = parse_flow(toml_str).expect("should parse");
         let errors = validate_flow(&flow);
@@ -844,12 +855,13 @@ next = "main"
             kinds,
             vec![
                 ValidationErrorKind::InvalidNextTarget,
+                ValidationErrorKind::InvalidMaxIterations,
                 ValidationErrorKind::InvalidForEach
             ],
             "{errors:?}"
         );
         assert!(errors[0].message.contains("'main'") && errors[0].message.contains("'nope'"));
-        assert!(errors[1].message.contains("\"rows\""));
+        assert!(errors[2].message.contains("\"rows\""));
     }
 
     // 5. Start block doesn't exist

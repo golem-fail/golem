@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12099 |
-| Both, kept in context by most clients | 12439 |
+| Tool list (31 tools, as `tools/list` JSON) | 12115 |
+| Both, kept in context by most clients | 12455 |
 
 ## Instructions
 
@@ -142,17 +142,17 @@ Rename a block and each next, goto and start naming it.
 
 ### `block_set`
 
-Set a block's own fields: for_each, where (device filter), record, run_flow and its vars and save_to. Its steps then become ? and ~.
+Set a block's own fields: for_each, where (device filter), record, max_iterations, run_flow and its vars and save_to. Its steps then become ? and ~.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `fields` (required) | object | { "for_each": "data", "where": { "os": "ios" } }; null removes a key. |
 | `name` (required) | string |  |
 
-<details><summary>As <code>tools/list</code> sends it · 421 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 437 chars</summary>
 
 ```json
-{"name":"block_set","description":"Set a block's own fields: for_each, where (device filter), record, run_flow and its vars and save_to. Its steps then become ? and ~.","inputSchema":{"properties":{"fields":{"additionalProperties":true,"description":"{ \"for_each\": \"data\", \"where\": { \"os\": \"ios\" } }; null removes a key.","type":"object"},"name":{"type":"string"}},"required":["name","fields"],"type":"object"}}
+{"name":"block_set","description":"Set a block's own fields: for_each, where (device filter), record, max_iterations, run_flow and its vars and save_to. Its steps then become ? and ~.","inputSchema":{"properties":{"fields":{"additionalProperties":true,"description":"{ \"for_each\": \"data\", \"where\": { \"os\": \"ios\" } }; null removes a key.","type":"object"},"name":{"type":"string"}},"required":["name","fields"],"type":"object"}}
 ```
 
 </details>
@@ -2786,7 +2786,7 @@ Performance data appears in all output formats: human (table), JSON (objects), J
 
 </details>
 
-<details><summary><code>help("flow", "block")</code> · Block · 743 chars · + 3 items</summary>
+<details><summary><code>help("flow", "block")</code> · Block · 1063 chars · + 3 items</summary>
 
 Source: [src/test-structure/20-block/00-intro.md](src/test-structure/20-block/00-intro.md)
 
@@ -2812,6 +2812,8 @@ steps = [
 ```
 
 `record = true` / `false` on a block overrides the flow's `record` default for that block (`--no-record` still wins).
+
+`max_iterations = N` on a block fails the flow with `EF509` when the flow would run the block an (N+1)th time. It guards a block that loops through `next`, a branch `goto` or `[[data]]` rows: each row counts as one run. To leave a loop on purpose instead, branch on `_loop` (see Branching (help("flow", "branching"))).
 
 Items (help("flow", item)):
 - platform: where: run a block only on devices that match
@@ -3949,7 +3951,7 @@ Items (help("codes", item)):
 - registry: Every code with its meaning and fix
 ```
 
-<details><summary><code>help("codes", "registry")</code> · Registry · 5215 chars</summary>
+<details><summary><code>help("codes", "registry")</code> · Registry · 5350 chars</summary>
 
 Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 
@@ -3968,6 +3970,7 @@ Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 | `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |
 | `F504` | The flow ran past `max_runtime`. | Raise `max_runtime`, or find the slow or looping blocks. |
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |
+| `F509` | A block ran more times than its `max_iterations`. | Fix the loop that re-enters the block, or raise its `max_iterations`. |
 | `X000` | golem did not classify this error. | Read the message, and report it to the golem maintainers. |
 | `P400` | The `action` is not a known action. | Fix the spelling; see the actions reference. |
 | `P404` | A block, subflow or fixture that the flow names does not exist. | Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`. |

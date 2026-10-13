@@ -50,6 +50,7 @@ Codes appear in every output format:
 | `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |
 | `F504` | The flow ran past `max_runtime`. | Raise `max_runtime`, or find the slow or looping blocks. |
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |
+| `F509` | A block ran more times than its `max_iterations`. | Fix the loop that re-enters the block, or raise its `max_iterations`. |
 | `X000` | golem did not classify this error. | Read the message, and report it to the golem maintainers. |
 | `P400` | The `action` is not a known action. | Fix the spelling; see the actions reference. |
 | `P404` | A block, subflow or fixture that the flow names does not exist. | Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`. |
