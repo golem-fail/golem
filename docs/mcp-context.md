@@ -2168,7 +2168,7 @@ unreachable paths.
 
 ### selectors
 
-<details><summary><code>help("selectors")</code> · Selectors · 1185 chars · + 10 items, 2 sub-items</summary>
+<details><summary><code>help("selectors")</code> · Selectors · 1202 chars · + 10 items</summary>
 
 Source: [src/selectors/00-intro.md](src/selectors/00-intro.md)
 
@@ -2183,15 +2183,15 @@ The same selector grammar is used everywhere an element is named: `tap`,
 
 Items (help("selectors", item)):
 - two-syntaxes: Flat on_* keys, or grouped on = { … } for traits, contains, inside
-- core: on_text, on_accessibility_label, on_index; what counts as text — prefer-text
+- core: on_text, on_accessibility_label, on_index; what counts as text; when to prefer text
 - state-filters: Filter by enabled, checked or clickable
 - traits: Shape and text predicates: button, wide, tall, has_text and more
 - relational: below, above, right_of or left_of a visible anchor
-- containment: contains or inside: select by nested bounds, not DOM — min_matches
+- containment: contains or inside: select by nested bounds, not DOM; min_matches for a list
 - chaining: Nested anchors, AND of keys, how ties sort and index picks
 - occlusion: tap hit-tests and routes around overlays such as sticky headers
 - within: Scope a scroll to a region: below a heading, or a list container
-- canvas: Compose and Flutter UIs: what works and what differs by platform — 6 items: help("selectors", "canvas") lists them; read it first
+- canvas: Compose and Flutter UIs: what works and what differs by platform — 4 items: help("selectors", "canvas") lists them; read it first
 ```
 
 <details><summary><code>help("selectors", "two-syntaxes")</code> · Two syntaxes · 359 chars</summary>
@@ -2217,9 +2217,9 @@ Source: [src/selectors/10-two-syntaxes.md](src/selectors/10-two-syntaxes.md)
 
 </details>
 
-<details><summary><code>help("selectors", "core")</code> · Core selectors · 1116 chars · + 1 item</summary>
+<details><summary><code>help("selectors", "core")</code> · Core selectors · 1677 chars</summary>
 
-Source: [src/selectors/20-core/00-intro.md](src/selectors/20-core/00-intro.md)
+Source: [src/selectors/20-core.md](src/selectors/20-core.md)
 
 ```text
 ## Core selectors
@@ -2237,15 +2237,6 @@ on both platforms. Thus an icon-only button labelled `Close` matches
 exception: its label describes a picture, so it is never text. In a webview,
 `text` is the DOM text only.
 
-Items (help("selectors", item)):
-- prefer-text: Prefer visible text; use accessibility_label sparingly
-```
-
-<details><summary><code>help("selectors", "prefer-text")</code> · Prefer visible text; use accessibility_label sparingly · 664 chars</summary>
-
-Source: [src/selectors/20-core/10-prefer-text.md](src/selectors/20-core/10-prefer-text.md)
-
-```text
 ### Prefer visible `text`; use `accessibility_label` sparingly
 
 Default to `on_text` (or a positional/`contains` selector). Use
@@ -2261,8 +2252,6 @@ Outside those cases, an `accessibility_label` selector tests something the user
 never perceives, and silently passes even if the visible text is wrong. When in
 doubt, use `text`.
 ```
-
-</details>
 
 </details>
 
@@ -2346,9 +2335,9 @@ relational match is treated as unresolved (empty).
 
 </details>
 
-<details><summary><code>help("selectors", "containment")</code> · Geometric containment: contains / inside · 894 chars · + 1 item</summary>
+<details><summary><code>help("selectors", "containment")</code> · Geometric containment: contains / inside · 1954 chars</summary>
 
-Source: [src/selectors/60-containment/00-intro.md](src/selectors/60-containment/00-intro.md)
+Source: [src/selectors/60-containment.md](src/selectors/60-containment.md)
 
 ````text
 ## Geometric containment: `contains` / `inside`
@@ -2371,15 +2360,6 @@ parent/child selector.
 `contains` excludes the anchor itself and a wrapper with exactly the anchor's
 bounds, and resolves **smallest-enclosing first**.
 
-Items (help("selectors", item)):
-- min_matches: the container of *repeated* items
-````
-
-<details><summary><code>help("selectors", "min_matches")</code> · min_matches — the container of *repeated* items · 1142 chars</summary>
-
-Source: [src/selectors/60-containment/10-min_matches.md](src/selectors/60-containment/10-min_matches.md)
-
-````text
 ### `min_matches` — the container of *repeated* items
 
 The smallest box enclosing a *single* item is often a per-item wrapper (a
@@ -2403,8 +2383,6 @@ a scroll to a list this way, see `within` (help("selectors", "within")).
 > resolve it — but neither could a human see it's a scrollable list. Make the
 > list taller, or fall back to `within = { below = "<heading>" }`.
 ````
-
-</details>
 
 </details>
 
@@ -2452,7 +2430,7 @@ separate, system-level concern.
 
 </details>
 
-<details><summary><code>help("selectors", "within")</code> · within (scoping a scroll) · 700 chars</summary>
+<details><summary><code>help("selectors", "within")</code> · within (scoping a scroll) · 665 chars</summary>
 
 Source: [src/selectors/90-within.md](src/selectors/90-within.md)
 
@@ -2471,13 +2449,13 @@ selector grammar. Two robust idioms for an inner list:
 { action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
 ```
 
-See `min_matches` (help("selectors", "min_matches")) and
+See `min_matches` and
 Actions Reference → scroll (help("act")) for the full action.
 ````
 
 </details>
 
-<details><summary><code>help("selectors", "canvas")</code> · Canvas-rendered UI (Compose, Compose Multiplatform, Flutter) · 2407 chars · + 6 items</summary>
+<details><summary><code>help("selectors", "canvas")</code> · Canvas-rendered UI (Compose, Compose Multiplatform, Flutter) · 2253 chars · + 4 items</summary>
 
 Source: [src/selectors/100-canvas/00-intro.llm.md](src/selectors/100-canvas/00-intro.llm.md) (LLM text)
 
@@ -2495,29 +2473,13 @@ Compose, Compose Multiplatform and Flutter copy their semantics tree into the pl
 - **Flutter custom widgets** (a `GestureDetector` on a `Container`, a `CustomPaint`) are invisible to golem until wrapped in `Semantics`.
 
 Items (help("selectors", item)):
-- version-floors: Compose Multiplatform 1.8.0+ on iOS; Flutter 3.19+ for identifier
 - annotations: Which Compose or Flutter annotation becomes text or label
 - element-types: element_type and the button trait are unreliable on canvas UIs
 - bounds: Off-screen nodes: left out on Android, kept on iOS
 - merged-semantics: How merged nodes report their text, by framework and platform
-- flutter: Wrap a custom Flutter widget in Semantics so golem sees it
 ```
 
-<details><summary><code>help("selectors", "version-floors")</code> · Version floors · 201 chars</summary>
-
-Source: [src/selectors/100-canvas/10-version-floors.md](src/selectors/100-canvas/10-version-floors.md)
-
-```text
-### Version floors
-
-- **Compose Multiplatform 1.8.0 or later on iOS.** From 1.8.0 the Compose
-  accessibility tree syncs to iOS automatically.
-- **Flutter 3.19 or later** for `Semantics(identifier:)`.
-```
-
-</details>
-
-<details><summary><code>help("selectors", "annotations")</code> · Which annotation reaches golem · 1264 chars</summary>
+<details><summary><code>help("selectors", "annotations")</code> · Which annotation reaches golem · 1229 chars</summary>
 
 Source: [src/selectors/100-canvas/20-annotations.md](src/selectors/100-canvas/20-annotations.md)
 
@@ -2535,7 +2497,7 @@ Source: [src/selectors/100-canvas/20-annotations.md](src/selectors/100-canvas/20
 The `accessibility_label` selector matches the label or the identifier.
 
 Visible text is the one path that works the same on both platforms. Use it (see
-Prefer visible `text` (help("selectors", "prefer-text"))). Do not put a
+Prefer visible `text`). Do not put a
 `contentDescription` on a `Text` whose value a step checks, because on iOS the
 step then reads the description.
 ```
@@ -2635,19 +2597,6 @@ and `contains` are geometric, so a coarse tree does not change them.
 
 </details>
 
-<details><summary><code>help("selectors", "flutter")</code> · Flutter · 164 chars</summary>
-
-Source: [src/selectors/100-canvas/60-flutter.md](src/selectors/100-canvas/60-flutter.md)
-
-```text
-### Flutter
-
-A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
-`CustomPaint`) is invisible to golem until you wrap it in `Semantics`.
-```
-
-</details>
-
 </details>
 
 </details>
@@ -2655,7 +2604,7 @@ A Flutter custom widget (for example a `GestureDetector` on a `Container`, or a
 
 ### flow
 
-<details><summary><code>help("flow")</code> · Test Structure · 1207 chars · + 13 items, 15 sub-items</summary>
+<details><summary><code>help("flow")</code> · Test Structure · 1228 chars · + 13 items, 14 sub-items</summary>
 
 Source: [src/test-structure/00-intro.md](src/test-structure/00-intro.md)
 
@@ -2673,7 +2622,7 @@ Items (help("flow", item)):
 - lifecycle: Setup is implicit: install, then app_lifecycle reset or launch
 - teardown: [[teardown]] steps run after the flow, even when it fails
 - data-driven: [[data]] rows; for_each = "data" runs a block per row
-- variables: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name} — built-in
+- variables: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name}; built-ins such as _device, _os
 - fake-data: ${fake:…} in short; help("fake") has the rest
 - multi-app: Several apps in one flow; switch with launch app = "…"
 - devices: [[flow.apps.devices]]: os, type, hardware and name constraints — coverage, hardware, pinning, auto-boot
@@ -3216,9 +3165,9 @@ its own flow, or as a subflow invoked with different `[block.vars]`.
 
 </details>
 
-<details><summary><code>help("flow", "variables")</code> · Variables · 644 chars · + 1 item</summary>
+<details><summary><code>help("flow", "variables")</code> · Variables · 1404 chars</summary>
 
-Source: [src/test-structure/90-variables/00-intro.md](src/test-structure/90-variables/00-intro.md)
+Source: [src/test-structure/90-variables.md](src/test-structure/90-variables.md)
 
 ````text
 ## Variables
@@ -3238,15 +3187,6 @@ steps = [
 
 When the CLI, `golem.toml` and the flow set the same name, see Project config (help("flow", "project-config")) for which one wins.
 
-Items (help("flow", item)):
-- built-in: _device, _os, _platform, _hardware and other per-step values
-````
-
-<details><summary><code>help("flow", "built-in")</code> · Built-in variables · 861 chars</summary>
-
-Source: [src/test-structure/90-variables/10-built-in.md](src/test-structure/90-variables/10-built-in.md)
-
-```text
 ### Built-in variables
 
 golem reserves the `_` prefix and fills these in per step:
@@ -3266,9 +3206,7 @@ golem reserves the `_` prefix and fills these in per step:
 `_hardware`, `_loop` and `_perf` are also readable by a branch condition
 (`[[block.branch]] if_var = "_hardware", equals = "real"`); the device and app
 builtins resolve in `${…}` interpolation only.
-```
-
-</details>
+````
 
 </details>
 
