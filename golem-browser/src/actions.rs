@@ -116,16 +116,26 @@ async fn mcp_call(pool: &mut BrowserPool, step: &Step, vars: &mut VariableStore)
     let (page, ua) = page_for(pool, step).await?;
     require_webmcp(&page, &ua).await?;
 
-    // `executeTool` takes its arguments as a JSON *string* and answers with
-    // one, which the explainer's `executeTool(tool, inputs)` signature doesn't
-    // convey — passing the object itself fails with "Failed to parse input
-    // arguments". Established against Chrome 153 rather than assumed.
+    // `executeTool`'s input changed under the experimental flag: Chrome 153
+    // wants the arguments as a JSON string ("Failed to parse input
+    // arguments" for an object), Chrome 155 an object ("invalid input
+    // object: value is not an object" for a string). Try the object, and
+    // retry as a string only on those input errors: Chrome raises them
+    // before the tool runs, and retrying on any other error could run a
+    // tool with side effects twice.
     let script = format!(
         "async () => {{
             const tools = await document.modelContext.getTools();
             const tool = tools.find((t) => t.name === {name});
             if (!tool) return {{ missing: true }};
-            const answer = await document.modelContext.executeTool(tool, {args});
+            const args = {args};
+            let answer;
+            try {{
+                answer = await document.modelContext.executeTool(tool, args);
+            }} catch (e) {{
+                if (!/parse input arguments|invalid input object/i.test(String(e && e.message))) throw e;
+                answer = await document.modelContext.executeTool(tool, JSON.stringify(args));
+            }}
             let result = answer;
             if (typeof answer === 'string') {{
                 try {{ result = JSON.parse(answer); }} catch {{ result = answer; }}
@@ -133,7 +143,7 @@ async fn mcp_call(pool: &mut BrowserPool, step: &Step, vars: &mut VariableStore)
             return {{ result }};
         }}",
         name = js_literal(tool),
-        args = js_literal(&arguments.to_string()),
+        args = arguments,
     );
     let outcome: serde_json::Value = page
         .evaluate_function(script)
@@ -2321,6 +2331,13 @@ mod tests {
                    content: [{ type: 'text', text: JSON.stringify({ order_id, status: 'fulfilled' }) }],
                  }),
                });
+               window.charges = 0;
+               document.modelContext.registerTool({
+                 name: 'charge_card',
+                 description: 'Charge a card, then reject its input',
+                 inputSchema: { type: 'object', properties: {} },
+                 execute: async () => { window.charges += 1; throw new Error('bad input: card declined'); },
+               });
              </script></body>",
         );
         let mut p = BrowserPool::new(PoolConfig {
@@ -2371,6 +2388,26 @@ mod tests {
             }
             other => panic!("the envelope SHALL be unwrapped and JSON nested, got {other:?}"),
         }
+
+        run(
+            &mut p,
+            &step("action = \"browse_mcp_call\"\ntool = \"charge_card\""),
+            &mut v,
+        )
+        .await
+        .expect_err("a tool that throws SHALL fail the step");
+        run(
+            &mut p,
+            &step("action = \"browse_execute_js\"\nscript = \"return String(window.charges)\"\nsave_to = \"charges\""),
+            &mut v,
+        )
+        .await
+        .expect("reading the count SHALL work");
+        assert_eq!(
+            v.get("charges"),
+            Some(&VarValue::string("1")),
+            "a tool's own error SHALL NOT be retried: it ran once"
+        );
 
         let e = run(
             &mut p,
