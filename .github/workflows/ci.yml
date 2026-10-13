@@ -115,6 +115,11 @@ jobs:
       # compiled above. Typecheck it here so that path can't bit-rot unnoticed.
       # Cheap: it compiles strictly less than the default build.
       - run: cargo check --workspace --all-targets --no-default-features
+      # The release binary compiles without debug_assertions, so code that is
+      # debug-only (the stub driver) can break it while every debug build
+      # passes: v0.16.0's tag failed this way. Not --all-targets: the tests
+      # use the stub driver, which a release build leaves out.
+      - run: cargo check --workspace --release
 
   test:
     needs: classify
