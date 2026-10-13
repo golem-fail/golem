@@ -1008,7 +1008,7 @@ impl PlatformDriver for AndroidDriver {
     ) -> Result<()> {
         // Refuse on physical devices for parity with iOS — push delivery
         // on real hardware needs FCM (server keys, device tokens) and is
-        // outside this action's scope. See README §push_notification
+        // outside this action's scope. See docs/actions-reference.md §push_notification
         // for the cross-device pattern using `branch` + `*_http` to
         // your own backend.
         if self.physical {

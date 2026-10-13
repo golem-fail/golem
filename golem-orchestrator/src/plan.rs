@@ -379,7 +379,7 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
             format!(
                 "{}:{}::{} `within` is set on action `{}` which doesn't \
                  consume it — only `scroll` and steps with `auto_scroll = true` \
-                 use `within`. See README §swipe.",
+                 use `within`. See docs/actions-reference.md §swipe.",
                 path.display(),
                 block,
                 issue.step_index,
@@ -428,7 +428,7 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
                      that may run on physical hardware. The action is sim/emu-\
                      only on both platforms and will error at runtime there. \
                      Branch on `_hardware` and use `*_http` to your APNS/FCM \
-                     backend for phys delivery. See README §push_notification.",
+                     backend for phys delivery. See docs/actions-reference.md §push_notification.",
                     path.display(),
                     block,
                     issue.step_index,

@@ -207,8 +207,7 @@ pub struct DeviceConstraint {
     /// Hardware kind axis. Values: `"virtual"` (sim/emulator) or `"real"`
     /// (physical device). Supports array form for coverage — `["virtual",
     /// "real"]` emits two tick boxes, satisfiable independently. Omitted
-    /// means virtual-only (safest default — physical devices require
-    /// explicit opt-in).
+    /// means either shape, a virtual device preferred.
     pub hardware: Option<StringOrVec>,
     pub playstore: Option<bool>,
     /// If set, only match devices in the requested boot state. Mostly used
