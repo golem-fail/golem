@@ -780,10 +780,12 @@ mod tests {
         let (state, _rx) = RegistrationState::new();
         // A port free on both addresses, so only the wildcard hold below
         // makes it busy: a stray `adb forward` on loopback must not stand in.
-        let busy = (COMPANION_PORT_START..COMPANION_PORT_END)
-            .find(|p| port_is_free(*p))
+        // Another process on the host can take a port between the check
+        // and the bind, so hold the first free port this test can bind.
+        let (busy, _held) = (COMPANION_PORT_START..COMPANION_PORT_END)
+            .filter(|p| port_is_free(*p))
+            .find_map(|p| TcpListener::bind(("0.0.0.0", p)).ok().map(|l| (p, l)))
             .expect("a free port SHALL exist in the companion range");
-        let _held = TcpListener::bind(("0.0.0.0", busy)).expect("SHALL hold the port");
         // Linux refuses the loopback bind too; macOS is where it slips by.
         #[cfg(target_os = "macos")]
         assert!(

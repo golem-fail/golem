@@ -381,9 +381,12 @@ async fn launch(config: &PoolConfig) -> Result<Running> {
         .prefix("golem-browser-")
         .tempdir()
         .context("creating the browser profile directory")?;
+    // chromiumoxide gives up after 20 s, which a cold Chrome on a loaded
+    // CI host can miss; a flow waiting longer beats one failing to start.
     let mut builder = BrowserConfig::builder()
         .chrome_executable(executable)
-        .user_data_dir(profile.path());
+        .user_data_dir(profile.path())
+        .launch_timeout(std::time::Duration::from_secs(60));
     if !config.headless {
         builder = builder.with_head();
     }
