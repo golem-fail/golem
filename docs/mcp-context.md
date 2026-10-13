@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12068 |
-| Both, kept in context by most clients | 12408 |
+| Tool list (31 tools, as `tools/list` JSON) | 12073 |
+| Both, kept in context by most clients | 12413 |
 
 ## Instructions
 
@@ -142,17 +142,17 @@ Rename a block and each next, goto and start naming it.
 
 ### `block_set`
 
-Set a block's own fields: app, for_each, where (device filter), run_flow, vars, save_to, record. Its steps then become ? and ~.
+Set a block's own fields: for_each, where (device filter), record, run_flow and its vars and save_to. Its steps then become ? and ~.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `fields` (required) | object | { "for_each": "data", "where": { "os": "ios" } }; null removes a key. |
 | `name` (required) | string |  |
 
-<details><summary>As <code>tools/list</code> sends it · 416 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 421 chars</summary>
 
 ```json
-{"name":"block_set","description":"Set a block's own fields: app, for_each, where (device filter), run_flow, vars, save_to, record. Its steps then become ? and ~.","inputSchema":{"properties":{"fields":{"additionalProperties":true,"description":"{ \"for_each\": \"data\", \"where\": { \"os\": \"ios\" } }; null removes a key.","type":"object"},"name":{"type":"string"}},"required":["name","fields"],"type":"object"}}
+{"name":"block_set","description":"Set a block's own fields: for_each, where (device filter), record, run_flow and its vars and save_to. Its steps then become ? and ~.","inputSchema":{"properties":{"fields":{"additionalProperties":true,"description":"{ \"for_each\": \"data\", \"where\": { \"os\": \"ios\" } }; null removes a key.","type":"object"},"name":{"type":"string"}},"required":["name","fields"],"type":"object"}}
 ```
 
 </details>

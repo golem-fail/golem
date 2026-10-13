@@ -37,10 +37,9 @@ pub const OPTION_KEYS: &[&str] = &[
 ];
 
 /// The keys of a `[[block]]` that `block_set` sets: the ones that are not
-/// its name, steps, `next` or branches, which other tools own.
-pub const BLOCK_KEYS: &[&str] = &[
-    "app", "for_each", "where", "run_flow", "vars", "save_to", "record",
-];
+/// its name, steps, `next` or branches, which other tools own. Not `app`:
+/// the parser accepts it, but nothing reads it.
+pub const BLOCK_KEYS: &[&str] = &["for_each", "where", "run_flow", "vars", "save_to", "record"];
 
 impl Draft {
     /// Run `change`; if the draft then does not parse as a flow, or has a
@@ -151,7 +150,10 @@ fn edit_errors(text: &str) -> Result<Vec<String>> {
         .filter(|e| {
             !matches!(
                 e.kind,
-                Kind::InvalidGotoTarget | Kind::InvalidStartBlock | Kind::MissingDevices
+                Kind::InvalidGotoTarget
+                    | Kind::InvalidStartBlock
+                    | Kind::InvalidNextTarget
+                    | Kind::MissingDevices
             )
         })
         .map(|e| e.message)

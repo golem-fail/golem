@@ -293,21 +293,20 @@ impl IosDriver {
 /// under a `custom` key alongside the `aps.alert`; without it, only the
 /// `aps.alert` envelope is produced. `title`/`body` are interpolated raw
 /// (callers pass test-controlled values; simctl reads this as a file).
-fn build_apns_payload(title: &str, body: &str, payload: Option<&str>) -> String {
+fn build_apns_payload(title: &str, body: &str, payload: Option<&str>) -> Result<String> {
+    let mut apns = serde_json::json!({ "aps": { "alert": { "title": title, "body": body } } });
     if let Some(custom) = payload {
-        format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}},"custom":{custom}}}"#)
-    } else {
-        format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}}}}"#)
+        let custom: serde_json::Value = serde_json::from_str(custom)
+            .with_context(|| format!("push_notification payload is not JSON: {custom}"))?;
+        apns["custom"] = custom;
     }
+    Ok(apns.to_string())
 }
 
-/// Escape a string for embedding inside a double-quoted JS string literal.
-///
-/// Backslashes first (so the quote-escape's added backslashes aren't
-/// re-escaped), then double quotes. Used to splice the notification body
-/// into a `__golemSetNotification("...")` eval expression.
-fn escape_js_string(body: &str) -> String {
-    body.replace('\\', "\\\\").replace('"', "\\\"")
+/// A string as a double-quoted JS string literal: JSON's string escaping
+/// covers quotes, backslashes and line breaks.
+fn js_string(body: &str) -> String {
+    serde_json::Value::from(body).to_string()
 }
 
 /// Reject recording names containing shell-special characters.
@@ -943,7 +942,7 @@ impl PlatformDriver for IosDriver {
             );
         }
         // Build an APNS payload JSON and push via simctl
-        let apns_payload = build_apns_payload(title, body, payload);
+        let apns_payload = build_apns_payload(title, body, payload)?;
 
         // Write payload to a temp file, then push
         let tmp = std::env::temp_dir().join(format!("golem_push_{}.json", std::process::id()));
@@ -971,10 +970,10 @@ impl PlatformDriver for IosDriver {
         // text appears. Best-effort: native screens / apps without
         // the hook quietly no-op. Pass the body — that's what the
         // test asserts on with `right_of "Notification:"`.
-        let body_escaped = escape_js_string(body);
         let _ = self
             .eval_in_webview(&format!(
-                r#"window.__golemSetNotification && window.__golemSetNotification("{body_escaped}")"#
+                "window.__golemSetNotification && window.__golemSetNotification({})",
+                js_string(body)
             ))
             .await;
         Ok(())
@@ -1539,7 +1538,7 @@ mod tests {
     //    and the result SHALL be valid JSON carrying title + body.
     #[test]
     fn apns_payload_without_custom_is_alert_only() {
-        let s = build_apns_payload("Hi", "Body text", None);
+        let s = build_apns_payload("Hi", "Body text", None).expect("payload");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("payload SHALL be valid JSON");
         assert_eq!(parsed["aps"]["alert"]["title"], "Hi");
@@ -1550,53 +1549,51 @@ mod tests {
         );
     }
 
-    // 2. With a custom payload, the caller JSON is spliced in verbatim under
-    //    `custom` alongside the alert envelope.
+    // 2. With a custom payload, the caller JSON goes under `custom`
+    //    alongside the alert envelope, whatever its JSON type.
     #[test]
-    fn apns_payload_with_custom_splices_payload() {
-        let s = build_apns_payload("T", "B", Some(r#"{"k":42}"#));
+    fn apns_payload_with_custom_puts_it_under_custom() {
+        let s = build_apns_payload("T", "B", Some(r#"{"k":42}"#)).expect("payload");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("payload SHALL be valid JSON");
         assert_eq!(parsed["aps"]["alert"]["title"], "T");
         assert_eq!(parsed["aps"]["alert"]["body"], "B");
-        assert_eq!(
-            parsed["custom"]["k"], 42,
-            "custom payload SHALL be spliced under `custom`, got: {s}",
-        );
-    }
-
-    // 3. A non-object custom payload (e.g. an array) is still spliced raw —
-    //    the builder does no validation, it just interpolates.
-    #[test]
-    fn apns_payload_custom_is_interpolated_raw() {
-        let s = build_apns_payload("T", "B", Some("[1,2,3]"));
-        let parsed: serde_json::Value =
-            serde_json::from_str(&s).expect("payload SHALL be valid JSON");
+        assert_eq!(parsed["custom"]["k"], 42, "got: {s}");
+        let s = build_apns_payload("T", "B", Some("[1,2,3]")).expect("payload");
+        let parsed: serde_json::Value = serde_json::from_str(&s).expect("valid JSON");
         assert_eq!(parsed["custom"], serde_json::json!([1, 2, 3]));
     }
 
-    // -----------------------------------------------------------------------
-    // escape_js_string — embed into a double-quoted JS string literal
-    // -----------------------------------------------------------------------
-
-    // 1. A plain body with no special characters SHALL pass through unchanged.
+    // 3. Quotes, backslashes and line breaks in title and body SHALL come
+    //    through as the same text.
     #[test]
-    fn escape_js_string_plain_unchanged() {
-        assert_eq!(escape_js_string("hello world"), "hello world");
+    fn apns_payload_escapes_title_and_body() {
+        let title = "Say \"hi\" \\o/";
+        let body = "line one\nline \"two\"";
+        let s = build_apns_payload(title, body, None).expect("payload");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("payload SHALL be valid JSON");
+        assert_eq!(parsed["aps"]["alert"]["title"], title);
+        assert_eq!(parsed["aps"]["alert"]["body"], body);
     }
 
-    // 2. Double quotes SHALL be backslash-escaped.
+    // 4. A custom payload that is not JSON SHALL fail with its text, not
+    //    produce a file simctl rejects.
     #[test]
-    fn escape_js_string_escapes_double_quote() {
-        assert_eq!(escape_js_string(r#"say "hi""#), r#"say \"hi\""#);
+    fn apns_payload_refuses_a_custom_payload_that_is_not_json() {
+        let err = build_apns_payload("T", "B", Some("{k: 1}")).expect_err("not JSON");
+        assert!(err.to_string().contains("{k: 1}"), "{err}");
     }
 
-    // 3. Backslashes SHALL be doubled, and SHALL be escaped before quotes so
-    //    a quote-escape's added backslash is not itself re-escaped.
+    // -----------------------------------------------------------------------
+    // js_string — a double-quoted JS string literal
+    // -----------------------------------------------------------------------
+
     #[test]
-    fn escape_js_string_escapes_backslash_before_quote() {
-        // Input: backslash then quote -> backslash doubled, quote escaped.
-        assert_eq!(escape_js_string("a\\\"b"), "a\\\\\\\"b");
+    fn js_string_quotes_and_escapes_the_body() {
+        assert_eq!(js_string("hello world"), r#""hello world""#);
+        assert_eq!(js_string("say \"hi\""), r#""say \"hi\"""#);
+        assert_eq!(js_string("a\\b\nc"), r#""a\\b\nc""#);
     }
 
     // -----------------------------------------------------------------------
