@@ -1,4 +1,5 @@
 ## Browser
+<!-- collapsed -->
 
 Drive a host browser, for web state that the app depends on.
 

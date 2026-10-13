@@ -305,7 +305,7 @@ Topics:
 
 ### act
 
-- `help("act")` · [Actions (LLM text)](src/actions-reference/00-intro.llm.md) + 10 items, 65 sub-items · 3005
+- `help("act")` · [Actions (LLM text)](src/actions-reference/00-intro.llm.md) + 10 items, 42 sub-items · 2605
 - `help("act", "interaction")` · [Interaction](src/actions-reference/10-interaction/00-intro.md) + 12 items · 449
   - `help("act", "tap")` · [`tap` — Tap an element](src/actions-reference/10-interaction/10-tap.md) · 437
   - `help("act", "double_tap")` · [`double_tap` — Double-tap an element](src/actions-reference/10-interaction/20-double_tap.md) · 175
@@ -377,7 +377,7 @@ Topics:
 
 ### selectors
 
-- `help("selectors")` · [Selectors](src/selectors/00-intro.md) + 10 items, 8 sub-items · 1200
+- `help("selectors")` · [Selectors](src/selectors/00-intro.md) + 10 items, 2 sub-items · 1185
 - `help("selectors", "two-syntaxes")` · [Two syntaxes](src/selectors/10-two-syntaxes.md) · 359
 - `help("selectors", "core")` · [Core selectors](src/selectors/20-core/00-intro.md) + 1 item · 1116
   - `help("selectors", "prefer-text")` · [Prefer visible `text`; use `accessibility_label` sparingly](src/selectors/20-core/10-prefer-text.md) · 664

@@ -205,7 +205,16 @@ fn render(address: &str) -> String {
 #[cfg(test)]
 fn nested_names(address: &str) -> usize {
     children(address)
-        .flat_map(|c| children(c.address))
+        .filter(|c| !collapsed(c.text))
+        .map(|c| listed_names(c.address))
+        .sum()
+}
+
+/// How many names a list of the parts below `address` gives: one per
+/// part, or each name its heading gives.
+#[cfg(test)]
+fn listed_names(address: &str) -> usize {
+    children(address)
         .map(|c| heading_names(c.text).len().max(1))
         .sum()
 }
@@ -254,11 +263,26 @@ fn summary(p: &HelpPart) -> String {
     } else {
         about
     };
+    if collapsed(p.text) && !names.is_empty() {
+        return format!(
+            "{about} — {} items: help(\"{}\", \"{}\") lists them; read it first",
+            children(p.address).count(),
+            topic_of(p.address).unwrap_or_default(),
+            item_name(p.address)
+        );
+    }
     match (about.is_empty(), names.is_empty()) {
         (_, true) => about,
         (true, false) => names.join(", "),
         (false, false) => format!("{about} — {}", names.join(", ")),
     }
+}
+
+/// A group marked `<!-- collapsed -->`: its parent's list gives its
+/// summary and how to open it, not the names below it. For a group that
+/// few flows need, or whose own text each of its items depends on.
+fn collapsed(text: &str) -> bool {
+    text.lines().any(|l| l.trim() == "<!-- collapsed -->")
 }
 
 /// A part's `<!-- summary: … -->` line: its line in a list, for a part
@@ -279,7 +303,7 @@ fn first_sentence(text: &str) -> Option<String> {
         .lines()
         .skip(1)
         .map(str::trim)
-        .find(|l| !l.is_empty())?;
+        .find(|l| !l.is_empty() && !l.starts_with("<!--"))?;
     if line.starts_with(['|', '`', '#', '<', '-', '*', '{']) {
         return None;
     }
@@ -584,6 +608,46 @@ mod tests {
             "these items list as their heading alone; add a `<!-- summary: … -->` line under it:\n{}",
             bare.join("\n")
         );
+    }
+
+    #[test]
+    fn an_action_group_with_its_own_rules_is_collapsed() {
+        // help("act") lists an expanded group's actions, so an agent goes
+        // straight to them and never reads the group's own text.
+        let long: Vec<&str> = HELP_PARTS
+            .iter()
+            .filter(|p| p.address.starts_with("actions-reference/"))
+            .filter(|p| children(p.address).next().is_some() && !collapsed(p.text))
+            .filter(|p| {
+                let own = clean(p.text, p.page);
+                own.lines()
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .len()
+                    > 120
+            })
+            .map(|p| p.address)
+            .collect();
+        assert!(
+            long.is_empty(),
+            "these action groups have text that help(\"act\") does not show; mark them \
+             `<!-- collapsed -->`, or move the text into their actions:\n{}",
+            long.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_collapsed_group_lists_as_its_summary_and_how_to_open_it() {
+        let act = help(Some("act"), None).expect("act");
+        assert!(
+            act.contains("- browser: Drive a host browser, for web state that the app depends on — 20 items: help(\"act\", \"browser\") lists them; read it first\n"),
+            "{act}"
+        );
+        assert!(!act.contains("browse_tap"), "{act}");
+        let browser = help(Some("act"), Some("browser")).expect("browser");
+        assert!(browser.contains("- browse_tap: "), "{browser}");
     }
 
     #[test]
