@@ -893,7 +893,19 @@ pub struct Parts {
     pub child_env: Option<golem_common::command::ChildEnv>,
 }
 
-/// The parts of a session on the device-free stub driver.
+/// The stub driver's bundle, for a session on it.
+fn stub_bundle(stub: bool) -> Option<String> {
+    #[cfg(debug_assertions)]
+    if stub {
+        return Some(golem_driver::stub::STUB_BUNDLE_ID.to_string());
+    }
+    let _ = stub;
+    None
+}
+
+/// The parts of a session on the device-free stub driver. Debug builds
+/// only, as the stub driver is.
+#[cfg(debug_assertions)]
 fn stub_parts(project_root: PathBuf) -> Parts {
     let device = DeviceInfo {
         name: "Stub Device".into(),
@@ -1066,13 +1078,18 @@ async fn open(
             }
         })
         .await;
-    let result = if cfg!(debug_assertions) && req.stub {
-        Ok((Work::from_parts(stub_parts(req.project_root.clone())), None))
-    } else {
-        match req.flow.clone() {
+    #[cfg(debug_assertions)]
+    let stubbed = req
+        .stub
+        .then(|| Work::from_parts(stub_parts(req.project_root.clone())));
+    #[cfg(not(debug_assertions))]
+    let stubbed: Option<Work> = None;
+    let result = match stubbed {
+        Some(work) => Ok((work, None)),
+        None => match req.flow.clone() {
             None => open_device(&req, &resource_mgr, &status).await,
             Some(f) => open_flow(&req, f, resource_mgr, install_cache, &status).await,
-        }
+        },
     };
     match result {
         Ok((mut work, flow_report)) => {
@@ -1086,14 +1103,12 @@ async fn open(
                     );
                 }
             }
-            let bundle = if req.stub {
-                golem_driver::stub::STUB_BUNDLE_ID.to_string()
-            } else {
+            let bundle = stub_bundle(req.stub).unwrap_or_else(|| {
                 work.apps
                     .first()
                     .and_then(|a| a.bundle.clone())
                     .unwrap_or_default()
-            };
+            });
             let out = OpResult::Opened {
                 device: format!("{}/{}", work.device.platform, work.device.name),
                 udid: work.device.udid.clone(),
