@@ -99,7 +99,7 @@ async fn every_tool_works_against_a_stub_session() {
         "options_set",
         "block_set",
         "teardown_delete",
-        "mixins_list",
+        "reuse_list",
         "app_logs",
     ] {
         assert!(
@@ -295,8 +295,8 @@ async fn every_tool_works_against_a_stub_session() {
         err,
         "a malformed step SHALL be refused even when it does not run: {c}"
     );
-    let (c, _) = call(&client, "mixins_list", serde_json::json!({})).await;
-    assert!(text_of(&c).contains("no mixins"), "{c}");
+    let (c, _) = call(&client, "reuse_list", serde_json::json!({})).await;
+    assert!(text_of(&c).contains("nothing to reuse"), "{c}");
     let all = dir.path().join("flows/all.test.toml");
     let (c, err) = call(
         &client,

@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12073 |
-| Both, kept in context by most clients | 12413 |
+| Tool list (31 tools, as `tools/list` JSON) | 12099 |
+| Both, kept in context by most clients | 12439 |
 
 ## Instructions
 
@@ -303,18 +303,6 @@ Docs, one piece at a time: help() lists topics, help(topic) a topic's items, hel
 
 </details>
 
-### `mixins_list`
-
-Project mixins and the vars each uses. Run one with act: { action = "load_mixin", mixin = "name", vars = { … } }.
-
-<details><summary>As <code>tools/list</code> sends it · 188 chars</summary>
-
-```json
-{"name":"mixins_list","description":"Project mixins and the vars each uses. Run one with act: { action = \"load_mixin\", mixin = \"name\", vars = { … } }.","inputSchema":{"type":"object"}}
-```
-
-</details>
-
 ### `options_set`
 
 Set draft [flow.options] keys, e.g. step_timeout, app_lifecycle, max_runtime, record, coverage; help("flow", "flow/options") lists all. Unknown key or wrong type refused.
@@ -345,6 +333,18 @@ What a selector matches, without acting: each visible match, which one act picks
 
 ```json
 {"name":"probe","description":"What a selector matches, without acting: each visible match, which one act picks, each anchor; on a miss, which clause removed the candidates. Never fails.","inputSchema":{"properties":{"format":{"description":"\"toon\" (default) or \"json\".","type":"string"},"selector":{"description":"{ on_text = \"Sign in\" }; a whole step works too.","type":"string"},"timeout_ms":{"description":"Poll this long while nothing matches. Default 0.","minimum":0,"type":"integer"}},"required":["selector"],"type":"object"}}
+```
+
+</details>
+
+### `reuse_list`
+
+Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read.
+
+<details><summary>As <code>tools/list</code> sends it · 214 chars</summary>
+
+```json
+{"name":"reuse_list","description":"Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read.","inputSchema":{"type":"object"}}
 ```
 
 </details>
