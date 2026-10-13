@@ -386,10 +386,10 @@ fn failure_code(item: &str) -> Option<String> {
 #[cfg(test)]
 pub fn context_section() -> String {
     let mut out = String::from(
-        "## Help\n\nEach call that `help` answers, linked to its text: the section of the docs \
-         page, or the `.llm.md` file that replaces it for the LLM. An item with items of its own \
-         answers its text, then the list of them (+ items). The size is the whole answer's, in \
-         characters.\n\n```text\n",
+        "## Help\n\nEach call that `help` answers, linked to the part in `docs/src` that it \
+         serves: the part, or the `.llm.md` file that replaces it for the LLM. An item with items \
+         of its own answers its text, then a list of them that `help` builds from their headings \
+         (+ items). The size is the whole answer's, in characters.\n\n```text\n",
     );
     out.push_str(&index());
     out.push_str("```\n");
@@ -412,11 +412,12 @@ pub fn context_section() -> String {
                 .unwrap_or_default()
                 .trim_start_matches('#')
                 .trim();
-            let target = if p.source.ends_with(".llm.md") {
-                format!("{} (LLM text)]({})", heading, p.source)
+            let llm = if p.source.ends_with(".llm.md") {
+                " (LLM text)"
             } else {
-                format!("{heading}]({}#{})", p.page, p.anchor)
+                ""
             };
+            let target = format!("{heading}{llm}]({})", p.source);
             let items = if children(p.address).next().is_some() {
                 " + items"
             } else {

@@ -290,7 +290,7 @@ Wait for the operation that answered pending; return its result (or the last res
 
 ## Help
 
-Each call that `help` answers, linked to its text: the section of the docs page, or the `.llm.md` file that replaces it for the LLM. An item with items of its own answers its text, then the list of them (+ items). The size is the whole answer's, in characters.
+Each call that `help` answers, linked to the part in `docs/src` that it serves: the part, or the `.llm.md` file that replaces it for the LLM. An item with items of its own answers its text, then a list of them that `help` builds from their headings (+ items). The size is the whole answer's, in characters.
 
 ```text
 help(topic) lists a topic's items; help(topic, item) gives one item.
@@ -306,150 +306,150 @@ Topics:
 ### act
 
 - `help("act")` · [Actions (LLM text)](src/actions-reference/00-intro.llm.md) + items · 3005
-- `help("act", "interaction")` · [Interaction](actions-reference.md#interaction) + items · 449
-  - `help("act", "tap")` · [`tap` — Tap an element](actions-reference.md#tap--tap-an-element) · 437
-  - `help("act", "double_tap")` · [`double_tap` — Double-tap an element](actions-reference.md#double_tap--double-tap-an-element) · 175
-  - `help("act", "type")` · [`type` — Type text into an element](actions-reference.md#type--type-text-into-an-element) · 489
-  - `help("act", "backspace")` · [`backspace` — Delete characters](actions-reference.md#backspace--delete-characters) · 486
-  - `help("act", "clear_text")` · [`clear_text` — Empty a field](actions-reference.md#clear_text--empty-a-field) · 802
-  - `help("act", "long_press")` · [`long_press` — Long press an element](actions-reference.md#long_press--long-press-an-element) · 269
-  - `help("act", "swipe")` · [`swipe` — Swipe gesture](actions-reference.md#swipe--swipe-gesture) · 1473
-  - `help("act", "scroll")` · [`scroll` — Scroll until element found](actions-reference.md#scroll--scroll-until-element-found) · 771
-  - `help("act", "pinch")` · [`pinch` — Pinch zoom gesture](actions-reference.md#pinch--pinch-zoom-gesture) · 742
-  - `help("act", "gesture")` · [`gesture` — Multi-touch gesture](actions-reference.md#gesture--multi-touch-gesture) · 806
-  - `help("act", "rotate")` · [`rotate` — Rotate gesture](actions-reference.md#rotate--rotate-gesture) · 860
-  - `help("act", "hide_keyboard")` · [`hide_keyboard` — Dismiss keyboard](actions-reference.md#hide_keyboard--dismiss-keyboard) · 463
-- `help("act", "assertions")` · [Assertions](actions-reference.md#assertions) + items · 282
-  - `help("act", "assert_visible")` · [`assert_visible` — Wait for / assert element exists](actions-reference.md#assert_visible--wait-for--assert-element-exists) · 702
-  - `help("act", "assert_not_visible")` · [`assert_not_visible` — Wait for / assert element absent](actions-reference.md#assert_not_visible--wait-for--assert-element-absent) · 433
-  - `help("act", "assert_alert")` · [`assert_alert` — Assert alert is displayed](actions-reference.md#assert_alert--assert-alert-is-displayed) · 228
-- `help("act", "reading")` · [Reading](actions-reference.md#reading) + items · 106
-  - `help("act", "read")` · [`read` — Read element text](actions-reference.md#read--read-element-text) · 342
-- `help("act", "app-lifecycle")` · [App Lifecycle](actions-reference.md#app-lifecycle) + items · 228
-  - `help("act", "launch")` · [`launch` — Launch or foreground an app](actions-reference.md#launch--launch-or-foreground-an-app) · 898
+- `help("act", "interaction")` · [Interaction](src/actions-reference/10-interaction/00-intro.md) + items · 449
+  - `help("act", "tap")` · [`tap` — Tap an element](src/actions-reference/10-interaction/10-tap.md) · 437
+  - `help("act", "double_tap")` · [`double_tap` — Double-tap an element](src/actions-reference/10-interaction/20-double_tap.md) · 175
+  - `help("act", "type")` · [`type` — Type text into an element](src/actions-reference/10-interaction/30-type.md) · 489
+  - `help("act", "backspace")` · [`backspace` — Delete characters](src/actions-reference/10-interaction/40-backspace.md) · 486
+  - `help("act", "clear_text")` · [`clear_text` — Empty a field](src/actions-reference/10-interaction/50-clear_text.md) · 802
+  - `help("act", "long_press")` · [`long_press` — Long press an element](src/actions-reference/10-interaction/60-long_press.md) · 269
+  - `help("act", "swipe")` · [`swipe` — Swipe gesture](src/actions-reference/10-interaction/70-swipe.md) · 1473
+  - `help("act", "scroll")` · [`scroll` — Scroll until element found](src/actions-reference/10-interaction/80-scroll.md) · 771
+  - `help("act", "pinch")` · [`pinch` — Pinch zoom gesture](src/actions-reference/10-interaction/90-pinch.md) · 742
+  - `help("act", "gesture")` · [`gesture` — Multi-touch gesture](src/actions-reference/10-interaction/100-gesture.md) · 806
+  - `help("act", "rotate")` · [`rotate` — Rotate gesture](src/actions-reference/10-interaction/110-rotate.md) · 860
+  - `help("act", "hide_keyboard")` · [`hide_keyboard` — Dismiss keyboard](src/actions-reference/10-interaction/120-hide_keyboard.md) · 463
+- `help("act", "assertions")` · [Assertions](src/actions-reference/20-assertions/00-intro.md) + items · 282
+  - `help("act", "assert_visible")` · [`assert_visible` — Wait for / assert element exists](src/actions-reference/20-assertions/10-assert_visible.md) · 702
+  - `help("act", "assert_not_visible")` · [`assert_not_visible` — Wait for / assert element absent](src/actions-reference/20-assertions/20-assert_not_visible.md) · 433
+  - `help("act", "assert_alert")` · [`assert_alert` — Assert alert is displayed](src/actions-reference/20-assertions/30-assert_alert.md) · 228
+- `help("act", "reading")` · [Reading](src/actions-reference/30-reading/00-intro.md) + items · 106
+  - `help("act", "read")` · [`read` — Read element text](src/actions-reference/30-reading/10-read.md) · 342
+- `help("act", "app-lifecycle")` · [App Lifecycle](src/actions-reference/40-app-lifecycle/00-intro.md) + items · 228
+  - `help("act", "launch")` · [`launch` — Launch or foreground an app](src/actions-reference/40-app-lifecycle/10-launch.md) · 898
   - `help("act", "app-permissions")` · [App permissions (LLM text)](src/actions-reference/40-app-lifecycle/20-app-permissions.llm.md) · 1620
-  - `help("act", "stop")` · [`stop` — Terminate an app](actions-reference.md#stop--terminate-an-app) · 141
-  - `help("act", "clear_data")` · [`clear_data` — Clear app data](actions-reference.md#clear_data--clear-app-data) · 652
-- `help("act", "device-controls")` · [Device Controls](actions-reference.md#device-controls) + items · 209
-  - `help("act", "set_dark_mode")` · [`set_dark_mode` — Set dark mode](actions-reference.md#set_dark_mode--set-dark-mode) · 341
-  - `help("act", "set_location")` · [`set_location` — Set GPS coordinates](actions-reference.md#set_location--set-gps-coordinates) · 308
-  - `help("act", "press")` · [`press` — Press hardware button](actions-reference.md#press--press-hardware-button) · 477
-- `help("act", "capture")` · [Capture](actions-reference.md#capture) + items · 215
-  - `help("act", "screenshot")` · [`screenshot` — Take screenshot](actions-reference.md#screenshot--take-screenshot) · 296
-  - `help("act", "recording")` · [Screen recording — per-block via `record = true`](actions-reference.md#screen-recording--per-block-via-record--true) · 545
-  - `help("act", "add_media")` · [`add_media` — Push media to device](actions-reference.md#add_media--push-media-to-device) · 535
-- `help("act", "alerts")` · [Alerts](actions-reference.md#alerts) + items · 152
-  - `help("act", "accept_alert")` · [`accept_alert` — Accept dialog](actions-reference.md#accept_alert--accept-dialog) · 411
-  - `help("act", "dismiss_alert")` · [`dismiss_alert` — Dismiss dialog](actions-reference.md#dismiss_alert--dismiss-dialog) · 362
-- `help("act", "external")` · [External](actions-reference.md#external) + items · 435
-  - `help("act", "open_link")` · [`open_link` — Open URL or deep link](actions-reference.md#open_link--open-url-or-deep-link) · 201
+  - `help("act", "stop")` · [`stop` — Terminate an app](src/actions-reference/40-app-lifecycle/30-stop.md) · 141
+  - `help("act", "clear_data")` · [`clear_data` — Clear app data](src/actions-reference/40-app-lifecycle/40-clear_data.md) · 652
+- `help("act", "device-controls")` · [Device Controls](src/actions-reference/50-device-controls/00-intro.md) + items · 209
+  - `help("act", "set_dark_mode")` · [`set_dark_mode` — Set dark mode](src/actions-reference/50-device-controls/10-set_dark_mode.md) · 341
+  - `help("act", "set_location")` · [`set_location` — Set GPS coordinates](src/actions-reference/50-device-controls/20-set_location.md) · 308
+  - `help("act", "press")` · [`press` — Press hardware button](src/actions-reference/50-device-controls/30-press.md) · 477
+- `help("act", "capture")` · [Capture](src/actions-reference/60-capture/00-intro.md) + items · 215
+  - `help("act", "screenshot")` · [`screenshot` — Take screenshot](src/actions-reference/60-capture/10-screenshot.md) · 296
+  - `help("act", "recording")` · [Screen recording — per-block via `record = true`](src/actions-reference/60-capture/20-recording.md) · 545
+  - `help("act", "add_media")` · [`add_media` — Push media to device](src/actions-reference/60-capture/30-add_media.md) · 535
+- `help("act", "alerts")` · [Alerts](src/actions-reference/70-alerts/00-intro.md) + items · 152
+  - `help("act", "accept_alert")` · [`accept_alert` — Accept dialog](src/actions-reference/70-alerts/10-accept_alert.md) · 411
+  - `help("act", "dismiss_alert")` · [`dismiss_alert` — Dismiss dialog](src/actions-reference/70-alerts/20-dismiss_alert.md) · 362
+- `help("act", "external")` · [External](src/actions-reference/80-external/00-intro.md) + items · 435
+  - `help("act", "open_link")` · [`open_link` — Open URL or deep link](src/actions-reference/80-external/10-open_link.md) · 201
   - `help("act", "push_notification")` · [`push_notification` — Deliver a push to the app under test (LLM text)](src/actions-reference/80-external/20-push_notification.llm.md) · 948
-  - `help("act", "bash")` · [`bash` — Run shell command](actions-reference.md#bash--run-shell-command) · 310
-  - `help("act", "run")` · [`run` — Run project script](actions-reference.md#run--run-project-script) · 635
-  - `help("act", "create_inbox")` · [`create_inbox` — Provision a disposable email inbox](actions-reference.md#create_inbox--provision-a-disposable-email-inbox) · 1329
-  - `help("act", "await_email")` · [`await_email` — Poll IMAP inbox](actions-reference.md#await_email--poll-imap-inbox) · 1314
-  - `help("act", "load_fixture")` · [`load_fixture` — Load fixture data](actions-reference.md#load_fixture--load-fixture-data) · 543
-  - `help("act", "load_mixin")` · [`load_mixin` — Inline a reusable step sequence](actions-reference.md#load_mixin--inline-a-reusable-step-sequence) · 707
-  - `help("act", "http")` · [`get_http`, `post_http`, `put_http`, `patch_http`, `delete_http` — HTTP requests](actions-reference.md#get_http-post_http-put_http-patch_http-delete_http--http-requests) · 668
+  - `help("act", "bash")` · [`bash` — Run shell command](src/actions-reference/80-external/30-bash.md) · 310
+  - `help("act", "run")` · [`run` — Run project script](src/actions-reference/80-external/40-run.md) · 635
+  - `help("act", "create_inbox")` · [`create_inbox` — Provision a disposable email inbox](src/actions-reference/80-external/50-create_inbox.md) · 1329
+  - `help("act", "await_email")` · [`await_email` — Poll IMAP inbox](src/actions-reference/80-external/60-await_email.md) · 1314
+  - `help("act", "load_fixture")` · [`load_fixture` — Load fixture data](src/actions-reference/80-external/70-load_fixture.md) · 543
+  - `help("act", "load_mixin")` · [`load_mixin` — Inline a reusable step sequence](src/actions-reference/80-external/80-load_mixin.md) · 707
+  - `help("act", "http")` · [`get_http`, `post_http`, `put_http`, `patch_http`, `delete_http` — HTTP requests](src/actions-reference/80-external/90-http.md) · 668
 - `help("act", "browser")` · [Browser (LLM text)](src/actions-reference/90-browser/00-intro.llm.md) + items · 2227
   - `help("act", "browse_navigate")` · [`browse_navigate` — Load a URL (LLM text)](src/actions-reference/90-browser/10-browse_navigate.llm.md) · 805
-  - `help("act", "browse_tap")` · [`browse_tap` — Click an element](actions-reference.md#browse_tap--click-an-element) · 209
-  - `help("act", "browse_type")` · [`browse_type` — Type into a field](actions-reference.md#browse_type--type-into-a-field) · 400
-  - `help("act", "browse_read")` · [`browse_read` — Read text or an attribute into a variable](actions-reference.md#browse_read--read-text-or-an-attribute-into-a-variable) · 590
-  - `help("act", "browse_screenshot")` · [`browse_screenshot` — Capture the tab](actions-reference.md#browse_screenshot--capture-the-tab) · 310
-  - `help("act", "browse_assert_exists")` · [`browse_assert_exists` — The element is in the DOM](actions-reference.md#browse_assert_exists--the-element-is-in-the-dom) · 239
-  - `help("act", "browse_assert_not_exists")` · [`browse_assert_not_exists` — The element is not in the DOM](actions-reference.md#browse_assert_not_exists--the-element-is-not-in-the-dom) · 287
-  - `help("act", "browse_assert_text")` · [`browse_assert_text` — The element says what you expect](actions-reference.md#browse_assert_text--the-element-says-what-you-expect) · 795
-  - `help("act", "browse_wait_exists")` · [`browse_wait_exists` — Wait for an element to appear](actions-reference.md#browse_wait_exists--wait-for-an-element-to-appear) · 331
-  - `help("act", "browse_wait_not_exists")` · [`browse_wait_not_exists` — Wait for an element to disappear](actions-reference.md#browse_wait_not_exists--wait-for-an-element-to-disappear) · 317
-  - `help("act", "browse_scroll_by")` · [`browse_scroll_by` — Scroll by a distance](actions-reference.md#browse_scroll_by--scroll-by-a-distance) · 586
-  - `help("act", "browse_scroll_to")` · [`browse_scroll_to` — Bring an element into view](actions-reference.md#browse_scroll_to--bring-an-element-into-view) · 206
-  - `help("act", "browse_select")` · [`browse_select` — Choose an option in a `<select>`](actions-reference.md#browse_select--choose-an-option-in-a-select) · 536
+  - `help("act", "browse_tap")` · [`browse_tap` — Click an element](src/actions-reference/90-browser/20-browse_tap.md) · 209
+  - `help("act", "browse_type")` · [`browse_type` — Type into a field](src/actions-reference/90-browser/30-browse_type.md) · 400
+  - `help("act", "browse_read")` · [`browse_read` — Read text or an attribute into a variable](src/actions-reference/90-browser/40-browse_read.md) · 590
+  - `help("act", "browse_screenshot")` · [`browse_screenshot` — Capture the tab](src/actions-reference/90-browser/50-browse_screenshot.md) · 310
+  - `help("act", "browse_assert_exists")` · [`browse_assert_exists` — The element is in the DOM](src/actions-reference/90-browser/60-browse_assert_exists.md) · 239
+  - `help("act", "browse_assert_not_exists")` · [`browse_assert_not_exists` — The element is not in the DOM](src/actions-reference/90-browser/70-browse_assert_not_exists.md) · 287
+  - `help("act", "browse_assert_text")` · [`browse_assert_text` — The element says what you expect](src/actions-reference/90-browser/80-browse_assert_text.md) · 795
+  - `help("act", "browse_wait_exists")` · [`browse_wait_exists` — Wait for an element to appear](src/actions-reference/90-browser/90-browse_wait_exists.md) · 331
+  - `help("act", "browse_wait_not_exists")` · [`browse_wait_not_exists` — Wait for an element to disappear](src/actions-reference/90-browser/100-browse_wait_not_exists.md) · 317
+  - `help("act", "browse_scroll_by")` · [`browse_scroll_by` — Scroll by a distance](src/actions-reference/90-browser/110-browse_scroll_by.md) · 586
+  - `help("act", "browse_scroll_to")` · [`browse_scroll_to` — Bring an element into view](src/actions-reference/90-browser/120-browse_scroll_to.md) · 206
+  - `help("act", "browse_select")` · [`browse_select` — Choose an option in a `<select>`](src/actions-reference/90-browser/130-browse_select.md) · 536
   - `help("act", "browse_execute_js")` · [`browse_execute_js` — Run JavaScript in the page (LLM text)](src/actions-reference/90-browser/140-browse_execute_js.llm.md) · 831
-  - `help("act", "browse_mcp_list_tools")` · [`browse_mcp_list_tools` — List the page's WebMCP tools](actions-reference.md#browse_mcp_list_tools--list-the-pages-webmcp-tools) · 417
-  - `help("act", "browse_mcp_call")` · [`browse_mcp_call` — Call a WebMCP tool](actions-reference.md#browse_mcp_call--call-a-webmcp-tool) · 858
-  - `help("act", "browse_cookies")` · [`browse_set_cookie` / `browse_get_cookie` — Cookies](actions-reference.md#browse_set_cookie--browse_get_cookie--cookies) · 732
-  - `help("act", "browse_local_storage")` · [`browse_set_local_storage` / `browse_get_local_storage` — Local storage](actions-reference.md#browse_set_local_storage--browse_get_local_storage--local-storage) · 647
-  - `help("act", "browse_session_storage")` · [`browse_set_session_storage` / `browse_get_session_storage` — Session storage](actions-reference.md#browse_set_session_storage--browse_get_session_storage--session-storage) · 302
-  - `help("act", "browse_close")` · [`browse_close` — Close a tab early](actions-reference.md#browse_close--close-a-tab-early) · 206
-- `help("act", "flow-control")` · [Flow Control](actions-reference.md#flow-control) + items · 104
-  - `help("act", "fail")` · [`fail` — Fail the flow immediately](actions-reference.md#fail--fail-the-flow-immediately) · 455
+  - `help("act", "browse_mcp_list_tools")` · [`browse_mcp_list_tools` — List the page's WebMCP tools](src/actions-reference/90-browser/150-browse_mcp_list_tools.md) · 417
+  - `help("act", "browse_mcp_call")` · [`browse_mcp_call` — Call a WebMCP tool](src/actions-reference/90-browser/160-browse_mcp_call.md) · 858
+  - `help("act", "browse_cookies")` · [`browse_set_cookie` / `browse_get_cookie` — Cookies](src/actions-reference/90-browser/170-browse_cookies.md) · 732
+  - `help("act", "browse_local_storage")` · [`browse_set_local_storage` / `browse_get_local_storage` — Local storage](src/actions-reference/90-browser/180-browse_local_storage.md) · 647
+  - `help("act", "browse_session_storage")` · [`browse_set_session_storage` / `browse_get_session_storage` — Session storage](src/actions-reference/90-browser/190-browse_session_storage.md) · 302
+  - `help("act", "browse_close")` · [`browse_close` — Close a tab early](src/actions-reference/90-browser/200-browse_close.md) · 206
+- `help("act", "flow-control")` · [Flow Control](src/actions-reference/100-flow-control/00-intro.md) + items · 104
+  - `help("act", "fail")` · [`fail` — Fail the flow immediately](src/actions-reference/100-flow-control/10-fail.md) · 455
 
 ### selectors
 
-- `help("selectors")` · [Selectors](selectors.md#selectors) + items · 889
-- `help("selectors", "two-syntaxes")` · [Two syntaxes](selectors.md#two-syntaxes) · 359
-- `help("selectors", "core")` · [Core selectors](selectors.md#core-selectors) + items · 1116
-  - `help("selectors", "prefer-text")` · [Prefer visible `text`; use `accessibility_label` sparingly](selectors.md#prefer-visible-text-use-accessibility_label-sparingly) · 664
-- `help("selectors", "state-filters")` · [State filters](selectors.md#state-filters) · 296
-- `help("selectors", "traits")` · [Traits](selectors.md#traits) · 579
-- `help("selectors", "relational")` · [Relational (positional) selectors](selectors.md#relational-positional-selectors) · 1163
-- `help("selectors", "containment")` · [Geometric containment: `contains` / `inside`](selectors.md#geometric-containment-contains--inside) + items · 894
-  - `help("selectors", "min_matches")` · [`min_matches` — the container of *repeated* items](selectors.md#min_matches--the-container-of-repeated-items) · 1142
+- `help("selectors")` · [Selectors](src/selectors/00-intro.md) + items · 889
+- `help("selectors", "two-syntaxes")` · [Two syntaxes](src/selectors/10-two-syntaxes.md) · 359
+- `help("selectors", "core")` · [Core selectors](src/selectors/20-core/00-intro.md) + items · 1116
+  - `help("selectors", "prefer-text")` · [Prefer visible `text`; use `accessibility_label` sparingly](src/selectors/20-core/10-prefer-text.md) · 664
+- `help("selectors", "state-filters")` · [State filters](src/selectors/30-state-filters.md) · 296
+- `help("selectors", "traits")` · [Traits](src/selectors/40-traits.md) · 579
+- `help("selectors", "relational")` · [Relational (positional) selectors](src/selectors/50-relational.md) · 1163
+- `help("selectors", "containment")` · [Geometric containment: `contains` / `inside`](src/selectors/60-containment/00-intro.md) + items · 894
+  - `help("selectors", "min_matches")` · [`min_matches` — the container of *repeated* items](src/selectors/60-containment/10-min_matches.md) · 1142
 - `help("selectors", "chaining")` · [Nesting and chaining (LLM text)](src/selectors/70-chaining.llm.md) · 648
-- `help("selectors", "occlusion")` · [Occlusion-aware tapping](selectors.md#occlusion-aware-tapping) · 1045
-- `help("selectors", "within")` · [`within` (scoping a scroll)](selectors.md#within-scoping-a-scroll) · 700
+- `help("selectors", "occlusion")` · [Occlusion-aware tapping](src/selectors/80-occlusion.md) · 1045
+- `help("selectors", "within")` · [`within` (scoping a scroll)](src/selectors/90-within.md) · 700
 - `help("selectors", "canvas")` · [Canvas-rendered UI (Compose, Compose Multiplatform, Flutter) (LLM text)](src/selectors/100-canvas/00-intro.llm.md) + items · 2155
-  - `help("selectors", "version-floors")` · [Version floors](selectors.md#version-floors) · 201
-  - `help("selectors", "annotations")` · [Which annotation reaches golem](selectors.md#which-annotation-reaches-golem) · 1264
-  - `help("selectors", "element-types")` · [Element types](selectors.md#element-types) · 1086
-  - `help("selectors", "bounds")` · [Bounds and visibility](selectors.md#bounds-and-visibility) · 1010
-  - `help("selectors", "merged-semantics")` · [Merged semantics](selectors.md#merged-semantics) · 1250
-  - `help("selectors", "flutter")` · [Flutter](selectors.md#flutter) · 164
+  - `help("selectors", "version-floors")` · [Version floors](src/selectors/100-canvas/10-version-floors.md) · 201
+  - `help("selectors", "annotations")` · [Which annotation reaches golem](src/selectors/100-canvas/20-annotations.md) · 1264
+  - `help("selectors", "element-types")` · [Element types](src/selectors/100-canvas/30-element-types.md) · 1086
+  - `help("selectors", "bounds")` · [Bounds and visibility](src/selectors/100-canvas/40-bounds.md) · 1010
+  - `help("selectors", "merged-semantics")` · [Merged semantics](src/selectors/100-canvas/50-merged-semantics.md) · 1250
+  - `help("selectors", "flutter")` · [Flutter](src/selectors/100-canvas/60-flutter.md) · 164
 
 ### flow
 
-- `help("flow")` · [Test Structure](test-structure.md#test-structure) + items · 730
-- `help("flow", "flow")` · [Flow](test-structure.md#flow) + items · 1268
-  - `help("flow", "launch-permissions")` · [Launch-time permissions](test-structure.md#launch-time-permissions) · 827
-  - `help("flow", "flow/options")` · [Flow Options](test-structure.md#flow-options) · 1984
-  - `help("flow", "accessibility-audit")` · [Accessibility Audit](test-structure.md#accessibility-audit) · 602
-  - `help("flow", "performance-monitoring")` · [Performance Monitoring](test-structure.md#performance-monitoring) · 609
-- `help("flow", "block")` · [Block](test-structure.md#block) + items · 629
-  - `help("flow", "platform")` · [Platform-Specific Blocks](test-structure.md#platform-specific-blocks) · 663
-  - `help("flow", "branching")` · [Branching](test-structure.md#branching) · 1292
-  - `help("flow", "next")` · [Block `next`](test-structure.md#block-next) · 334
-- `help("flow", "step")` · [Step](test-structure.md#step) + items · 488
-  - `help("flow", "selectors")` · [Selectors](test-structure.md#selectors) · 675
-  - `help("flow", "step/options")` · [Step Options](test-structure.md#step-options) · 851
-  - `help("flow", "timeout-multipliers")` · [Timeout Multipliers](test-structure.md#timeout-multipliers) · 1251
+- `help("flow")` · [Test Structure](src/test-structure/00-intro.md) + items · 730
+- `help("flow", "flow")` · [Flow](src/test-structure/10-flow/00-intro.md) + items · 1268
+  - `help("flow", "launch-permissions")` · [Launch-time permissions](src/test-structure/10-flow/05-launch-permissions.md) · 827
+  - `help("flow", "flow/options")` · [Flow Options](src/test-structure/10-flow/10-options.md) · 1984
+  - `help("flow", "accessibility-audit")` · [Accessibility Audit](src/test-structure/10-flow/20-accessibility-audit.md) · 602
+  - `help("flow", "performance-monitoring")` · [Performance Monitoring](src/test-structure/10-flow/30-performance-monitoring.md) · 609
+- `help("flow", "block")` · [Block](src/test-structure/20-block/00-intro.md) + items · 629
+  - `help("flow", "platform")` · [Platform-Specific Blocks](src/test-structure/20-block/10-platform.md) · 663
+  - `help("flow", "branching")` · [Branching](src/test-structure/20-block/20-branching.md) · 1292
+  - `help("flow", "next")` · [Block `next`](src/test-structure/20-block/30-next.md) · 334
+- `help("flow", "step")` · [Step](src/test-structure/30-step/00-intro.md) + items · 488
+  - `help("flow", "selectors")` · [Selectors](src/test-structure/30-step/10-selectors.md) · 675
+  - `help("flow", "step/options")` · [Step Options](src/test-structure/30-step/20-options.md) · 851
+  - `help("flow", "timeout-multipliers")` · [Timeout Multipliers](src/test-structure/30-step/30-timeout-multipliers.md) · 1251
 - `help("flow", "subflow")` · [Subflow (LLM text)](src/test-structure/40-subflow.llm.md) · 1083
-- `help("flow", "reuse")` · [Reuse: Subflow vs Mixin vs Fixture](test-structure.md#reuse-subflow-vs-mixin-vs-fixture) · 1011
-- `help("flow", "lifecycle")` · [Lifecycle: Setup & Teardown](test-structure.md#lifecycle-setup--teardown) · 1037
-- `help("flow", "teardown")` · [Teardown](test-structure.md#teardown) · 641
-- `help("flow", "data-driven")` · [Data-Driven Tests](test-structure.md#data-driven-tests) · 1050
-- `help("flow", "variables")` · [Variables](test-structure.md#variables) + items · 602
-  - `help("flow", "built-in")` · [Built-in variables](test-structure.md#built-in-variables) · 861
-- `help("flow", "fake-data")` · [Fake Data Generators](test-structure.md#fake-data-generators) · 471
-- `help("flow", "multi-app")` · [Multi-App Flows](test-structure.md#multi-app-flows) · 537
+- `help("flow", "reuse")` · [Reuse: Subflow vs Mixin vs Fixture](src/test-structure/50-reuse.md) · 1011
+- `help("flow", "lifecycle")` · [Lifecycle: Setup & Teardown](src/test-structure/60-lifecycle.md) · 1037
+- `help("flow", "teardown")` · [Teardown](src/test-structure/70-teardown.md) · 641
+- `help("flow", "data-driven")` · [Data-Driven Tests](src/test-structure/80-data-driven.md) · 1050
+- `help("flow", "variables")` · [Variables](src/test-structure/90-variables/00-intro.md) + items · 602
+  - `help("flow", "built-in")` · [Built-in variables](src/test-structure/90-variables/10-built-in.md) · 861
+- `help("flow", "fake-data")` · [Fake Data Generators](src/test-structure/100-fake-data.md) · 471
+- `help("flow", "multi-app")` · [Multi-App Flows](src/test-structure/110-multi-app.md) · 537
 - `help("flow", "devices")` · [Devices (LLM text)](src/test-structure/120-devices/00-intro.llm.md) + items · 1397
-  - `help("flow", "coverage")` · [Coverage Strategies](test-structure.md#coverage-strategies) · 2379
-  - `help("flow", "hardware")` · [Hardware Axis (virtual / real)](test-structure.md#hardware-axis-virtual--real) · 1578
-  - `help("flow", "pinning")` · [Pinning a Specific Device by Name](test-structure.md#pinning-a-specific-device-by-name) · 387
-  - `help("flow", "auto-boot")` · [Auto-Boot Behaviour](test-structure.md#auto-boot-behaviour) · 402
-- `help("flow", "project-config")` · [Project config (`golem.toml`)](test-structure.md#project-config-golemtoml) · 1544
+  - `help("flow", "coverage")` · [Coverage Strategies](src/test-structure/120-devices/10-coverage.md) · 2379
+  - `help("flow", "hardware")` · [Hardware Axis (virtual / real)](src/test-structure/120-devices/20-hardware.md) · 1578
+  - `help("flow", "pinning")` · [Pinning a Specific Device by Name](src/test-structure/120-devices/30-pinning.md) · 387
+  - `help("flow", "auto-boot")` · [Auto-Boot Behaviour](src/test-structure/120-devices/40-auto-boot.md) · 402
+- `help("flow", "project-config")` · [Project config (`golem.toml`)](src/test-structure/130-project-config.md) · 1544
 
 ### fake
 
-- `help("fake")` · [Fake Data Generators](fake-data.md#fake-data-generators) + items · 1159
+- `help("fake")` · [Fake Data Generators](src/fake-data/00-intro.md) + items · 1159
 - `help("fake", "seeds")` · [Determinism and seeds (LLM text)](src/fake-data/10-seeds.llm.md) · 576
-- `help("fake", "all-generators")` · [All generators](fake-data.md#all-generators) · 1088
-- `help("fake", "simple-generators")` · [Simple generators](fake-data.md#simple-generators) + items · 224
-  - `help("fake", "email")` · [email](fake-data.md#email) · 825
-  - `help("fake", "password")` · [password](fake-data.md#password) · 213
-  - `help("fake", "uuid")` · [uuid](fake-data.md#uuid) · 94
-  - `help("fake", "number")` · [number](fake-data.md#number) · 163
-  - `help("fake", "one_of")` · [one_of](fake-data.md#one_of) · 319
-  - `help("fake", "sentence")` · [sentence](fake-data.md#sentence) · 820
-  - `help("fake", "phone")` · [phone](fake-data.md#phone) · 572
-- `help("fake", "structured-generators")` · [Structured generators](fake-data.md#structured-generators) + items · 190
+- `help("fake", "all-generators")` · [All generators](src/fake-data/20-all-generators.md) · 1088
+- `help("fake", "simple-generators")` · [Simple generators](src/fake-data/30-simple-generators/00-intro.md) + items · 224
+  - `help("fake", "email")` · [email](src/fake-data/30-simple-generators/10-email.md) · 825
+  - `help("fake", "password")` · [password](src/fake-data/30-simple-generators/20-password.md) · 213
+  - `help("fake", "uuid")` · [uuid](src/fake-data/30-simple-generators/30-uuid.md) · 94
+  - `help("fake", "number")` · [number](src/fake-data/30-simple-generators/40-number.md) · 163
+  - `help("fake", "one_of")` · [one_of](src/fake-data/30-simple-generators/50-one_of.md) · 319
+  - `help("fake", "sentence")` · [sentence](src/fake-data/30-simple-generators/60-sentence.md) · 820
+  - `help("fake", "phone")` · [phone](src/fake-data/30-simple-generators/70-phone.md) · 572
+- `help("fake", "structured-generators")` · [Structured generators](src/fake-data/40-structured-generators/00-intro.md) + items · 190
   - `help("fake", "person")` · [person (LLM text)](src/fake-data/40-structured-generators/10-person.llm.md) · 2749
-  - `help("fake", "address")` · [address](fake-data.md#address) · 2028
-  - `help("fake", "credit_card")` · [credit_card](fake-data.md#credit_card) · 1719
-  - `help("fake", "timestamp")` · [timestamp](fake-data.md#timestamp) · 1351
-- `help("fake", "cross-references")` · [Cross-references](fake-data.md#cross-references) · 246
+  - `help("fake", "address")` · [address](src/fake-data/40-structured-generators/20-address.md) · 2028
+  - `help("fake", "credit_card")` · [credit_card](src/fake-data/40-structured-generators/30-credit_card.md) · 1719
+  - `help("fake", "timestamp")` · [timestamp](src/fake-data/40-structured-generators/40-timestamp.md) · 1351
+- `help("fake", "cross-references")` · [Cross-references](src/fake-data/50-cross-references.md) · 246
 
 ### codes
 
-- `help("codes")` · [Error Codes (LLM text)](src/error-codes/00-intro.llm.md) + items · 693
-- `help("codes", "registry")` · [Registry](error-codes.md#registry) · 5215
+- `help("codes")` · [Error Codes (LLM text)](src/error-codes/00-intro.llm.md) + items · 762
+- `help("codes", "registry")` · [Registry](src/error-codes/10-registry.md) · 5215
