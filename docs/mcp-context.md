@@ -801,7 +801,7 @@ Source: [src/actions-reference/10-interaction/70-swipe.md](src/actions-reference
 
 </details>
 
-<details><summary><code>help("act", "scroll")</code> · scroll — Scroll until element found · 771 chars</summary>
+<details><summary><code>help("act", "scroll")</code> · scroll — Scroll until element found · 818 chars</summary>
 
 Source: [src/actions-reference/10-interaction/80-scroll.md](src/actions-reference/10-interaction/80-scroll.md)
 
@@ -823,13 +823,13 @@ Scrolls the page (or a container) until the target element is visible.
 | `to` | — | Target element: a selector group (alias of `on`), or use the flat `on_*` selectors |
 | `direction` | `"down"` | Scroll direction |
 | `within` | — | Constrain scrolling to an element's bounds |
-| `max_scrolls` | — | Limit iterations |
+| `scroll_timeout` | — | Stop scrolling after this many ms, within the step `timeout` |
 | `timeout` | 8× `step_timeout` (40 s); 12× (60 s) with `within` | Overall scroll timeout |
 ````
 
 </details>
 
-<details><summary><code>help("act", "pinch")</code> · pinch — Pinch zoom gesture · 742 chars</summary>
+<details><summary><code>help("act", "pinch")</code> · pinch — Pinch zoom gesture · 750 chars</summary>
 
 Source: [src/actions-reference/10-interaction/90-pinch.md](src/actions-reference/10-interaction/90-pinch.md)
 
@@ -839,8 +839,8 @@ Source: [src/actions-reference/10-interaction/90-pinch.md](src/actions-reference
 Two-finger pinch centered on an element or coordinates.
 
 ```toml
-{ action = "pinch", scale = 2.0, duration = 500 }     # Zoom in
-{ action = "pinch", scale = 0.5, duration = 500 }     # Zoom out
+{ action = "pinch", scale = 2.0 }                     # Zoom in
+{ action = "pinch", scale = 0.5, velocity = 2.0 }     # Zoom out, slowly
 { action = "pinch", on_text = "Map", scale = 2.0 }    # Centered on an element
 { action = "pinch", x = "50%", y = 300, scale = 0.5 } # Centered on a point
 ```
@@ -3014,7 +3014,7 @@ Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` 
 
 </details>
 
-<details><summary><code>help("flow", "step/options")</code> · Step Options · 851 chars</summary>
+<details><summary><code>help("flow", "step/options")</code> · Step Options · 933 chars</summary>
 
 Source: [src/test-structure/30-step/20-options.md](src/test-structure/30-step/20-options.md)
 
@@ -3025,7 +3025,7 @@ Source: [src/test-structure/30-step/20-options.md](src/test-structure/30-step/20
 |-------|---------|-------------|
 | `timeout` | per-action | Max wait in ms. Overrides computed default. |
 | `auto_scroll` | `false` | Scroll page to find element |
-| `max_scrolls` | — | Limit scroll attempts |
+| `scroll_timeout` | — | With `scroll` or `auto_scroll`: stop scrolling after this many ms. The step `timeout` still applies. |
 | `within` | — | With `scroll` or `auto_scroll`: scroll only inside the element this selector matches — see `within` (help("selectors", "within")) |
 | `keep_keyboard` | `false` | Leave the soft keyboard up: golem does not dismiss it before a tap or when it hides the target |
 | `if_fail` | `"error"` | `"error"` (fail flow), `"warn"` (log + continue), `"ignore"` (silent continue) |
