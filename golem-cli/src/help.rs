@@ -195,6 +195,16 @@ fn render(address: &str) -> String {
     out.trim_end().to_string() + "\n"
 }
 
+/// How many names the item list under `address` shows on its items'
+/// lines: one per part below each item, or each name its heading gives.
+#[cfg(test)]
+fn nested_names(address: &str) -> usize {
+    children(address)
+        .flat_map(|c| children(c.address))
+        .map(|c| heading_names(c.text).len().max(1))
+        .sum()
+}
+
 /// One line for a part in a list: its heading's summary, and for a part
 /// with parts below it, their names.
 fn summary(p: &HelpPart) -> String {
@@ -389,7 +399,7 @@ pub fn context_section() -> String {
         "## Help\n\nEach call that `help` answers, linked to the part in `docs/src` that it \
          serves: the part, or the `.llm.md` file that replaces it for the LLM. An item with items \
          of its own answers its text, then a list of them that `help` builds from their headings \
-         (+ items). The size is the whole answer's, in characters.\n\n```text\n",
+         (+ items, counted; sub-items are the names on those items' lines). The size is the whole answer's, in characters.\n\n```text\n",
     );
     out.push_str(&index());
     out.push_str("```\n");
@@ -418,10 +428,12 @@ pub fn context_section() -> String {
                 ""
             };
             let target = format!("{heading}{llm}]({})", p.source);
-            let items = if children(p.address).next().is_some() {
-                " + items"
-            } else {
-                ""
+            let count =
+                |n: usize, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
+            let items = match (children(p.address).count(), nested_names(p.address)) {
+                (0, _) => String::new(),
+                (n, 0) => format!(" + {}", count(n, "item")),
+                (n, m) => format!(" + {}, {}", count(n, "item"), count(m, "sub-item")),
             };
             out.push_str(&format!(
                 "{}- `{call}` · [{target}{items} · {}\n",
