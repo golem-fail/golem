@@ -1613,7 +1613,7 @@ password = "staging-password"
 
 </details>
 
-<details><summary><code>help("act", "load_mixin")</code> · load_mixin — Inline a reusable step sequence · 707 chars</summary>
+<details><summary><code>help("act", "load_mixin")</code> · load_mixin — Inline a reusable step sequence · 819 chars</summary>
 
 Source: [src/actions-reference/80-external/80-load_mixin.md](src/actions-reference/80-external/80-load_mixin.md)
 
@@ -1621,7 +1621,8 @@ Source: [src/actions-reference/80-external/80-load_mixin.md](src/actions-referen
 ### `load_mixin` — Inline a reusable step sequence
 
 Inline the steps from a mixin file in `__mixins__/` (a `[[step]]`-only file) into
-the current block. Pass per-call values via `vars`, referenced as `${…}` inside
+the current block or `[[teardown]]`. In an MCP session, `act` runs the mixin's
+steps, and the draft records the `load_mixin` step. Pass per-call values via `vars`, referenced as `${…}` inside
 the mixin. See reuse comparison (help("flow", "reuse")).
 
 ```toml
@@ -3120,7 +3121,7 @@ Cleanup after the flow belongs in Teardown (help("flow", "teardown")).
 
 </details>
 
-<details><summary><code>help("flow", "teardown")</code> · Teardown · 641 chars</summary>
+<details><summary><code>help("flow", "teardown")</code> · Teardown · 763 chars</summary>
 
 Source: [src/test-structure/70-teardown.md](src/test-structure/70-teardown.md)
 
@@ -3136,6 +3137,8 @@ steps = [
   { action = "stop", app = "app" },
 ]
 ```
+
+A teardown step can be a `load_mixin` (help("act", "load_mixin")), for example to share a logout sequence between flows.
 
 Skip teardown with `--no-teardown`.
 ````

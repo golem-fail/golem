@@ -33,3 +33,10 @@ steps = [
   # Verify the app relaunched
   { action = "assert_visible", on_text = "Counter" },
 ]
+
+# A teardown can reuse a mixin too: its steps must run, not warn
+# "Unknown action".
+[[teardown]]
+steps = [
+  { action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "app", wait_element = "Submit" } },
+]

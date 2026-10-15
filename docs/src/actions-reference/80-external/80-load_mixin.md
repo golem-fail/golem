@@ -1,7 +1,8 @@
 ### `load_mixin` — Inline a reusable step sequence
 
 Inline the steps from a mixin file in `__mixins__/` (a `[[step]]`-only file) into
-the current block. Pass per-call values via `vars`, referenced as `${…}` inside
+the current block or `[[teardown]]`. In an MCP session, `act` runs the mixin's
+steps, and the draft records the `load_mixin` step. Pass per-call values via `vars`, referenced as `${…}` inside
 the mixin. See [reuse comparison](test-structure.md#reuse-subflow-vs-mixin-vs-fixture).
 
 ```toml

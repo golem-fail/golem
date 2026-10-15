@@ -318,6 +318,10 @@ fn prepare_flow(
         block.steps = expand_mixins(&block.steps, flow_dir, project_root)
             .with_context(|| format!("expanding mixins in {}", path.display()))?;
     }
+    for teardown in &mut flow.teardown {
+        teardown.steps = expand_mixins(&teardown.steps, flow_dir, project_root)
+            .with_context(|| format!("expanding mixins in the teardown of {}", path.display()))?;
+    }
 
     Ok((flow, profile_notes))
 }
@@ -929,6 +933,42 @@ on_indx = 2
                 .contains("Block 'sub': run_flow file 'gone.test.toml' does not exist"),
             "{err:#}"
         );
+    }
+
+    #[test]
+    fn a_load_mixin_in_the_teardown_expands_into_the_mixin_steps() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("__mixins__")).expect("mixins");
+        std::fs::write(
+            dir.path().join("__mixins__/logout.toml"),
+            "[[step]]\naction = \"tap\"\non_text = \"${button}\"\n\n[[step]]\naction = \"assert_visible\"\non_text = \"Signed out\"\n",
+        )
+        .expect("mixin");
+        let flow = |mixin: &str| {
+            format!(
+                "[flow]\nname = \"t\"\n\n[[block]]\nname = \"main\"\nsteps = [{{ action = \"tap\", on_text = \"Go\" }}]\n\n\
+                 [[teardown]]\nsteps = [{{ action = \"load_mixin\", mixin = \"{mixin}\", vars = {{ button = \"Log out\" }} }}]\n"
+            )
+        };
+        let path = dir.path().join("t.test.toml");
+        let (parsed, _) =
+            prepare_flow(&flow("logout"), &path, &[], None, dir.path(), None).expect("prepare");
+        let steps: Vec<(&str, Option<&str>)> = parsed.teardown[0]
+            .steps
+            .iter()
+            .map(|s| (s.action.as_str(), s.on_text.as_deref()))
+            .collect();
+        assert_eq!(
+            steps,
+            vec![
+                ("tap", Some("Log out")),
+                ("assert_visible", Some("Signed out"))
+            ],
+            "the teardown SHALL run the mixin's steps with its vars"
+        );
+        let err = prepare_flow(&flow("gone"), &path, &[], None, dir.path(), None)
+            .expect_err("a missing mixin SHALL fail before a device boots");
+        assert!(format!("{err:#}").contains("teardown"), "{err:#}");
     }
 
     /// A correct flow must stay silent — a lint that cries wolf on the
