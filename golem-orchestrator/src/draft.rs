@@ -19,7 +19,10 @@ mod edit;
 mod reuse;
 mod setup;
 mod status;
-pub use reuse::{all_mixins, mixins_for, Mixin, MixinMatch, Place};
+pub use reuse::{
+    all_fixtures, all_mixins, fixtures_for, mixins_for, FixtureMatch, FixtureValue, Mixin,
+    MixinMatch, Place,
+};
 pub use status::{StatusCounts, StepStatus, StepsQuery};
 
 /// Where the next recorded step goes: a block, and a position in its steps.

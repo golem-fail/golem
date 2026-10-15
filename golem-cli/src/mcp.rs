@@ -346,6 +346,17 @@ pub struct ExportParams {
     pub overwrite: bool,
     /// From a mixin hint: put a load_mixin step in place of the matching steps.
     pub mixins: Option<Vec<MixinAt>>,
+    /// From a fixture hint: put ${x.key} in place of the value.
+    pub fixtures: Option<Vec<FixtureAt>>,
+}
+
+#[derive(Debug, Deserialize, serde::Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FixtureAt {
+    /// block:step.
+    pub at: String,
+    /// fixture.key
+    pub key: String,
 }
 
 #[derive(Debug, Deserialize, serde::Serialize, JsonSchema)]
@@ -871,7 +882,7 @@ impl GolemMcp {
         let reply = self
             .op(
                 "session_export",
-                serde_json::json!({ "path": p.path, "overwrite": p.overwrite, "mixins": p.mixins }),
+                serde_json::json!({ "path": p.path, "overwrite": p.overwrite, "mixins": p.mixins, "fixtures": p.fixtures }),
             )
             .await?;
         self.render(&reply, false)
