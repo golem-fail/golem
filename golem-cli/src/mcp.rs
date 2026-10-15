@@ -1207,6 +1207,9 @@ impl GolemMcp {
         }
         if let Some(mut note) = crate::session_cmd::note_text(reply) {
             if r["opened"] == true {
+                note.push_str(&crate::project_setup::session_lines(
+                    &crate::project_setup::check(&self.options.project_root),
+                ));
                 if let Some(line) = reuse_summary(&self.options.project_root) {
                     note.push_str(&line);
                 }

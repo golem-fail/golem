@@ -118,6 +118,8 @@ struct Facts {
     /// The `golem mcp` policy in this project: its summary and what golem
     /// changed so its rules hold, or why it does not load.
     mcp_policy: Option<std::result::Result<(String, Vec<String>), String>>,
+    /// The project of the working directory.
+    project: Option<crate::project_setup::Setup>,
 }
 
 /// What `doctor` can say about browser automation.
@@ -374,6 +376,58 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
     }
 
     checks
+}
+
+/// Project checks: the project of the working directory has a `golem.toml`,
+/// and each of its apps an install script that exists and runs.
+fn evaluate_project(setup: &crate::project_setup::Setup) -> Vec<Check> {
+    use crate::project_setup::{Script, Setup};
+    match setup {
+        Setup::NoProject => vec![Check::ok(
+            "project",
+            "none: no golem.toml in this directory or above",
+        )],
+        Setup::Unreadable { toml, error } => vec![Check::fail(
+            "golem.toml",
+            &format!("{}: {error}", toml.display()),
+            "fix the file; `golem init` shows a working one",
+        )],
+        Setup::Project { toml, apps } => {
+            let mut checks = vec![Check::ok("golem.toml", &toml.display().to_string())];
+            for app in apps {
+                let label = format!("app {}", app.name);
+                if app.scripts.is_empty() {
+                    checks.push(Check::warn(
+                        &label,
+                        "no install_script: golem expects the app to be installed already",
+                        &format!(
+                            "`golem install-script --app {}` scaffolds one (`--print <framework>` writes a template)",
+                            app.name
+                        ),
+                    ));
+                }
+                for (path, state) in &app.scripts {
+                    checks.push(match state {
+                        Script::Ok => Check::ok(&label, &format!("install_script {path}")),
+                        Script::Missing => Check::warn(
+                            &label,
+                            &format!("install_script {path} does not exist"),
+                            &format!(
+                                "`golem install-script --app {}` scaffolds one, or fix the path",
+                                app.name
+                            ),
+                        ),
+                        Script::NotExecutable => Check::warn(
+                            &label,
+                            &format!("install_script {path} is not executable"),
+                            &format!("chmod +x {path}"),
+                        ),
+                    });
+                }
+            }
+            checks
+        }
+    }
 }
 
 /// Build checks: what's needed to build golem + its companions from source.
@@ -687,6 +741,9 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
             .then(golem_orchestrator::companions::android_companion_size);
         f.golem_writable = Some(probe_golem_writable());
         f.mcp_policy = Some(probe_mcp_policy());
+        f.project = std::env::current_dir()
+            .ok()
+            .map(|cwd| crate::project_setup::check(&cwd));
     }
 
     if run_build {
@@ -716,6 +773,12 @@ pub async fn run(args: &DoctorArgs) -> Result<i32> {
             title: "runtime",
             checks: evaluate_runtime(&facts),
         });
+        if let Some(setup) = &facts.project {
+            sections.push(Section {
+                title: "project",
+                checks: evaluate_project(setup),
+            });
+        }
     }
     if run_build {
         sections.push(Section {
@@ -788,6 +851,7 @@ mod tests {
             android_companion: Some(12_000_000),
             golem_writable: Some(Ok(())),
             mcp_policy: None,
+            project: None,
             cargo: Some("1.83.0".to_string()),
             xcodebuild: Some("15.4".to_string()),
             jdk: Some("17.0.10".to_string()),
@@ -1211,5 +1275,62 @@ mod tests {
         assert!(detail.contains("shell: allow → ask"), "{detail}");
         f.mcp_policy = Some(Err("[mcp.policy] \"shel\" is not an action class".into()));
         assert_eq!(line(&f).map(|l| l.0), Some(Status::Fail));
+    }
+
+    #[test]
+    fn the_project_section_warns_for_each_missing_part_and_says_none_outside_one() {
+        use crate::project_setup::{App, Script, Setup};
+        let none = evaluate_project(&Setup::NoProject);
+        assert_eq!(none.len(), 1);
+        assert_eq!(none[0].status, Status::Ok);
+        assert!(none[0].detail.starts_with("none"), "{}", none[0].detail);
+
+        let checks = evaluate_project(&Setup::Project {
+            toml: "/p/golem.toml".into(),
+            apps: vec![
+                App {
+                    name: "ready".into(),
+                    scripts: vec![("i.sh".into(), Script::Ok)],
+                },
+                App {
+                    name: "bare".into(),
+                    scripts: Vec::new(),
+                },
+                App {
+                    name: "split".into(),
+                    scripts: vec![
+                        ("ios.sh".into(), Script::NotExecutable),
+                        ("gone.sh".into(), Script::Missing),
+                    ],
+                },
+            ],
+        });
+        let got: Vec<(Status, &str, Option<&str>)> = checks
+            .iter()
+            .map(|c| (c.status, c.label.as_str(), c.remedy.as_deref()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (Status::Ok, "golem.toml", None),
+                (Status::Ok, "app ready", None),
+                (
+                    Status::Warn,
+                    "app bare",
+                    Some("`golem install-script --app bare` scaffolds one (`--print <framework>` writes a template)")
+                ),
+                (Status::Warn, "app split", Some("chmod +x ios.sh")),
+                (
+                    Status::Warn,
+                    "app split",
+                    Some("`golem install-script --app split` scaffolds one, or fix the path")
+                ),
+            ]
+        );
+        assert_eq!(
+            exit_code(&checks),
+            0,
+            "a project warning SHALL not fail doctor"
+        );
     }
 }

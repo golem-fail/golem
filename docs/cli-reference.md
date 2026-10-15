@@ -389,6 +389,14 @@ warning, not a failure, as long as the other platform is drivable. golem also
 prints the relevant runtime lines automatically when a run dead-ends on a missing
 device.
 
+**Project** (with the runtime checks) — the project of the working directory:
+
+- a `golem.toml` in this directory or above. Outside a project, doctor says so,
+  and shows no project warnings.
+- for each `[[apps]]` entry, an `install_script` that exists and is executable.
+  Each missing part is a warning that names its fix (`golem install-script --app
+  <name>`, `chmod +x <script>`). A project warning does not fail doctor.
+
 **Build** (`--build`) — the contributor / release-box path:
 
 - Rust toolchain (`cargo`)
