@@ -340,6 +340,8 @@ Scaffold an install script for an app in your project. In a terminal, golem asks
 
 In a monorepo, run `--template` once for each app, with its own `--app` and `--path`.
 
+Without a terminal and without `--print` or `--template`, the command fails at once, and names the forms that work without one.
+
 See [App Install](app-install.md) for the full resolution and execution model.
 
 ## `golem a11y-extract <png>`

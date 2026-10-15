@@ -149,7 +149,22 @@ pub fn run(args: &InstallScriptArgs) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let ask = match args.template {
         Some(_) => Ask::Defaults,
-        None => Ask::Terminal(Box::default()),
+        None => {
+            crate::terminal::require(
+                "golem install-script",
+                &[
+                    (
+                        "golem install-script --print expo",
+                        "read a template, then adapt it",
+                    ),
+                    (
+                        "golem install-script --template expo --app NAME --path DIR",
+                        "write one without prompts",
+                    ),
+                ],
+            )?;
+            Ask::Terminal(Box::default())
+        }
     };
     scaffold(&ask, args, &cwd)
 }

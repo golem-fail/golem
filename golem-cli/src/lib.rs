@@ -13,6 +13,7 @@ pub mod policy_cmd;
 pub mod probe_cmd;
 pub mod scaffold;
 pub mod session_cmd;
+mod terminal;
 pub mod tree;
 
 use std::path::{Path, PathBuf};
