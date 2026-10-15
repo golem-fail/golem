@@ -1503,7 +1503,7 @@ The script runs directly, not through a shell, so it must be executable (`chmod 
 
 </details>
 
-<details><summary><code>help("act", "create_inbox")</code> · create_inbox — Provision a disposable email inbox · 1329 chars</summary>
+<details><summary><code>help("act", "create_inbox")</code> · create_inbox — Provision a disposable email inbox · 1410 chars</summary>
 
 Source: [src/actions-reference/80-external/50-create_inbox.md](src/actions-reference/80-external/50-create_inbox.md)
 
@@ -1530,7 +1530,8 @@ fields are exactly what `await_email` (help("act", "await_email")) reads, so
 | `timeout` | `15000` | Provisioning deadline (ms). |
 
 Saved object fields: `address` (= `user`, the email address), `user`, `pass`,
-`imap_host`, `imap_port`, `smtp_host`, `smtp_port`.
+`imap_host`, `imap_port`, `smtp_host`, `smtp_port`. `pass` is always
+secret (help("flow", "secrets")): golem masks it in all output.
 
 > **Non-deterministic.** Provisioning is live network I/O, so the inbox is not
 > replayed by `--seed` — each run gets a fresh address. Receiving mail at it is
@@ -1578,7 +1579,7 @@ verification/OTP mail.
 
 </details>
 
-<details><summary><code>help("act", "load_fixture")</code> · load_fixture — Load fixture data · 543 chars</summary>
+<details><summary><code>help("act", "load_fixture")</code> · load_fixture — Load fixture data · 882 chars</summary>
 
 Source: [src/actions-reference/80-external/70-load_fixture.md](src/actions-reference/80-external/70-load_fixture.md)
 
@@ -1597,6 +1598,17 @@ reuse comparison (help("flow", "reuse")).
 |-------|-------------|
 | `fixture` | Fixture name: `__fixtures__/<fixture>.toml`, looked up from the flow's directory up to the project root (required) |
 | `as` | Variable name the fixture's vars are stored under (required) |
+
+A root `secret` list names the keys of `[vars]` that golem masks in all output. A name that is not a key of `[vars]` fails the fixture, so a typo cannot leave a value unmasked. See Secrets (help("flow", "secrets")).
+
+```toml
+# __fixtures__/qa.toml
+secret = ["password"]
+
+[vars]
+email = "qa@example.test"
+password = "staging-password"
+```
 ````
 
 </details>
@@ -2604,7 +2616,7 @@ and `contains` are geometric, so a coarse tree does not change them.
 
 ### flow
 
-<details><summary><code>help("flow")</code> · Test Structure · 1228 chars · + 13 items, 14 sub-items</summary>
+<details><summary><code>help("flow")</code> · Test Structure · 1317 chars · + 14 items, 14 sub-items</summary>
 
 Source: [src/test-structure/00-intro.md](src/test-structure/00-intro.md)
 
@@ -2623,6 +2635,7 @@ Items (help("flow", item)):
 - teardown: [[teardown]] steps run after the flow, even when it fails
 - data-driven: [[data]] rows; for_each = "data" runs a block per row
 - variables: Set by --var, [flow.vars], rows, save_to or fixtures; read as ${name}; built-ins such as _device, _os
+- secrets: secret in a fixture or on a save_to step: golem masks the value in all output
 - fake-data: ${fake:…} in short; help("fake") has the rest
 - multi-app: Several apps in one flow; switch with launch app = "…"
 - devices: [[flow.apps.devices]]: os, type, hardware and name constraints — coverage, hardware, pinning, auto-boot
@@ -2965,7 +2978,7 @@ Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` 
 
 </details>
 
-<details><summary><code>help("flow", "step/options")</code> · Step Options · 933 chars</summary>
+<details><summary><code>help("flow", "step/options")</code> · Step Options · 1117 chars</summary>
 
 Source: [src/test-structure/30-step/20-options.md](src/test-structure/30-step/20-options.md)
 
@@ -2983,6 +2996,7 @@ Source: [src/test-structure/30-step/20-options.md](src/test-structure/30-step/20
 | `retry` | `0` | Retry count on failure |
 | `retry_delay` | `1000` | Delay between retries (ms) |
 | `save_to` | — | Save result to a variable |
+| `secret` | — | With `save_to`: `true` masks the whole saved value in all output, and a list of paths, such as `["token"]`, masks only those — see Secrets (help("flow", "secrets")) |
 | `app` | — | Target a specific app (for multi-app flows) |
 ```
 
@@ -3208,6 +3222,39 @@ golem reserves the `_` prefix and fills these in per step:
 `_hardware`, `_loop` and `_perf` are also readable by a branch condition
 (`[[block.branch]] if_var = "_hardware", equals = "real"`); the device and app
 builtins resolve in `${…}` interpolation only.
+````
+
+</details>
+
+<details><summary><code>help("flow", "secrets")</code> · Secrets · 1969 chars</summary>
+
+Source: [src/test-structure/95-secrets.md](src/test-structure/95-secrets.md)
+
+````text
+## Secrets
+
+golem shows variable values in its output: the step lines, the reports, the logs and the MCP results. Tag a value as secret where it enters the run, and golem replaces the value with its reference everywhere it writes. For example, `t:"staging-password"` shows as `t:"${qa.password}"`.
+
+Tag a value in one of these places:
+
+- **A fixture.** A root `secret` list names the keys of `[vars]` that are secret. See `load_fixture` (help("act", "load_fixture")).
+- **A step with `save_to`.** `secret = true` tags the whole saved value. `secret = ["token", "user.refresh_token"]` tags only those paths, for example the token of a test user that an HTTP step creates. If a path is not in the saved value, the step passes with the warning WP463, because the value under the real path is not masked.
+- **`create_inbox`.** The inbox password (`pass`) is always secret.
+
+To keep a secret out of every file, get it from the environment or a secret manager with a step:
+
+```toml
+{ action = "bash", run = "op read op://qa/password", save_to = "pw", secret = true }
+```
+
+golem masks the value, not the variable. A string made from a secret, such as `"Bearer ${user.token}"`, shows as `Bearer ${user.token}`, and a response that sends the token back is masked too. golem masks a secret of any length. A short secret, such as a PIN, also masks the same text elsewhere in the output: the output is harder to read, but the secret does not show. For an object such as the result of `run`, name the paths: `secret = true` also masks fields such as `exit_code`.
+
+The limits:
+
+- golem cannot mask pixels. A screenshot or a screen recording shows a secret that the app displays. Password fields usually show dots.
+- golem cannot mask a changed form of a value: base64, URL encoding, a hash, or a value split across lines.
+- Masking hides a value. It does not stop a step from using the value: a step can still send it with `bash` or `post_http`.
+- Use test accounts, not real users.
 ````
 
 </details>
@@ -3951,7 +3998,7 @@ Items (help("codes", item)):
 - registry: Every code with its meaning and fix
 ```
 
-<details><summary><code>help("codes", "registry")</code> · Registry · 5350 chars</summary>
+<details><summary><code>help("codes", "registry")</code> · Registry · 5482 chars</summary>
 
 Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 
@@ -3979,6 +4026,7 @@ Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 | `P460` | The flow or mixin file is not valid TOML, or does not fit the schema. | Fix the file at the line that the message names. |
 | `P461` | No device can satisfy the flow's device constraints. | Relax the device constraints, or add a device that matches. |
 | `P462` | `add_media` got a file that is not a supported image or video. | Use a supported image or video file. |
+| `P463` | A `secret` path names no key of the value the step saved. | Fix the path in `secret`, so the value under it is masked. |
 | `A403` | The install script path is outside the project. | Keep `install_script` inside the project directory. |
 | `A404` | The install script or the app bundle does not exist. | Fix the `install_script` or bundle path, or build the app first. |
 | `A408` | The app install ran past its timeout. | Make the install faster, or raise `install_timeout_ms`. |

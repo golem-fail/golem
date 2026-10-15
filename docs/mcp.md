@@ -429,7 +429,7 @@ Only an explicit `session_close` runs the teardown. A teardown can change the ap
 - The variables of the flow that the session opened from.
 - A step's `save_to`.
 
-A `session_open` variable wins over a `flow_set` variable of the same name, as `--var` wins over `[flow.vars]`. The draft keeps `${name}` as written, so a secret such as `${password}` never lands in the flow file.
+A `session_open` variable wins over a `flow_set` variable of the same name, as `--var` wins over `[flow.vars]`. The draft keeps `${name}` as written, so a secret such as `${password}` never lands in the flow file. A value tagged [secret](test-structure.md#secrets), in a fixture or with `secret` on a `save_to` step, shows as its reference in every result, so the model never sees it.
 
 **Replay fake data.** `session_open` reports the seed of the session's fake data: `session open · … · seed 4711`. A failed `golem run` reports its seed too. `session_open(seed = 4711)` replays that data, as `golem run --seed 4711` does, with or without `flow`. A `[flow] seed` in a flow file has no effect.
 

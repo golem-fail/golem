@@ -376,7 +376,7 @@ pub(crate) async fn handle_create_inbox(step: &Step, vars: &mut VariableStore) -
     let timeout_ms = step.timeout.unwrap_or(15000);
 
     let account = provision_inbox(provider, timeout_ms, EtherealClient::new()).await?;
-    vars.set_in_scope(ScopeLevel::Flow, save_to, inbox_object(&account));
+    save_inbox(vars, save_to, &account);
 
     Ok(())
 }
@@ -418,6 +418,21 @@ async fn provision_inbox(
 /// Build the inbox variable object from a provisioned account. `address`
 /// mirrors `user` (the account login is the email address); ports are
 /// stringified to match how `await_email` reads `imap_port`.
+/// Save the inbox under `save_to`, its secret fields tagged. The provider
+/// knows which fields are secret; a `secret` on the step adds more.
+fn save_inbox(vars: &mut VariableStore, save_to: &str, account: &golem_email::EtherealAccount) {
+    let inbox = inbox_object(account);
+    for field in INBOX_SECRET_FIELDS {
+        if let Some(value) = inbox.get_path(field) {
+            crate::secrets::register_value(value, &format!("{save_to}.{field}"));
+        }
+    }
+    vars.set_in_scope(ScopeLevel::Flow, save_to, inbox);
+}
+
+/// The fields of an inbox object that are always secret.
+const INBOX_SECRET_FIELDS: &[&str] = &["pass"];
+
 fn inbox_object(account: &golem_email::EtherealAccount) -> VarValue {
     let mut obj = HashMap::new();
     obj.insert("address".to_string(), VarValue::string(&account.user));
@@ -2089,6 +2104,18 @@ mod tests {
         assert_eq!(get("imap_port"), "993");
         assert_eq!(get("smtp_host"), "smtp.ethereal.email");
         assert_eq!(get("smtp_port"), "587");
+    }
+
+    #[test]
+    fn a_saved_inbox_masks_its_password() {
+        let account =
+            golem_email::EtherealAccount::from_api_response(ETHEREAL_FIXTURE).expect("parse");
+        let mut vars = make_vars();
+        save_inbox(&mut vars, "inbox", &account);
+        assert_eq!(
+            golem_common::secrets::mask("user abc123@ethereal.email pass s3cretP4ss"),
+            "user abc123@ethereal.email pass ${inbox.pass}"
+        );
     }
 
     // handle_create_inbox SHALL require a provider param (fails before any I/O).

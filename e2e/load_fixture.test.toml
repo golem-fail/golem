@@ -28,4 +28,9 @@ steps = [
   { action = "tap", on_text = "Reset fields" },
   { action = "type", on_text = "Search", input = "id-${cfg.token}", auto_scroll = true },
   { action = "assert_visible", on_text = "id-*" },
+
+  # Secret fixture var → typed and asserted, but masked in all output.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${cfg.password}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${cfg.password}" },
 ]

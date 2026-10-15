@@ -41,6 +41,9 @@ pub enum ValidationErrorKind {
     /// An action is missing a parameter it cannot run without (e.g.
     /// `open_link` with no `url`).
     MissingParam,
+    /// A step's `secret` is not `true` or a list of paths, or the step
+    /// saves nothing (`save_to`) for it to tag.
+    InvalidSecret,
 }
 
 /// Every action a step may name.
@@ -229,6 +232,32 @@ pub(crate) fn validate_step(step: &Step) -> Vec<ValidationError> {
             ),
             kind: ValidationErrorKind::SelectorNotAllowed,
         });
+    }
+
+    // 13. `secret` tags what the step saves.
+    if let Some(secret) = step.params.get("secret") {
+        let shape_ok = match secret {
+            toml::Value::Boolean(_) => true,
+            toml::Value::Array(paths) => paths.iter().all(toml::Value::is_str),
+            _ => false,
+        };
+        if !shape_ok {
+            errors.push(ValidationError {
+                message: format!(
+                    "{}: secret must be true or a list of paths, such as [\"token\"]",
+                    step.action
+                ),
+                kind: ValidationErrorKind::InvalidSecret,
+            });
+        } else if step.save_to.is_none() {
+            errors.push(ValidationError {
+                message: format!(
+                    "{}: secret tags the value that save_to saves, and the step has no save_to",
+                    step.action
+                ),
+                kind: ValidationErrorKind::InvalidSecret,
+            });
+        }
     }
 
     // 12. A required parameter is missing.
@@ -789,6 +818,35 @@ steps = [
             [
                 "open_link requires 'url'",
                 "create_inbox requires 'save_to'"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_secret_must_be_true_or_paths_and_needs_save_to() {
+        let toml_str = r#"
+[flow]
+name = "secret"
+
+[[block]]
+steps = [
+  { action = "bash", run = "echo x", save_to = "a", secret = true },
+  { action = "get_http", url = "https://x.test", save_to = "b", secret = ["token", "user.refresh"] },
+  { action = "bash", run = "echo x", secret = true },
+  { action = "bash", run = "echo x", save_to = "c", secret = "token" },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let messages: Vec<String> = validate_flow(&flow)
+            .into_iter()
+            .inspect(|e| assert_eq!(e.kind, ValidationErrorKind::InvalidSecret))
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "bash: secret tags the value that save_to saves, and the step has no save_to",
+                "bash: secret must be true or a list of paths, such as [\"token\"]",
             ]
         );
     }

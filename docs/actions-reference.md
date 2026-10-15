@@ -625,7 +625,8 @@ fields are exactly what [`await_email`](#await_email--poll-imap-inbox) reads, so
 | `timeout` | `15000` | Provisioning deadline (ms). |
 
 Saved object fields: `address` (= `user`, the email address), `user`, `pass`,
-`imap_host`, `imap_port`, `smtp_host`, `smtp_port`.
+`imap_host`, `imap_port`, `smtp_host`, `smtp_port`. `pass` is always
+[secret](test-structure.md#secrets): golem masks it in all output.
 
 > **Non-deterministic.** Provisioning is live network I/O, so the inbox is not
 > replayed by `--seed` — each run gets a fresh address. Receiving mail at it is
@@ -676,6 +677,17 @@ Load variables from a TOML file in `__fixtures__/` (a `[vars]` table). See
 |-------|-------------|
 | `fixture` | Fixture name: `__fixtures__/<fixture>.toml`, looked up from the flow's directory up to the project root (required) |
 | `as` | Variable name the fixture's vars are stored under (required) |
+
+A root `secret` list names the keys of `[vars]` that golem masks in all output. A name that is not a key of `[vars]` fails the fixture, so a typo cannot leave a value unmasked. See [Secrets](test-structure.md#secrets).
+
+```toml
+# __fixtures__/qa.toml
+secret = ["password"]
+
+[vars]
+email = "qa@example.test"
+password = "staging-password"
+```
 
 ### `load_mixin` — Inline a reusable step sequence
 

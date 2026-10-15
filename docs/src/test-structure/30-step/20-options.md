@@ -12,4 +12,5 @@
 | `retry` | `0` | Retry count on failure |
 | `retry_delay` | `1000` | Delay between retries (ms) |
 | `save_to` | — | Save result to a variable |
+| `secret` | — | With `save_to`: `true` masks the whole saved value in all output, and a list of paths, such as `["token"]`, masks only those — see [Secrets](#secrets) |
 | `app` | — | Target a specific app (for multi-app flows) |
