@@ -1,7 +1,6 @@
 //! The policy for what an LLM may run through `golem mcp`: where it is
 //! read from, and `golem mcp-config`, which changes it.
 
-use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -160,8 +159,13 @@ pub fn run(args: &crate::cli::McpConfigArgs) -> Result<i32> {
             // that golem raises today would hide a looser value written now.
             let looser = mode < Policy::configured(&config, name);
             set(&mut config, name, mode)?;
-            if looser && !std::io::stdin().is_terminal() {
-                bail!("making the policy looser needs a terminal: run golem mcp-config in one");
+            if looser && !crate::terminal::is_interactive() {
+                bail!(
+                    "making the policy looser needs a terminal. Without one:\n  \
+                     golem mcp-config show    # read the policy\n  \
+                     or ask the user to run `golem mcp-config set {name} {}` in a terminal",
+                    mode.name()
+                );
             }
             write_config(&path, &config)?;
             eprint!("{}", describe(&Policy::from_user(&config)));
@@ -174,9 +178,16 @@ pub fn run(args: &crate::cli::McpConfigArgs) -> Result<i32> {
 fn interactive(path: &Path, mut config: PolicyConfig) -> Result<i32> {
     use dialoguer::theme::ColorfulTheme;
     use dialoguer::Select;
-    if !std::io::stdin().is_terminal() {
-        bail!("golem mcp-config needs a terminal; `golem mcp-config set NAME MODE` can only make the policy stricter without one");
-    }
+    crate::terminal::require(
+        "golem mcp-config",
+        &[
+            ("golem mcp-config show", "read the policy"),
+            (
+                "golem mcp-config set NAME MODE",
+                "make the policy stricter (looser needs a terminal)",
+            ),
+        ],
+    )?;
     let theme = ColorfulTheme::default();
     loop {
         let policy = Policy::from_user(&config);
