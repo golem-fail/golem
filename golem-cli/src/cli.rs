@@ -25,6 +25,9 @@ pub enum Commands {
     Probe(ProbeArgs),
     /// Run an MCP server over stdio, so an LLM client can drive a device
     Mcp(McpArgs),
+    /// Show or change what an LLM may run through `golem mcp`: allow, ask
+    /// or deny for each action class
+    McpConfig(McpConfigArgs),
     /// A device session that stays open between commands, held by the daemon
     Session(SessionArgs),
     /// List available devices
@@ -158,6 +161,39 @@ pub struct McpArgs {
     /// Open sessions on the device-free stub driver (debug builds; tests)
     #[arg(long, hide = true)]
     pub stub_session: bool,
+
+    /// Deny an action class (such as shell or http) or one action, for
+    /// this server. Repeat it for more. It can only make the policy
+    /// stricter
+    #[arg(long, value_name = "CLASS|ACTION")]
+    pub deny: Vec<String>,
+
+    /// Ask the user before an action class or one action runs, for this
+    /// server. It can only make the policy stricter
+    #[arg(long, value_name = "CLASS|ACTION")]
+    pub ask: Vec<String>,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct McpConfigArgs {
+    /// With no command, change the policy interactively
+    #[command(subcommand)]
+    pub command: Option<McpConfigCommand>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum McpConfigCommand {
+    /// Print the policy that applies in this project
+    Show,
+    /// Set an action class or one action to allow, ask or deny. Making the
+    /// policy looser needs a terminal
+    Set {
+        /// An action class (read, device, device-data, browser,
+        /// browser-secrets, http, email, script, shell) or an action
+        name: String,
+        /// allow, ask or deny
+        mode: String,
+    },
 }
 
 #[derive(clap::Args, Debug)]

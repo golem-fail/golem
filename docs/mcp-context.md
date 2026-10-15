@@ -3973,7 +3973,7 @@ person = "${fake:person(country=${addr.country_code})}"
 
 ### codes
 
-<details><summary><code>help("codes")</code> · Error Codes · 789 chars · + 1 item</summary>
+<details><summary><code>help("codes")</code> · Error Codes · 859 chars · + 1 item</summary>
 
 Source: [src/error-codes/00-intro.llm.md](src/error-codes/00-intro.llm.md) (LLM text)
 
@@ -3989,6 +3989,7 @@ A failed or warned step carries a code such as `EF404`: `<severity><domain><numb
   - `A`: the app's build, install or launch.
   - `D`: the device, its boot or the companion.
   - `H`: the host: tools, ports, the golem daemon.
+  - `S`: the user's `golem mcp` policy refused the action (MCP only).
   - `X`: golem did not classify the error.
 - Number: the cause, the same for `E` and `W`.
 
@@ -3998,7 +3999,7 @@ Items (help("codes", item)):
 - registry: Every code with its meaning and fix
 ```
 
-<details><summary><code>help("codes", "registry")</code> · Registry · 5482 chars</summary>
+<details><summary><code>help("codes", "registry")</code> · Registry · 5740 chars</summary>
 
 Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 
@@ -4019,6 +4020,8 @@ Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |
 | `F509` | A block ran more times than its `max_iterations`. | Fix the loop that re-enters the block, or raise its `max_iterations`. |
 | `X000` | golem did not classify this error. | Read the message, and report it to the golem maintainers. |
+| `S001` | The user's `golem mcp` policy denies this action. | Tell the user; the user changes the policy with `golem mcp-config`. |
+| `S002` | This action needs the user's permission. | Ask the user; if the user agrees, call act again with the same step. |
 | `P400` | The `action` is not a known action. | Fix the spelling; see the actions reference. |
 | `P404` | A block, subflow or fixture that the flow names does not exist. | Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`. |
 | `P422` | A required field is missing or not valid. | Add or fix the field that the message names. |

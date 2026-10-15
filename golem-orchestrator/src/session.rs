@@ -39,6 +39,9 @@ pub struct OpenRequest {
     pub child_env: Option<golem_common::command::ChildEnv>,
     /// Ends the session after this long with no operation.
     pub idle_timeout: Duration,
+    /// What the steps an LLM writes may do. `None` for a session a person
+    /// drives from the shell.
+    pub policy: Option<golem_parser::policy::Policy>,
     /// Run this flow first, and open the session where it stops.
     pub flow: Option<FlowOpen>,
     /// Boot a shut-down device when no booted device fits.
@@ -496,6 +499,17 @@ struct Work {
     slot: Option<Slot>,
     /// Restarts the companion when it dies. `None` on the stub driver.
     recovery: Option<Arc<dyn golem_runner::recovery::CompanionRecovery>>,
+    /// What the steps an LLM writes may do; `None` allows everything.
+    policy: Option<golem_parser::policy::Policy>,
+    approvals: Approvals,
+}
+
+/// The `ask` steps of a session, by [`step_key`]: refused once, then
+/// allowed until the session ends.
+#[derive(Default)]
+struct Approvals {
+    asked: std::collections::HashSet<u64>,
+    approved: std::collections::HashSet<u64>,
 }
 
 /// Restart a dead companion on the session's device, and point the
@@ -959,6 +973,8 @@ impl Work {
             log: Vec::new(),
             slot: None,
             recovery: None,
+            policy: None,
+            approvals: Approvals::default(),
         }
     }
 }
@@ -1093,6 +1109,7 @@ async fn open(
     };
     match result {
         Ok((mut work, flow_report)) => {
+            work.policy = req.policy.clone();
             if req.flow.is_none() {
                 work.rng = golem_vars::seed::FakeRng::from_optional_seed(req.seed);
                 for (k, v) in &req.vars {
@@ -1513,6 +1530,60 @@ fn finish(status: &Mutex<Status>, changed: &tokio::sync::Notify, outcome: Outcom
     changed.notify_waiters();
 }
 
+/// Refuse a step that the session's policy does not allow. Golem checks a
+/// step where it enters the session or the draft, so `draft_run` runs only
+/// steps that passed here or came from the user's files.
+fn check_policy(work: &mut Work, step: &str) -> Result<(), String> {
+    use golem_parser::policy::{ActionClass, Mode};
+    let Some(policy) = &work.policy else {
+        return Ok(());
+    };
+    // A step that does not parse fails later, with the parse error.
+    let Ok(parsed) = golem_parser::inline::parse_step_inline(step) else {
+        return Ok(());
+    };
+    let action = parsed.step.action.as_str();
+    let class = ActionClass::of(action).map_or("unknown", ActionClass::name);
+    match policy.mode(action) {
+        Mode::Allow => Ok(()),
+        Mode::Deny => Err(format!(
+            "ES001 {action}: denied by user policy ({class})\nfix: {}",
+            golem_events::FailureCode::PolicyDenied.fix()
+        )),
+        Mode::Ask => {
+            let key = step_key(&parsed.line, &work.vars);
+            if work.approvals.approved.contains(&key) {
+                return Ok(());
+            }
+            if work.approvals.asked.remove(&key) {
+                work.approvals.approved.insert(key);
+                return Ok(());
+            }
+            work.approvals.asked.insert(key);
+            Err(format!(
+                "ES002 {action}: needs the user's permission ({class})\nfix: {}",
+                golem_events::FailureCode::PolicyAsk.fix()
+            ))
+        }
+    }
+}
+
+/// The step as it would run: its keys in order, its `${var}`s resolved
+/// where they have a value. Two calls are the same step when this is.
+fn step_key(line: &str, vars: &golem_vars::VariableStore) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let canonical = format!("s = {line}")
+        .parse::<toml::Table>()
+        .ok()
+        .and_then(|t| t.get("s").cloned())
+        .map_or_else(|| line.to_string(), |v| v.to_string());
+    let ctx = golem_vars::interpolation::InterpolationContext::new(vars);
+    let resolved = golem_vars::interpolation::interpolate(&canonical, &ctx).unwrap_or(canonical);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    resolved.hash(&mut hasher);
+    hasher.finish()
+}
+
 fn phase_of(op: &Op) -> String {
     match op {
         Op::Act { step, .. } => match golem_parser::inline::parse_step_inline(step) {
@@ -1549,6 +1620,20 @@ fn summary_of(op: &Op, result: &OpResult) -> String {
 }
 
 async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResult {
+    let written = match op {
+        Op::Act { step, .. } => Some(step.as_str()),
+        Op::Edit(
+            DraftEdit::TeardownAdd { step, .. }
+            | DraftEdit::RecordOnly { step, .. }
+            | DraftEdit::StepEdit {
+                step: Some(step), ..
+            },
+        ) => Some(step.as_str()),
+        _ => None,
+    };
+    if let Some(Err(refusal)) = written.map(|step| check_policy(work, step)) {
+        return OpResult::Failed(refusal);
+    }
     match op {
         Op::DraftRun { restart, stop_at } => draft_run(work, *restart, stop_at.as_deref(), status)
             .await
@@ -2256,6 +2341,161 @@ mod tests {
         }
     }
 
+    /// A session on the mock screen under `policy` (a `[mcp.policy]` TOML).
+    async fn session_with_policy(policy: &str) -> Session {
+        let s = session_on(
+            Arc::new(MockPlatformDriver::new(screen())),
+            None,
+            DEFAULT_IDLE_TIMEOUT,
+        );
+        let config = golem_parser::policy::PolicyConfig::from_toml(policy).expect("policy");
+        s.work.lock().await.as_mut().expect("work").policy =
+            Some(golem_parser::policy::Policy::from_user(&config));
+        s
+    }
+
+    fn failed(done: &Outcome) -> &str {
+        match &done.result {
+            OpResult::Failed(e) => e,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_denied_action_is_refused_wherever_a_step_enters() {
+        let s = session_with_policy("[mcp.policy]\nshell = \"deny\"\n").await;
+        let bash = r#"{ action = "bash", run = "echo hi" }"#;
+        let refused = run(&s, act(bash)).await;
+        assert!(
+            failed(&refused).starts_with("ES001 bash: denied by user policy (shell)"),
+            "{refused:?}"
+        );
+        for edit in [
+            DraftEdit::RecordOnly {
+                step: bash.into(),
+                comment: None,
+            },
+            DraftEdit::TeardownAdd {
+                step: bash.into(),
+                comment: None,
+            },
+        ] {
+            let done = run(&s, Op::Edit(edit)).await;
+            assert!(failed(&done).starts_with("ES001"), "{done:?}");
+        }
+        let tapped = run(&s, act(r#"{ action = "tap", on_text = "Pay 42" }"#)).await;
+        assert!(matches!(tapped.result, OpResult::Act { passed: true, .. }));
+        let edited = run(
+            &s,
+            Op::Edit(DraftEdit::StepEdit {
+                at: "main:1".into(),
+                step: Some(bash.into()),
+                comment: None,
+            }),
+        )
+        .await;
+        assert!(
+            failed(&edited).starts_with("ES001"),
+            "an edit SHALL NOT turn a tap into bash: {edited:?}"
+        );
+        match run(&s, Op::DraftShow).await.result {
+            OpResult::Draft(text) => assert!(!text.contains("bash"), "{text}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_ask_step_is_refused_once_then_runs() {
+        let s = session_with_policy("").await;
+        let first = run(
+            &s,
+            act(r#"{ action = "bash", run = "echo hi", save_to = "out" }"#),
+        )
+        .await;
+        let text = failed(&first);
+        assert!(
+            text.starts_with("ES002 bash: needs the user's permission (shell)"),
+            "{text}"
+        );
+        assert!(text.contains("fix: Ask the user"), "{text}");
+        // The same step: other key order, spaces and a comment.
+        let again = run(
+            &s,
+            Op::Act {
+                step: r#"{ save_to = "out",  run = "echo hi", action = "bash" }"#.into(),
+                tree: false,
+                comment: Some("asked the user".into()),
+            },
+        )
+        .await;
+        assert!(
+            matches!(again.result, OpResult::Act { passed: true, .. }),
+            "{again:?}"
+        );
+        let third = run(
+            &s,
+            act(r#"{ action = "bash", run = "echo hi", save_to = "out" }"#),
+        )
+        .await;
+        assert!(
+            matches!(third.result, OpResult::Act { passed: true, .. }),
+            "an approval SHALL last the session: {third:?}"
+        );
+        let changed = run(
+            &s,
+            act(r#"{ action = "bash", run = "echo bye", save_to = "out" }"#),
+        )
+        .await;
+        assert!(failed(&changed).starts_with("ES002"), "{changed:?}");
+    }
+
+    #[tokio::test]
+    async fn an_ask_step_asks_again_when_its_variable_resolves_to_another_value() {
+        let s = session_with_policy("").await;
+        let set = |v: &'static str| {
+            let s = &s;
+            async move {
+                s.work
+                    .lock()
+                    .await
+                    .as_mut()
+                    .expect("work")
+                    .vars
+                    .set_in_scope(
+                        golem_vars::ScopeLevel::Flow,
+                        "cmd",
+                        golem_vars::VarValue::string(v),
+                    );
+            }
+        };
+        let step = r#"{ action = "bash", run = "${cmd}" }"#;
+        set("echo one").await;
+        assert!(failed(&run(&s, act(step)).await).starts_with("ES002"));
+        assert!(matches!(
+            run(&s, act(step)).await.result,
+            OpResult::Act { passed: true, .. }
+        ));
+        set("echo two").await;
+        assert!(
+            failed(&run(&s, act(step)).await).starts_with("ES002"),
+            "a different resolved command SHALL ask again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_session_without_a_policy_allows_every_action() {
+        let s = session_on(
+            Arc::new(MockPlatformDriver::new(screen())),
+            None,
+            DEFAULT_IDLE_TIMEOUT,
+        );
+        let done = run(&s, act(r#"{ action = "bash", run = "echo hi" }"#)).await;
+        assert!(
+            matches!(done.result, OpResult::Act { passed: true, .. }),
+            "{done:?}"
+        );
+    }
+
     #[tokio::test]
     async fn a_value_one_act_reads_is_there_for_the_next() {
         let s = session_on(
@@ -2486,6 +2726,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 project_root: dir.to_path_buf(),
                 child_env: None,
                 idle_timeout: DEFAULT_IDLE_TIMEOUT,
+                policy: None,
                 flow: Some(FlowOpen {
                     path: dir.join("s.test.toml"),
                     stop_at: stop_at
@@ -2519,6 +2760,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 project_root: std::env::temp_dir(),
                 child_env: None,
                 idle_timeout: DEFAULT_IDLE_TIMEOUT,
+                policy: None,
                 flow: None,
                 boot: false,
                 seed: Some(42),

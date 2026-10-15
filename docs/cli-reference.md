@@ -10,6 +10,7 @@
 - [`golem tree`](#golem-tree)
 - [`golem probe`](#golem-probe)
 - [`golem mcp`](#golem-mcp)
+- [`golem mcp-config`](#golem-mcp-config)
 - [`golem session`](#golem-session)
 - [`golem devices`](#golem-devices)
 - [`golem init`](#golem-init)
@@ -167,7 +168,7 @@ warn: more than one element matches, and act picks the first. Add index, or a ti
 Run an MCP server over stdio, so an LLM client (Claude Code, Codex, Cursor, Claude Desktop and others) can drive a device one step at a time.
 
 ```bash
-golem mcp [--project <DIR>] [--soft-timeout <SECS>]
+golem mcp [--project <DIR>] [--soft-timeout <SECS>] [--deny <CLASS|ACTION>]… [--ask <CLASS|ACTION>]…
 golem mcp --print-config <CLIENT>
 golem mcp --print-skill
 golem mcp --print-instructions
@@ -182,6 +183,8 @@ Setup for each client, the session rules and two example sequences are in [golem
 | `--print-config <CLIENT>` | Print the config block that adds this server to a client, with the absolute path of this `golem`, then exit. `CLIENT` is `claude`, `codex`, `opencode`, `gemini`, `copilot`, `goose`, `zed`, `continue` or `desktop`. The `desktop` and `zed` blocks also set `env` to your `PATH` and `ANDROID_HOME`. [MCP Server](mcp.md#setup) says which file each block goes in, and which block the other clients use. |
 | `--print-skill` | Print the server instructions as an Agent Skill (`SKILL.md`), then exit. Use it for a client that does not pass a server's instructions to the model. See [When the client drops the instructions](mcp.md#when-the-client-drops-the-instructions). |
 | `--print-instructions` | Print the server instructions as plain text, then exit, for `AGENTS.md` or a client's rules file. |
+| `--deny <CLASS\|ACTION>` | Deny an action class, such as `shell` or `http`, or one action, for this server. Repeat it for more. It can only make the [policy](mcp.md#what-the-llm-may-run) stricter. |
+| `--ask <CLASS\|ACTION>` | Ask the user before an action class or one action runs, for this server. It can only make the policy stricter. |
 
 The server starts without device work.
 
@@ -249,6 +252,18 @@ The server starts without device work.
 **Step status.** Each step of the draft has a status, which `draft_steps` and `export_flow` show: `✓` passed in this session, `·` comes from the file and did not run in this session, `?` unverified, `~` stale. A change to the draft (a step from `act`, run or not) makes the next active step `?`, because the screen before it changed. Each later step that can run after the change becomes `~`: the rest of the block, then each block that a `branch` target, `next` or the next block in the file leads to. A `screenshot` is not an active step. Only `?` is in the file, as a `# unverified` line above the step; a step that passes in the session loses it.
 
 A session runs one operation at a time. A call made while another runs answers `busy`. A call that takes longer than the soft timeout answers `pending`, and `wait` returns its result. `format = "json"` returns JSON instead of TOON.
+
+## `golem mcp-config`
+
+Show or change what an LLM may run through `golem mcp`. See [What the LLM may run](mcp.md#what-the-llm-may-run).
+
+```bash
+golem mcp-config                  # change the policy interactively
+golem mcp-config show             # print the policy that applies in this project
+golem mcp-config set <NAME> <MODE>
+```
+
+`NAME` is an action class (`read`, `device`, `device-data`, `browser`, `browser-secrets`, `http`, `email`, `script`, `shell`) or one action. `MODE` is `allow`, `ask` or `deny`. The command writes `[mcp.policy]` in `~/.golem/config.toml` (or the file `GOLEM_CONFIG` names), and keeps the rest of the file. A change that makes the policy looser needs a terminal, so an LLM cannot easily loosen its own policy.
 
 ## `golem session`
 

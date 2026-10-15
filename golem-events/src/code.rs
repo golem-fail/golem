@@ -23,6 +23,8 @@ pub enum Domain {
     Flow,
     /// Test file, params, or suite config invalid (test writer).
     Parsing,
+    /// The user's `golem mcp` policy refused an action (the user).
+    Policy,
     /// Unclassified — an error reached output without being tagged with a
     /// cause. Ownership is genuinely unknown (the engine didn't classify it),
     /// so it gets its own domain rather than being guessed into Flow. A live
@@ -38,6 +40,7 @@ impl Domain {
             Self::App => 'A',
             Self::Flow => 'F',
             Self::Parsing => 'P',
+            Self::Policy => 'S',
             Self::Unknown => 'X',
         }
     }
@@ -104,6 +107,12 @@ pub enum FailureCode {
     /// renders in the `Unknown` domain so coverage gaps stay visible
     /// instead of being absorbed into the Flow bucket.
     Uncoded,
+
+    // ── S: the user's MCP policy ──
+    /// S001: the user's policy denies this action.
+    PolicyDenied,
+    /// S002: this action needs the user's permission.
+    PolicyAsk,
 
     // ── P: parsing / test authoring ──
     /// P400: unknown action keyword.
@@ -231,6 +240,7 @@ impl FailureCode {
             | FlowMaxSteps
             | FlowMaxIterations => Domain::Flow,
             Uncoded => Domain::Unknown,
+            PolicyDenied | PolicyAsk => Domain::Policy,
             ParseUnknownAction
             | ParseMissingReference
             | ParseMissingParam
@@ -297,6 +307,8 @@ impl FailureCode {
             FlowMaxSteps => 508,
             FlowMaxIterations => 509,
             Uncoded => 0,
+            PolicyDenied => 1,
+            PolicyAsk => 2,
             ParseUnknownAction => 400,
             ParseMissingReference => 404,
             ParseMissingParam => 422,
@@ -334,7 +346,7 @@ impl FailureCode {
     }
 
     /// Every code, in registry order.
-    pub const ALL: [FailureCode; 45] = [
+    pub const ALL: [FailureCode; 47] = [
         Self::FlowExplicitFail,
         Self::FlowElementNotFound,
         Self::FlowElementOffscreen,
@@ -347,6 +359,8 @@ impl FailureCode {
         Self::FlowMaxSteps,
         Self::FlowMaxIterations,
         Self::Uncoded,
+        Self::PolicyDenied,
+        Self::PolicyAsk,
         Self::ParseUnknownAction,
         Self::ParseMissingReference,
         Self::ParseMissingParam,
@@ -400,6 +414,8 @@ impl FailureCode {
             FlowMaxSteps => "The flow ran more than `max_steps` steps, usually in a loop.",
             FlowMaxIterations => "A block ran more times than its `max_iterations`.",
             Uncoded => "golem did not classify this error.",
+            PolicyDenied => "The user's `golem mcp` policy denies this action.",
+            PolicyAsk => "This action needs the user's permission.",
             ParseUnknownAction => "The `action` is not a known action.",
             ParseMissingReference => {
                 "A block, subflow or fixture that the flow names does not exist."
@@ -474,6 +490,8 @@ impl FailureCode {
                 "Fix the loop that re-enters the block, or raise its `max_iterations`."
             }
             Uncoded => "Read the message, and report it to the golem maintainers.",
+            PolicyDenied => "Tell the user; the user changes the policy with `golem mcp-config`.",
+            PolicyAsk => "Ask the user; if the user agrees, call act again with the same step.",
             ParseUnknownAction => "Fix the spelling; see the actions reference.",
             ParseMissingReference => {
                 "Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`."

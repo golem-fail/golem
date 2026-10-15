@@ -21,6 +21,7 @@ pub mod fixture;
 pub mod inline;
 pub mod mixin;
 pub mod permissions;
+pub mod policy;
 pub mod validation;
 
 use serde::de::value::MapAccessDeserializer;

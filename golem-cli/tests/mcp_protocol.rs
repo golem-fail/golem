@@ -55,6 +55,7 @@ async fn every_tool_works_against_a_stub_session() {
         project_root: dir.path().to_path_buf(),
         soft_timeout: Some(Duration::from_secs(10)),
         stub: true,
+        policy: Default::default(),
     });
     let (server_io, client_io) = tokio::io::duplex(1 << 20);
     tokio::spawn(async move {
@@ -424,6 +425,7 @@ async fn a_client_with_a_short_limit_gets_a_shorter_soft_timeout() {
         project_root: dir.path().to_path_buf(),
         soft_timeout: None,
         stub: true,
+        policy: Default::default(),
     });
     let watched = server.clone();
     let (server_io, client_io) = tokio::io::duplex(1 << 16);
@@ -438,5 +440,100 @@ async fn a_client_with_a_short_limit_gets_a_shorter_soft_timeout() {
     );
     let client = copilot.serve(client_io).await.expect("client");
     assert_eq!(watched.soft_timeout(), Duration::from_secs(20));
+    client.cancel().await.expect("close client");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_policy_asks_denies_and_hides_actions_over_mcp() {
+    let dir = tempfile::Builder::new()
+        .prefix("gmcp")
+        .tempdir_in("/tmp")
+        .expect("tempdir");
+    std::fs::write(dir.path().join("golem.toml"), common::golem_toml()).expect("golem.toml");
+    let socket = dir.path().join("d.sock");
+    let _daemon = golem_orchestrator::ipc::start_server(
+        &socket,
+        &golem_orchestrator::ipc::Identity::current(),
+    )
+    .await
+    .expect("daemon");
+    let server = GolemMcp::new(McpOptions {
+        socket,
+        project_root: dir.path().to_path_buf(),
+        soft_timeout: Some(Duration::from_secs(10)),
+        stub: true,
+        policy: golem_cli::policy_cmd::PolicySource {
+            user_config: None,
+            deny: vec!["email".into()],
+            ask: Vec::new(),
+        },
+    });
+    let (server_io, client_io) = tokio::io::duplex(1 << 20);
+    tokio::spawn(async move {
+        let service = server.serve(server_io).await.expect("serve");
+        let _ = service.waiting().await;
+    });
+    let client = ().serve(client_io).await.expect("client");
+
+    let (c, err) = call(&client, "session_open", serde_json::json!({})).await;
+    assert!(!err, "{c}");
+    assert!(
+        text_of(&c).contains(
+            "policy: http ask, email deny, shell deny · shell: ask → deny (email is deny, and bash can do its work)"
+        ),
+        "{c}"
+    );
+
+    let inbox = r#"{ action = "create_inbox", provider = "ethereal", save_to = "inbox" }"#;
+    let (c, err) = call(&client, "act", serde_json::json!({ "step": inbox })).await;
+    assert!(err, "{c}");
+    assert!(
+        text_of(&c).starts_with("ES001 create_inbox: denied by user policy (email)"),
+        "{c}"
+    );
+    let (c, err) = call(
+        &client,
+        "act",
+        serde_json::json!({ "step": inbox, "run": false }),
+    )
+    .await;
+    assert!(
+        err && text_of(&c).starts_with("ES001"),
+        "act(run = false) SHALL be refused too: {c}"
+    );
+
+    let get = r#"{ action = "get_http", url = "http://127.0.0.1:9/x", if_fail = "ignore" }"#;
+    let (c, err) = call(&client, "act", serde_json::json!({ "step": get })).await;
+    assert!(err && text_of(&c).starts_with("ES002 get_http"), "{c}");
+    let (c, err) = call(&client, "act", serde_json::json!({ "step": get })).await;
+    assert!(!err, "the same step SHALL run on the second call: {c}");
+
+    let (c, _) = call(
+        &client,
+        "help",
+        serde_json::json!({ "topic": "act", "item": "external" }),
+    )
+    .await;
+    let external = text_of(&c);
+    assert!(
+        !external.contains("create_inbox") && !external.contains("- bash"),
+        "{external}"
+    );
+    let (c, err) = call(
+        &client,
+        "help",
+        serde_json::json!({ "topic": "act", "item": "bash" }),
+    )
+    .await;
+    assert!(err, "a denied action SHALL have no help: {c}");
+    let (c, err) = call(
+        &client,
+        "help",
+        serde_json::json!({ "topic": "act", "item": "get_http" }),
+    )
+    .await;
+    assert!(!err, "{c}");
+    assert!(text_of(&c).contains("asks for this action"), "{c}");
+
     client.cancel().await.expect("close client");
 }

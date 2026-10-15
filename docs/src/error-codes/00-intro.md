@@ -13,6 +13,7 @@ A code is five characters: `<severity><domain><number>`, e.g. `EF408`.
   |--------|--------|-------|
   | `H` | Host — toolchain, orchestrator, ports | SRE / CI |
   | `D` | Device — boot, companion, driver comms | Device farm |
+  | `S` | Policy — the user's `golem mcp` policy refused an action (MCP results only; `golem run` never shows it) | The user (`golem mcp-config`) |
   | `A` | App — build, install, launch | App developer |
   | `F` | Flow — runtime test logic | Test writer / app developer¹ |
   | `P` | Parsing — test file, params, suite config | Test writer |

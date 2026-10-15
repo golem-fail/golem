@@ -115,6 +115,9 @@ struct Facts {
     /// Where `browse_*` steps stand on this host: whether this build carries
     /// browser support at all, and the Chrome it would drive if so.
     browser: BrowserFacts,
+    /// The `golem mcp` policy in this project: its summary and what golem
+    /// changed so its rules hold, or why it does not load.
+    mcp_policy: Option<std::result::Result<(String, Vec<String>), String>>,
 }
 
 /// What `doctor` can say about browser automation.
@@ -206,6 +209,24 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
             "~/.golem writable",
             reason,
             "fix permissions on ~/.golem (golem extracts embedded companions there)",
+        )),
+    }
+
+    // The MCP policy: a config that does not load stops `golem mcp`.
+    match &f.mcp_policy {
+        None => {}
+        Some(Ok((summary, notes))) if notes.is_empty() => {
+            checks.push(Check::ok("golem mcp policy", summary));
+        }
+        Some(Ok((summary, notes))) => checks.push(Check::warn(
+            "golem mcp policy",
+            &format!("{summary}; {}", notes.join("; ")),
+            "make shell at least as strict as each other class: golem mcp-config",
+        )),
+        Some(Err(reason)) => checks.push(Check::fail(
+            "golem mcp policy",
+            reason,
+            "fix [mcp.policy] in ~/.golem/config.toml or golem.toml, or run golem mcp-config",
         )),
     }
 
@@ -595,6 +616,30 @@ async fn stdout_of(program: &str, args: &[&str]) -> String {
 
 /// Probe `~/.golem`: ensure it exists and is writable by round-tripping a probe
 /// file. Returns `Ok(())` or a human-readable reason.
+fn probe_mcp_policy() -> std::result::Result<(String, Vec<String>), String> {
+    let source = crate::policy_cmd::PolicySource {
+        user_config: Some(crate::policy_cmd::user_config_path().map_err(|e| format!("{e:#}"))?),
+        ..Default::default()
+    };
+    let policy = source
+        .policy(&crate::project_root_for_policy())
+        .map_err(|e| format!("{e:#}"))?;
+    Ok((
+        policy
+            .summary_line()
+            .map(|l| {
+                l.trim_start_matches("policy: ")
+                    .split(" · ")
+                    .next()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "everything allowed".into()),
+        policy.notes().to_vec(),
+    ))
+}
+
 fn probe_golem_writable() -> std::result::Result<(), String> {
     let home = dirs::home_dir().ok_or_else(|| "could not determine home directory".to_string())?;
     let dir = home.join(".golem");
@@ -641,6 +686,7 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
         f.android_companion = golem_orchestrator::companions::has_android_companion()
             .then(golem_orchestrator::companions::android_companion_size);
         f.golem_writable = Some(probe_golem_writable());
+        f.mcp_policy = Some(probe_mcp_policy());
     }
 
     if run_build {
@@ -741,6 +787,7 @@ mod tests {
             ios_companion: Some(9_400_000),
             android_companion: Some(12_000_000),
             golem_writable: Some(Ok(())),
+            mcp_policy: None,
             cargo: Some("1.83.0".to_string()),
             xcodebuild: Some("15.4".to_string()),
             jdk: Some("17.0.10".to_string()),
@@ -1141,5 +1188,28 @@ mod tests {
         // "xcrun version 66." — trailing dot ⇒ not a clean N.N version.
         assert_eq!(parse_version("xcrun version 66."), None);
         assert_eq!(parse_version("no version here"), None);
+    }
+
+    #[test]
+    fn a_raised_shell_in_the_mcp_policy_warns() {
+        let line = |f: &Facts| {
+            evaluate_runtime(f)
+                .into_iter()
+                .find(|c| c.label == "golem mcp policy")
+                .map(|c| (c.status, c.detail))
+        };
+        let mut f = base_facts();
+        assert_eq!(line(&f), None);
+        f.mcp_policy = Some(Ok(("http ask, shell ask".into(), Vec::new())));
+        assert_eq!(line(&f), Some((Status::Ok, "http ask, shell ask".into())));
+        f.mcp_policy = Some(Ok((
+            "script ask, shell ask".into(),
+            vec!["shell: allow → ask (script is ask, and bash can do its work)".into()],
+        )));
+        let (status, detail) = line(&f).expect("line");
+        assert_eq!(status, Status::Warn);
+        assert!(detail.contains("shell: allow → ask"), "{detail}");
+        f.mcp_policy = Some(Err("[mcp.policy] \"shel\" is not an action class".into()));
+        assert_eq!(line(&f).map(|l| l.0), Some(Status::Fail));
     }
 }

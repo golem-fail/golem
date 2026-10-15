@@ -22,6 +22,7 @@ The tool list and each tool's arguments are in the [CLI reference](cli-reference
   - [Install channels](#install-channels)
   - [Timeouts](#timeouts)
   - [When the client drops the instructions](#when-the-client-drops-the-instructions)
+- [What the LLM may run](#what-the-llm-may-run)
 - [The step notation](#the-step-notation)
 - [The visible tree decides](#the-visible-tree-decides)
 - [Sessions](#sessions)
@@ -362,6 +363,42 @@ Some clients drop the instructions, for example Cline. With such a client, give 
    For Cline, add the text to `.clinerules` instead.
 
 Both commands print the text that the server sends, so the text stays the same after an upgrade. Run the command again after you upgrade golem.
+
+## What the LLM may run
+
+golem checks each step that the LLM writes, against a policy. golem enforces the policy itself: the model cannot skip it, and text on a screen, in a log or in an email cannot talk the model past it. Each action belongs to a class, and the policy sets each class, or one action, to `allow`, `ask` or `deny`.
+
+| Class | Actions | Default |
+|---|---|---|
+| `read` | `tree`, `screenshot`, `probe`, `read`, `assert_*`, `app_logs`, `load_fixture`, `load_mixin` | allow |
+| `device` | `tap`, `type`, `swipe`, `launch`, `open_link`, `press` and the other gestures | allow |
+| `device-data` | `clear_data`, `set_location`, `push_notification`, `add_media` | allow |
+| `browser` | `browse_navigate`, `browse_tap`, `browse_type`, `browse_read` and the other `browse_*` actions not listed below | allow |
+| `browser-secrets` | `browse_get_cookie`, `browse_get_local_storage`, `browse_get_session_storage`, `browse_execute_js`, `browse_mcp_call` | allow |
+| `http` | `get_http`, `post_http`, `put_http`, `patch_http`, `delete_http`: requests from the host, which reach localhost and the internal network | ask |
+| `email` | `create_inbox`, `await_email` | allow |
+| `script` | `run`: a script in the project | allow |
+| `shell` | `bash`: any command on the host | ask |
+
+- **`allow`** runs the step.
+- **`ask`** refuses the first `act` of the step with ES002, and tells the model to ask the user. If the user agrees, the model calls `act` again with the same step, and the step runs. golem compares the steps as they would run: key order, spaces, `comment`, `tree` and `run` do not matter, and each `${var}` counts with its value. An approval lasts until the session closes. `ask` relies on the model to ask: a model that does not obey can call `act` again without asking.
+- **`deny`** refuses the step with ES001, and `help` does not list the action.
+
+golem checks a step where it enters the session or the draft: `act` (also with `run = false`), `step_edit` and `teardown_add`. `draft_run` runs only steps that passed this check or came from the user's own files: a flow from `session_open(flow)`, a mixin, a subflow. `golem run` and `golem session` do not read the policy.
+
+`bash` can do the work of each other class (`./scripts/x.sh`, `curl`, `adb shell pm clear`). So golem makes `shell` at least as strict as the strictest class or action, and says so in the `session_open` result and in `golem doctor`.
+
+Set the policy in `~/.golem/config.toml` with [`golem mcp-config`](cli-reference.md#golem-mcp-config):
+
+```toml
+[mcp.policy]
+http = "allow"
+
+[mcp.policy.actions]
+delete_http = "deny"
+```
+
+A project `golem.toml` can have an `[mcp.policy]` too, and `golem mcp --deny shell` or `--ask http` sets one for a client. Both can only make the policy stricter, so a cloned repository cannot allow `bash` for itself. The `session_open` result ends with the policy, for example `policy: http ask, shell ask`.
 
 ## The step notation
 
