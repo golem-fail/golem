@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12683 |
-| Both, kept in context by most clients | 13023 |
+| Tool list (31 tools, as `tools/list` JSON) | 12993 |
+| Both, kept in context by most clients | 13333 |
 
 ## Instructions
 
@@ -255,14 +255,15 @@ Check the draft as golem run does (golem.toml merged; actions, required keys, bl
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `fixtures` | array | From a fixture hint: put ${x.key} in place of the value. |
 | `mixins` | array | From a mixin hint: put a load_mixin step in place of the matching steps. |
 | `overwrite` | boolean | Needed to replace a file this session did not open or export. |
 | `path` (required) | string | Relative to project, or absolute. |
 
-<details><summary>As <code>tools/list</code> sends it · 788 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 1098 chars</summary>
 
 ```json
-{"name":"export_flow","description":"Check the draft as golem run does (golem.toml merged; actions, required keys, block names, branches); if it passes, write it. Returns status counts, unverified steps, run warnings.","inputSchema":{"$defs":{"MixinAt":{"properties":{"at":{"description":"First step, block:step.","type":"string"},"mixin":{"type":"string"}},"required":["at","mixin"],"type":"object"}},"properties":{"mixins":{"description":"From a mixin hint: put a load_mixin step in place of the matching steps.","items":{"$ref":"#/$defs/MixinAt"},"type":"array"},"overwrite":{"description":"Needed to replace a file this session did not open or export.","type":"boolean"},"path":{"description":"Relative to project, or absolute.","type":"string"}},"required":["path"],"type":"object"}}
+{"name":"export_flow","description":"Check the draft as golem run does (golem.toml merged; actions, required keys, block names, branches); if it passes, write it. Returns status counts, unverified steps, run warnings.","inputSchema":{"$defs":{"FixtureAt":{"properties":{"at":{"description":"block:step.","type":"string"},"key":{"description":"fixture.key","type":"string"}},"required":["at","key"],"type":"object"},"MixinAt":{"properties":{"at":{"description":"First step, block:step.","type":"string"},"mixin":{"type":"string"}},"required":["at","mixin"],"type":"object"}},"properties":{"fixtures":{"description":"From a fixture hint: put ${x.key} in place of the value.","items":{"$ref":"#/$defs/FixtureAt"},"type":"array"},"mixins":{"description":"From a mixin hint: put a load_mixin step in place of the matching steps.","items":{"$ref":"#/$defs/MixinAt"},"type":"array"},"overwrite":{"description":"Needed to replace a file this session did not open or export.","type":"boolean"},"path":{"description":"Relative to project, or absolute.","type":"string"}},"required":["path"],"type":"object"}}
 ```
 
 </details>

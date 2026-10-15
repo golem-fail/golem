@@ -349,6 +349,88 @@ impl Draft {
         out
     }
 
+    /// Each literal of a step that equals one of `values`.
+    pub fn fixture_matches(&self, values: &[FixtureValue]) -> Vec<FixtureMatch> {
+        let mut out = Vec::new();
+        for (place, steps) in self.places() {
+            for (i, step) in steps.iter().enumerate() {
+                for v in values {
+                    let mut fields = Vec::new();
+                    fields_equal(step, &v.value, "", &mut fields);
+                    out.extend(fields.into_iter().map(|field| FixtureMatch {
+                        place,
+                        step: i,
+                        field,
+                        value: v.clone(),
+                    }));
+                }
+            }
+        }
+        out
+    }
+
+    /// The `as` of a `load_fixture` of `fixture` before step `i`.
+    fn fixture_loaded_as(&self, place: Place, i: usize, fixture: &str) -> Option<String> {
+        let steps = self.places().into_iter().find(|(p, _)| *p == place)?.1;
+        steps[..i.min(steps.len())].iter().rev().find_map(|s| {
+            (s.get("action")?.as_str()? == "load_fixture" && s.get("fixture")?.as_str()? == fixture)
+                .then(|| s.get("as")?.as_str().map(str::to_string))
+                .flatten()
+        })
+    }
+
+    /// Put `${ns.key}` in place of the fixture value in step `i`, with a
+    /// `load_fixture` step before it when the place has none: `ns` is that
+    /// step's `as`. The new `load_fixture` did not run, so it is
+    /// unverified. Returns how many steps golem added (0 or 1).
+    pub fn use_fixture(&mut self, place: Place, i: usize, value: &FixtureValue) -> Result<usize> {
+        let (ns, added) = match self.fixture_loaded_as(place, i, &value.fixture) {
+            Some(ns) => (ns, 0),
+            None => (value.fixture.clone(), 1),
+        };
+        let reference = format!("${{{ns}.{}}}", value.key);
+        match place {
+            Place::Block(b) => {
+                let mut step = self.step_value(b, i).context("no such step")?;
+                for (_, v) in step.iter_mut() {
+                    swap_strings(v, &value.value, &reference);
+                }
+                self.replace_step(b, i, step)?;
+            }
+            Place::Teardown => {
+                let steps = self
+                    .teardown_steps_mut()
+                    .context("the draft has no [[teardown]] steps")?;
+                let step = steps.get_mut(i).context("no such teardown step")?;
+                swap_strings(step, &value.value, &reference);
+            }
+        }
+        self.reparse()?;
+        if added == 1 {
+            let load = parse_inline(&format!(
+                r#"{{ action = "load_fixture", fixture = "{}", as = "{ns}" }}"#,
+                value.fixture
+            ))?;
+            match place {
+                Place::Block(b) => {
+                    self.insert_step_in("block", b, Some(i), load, Some(super::status::MARKER))?;
+                    self.reparse()?;
+                    if let Some(s) = self.status.get_mut(b) {
+                        s.insert(i.min(s.len()), StepStatus::Unverified);
+                    }
+                    if let Some(ins) = self.insertion.as_mut().filter(|ins| ins.block == b) {
+                        ins.at = ins.at.map(|at| if at >= i { at + 1 } else { at });
+                    }
+                }
+                Place::Teardown => {
+                    self.insert_step_in("teardown", 0, Some(i), load, None)?;
+                    self.reparse()?;
+                }
+            }
+        }
+        Ok(added)
+    }
+
     /// How many steps block `b` has.
     pub fn steps_in_block(&self, b: usize) -> usize {
         self.steps_len(b)
@@ -461,6 +543,142 @@ fn file_places(text: &str) -> Vec<(String, Vec<toml::Table>)> {
         out.push(("teardown".to_string(), steps_of(t)));
     }
     out
+}
+
+/// A fixture value that a literal in the draft can stand for. Only golem
+/// sees the value: hints and errors name the fixture and the key.
+#[derive(Debug, Clone)]
+pub struct FixtureValue {
+    pub fixture: String,
+    pub key: String,
+    value: String,
+    /// The fixture's `secret` list names the key.
+    pub secret: bool,
+}
+
+/// The fixtures a flow in `flow_dir` can load, as `load_fixture` resolves
+/// them, and each value worth a hint: not a generator, not shorter than
+/// four characters, not `true` or `false`, not only a number. Short and
+/// common values would match too much text that is not the fixture's.
+pub fn fixtures_for(flow_dir: &Path, project_root: &Path) -> Vec<FixtureValue> {
+    let mut found: BTreeMap<String, PathBuf> = BTreeMap::new();
+    for dir in flow_dir.ancestors() {
+        if let Ok(files) = std::fs::read_dir(dir.join("__fixtures__")) {
+            for file in files.flatten().map(|f| f.path()) {
+                if file.extension().and_then(|e| e.to_str()) != Some("toml") {
+                    continue;
+                }
+                if let Some(name) = file.file_stem().and_then(|s| s.to_str()) {
+                    found.entry(name.to_string()).or_insert(file);
+                }
+            }
+        }
+        if dir == project_root {
+            break;
+        }
+    }
+    let worth = |v: &str| {
+        v.chars().count() >= 4
+            && !matches!(v, "true" | "false")
+            && v.parse::<f64>().is_err()
+            && !v.contains("${")
+    };
+    found
+        .into_iter()
+        .filter_map(|(name, path)| {
+            let text = std::fs::read_to_string(path).ok()?;
+            let fixture = golem_parser::fixture::parse_fixture(&text).ok()?;
+            Some(
+                fixture
+                    .vars
+                    .iter()
+                    .filter(|(_, v)| worth(v))
+                    .map(|(k, v)| FixtureValue {
+                        fixture: name.clone(),
+                        key: k.clone(),
+                        value: v.clone(),
+                        secret: fixture.secret.contains(k),
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .flatten()
+        .collect()
+}
+
+/// Every fixture value of the project worth a hint, the shallowest
+/// fixture first for a name: for a draft that is not a file yet.
+pub fn all_fixtures(project_root: &Path) -> Vec<FixtureValue> {
+    let mut dirs: Vec<PathBuf> = super::reusables(project_root)
+        .into_iter()
+        .filter(|r| r.kind == super::ReuseKind::Fixture)
+        .filter_map(|r| {
+            r.path
+                .parent()
+                .and_then(Path::parent)
+                .map(Path::to_path_buf)
+        })
+        .collect();
+    dirs.sort_by_key(|d| d.components().count());
+    dirs.dedup();
+    let mut out: Vec<FixtureValue> = Vec::new();
+    for dir in dirs {
+        for v in fixtures_for(&dir, &dir) {
+            if !out.iter().any(|o| o.fixture == v.fixture && o.key == v.key) {
+                out.push(v);
+            }
+        }
+    }
+    out
+}
+
+/// A literal of a draft step that equals a fixture value.
+#[derive(Debug, Clone)]
+pub struct FixtureMatch {
+    pub place: Place,
+    pub step: usize,
+    /// The field that holds it: `input`, or `on.text` inside a table.
+    pub field: String,
+    pub value: FixtureValue,
+}
+
+/// The field paths in `table` whose string value is `value`.
+fn fields_equal(table: &toml::Table, value: &str, prefix: &str, out: &mut Vec<String>) {
+    for (k, v) in table {
+        let path = if prefix.is_empty() {
+            k.clone()
+        } else {
+            format!("{prefix}.{k}")
+        };
+        match v {
+            toml::Value::String(s) if s == value => out.push(path),
+            toml::Value::Table(t) => fields_equal(t, value, &path, out),
+            _ => {}
+        }
+    }
+}
+
+/// `value` with each string equal to `from` changed to `to`.
+fn swap_strings(value: &mut Value, from: &str, to: &str) {
+    match value {
+        Value::String(s) if s.value() == from => {
+            let decor = s.decor().clone();
+            let mut new = toml_edit::Formatted::new(to.to_string());
+            *new.decor_mut() = decor;
+            *s = new;
+        }
+        Value::InlineTable(t) => {
+            for (_, v) in t.iter_mut() {
+                swap_strings(v, from, to);
+            }
+        }
+        Value::Array(a) => {
+            for v in a.iter_mut() {
+                swap_strings(v, from, to);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The `*.test.toml` files of the project, as `reusables` walks it.

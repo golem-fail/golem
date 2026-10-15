@@ -186,6 +186,17 @@ async fn handle(
                     ))
                 })
                 .collect(),
+            fixtures: msg["fixtures"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|m| {
+                    Some((
+                        m["at"].as_str()?.to_string(),
+                        m["key"].as_str()?.to_string(),
+                    ))
+                })
+                .collect(),
         }),
         "session_tree" => Some(Op::Tree {
             full: msg["full"].as_bool().unwrap_or(false),

@@ -219,6 +219,9 @@ pub enum Op {
         /// Put a `load_mixin` step in place of each run of steps that
         /// starts at `at` (`main:3`) and matches the mixin.
         mixins: Vec<(String, String)>,
+        /// Put `${x.key}` in place of the value of fixture key `qa.key` in
+        /// the step at `at`.
+        fixtures: Vec<(String, String)>,
     },
 }
 
@@ -516,9 +519,10 @@ struct Work {
     approvals: Approvals,
     /// The mixin hints already given, so each shows once.
     hinted: std::collections::HashSet<String>,
-    /// The mixins the draft can load, and when golem read them: finding
-    /// them walks the project, which is too slow for every `act`.
-    mixins: Option<(Instant, Vec<crate::draft::Mixin>)>,
+    /// The mixins and fixture values the draft can load, and when golem
+    /// read them: finding them walks the project, which is too slow for
+    /// every `act`.
+    reusable: Option<(Instant, Reusable)>,
 }
 
 /// The `ask` steps of a session, by [`step_key`]: refused once, then
@@ -993,7 +997,7 @@ impl Work {
             policy: None,
             approvals: Approvals::default(),
             hinted: Default::default(),
-            mixins: None,
+            reusable: None,
         }
     }
 }
@@ -1728,17 +1732,31 @@ fn with_reuse_hints(work: &mut Work, op: &Op, result: OpResult) -> OpResult {
 /// again: a person can add a mixin while the session runs.
 const MIXINS_FRESH: Duration = Duration::from_secs(30);
 
-/// The mixins this draft can load: from the flow's directory up, or every
-/// mixin of the project for a draft that is not a file yet.
-fn draft_mixins(work: &mut Work) -> Vec<crate::draft::Mixin> {
-    if let Some((read, mixins)) = &work.mixins {
+/// What the draft can reuse.
+#[derive(Clone, Default)]
+struct Reusable {
+    mixins: Vec<crate::draft::Mixin>,
+    fixtures: Vec<crate::draft::FixtureValue>,
+}
+
+/// The mixins and fixture values this draft can load: from the flow's
+/// directory up, or every one of the project for a draft that is not a
+/// file yet.
+fn draft_reusable(work: &mut Work) -> Reusable {
+    if let Some((read, reusable)) = &work.reusable {
         if read.elapsed() < MIXINS_FRESH {
-            return mixins.clone();
+            return reusable.clone();
         }
     }
-    let mixins = read_draft_mixins(work);
-    work.mixins = Some((Instant::now(), mixins.clone()));
-    mixins
+    let reusable = Reusable {
+        mixins: read_draft_mixins(work),
+        fixtures: match work.draft.source_dir() {
+            Some(dir) => crate::draft::fixtures_for(dir, &work.project_root),
+            None => crate::draft::all_fixtures(&work.project_root),
+        },
+    };
+    work.reusable = Some((Instant::now(), reusable.clone()));
+    reusable
 }
 
 fn read_draft_mixins(work: &Work) -> Vec<crate::draft::Mixin> {
@@ -1775,14 +1793,38 @@ fn match_hint(draft: &crate::draft::Draft, m: &crate::draft::MixinMatch) -> Stri
     )
 }
 
-/// New hints: each run of steps a mixin holds whole, and after an `act`,
-/// a mixin whose first steps the block's last steps are.
+/// The hint line for a fixture value: it names the fixture and the key,
+/// never the value.
+fn fixture_hint(draft: &crate::draft::Draft, m: &crate::draft::FixtureMatch) -> String {
+    let at = draft.place_address(m.place, m.step);
+    let key = format!("{}.{}", m.value.fixture, m.value.key);
+    let secret = if m.value.secret { " (a secret)" } else { "" };
+    format!(
+        "hint: {at} {} equals fixture {key}{secret} · export_flow(fixtures = [{{ at = \"{at}\", key = \"{key}\" }}]) replaces it",
+        m.field
+    )
+}
+
+/// New hints: each run of steps a mixin holds whole, each literal that
+/// equals a fixture value, and after an `act`, a mixin whose first steps
+/// the block's last steps are.
 fn reuse_hints(work: &mut Work, early: bool) -> Vec<String> {
-    let mixins = draft_mixins(work);
-    if mixins.is_empty() {
-        return Vec::new();
-    }
+    let Reusable { mixins, fixtures } = draft_reusable(work);
     let mut out = Vec::new();
+    for m in work.draft.fixture_matches(&fixtures) {
+        let key = format!(
+            "fixture|{}|{}.{}",
+            work.draft.place_address(m.place, m.step),
+            m.value.fixture,
+            m.value.key
+        );
+        if work.hinted.insert(key) {
+            out.push(fixture_hint(&work.draft, &m));
+        }
+    }
+    if mixins.is_empty() {
+        return out;
+    }
     for m in work.draft.mixin_matches(&mixins) {
         let key = format!("{}|{}", work.draft.place_address(m.place, m.start), m.mixin);
         if work.hinted.insert(key) {
@@ -1857,6 +1899,60 @@ fn apply_mixins(
     Ok(())
 }
 
+/// Put `${x.key}` in place of each requested fixture value, after checking
+/// that the step still holds it, with a `load_fixture` step where the
+/// block has none before it.
+fn apply_fixtures(
+    draft: &mut crate::draft::Draft,
+    requested: &[(String, String)],
+    values: &[crate::draft::FixtureValue],
+) -> Result<()> {
+    let current = draft.fixture_matches(values);
+    let listing = || {
+        let shown: Vec<String> = current
+            .iter()
+            .map(|m| {
+                format!(
+                    "{} {}.{}",
+                    draft.place_address(m.place, m.step),
+                    m.value.fixture,
+                    m.value.key
+                )
+            })
+            .collect();
+        if shown.is_empty() {
+            "none".to_string()
+        } else {
+            shown.join(", ")
+        }
+    };
+    let mut chosen = Vec::new();
+    for (at, key) in requested {
+        let (place, step) = draft.parse_place(at)?;
+        let Some(m) = current.iter().find(|m| {
+            m.place == place
+                && m.step == step
+                && format!("{}.{}", m.value.fixture, m.value.key) == *key
+        }) else {
+            anyhow::bail!(
+                "{at} does not hold the value of fixture {key}; current matches: {}",
+                listing()
+            );
+        };
+        chosen.push(m.clone());
+    }
+    // In file order: a load_fixture golem adds serves the later steps too,
+    // and moves them one down.
+    chosen.sort_by_key(|m| (m.place, m.step));
+    let mut moved: std::collections::HashMap<crate::draft::Place, usize> = Default::default();
+    for m in chosen {
+        let shift = moved.entry(m.place).or_default();
+        let added = draft.use_fixture(m.place, m.step + *shift, &m.value)?;
+        *shift += added;
+    }
+    Ok(())
+}
+
 async fn run_op_checked(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResult {
     match op {
         Op::DraftRun { restart, stop_at } => draft_run(work, *restart, stop_at.as_deref(), status)
@@ -1893,6 +1989,7 @@ async fn run_op_checked(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -
             path,
             overwrite,
             mixins,
+            fixtures,
         } => {
             let path = if path.is_absolute() {
                 path.clone()
@@ -1905,16 +2002,29 @@ async fn run_op_checked(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -
             };
             // Changed on a copy: a failed export leaves the draft as it was.
             let mut draft = work.draft.clone();
-            let available = draft_mixins(work);
-            if let Err(e) = apply_mixins(&mut draft, mixins, &available) {
+            let available = draft_reusable(work);
+            if !mixins.is_empty() && !fixtures.is_empty() {
+                return OpResult::Failed(
+                    "export_flow takes mixins or fixtures, not both: the places of one move with the other; export with one, then the other".into(),
+                );
+            }
+            let applied = apply_mixins(&mut draft, mixins, &available.mixins)
+                .and_then(|()| apply_fixtures(&mut draft, fixtures, &available.fixtures));
+            if let Err(e) = applied {
                 return OpResult::Failed(format!("{e:#}"));
             }
             match draft.export(&path, *overwrite, &work.project_root) {
                 Ok(done) => {
                     let mut hints: Vec<String> = draft
-                        .mixin_matches(&available)
+                        .mixin_matches(&available.mixins)
                         .iter()
                         .map(|m| match_hint(&draft, m))
+                        .chain(
+                            draft
+                                .fixture_matches(&available.fixtures)
+                                .iter()
+                                .map(|m| fixture_hint(&draft, m)),
+                        )
                         .collect();
                     let mut own = draft.own_files().to_vec();
                     own.push(done.path.clone());
@@ -3024,6 +3134,7 @@ mod tests {
             path: out.clone(),
             overwrite: true,
             mixins: vec![(at.to_string(), "pay".to_string())],
+            fixtures: Vec::new(),
         };
         match run(&s, export("main:1")).await.result {
             OpResult::Failed(e) => assert!(
@@ -3096,6 +3207,7 @@ mod tests {
                     ("main:1".into(), "pay".into()),
                     ("main:1".into(), "pay".into()),
                 ],
+                fixtures: Vec::new(),
             },
         )
         .await;
@@ -3127,6 +3239,7 @@ mod tests {
             path: out,
             overwrite: true,
             mixins: Vec::new(),
+            fixtures: Vec::new(),
         };
         match run(&s, export).await.result {
             OpResult::Exported { hints, .. } => assert_eq!(
@@ -3134,6 +3247,108 @@ mod tests {
                 ["hint: main:2–4 also in e2e/checkout.test.toml auth:1–3 · consider a mixin"],
                 "the file it writes SHALL NOT count"
             ),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// A session on the mock screen whose project holds the fixture `qa`:
+    /// `password` (secret), `user` and a value too short for a hint.
+    fn session_with_fixture() -> (Session, tempfile::TempDir) {
+        let (s, dir) = session_with_mixin();
+        std::fs::create_dir_all(dir.path().join("__fixtures__")).expect("fixtures");
+        std::fs::write(
+            dir.path().join("__fixtures__/qa.toml"),
+            "secret = [\"password\"]\n\n[vars]\nuser = \"Pay 42\"\npassword = \"Total\"\npin = \"42\"\n",
+        )
+        .expect("fixture");
+        (s, dir)
+    }
+
+    #[tokio::test]
+    async fn a_literal_that_equals_a_fixture_value_gets_a_hint_without_the_value() {
+        let (s, _dir) = session_with_fixture();
+        let typed = run(
+            &s,
+            act(r#"{ action = "type", on_text = "Total", input = "Total" }"#),
+        )
+        .await;
+        let toon = act_toon(&typed);
+        assert!(
+            toon.contains(r#"hint: main:1 input equals fixture qa.password (a secret) · export_flow(fixtures = [{ at = "main:1", key = "qa.password" }]) replaces it"#),
+            "{toon}"
+        );
+        assert_eq!(
+            toon.matches("qa.password").count(),
+            2,
+            "one hint for the step and key, though two fields hold the value: {toon}"
+        );
+        let short = run(&s, act(r#"{ action = "assert_visible", on_text = "42" }"#)).await;
+        assert!(
+            !act_toon(&short).contains("qa.pin"),
+            "a value shorter than 4 characters SHALL NOT get a hint"
+        );
+    }
+
+    #[tokio::test]
+    async fn export_puts_the_fixture_reference_in_place_of_the_value() {
+        let (s, dir) = session_with_fixture();
+        for step in [
+            r#"{ action = "assert_visible", on_text = "Pay 42" }"#,
+            r#"{ action = "type", on_text = "Pay 42", input = "Total" }"#,
+        ] {
+            act_toon(&run(&s, act(step)).await);
+        }
+        let out = dir.path().join("flow.test.toml");
+        let export = |fixtures: Vec<(String, String)>| Op::Export {
+            path: out.clone(),
+            overwrite: true,
+            mixins: Vec::new(),
+            fixtures,
+        };
+        match run(&s, export(vec![("main:1".into(), "qa.password".into())])).await.result {
+            OpResult::Failed(e) => assert!(
+                e.contains("main:1 does not hold the value of fixture qa.password; current matches: main:1 qa.user, main:2 qa.user, main:2 qa.password"),
+                "{e}"
+            ),
+            other => panic!("{other:?}"),
+        }
+        let done = run(
+            &s,
+            export(vec![
+                ("main:1".into(), "qa.user".into()),
+                ("main:2".into(), "qa.password".into()),
+                ("main:2".into(), "qa.user".into()),
+            ]),
+        )
+        .await;
+        assert!(matches!(done.result, OpResult::Exported { .. }), "{done:?}");
+        let written = std::fs::read_to_string(&out).expect("written");
+        assert_eq!(
+            written
+                .matches(r#"action = "load_fixture", fixture = "qa", as = "qa""#)
+                .count(),
+            1,
+            "one load_fixture SHALL serve the later steps: {written}"
+        );
+        assert!(
+            written.contains(r#"{ action = "assert_visible", on_text = "${qa.user}" }"#),
+            "{written}"
+        );
+        assert!(
+            written.contains(
+                r#"{ action = "type", on_text = "${qa.user}", input = "${qa.password}" }"#
+            ),
+            "{written}"
+        );
+        assert!(!written.contains("\"Total\""), "{written}");
+        let both = Op::Export {
+            path: out.clone(),
+            overwrite: true,
+            mixins: vec![("main:1".into(), "pay".into())],
+            fixtures: vec![("main:1".into(), "qa.user".into())],
+        };
+        match run(&s, both).await.result {
+            OpResult::Failed(e) => assert!(e.contains("takes mixins or fixtures, not both"), "{e}"),
             other => panic!("{other:?}"),
         }
     }
@@ -3154,6 +3369,7 @@ mod tests {
                 path: out,
                 overwrite: true,
                 mixins: Vec::new(),
+                fixtures: Vec::new(),
             },
         )
         .await
@@ -3193,6 +3409,7 @@ mod tests {
                 path: out.clone(),
                 overwrite: true,
                 mixins: vec![("teardown:1".into(), "pay".into())],
+                fixtures: Vec::new(),
             },
         )
         .await;
@@ -3981,6 +4198,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 path: path.clone(),
                 overwrite: false,
                 mixins: Vec::new(),
+                fixtures: Vec::new(),
             },
         )
         .await
