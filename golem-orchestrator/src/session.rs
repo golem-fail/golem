@@ -256,11 +256,13 @@ pub enum DraftEdit {
         step: String,
         comment: Option<String>,
     },
-    /// Replace the step at `at` (`block:step`), its comment, or both.
+    /// Replace the step at `at` (`block:step`), its comment, or both; or,
+    /// with `inline`, put a `load_mixin` step's own steps in its place.
     StepEdit {
         at: String,
         step: Option<String>,
         comment: Option<String>,
+        inline: bool,
     },
     StepDelete {
         at: String,
@@ -315,7 +317,9 @@ impl DraftEdit {
             |draft: &crate::draft::Draft, (b, i): (usize, usize)| Some(draft.listing_near(b, i));
         let line = |step: &str| golem_parser::inline::parse_step_inline(step).map(|p| p.line);
         match self {
-            DraftEdit::StepEdit { at, step, comment } => {
+            DraftEdit::StepEdit {
+                at, step, comment, ..
+            } => {
                 let step = step.as_deref().map(line).transpose()?;
                 let place = draft.step_edit(at, step.as_deref(), comment.as_deref())?;
                 return Ok(near(draft, place));
@@ -1530,6 +1534,15 @@ fn finish(status: &Mutex<Status>, changed: &tokio::sync::Notify, outcome: Outcom
     changed.notify_waiters();
 }
 
+/// Put the steps of the `load_mixin` step at `at` in its place, and return
+/// the listing around them.
+fn inline_mixin(work: &mut Work, at: &str) -> Result<String> {
+    let (b, i) = work.draft.address_of(at)?;
+    let lines = work.draft.mixin_steps(b, i, &work.project_root)?;
+    let (b, i) = work.draft.step_inline(at, &lines)?;
+    Ok(work.draft.listing_near(b, i))
+}
+
 /// Refuse a step that the session's policy does not allow. Golem checks a
 /// step where it enters the session or the draft, so `draft_run` runs only
 /// steps that passed here or came from the user's files.
@@ -1644,8 +1657,14 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
             comment,
         } => act(work, step, *tree, comment.as_deref()).await,
         Op::DraftShow => OpResult::Draft(work.draft.text()),
-        Op::DraftSteps(q) => match work.draft.steps(q) {
+        Op::DraftSteps(q) => match work.draft.steps_with_mixins(q, &work.project_root) {
             Ok(text) => OpResult::Draft(text),
+            Err(e) => OpResult::Failed(format!("{e:#}")),
+        },
+        Op::Edit(DraftEdit::StepEdit {
+            at, inline: true, ..
+        }) => match inline_mixin(work, at) {
+            Ok(listing) => OpResult::Edited(format!("draft updated\n{listing}")),
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
         Op::Edit(edit) => match edit
@@ -2462,6 +2481,7 @@ mod tests {
                 at: "main:1".into(),
                 step: Some(bash.into()),
                 comment: None,
+                inline: false,
             }),
         )
         .await;
@@ -2629,6 +2649,78 @@ mod tests {
             "the draft SHALL record the load_mixin step, not its steps:\n{draft}"
         );
         assert!(!draft.contains("assert_visible"), "{draft}");
+    }
+
+    #[tokio::test]
+    async fn a_mixin_step_lists_its_steps_refuses_edits_inside_and_inlines() {
+        let (s, dir) = session_with_mixin();
+        let step = r#"{ action = "load_mixin", mixin = "pay", vars = { what = "Pay 42", then = "Total" } }"#;
+        assert!(matches!(
+            run(&s, act(step)).await.result,
+            OpResult::Act { passed: true, .. }
+        ));
+        let listing = match run(&s, Op::DraftSteps(crate::draft::StepsQuery::default()))
+            .await
+            .result
+        {
+            OpResult::Draft(text) => text,
+            other => panic!("{other:?}"),
+        };
+        assert!(
+            listing.contains(r#"    main:1.1   { action = "tap", on_text = "Pay 42" }"#),
+            "{listing}"
+        );
+        assert!(
+            listing.contains(
+                r#"    main:1.2   { action = "assert_visible", on_text = "Total", timeout = 300 }"#
+            ),
+            "{listing}"
+        );
+        let refused = run(
+            &s,
+            Op::Edit(DraftEdit::StepDelete {
+                at: "main:1.2".into(),
+            }),
+        )
+        .await;
+        match &refused.result {
+            OpResult::Failed(e) => assert!(
+                e.contains(r#"main:1.2 is inside a mixin · step_edit("main:1", inline = true)"#),
+                "{e}"
+            ),
+            other => panic!("{other:?}"),
+        }
+        let mixin_file =
+            std::fs::read_to_string(dir.path().join("__mixins__/pay.toml")).expect("read");
+        let inlined = run(
+            &s,
+            Op::Edit(DraftEdit::StepEdit {
+                at: "main:1".into(),
+                step: None,
+                comment: None,
+                inline: true,
+            }),
+        )
+        .await;
+        match &inlined.result {
+            OpResult::Edited(text) => {
+                assert!(
+                    text.contains(r#"main:1 ✓ { action = "tap", on_text = "Pay 42" }"#),
+                    "{text}"
+                );
+                assert!(
+                    text.contains(r#"main:2 ✓ { action = "assert_visible""#),
+                    "{text}"
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(!draft_of(&s).await.contains("load_mixin"));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("__mixins__/pay.toml")).expect("read"),
+            mixin_file,
+            "inline SHALL NOT change the mixin file"
+        );
     }
 
     #[tokio::test]

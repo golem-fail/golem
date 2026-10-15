@@ -497,6 +497,7 @@ fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEd
             at: need("at")?,
             step: text("step"),
             comment: text("comment"),
+            inline: msg["inline"].as_bool().unwrap_or(false),
         },
         "step_delete" => DraftEdit::StepDelete { at: need("at")? },
         "step_move" => DraftEdit::StepMove {

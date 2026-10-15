@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12115 |
-| Both, kept in context by most clients | 12455 |
+| Tool list (31 tools, as `tools/list` JSON) | 12365 |
+| Both, kept in context by most clients | 12705 |
 
 ## Instructions
 
@@ -339,12 +339,16 @@ What a selector matches, without acting: each visible match, which one act picks
 
 ### `reuse_list`
 
-Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read.
+Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read. name: one mixin's steps.
 
-<details><summary>As <code>tools/list</code> sends it · 214 chars</summary>
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | A mixin's name: list its steps. |
+
+<details><summary>As <code>tools/list</code> sends it · 327 chars</summary>
 
 ```json
-{"name":"reuse_list","description":"Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read.","inputSchema":{"type":"object"}}
+{"name":"reuse_list","description":"Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read. name: one mixin's steps.","inputSchema":{"properties":{"name":{"description":"A mixin's name: list its steps.","type":"string"}},"type":"object"}}
 ```
 
 </details>
@@ -443,12 +447,13 @@ Change a draft step without running it. Only a new comment or larger timeout kee
 |-----------|------|-------------|
 | `at` (required) | string | block:step. |
 | `comment` | string | "" removes it. |
+| `inline` | boolean | On a load_mixin step: copy the mixin's steps into the draft in its place, to edit them here. |
 | `step` | string | Whole new step. |
 
-<details><summary>As <code>tools/list</code> sends it · 410 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 547 chars</summary>
 
 ```json
-{"name":"step_edit","description":"Change a draft step without running it. Only a new comment or larger timeout keeps its status; else it and the next step become ?, later ~.","inputSchema":{"properties":{"at":{"description":"block:step.","type":"string"},"comment":{"description":"\"\" removes it.","type":"string"},"step":{"description":"Whole new step.","type":"string"}},"required":["at"],"type":"object"}}
+{"name":"step_edit","description":"Change a draft step without running it. Only a new comment or larger timeout keeps its status; else it and the next step become ?, later ~.","inputSchema":{"properties":{"at":{"description":"block:step.","type":"string"},"comment":{"description":"\"\" removes it.","type":"string"},"inline":{"description":"On a load_mixin step: copy the mixin's steps into the draft in its place, to edit them here.","type":"boolean"},"step":{"description":"Whole new step.","type":"string"}},"required":["at"],"type":"object"}}
 ```
 
 </details>
