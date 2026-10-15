@@ -16,8 +16,10 @@ use anyhow::{bail, Context, Result};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
 
 mod edit;
+mod reuse;
 mod setup;
 mod status;
+pub use reuse::{all_mixins, mixins_for, Mixin, MixinMatch, Place};
 pub use status::{StatusCounts, StepStatus, StepsQuery};
 
 /// Where the next recorded step goes: a block, and a position in its steps.

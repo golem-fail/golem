@@ -514,6 +514,79 @@ async fn live_mcp_an_inlined_mixin_exports_steps_that_golem_run_passes() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
+async fn live_mcp_steps_that_match_a_mixin_export_as_load_mixin() {
+    let live = Live::new();
+    let scratch = live.scratch();
+    std::fs::create_dir_all(scratch.path().join("__mixins__")).expect("mixins");
+    std::fs::copy(
+        live.root.join("e2e/__mixins__/launch_and_wait.toml"),
+        scratch.path().join("__mixins__/launch_and_wait.toml"),
+    )
+    .expect("mixin");
+    let flow = scratch.path().join("match.test.toml");
+    std::fs::write(
+        &flow,
+        "[flow]\nname = \"m\"\n\n[[flow.apps]]\nname = \"app\"\ndevices = [{ os = [\"ios:latest\", \"android:latest\"] }]\n\n[[block]]\nname = \"main\"\nsteps = [\n  { action = \"stop\", app = \"app\" },\n]\n",
+    )
+    .expect("flow");
+    let mcp = live.mcp(&[]).await;
+    live.open(
+        &mcp,
+        serde_json::json!({ "flow": flow.display().to_string(), "run": false }),
+    )
+    .await;
+    mcp.ok(
+        "act",
+        serde_json::json!({ "step": r#"{ action = "launch", app = "app" }"# }),
+    )
+    .await;
+    let hinted = mcp
+        .ok(
+            "act",
+            serde_json::json!({ "step": r#"{ action = "assert_visible", on_text = "Submit" }"# }),
+        )
+        .await;
+    assert!(
+        hinted.contains(
+            r#"hint: main:1–2 match mixin "launch_and_wait" (vars: app_bundle, wait_element)"#
+        ),
+        "{hinted}"
+    );
+    let exported = mcp
+        .ok(
+            "export_flow",
+            serde_json::json!({
+                "path": flow.display().to_string(),
+                "overwrite": true,
+                "mixins": [{ "at": "main:1", "mixin": "launch_and_wait" }],
+            }),
+        )
+        .await;
+    assert!(exported.starts_with("exported "), "{exported}");
+    mcp.ok("session_close", serde_json::json!({ "teardown": false }))
+        .await;
+    drop(mcp);
+    let written = std::fs::read_to_string(&flow).expect("read");
+    assert!(
+        written.contains(r#"{ action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "app", wait_element = "Submit" } }"#),
+        "{written}"
+    );
+
+    let run = live
+        .golem_run(&flow, &live.platform)
+        .output()
+        .await
+        .expect("golem run");
+    assert!(
+        run.status.success(),
+        "the exported flow SHALL pass under golem run:\n{}\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
 async fn live_mcp_app_logs_show_the_launch_line_and_a_crash() {
     let live = Live::new();
     let mcp = live.mcp(&[]).await;

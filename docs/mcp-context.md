@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 340 |
-| Tool list (31 tools, as `tools/list` JSON) | 12365 |
-| Both, kept in context by most clients | 12705 |
+| Tool list (31 tools, as `tools/list` JSON) | 12683 |
+| Both, kept in context by most clients | 13023 |
 
 ## Instructions
 
@@ -255,13 +255,14 @@ Check the draft as golem run does (golem.toml merged; actions, required keys, bl
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `mixins` | array | From a mixin hint: put a load_mixin step in place of the matching steps. |
 | `overwrite` | boolean | Needed to replace a file this session did not open or export. |
 | `path` (required) | string | Relative to project, or absolute. |
 
-<details><summary>As <code>tools/list</code> sends it · 470 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 788 chars</summary>
 
 ```json
-{"name":"export_flow","description":"Check the draft as golem run does (golem.toml merged; actions, required keys, block names, branches); if it passes, write it. Returns status counts, unverified steps, run warnings.","inputSchema":{"properties":{"overwrite":{"description":"Needed to replace a file this session did not open or export.","type":"boolean"},"path":{"description":"Relative to project, or absolute.","type":"string"}},"required":["path"],"type":"object"}}
+{"name":"export_flow","description":"Check the draft as golem run does (golem.toml merged; actions, required keys, block names, branches); if it passes, write it. Returns status counts, unverified steps, run warnings.","inputSchema":{"$defs":{"MixinAt":{"properties":{"at":{"description":"First step, block:step.","type":"string"},"mixin":{"type":"string"}},"required":["at","mixin"],"type":"object"}},"properties":{"mixins":{"description":"From a mixin hint: put a load_mixin step in place of the matching steps.","items":{"$ref":"#/$defs/MixinAt"},"type":"array"},"overwrite":{"description":"Needed to replace a file this session did not open or export.","type":"boolean"},"path":{"description":"Relative to project, or absolute.","type":"string"}},"required":["path"],"type":"object"}}
 ```
 
 </details>
