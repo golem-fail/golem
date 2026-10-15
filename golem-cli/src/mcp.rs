@@ -472,6 +472,26 @@ fn compact_schemas<S>(mut router: ToolRouter<S>) -> ToolRouter<S> {
     router
 }
 
+/// One line naming what the project has to reuse, for `session_open`: the
+/// model rarely calls `reuse_list` on its own, and then writes again the
+/// steps a mixin holds.
+fn reuse_summary(project_root: &std::path::Path) -> Option<String> {
+    use golem_orchestrator::draft::ReuseKind;
+    let found = golem_orchestrator::draft::reusables(project_root);
+    let parts: Vec<String> = [
+        (ReuseKind::Mixin, "mixin"),
+        (ReuseKind::Fixture, "fixture"),
+        (ReuseKind::Subflow, "subflow"),
+    ]
+    .into_iter()
+    .filter_map(|(kind, noun)| {
+        let n = found.iter().filter(|r| r.kind == kind).count();
+        (n > 0).then(|| format!("{n} {noun}{}", if n == 1 { "" } else { "s" }))
+    })
+    .collect();
+    (!parts.is_empty()).then(|| format!("reuse: {} (reuse_list)\n", parts.join(", ")))
+}
+
 fn text(s: impl Into<String>) -> Result<CallToolResult, ErrorData> {
     Ok(CallToolResult::success(vec![ContentBlock::text(s)]))
 }
@@ -1076,7 +1096,12 @@ impl GolemMcp {
         if let Some(err) = r["error"].as_str() {
             return tool_error(err.to_string());
         }
-        if let Some(note) = crate::session_cmd::note_text(reply) {
+        if let Some(mut note) = crate::session_cmd::note_text(reply) {
+            if r["opened"] == true {
+                if let Some(line) = reuse_summary(&self.options.project_root) {
+                    note.push_str(&line);
+                }
+            }
             return text(note);
         }
         if let Some(png) = r["png_base64"].as_str() {
@@ -1369,6 +1394,29 @@ pub async fn serve(options: McpOptions) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_reuse_summary_counts_each_kind_and_leaves_out_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert_eq!(reuse_summary(dir.path()), None, "nothing to reuse, no line");
+        std::fs::create_dir_all(dir.path().join("__mixins__")).expect("mixins");
+        for m in ["a", "b"] {
+            std::fs::write(
+                dir.path().join(format!("__mixins__/{m}.toml")),
+                "[[step]]\naction = \"tap\"\non_text = \"x\"\n",
+            )
+            .expect("mixin");
+        }
+        std::fs::write(
+            dir.path().join("sub.test.toml"),
+            "[flow]\nname = \"s\"\nexplicit_only = true\n",
+        )
+        .expect("subflow");
+        assert_eq!(
+            reuse_summary(dir.path()).as_deref(),
+            Some("reuse: 2 mixins, 1 subflow (reuse_list)\n")
+        );
+    }
 
     #[test]
     fn the_skill_is_valid_frontmatter_with_the_when_to_use_text() {
