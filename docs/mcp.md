@@ -516,6 +516,8 @@ A change, such as a new step from `act`, sets these statuses:
 - The next active step becomes `?`, because the screen before it is different now. A `screenshot` is not an active step, so the step after it becomes `?`.
 - Each later step that can run after the change becomes `~`. That is the rest of the block, then each block that a `branch`, `next` or the next block in the file leads to.
 
+Under a `load_mixin` step, `draft_steps` lists the mixin's steps as they would run, with the variables filled in, at sub-addresses such as `login:2.1`. They are read-only: a step tool refuses a sub-address, and tells the model to use `step_edit(at = "login:2", inline = true)`. That call puts the mixin's steps in the draft in place of the `load_mixin` step, with its status, so the model can change them for this flow only. The mixin file does not change, and other flows that use it are not affected. golem does not copy the steps on its own, because the flow then no longer gets later fixes to the mixin.
+
 Only `?` goes into the file, as a `# unverified` line above the step. A step that passes in the session loses the line. `export_flow` gives the count of each status and lists the unverified steps.
 
 `export_flow` checks the draft as `golem run` does before it boots a device: with `golem.toml` merged in and mixins expanded, each step's action and required keys, each block that `start` or a `goto` names, and each branch. If the check fails, the tool writes nothing and lists the errors. If it passes, the tool writes the file and returns the warnings that `golem run` would give. `act`, `teardown_add` and `step_edit` already refuse a step that fails the check. `block_link` refuses a branch that fails it, but a `goto` can name a block that you add later.
@@ -535,7 +537,7 @@ These tools change a step that is already in the draft. They do not run the step
 
 | Tool | What it does |
 |------|--------------|
-| `step_edit(at, step?, comment?)` | Replaces the step, its comment, or both. `comment = ""` removes the comment. |
+| `step_edit(at, step?, comment?, inline?)` | Replaces the step, its comment, or both. `comment = ""` removes the comment. On a `load_mixin` step, `inline = true` puts the mixin's steps in its place. |
 | `step_delete(at)` | Removes the step and its comment. |
 | `step_move(from, to)` | Moves the step so that its address becomes `to`. To add the step at the end of a block, give the address one past the block's last step. |
 
@@ -585,7 +587,7 @@ These tools change only the draft. They never touch the device, and they set no 
 | `options_set(options)` | Sets `[flow.options]` keys, such as `step_timeout`, `app_lifecycle`, `max_runtime`, `record` or `coverage`. A null value removes a key. The tool refuses an unknown key, or a value of the wrong type. |
 | `block_set(name, fields)` | Sets a block's own fields: `for_each`, `where` (the device filter), `record`, `max_iterations`, and `run_flow` with its `vars` and `save_to`. A null value removes a field. The block's steps then become `?` and `~`. `block_link` sets `next` and branches. |
 | `data_add(row)` | Adds a `[[data]]` row. A block with `for_each = "data"` (set it with `block_set`) runs once for each row, and its steps read the fields as `${_each.field}`. |
-| `reuse_list` | Lists the files a flow can reuse, with how to use each kind. Mixins come with the variables they use. Run one with `act` and `{ action = "load_mixin", mixin = "name", vars = { … } }`; the draft records the `load_mixin` step, not the mixin's steps. Fixtures come with their keys, never their values. Load one with `act` and `{ action = "load_fixture", fixture = "name", as = "x" }`, then read `${x.key}`. Subflows (`explicit_only = true`) come with the variables they read but do not set. Run one from a block with `block_set` and `run_flow`. A mixin, fixture or subflow that does not parse is listed with the parse error. |
+| `reuse_list` | Lists the files a flow can reuse, with how to use each kind. Mixins come with the variables they use, and `reuse_list(name)` lists one mixin's steps. Run one with `act` and `{ action = "load_mixin", mixin = "name", vars = { … } }`; the draft records the `load_mixin` step, not the mixin's steps. Fixtures come with their keys, never their values. Load one with `act` and `{ action = "load_fixture", fixture = "name", as = "x" }`, then read `${x.key}`. Subflows (`explicit_only = true`) come with the variables they read but do not set. Run one from a block with `block_set` and `run_flow`. A mixin, fixture or subflow that does not parse is listed with the parse error. |
 
 ## Example: write a new flow
 

@@ -537,3 +537,47 @@ async fn the_policy_asks_denies_and_hides_actions_over_mcp() {
 
     client.cancel().await.expect("close client");
 }
+
+#[tokio::test]
+async fn reuse_list_with_a_name_shows_the_mixin_steps() {
+    let dir = tempfile::Builder::new()
+        .prefix("gmcp")
+        .tempdir_in("/tmp")
+        .expect("tempdir");
+    std::fs::create_dir_all(dir.path().join("e2e/__mixins__")).expect("mixins");
+    std::fs::write(
+        dir.path().join("e2e/__mixins__/login.toml"),
+        "[[step]]\naction = \"type\"\non_text = \"Email\"\ninput = \"${email}\"\n\n[[step]]\naction = \"tap\"\non_text = \"Sign in\"\n",
+    )
+    .expect("mixin");
+    let server = GolemMcp::new(McpOptions {
+        socket: dir.path().join("d.sock"),
+        project_root: dir.path().to_path_buf(),
+        soft_timeout: Some(Duration::from_secs(10)),
+        stub: true,
+        policy: Default::default(),
+    });
+    let (server_io, client_io) = tokio::io::duplex(1 << 16);
+    tokio::spawn(async move {
+        let service = server.serve(server_io).await.expect("serve");
+        let _ = service.waiting().await;
+    });
+    let client = ().serve(client_io).await.expect("client");
+    let (c, err) = call(
+        &client,
+        "reuse_list",
+        serde_json::json!({ "name": "login" }),
+    )
+    .await;
+    assert!(!err, "{c}");
+    assert_eq!(
+        text_of(&c),
+        "mixin login (e2e/__mixins__/login.toml) · 2 steps · vars: email\n  \
+         1 { action = \"type\", on_text = \"Email\", input = \"${email}\" }\n  \
+         2 { action = \"tap\", on_text = \"Sign in\" }\n\
+         act: { action = \"load_mixin\", mixin = \"login\", vars = { … } }\n"
+    );
+    let (c, err) = call(&client, "reuse_list", serde_json::json!({ "name": "nope" })).await;
+    assert!(err && text_of(&c).contains("no mixin \"nope\""), "{c}");
+    client.cancel().await.expect("close client");
+}

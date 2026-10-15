@@ -148,6 +148,63 @@ pub fn expand_mixins(
     Ok(expanded)
 }
 
+/// The steps of mixin `name`, each as a one-line step, with each `${key}`
+/// of `vars` filled in, as `load_mixin` would run them. The keys keep the
+/// order the mixin file writes them in.
+pub fn mixin_lines(
+    name: &str,
+    vars: &HashMap<String, String>,
+    flow_dir: &Path,
+    project_root: &Path,
+) -> anyhow::Result<Vec<String>> {
+    let path = resolve_mixin_path(name, flow_dir, project_root)?;
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("Failed to read mixin file {}: {e}", path.display()))?;
+    // Checks the shape, as `load_mixin` does.
+    parse_mixin(&text)?;
+    let doc: toml_edit::DocumentMut = text.parse()?;
+    let steps = doc
+        .get("step")
+        .and_then(toml_edit::Item::as_array_of_tables)
+        .map(|a| a.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    Ok(steps
+        .into_iter()
+        .map(|table| {
+            let mut line = toml_edit::InlineTable::new();
+            for (key, item) in table.iter() {
+                if let Some(value) = item.as_value() {
+                    let mut value = remap_edit_value(value, vars);
+                    value.decor_mut().clear();
+                    line.insert(key, value);
+                }
+            }
+            line.fmt();
+            toml_edit::Value::InlineTable(line)
+                .to_string()
+                .trim()
+                .to_string()
+        })
+        .collect())
+}
+
+fn remap_edit_value(value: &toml_edit::Value, vars: &HashMap<String, String>) -> toml_edit::Value {
+    match value {
+        toml_edit::Value::String(s) => remap_string(s.value(), vars).into(),
+        toml_edit::Value::Array(a) => {
+            toml_edit::Value::Array(a.iter().map(|v| remap_edit_value(v, vars)).collect())
+        }
+        toml_edit::Value::InlineTable(t) => {
+            let mut out = toml_edit::InlineTable::new();
+            for (k, v) in t.iter() {
+                out.insert(k, remap_edit_value(v, vars));
+            }
+            toml_edit::Value::InlineTable(out)
+        }
+        other => other.clone(),
+    }
+}
+
 /// Extract variable mappings from a load_mixin step's params
 fn extract_vars_from_step(step: &Step) -> HashMap<String, String> {
     let mut vars = HashMap::new();
@@ -1466,5 +1523,28 @@ action = "tap"
     fn parse_mixin_malformed_toml_errors() {
         let result = parse_mixin("this is = = not toml");
         assert!(result.is_err(), "malformed TOML SHALL error");
+    }
+
+    #[test]
+    fn mixin_lines_fill_the_vars_into_one_line_steps() {
+        let tmp = TempDir::new().expect("temp dir");
+        std::fs::create_dir_all(tmp.path().join("__mixins__")).expect("dir");
+        std::fs::write(
+            tmp.path().join("__mixins__/login.toml"),
+            "[[step]]\naction = \"type\"\non_text = \"Email\"\ninput = \"${email}\" # who\n\n[[step]]\naction = \"tap\"\non = { text = \"${button}\" }\n",
+        )
+        .expect("mixin");
+        let vars: HashMap<String, String> = [("email", "a@b.test"), ("button", "Sign in")]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let lines = mixin_lines("login", &vars, tmp.path(), tmp.path()).expect("lines");
+        assert_eq!(
+            lines,
+            [
+                r#"{ action = "type", on_text = "Email", input = "a@b.test" }"#,
+                r#"{ action = "tap", on = { text = "Sign in" } }"#,
+            ]
+        );
     }
 }

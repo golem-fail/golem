@@ -283,6 +283,8 @@ pub struct StepEditParams {
     pub step: Option<String>,
     /// "" removes it.
     pub comment: Option<String>,
+    /// On a load_mixin step: copy the mixin's steps into the draft in its place, to edit them here.
+    pub inline: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -376,6 +378,13 @@ pub struct HelpParams {
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct NoParams {}
+
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ReuseParams {
+    /// A mixin's name: list its steps.
+    pub name: Option<String>,
+}
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 pub struct LogsParams {
@@ -963,7 +972,7 @@ impl GolemMcp {
         &self,
         Parameters(p): Parameters<StepEditParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.edit(serde_json::json!({ "edit": "step_edit", "at": p.at, "step": p.step, "comment": p.comment }))
+        self.edit(serde_json::json!({ "edit": "step_edit", "at": p.at, "step": p.step, "comment": p.comment, "inline": p.inline }))
             .await
     }
 
@@ -1008,15 +1017,51 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read."
+        description = "Project files a flow can reuse, each with how to use it: mixins and the vars they use, fixtures and their keys, subflows and the vars they read. name: one mixin's steps."
     )]
     async fn reuse_list(
         &self,
-        Parameters(_): Parameters<NoParams>,
+        Parameters(p): Parameters<ReuseParams>,
     ) -> Result<CallToolResult, ErrorData> {
         use golem_orchestrator::draft::ReuseKind;
         let root = &self.options.project_root;
         let found = golem_orchestrator::draft::reusables(root);
+        if let Some(name) = p.name {
+            let Some(mixin) = found
+                .iter()
+                .find(|r| r.kind == ReuseKind::Mixin && r.name == name)
+            else {
+                return tool_error(format!("no mixin {name:?}; reuse_list() lists them"));
+            };
+            // `__mixins__/<name>.toml`: the mixin resolves from its parent.
+            let dir = mixin
+                .path
+                .parent()
+                .and_then(std::path::Path::parent)
+                .unwrap_or(root);
+            let lines =
+                match golem_parser::mixin::mixin_lines(&name, &Default::default(), dir, root) {
+                    Ok(lines) => lines,
+                    Err(e) => return tool_error(format!("{e:#}")),
+                };
+            let rel = mixin
+                .path
+                .strip_prefix(root)
+                .unwrap_or(&mixin.path)
+                .display();
+            let mut out = format!("mixin {name} ({rel}) · {} steps", lines.len());
+            if !mixin.names.is_empty() {
+                out.push_str(&format!(" · vars: {}", mixin.names.join(", ")));
+            }
+            out.push('\n');
+            for (i, line) in lines.iter().enumerate() {
+                out.push_str(&format!("  {} {line}\n", i + 1));
+            }
+            out.push_str(&format!(
+                "act: {{ action = \"load_mixin\", mixin = \"{name}\", vars = {{ … }} }}\n"
+            ));
+            return text(out);
+        }
         if found.is_empty() {
             return text(
                 "nothing to reuse: no __mixins__/ or __fixtures__/ directory, and no flow with explicit_only = true",

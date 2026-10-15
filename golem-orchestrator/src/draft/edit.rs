@@ -12,6 +12,10 @@ const EDIT_CONTEXT: usize = 2;
 
 impl Draft {
     /// The block and 0-based step an address names; the step must exist.
+    pub fn address_of(&self, at: &str) -> Result<(usize, usize)> {
+        self.locate(at)
+    }
+
     fn locate(&self, at: &str) -> Result<(usize, usize)> {
         let (name, i) = parse_address(at)?;
         let b = self
@@ -75,6 +79,36 @@ impl Draft {
             self.after_change(b, i, i + 1)?;
         } else {
             self.reparse()?;
+        }
+        Ok((b, i))
+    }
+
+    /// Replace the `load_mixin` step at `at` with `lines`, the mixin's
+    /// steps as it would run them. The steps keep its status and its
+    /// comments; the mixin file does not change. Returns where they start.
+    pub fn step_inline(&mut self, at: &str, lines: &[String]) -> Result<(usize, usize)> {
+        let (b, i) = self.locate(at)?;
+        if self.step_action(b, i).as_deref() != Some("load_mixin") {
+            bail!("{at} is not a load_mixin step; inline copies a mixin's steps");
+        }
+        let Some((first, rest)) = lines.split_first() else {
+            bail!("the mixin has no steps");
+        };
+        let status = self.status_of(b, i).unwrap_or(StepStatus::NotRun);
+        self.replace_step(b, i, parse_inline(first)?)?;
+        for (k, line) in rest.iter().enumerate() {
+            self.insert_step_in("block", b, Some(i + 1 + k), parse_inline(line)?, None)?;
+        }
+        self.reparse()?;
+        if let Some(statuses) = self.status.get_mut(b) {
+            for k in 0..rest.len() {
+                statuses.insert((i + 1 + k).min(statuses.len()), status);
+            }
+        }
+        if let Some(ins) = self.insertion.as_mut() {
+            if ins.block == b {
+                ins.at = ins.at.map(|at| if at > i { at + rest.len() } else { at });
+            }
         }
         Ok((b, i))
     }

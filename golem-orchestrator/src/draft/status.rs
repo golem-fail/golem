@@ -91,6 +91,13 @@ const DEFAULT_CONTEXT: usize = 5;
 /// Parse a step address: `block` (its first step) or `block:step`, steps
 /// counting from 1. Returns the block name and the 0-based step.
 pub(super) fn parse_address(s: &str) -> Result<(String, usize)> {
+    if let Some((block, inner)) = s.rsplit_once(':') {
+        if let Some((step, _)) = inner.split_once('.') {
+            bail!(
+                "{s} is inside a mixin · step_edit(\"{block}:{step}\", inline = true) copies its steps into the draft, then edit them"
+            );
+        }
+    }
     let (block, step) = match s.rsplit_once(':') {
         Some((b, n)) => (
             b,
@@ -538,6 +545,47 @@ impl Draft {
     /// The step listing: a header with the counts and the cursor, then
     /// each block's header and the steps that `q` selects.
     pub fn steps(&self, q: &StepsQuery) -> Result<String> {
+        self.steps_listing(q, None)
+    }
+
+    /// [`Draft::steps`], with the steps of each `load_mixin` under it as
+    /// read-only sub-addresses (`main:3.1`), the mixin found from the
+    /// draft's directory up to `project_root`.
+    pub fn steps_with_mixins(
+        &self,
+        q: &StepsQuery,
+        project_root: &std::path::Path,
+    ) -> Result<String> {
+        self.steps_listing(q, Some(project_root))
+    }
+
+    /// The steps of the `load_mixin` step `i` of block `b`, as it would run
+    /// them.
+    pub fn mixin_steps(
+        &self,
+        b: usize,
+        i: usize,
+        project_root: &std::path::Path,
+    ) -> Result<Vec<String>> {
+        let step = self.step_value(b, i).context("no such step")?;
+        let name = step
+            .get("mixin")
+            .and_then(Value::as_str)
+            .context("the load_mixin step names no mixin")?;
+        let vars: std::collections::HashMap<String, String> = step
+            .get("vars")
+            .and_then(Value::as_inline_table)
+            .map(|t| {
+                t.iter()
+                    .filter_map(|(k, v)| Some((k.to_string(), v.as_str()?.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let flow_dir = self.source_dir().unwrap_or(project_root);
+        golem_parser::mixin::mixin_lines(name, &vars, flow_dir, project_root)
+    }
+
+    fn steps_listing(&self, q: &StepsQuery, mixins: Option<&std::path::Path>) -> Result<String> {
         let all = self.addresses();
         let cursor = self.insertion.as_ref().map(|ins| {
             let len = self.steps_len(ins.block);
@@ -617,6 +665,22 @@ impl Draft {
                         out.push_str(&format!("  # {}", comments.join(" / ")));
                     }
                     out.push('\n');
+                    let mixin =
+                        mixins.filter(|_| self.step_action(b, i).as_deref() == Some("load_mixin"));
+                    if let Some(root) = mixin {
+                        match self.mixin_steps(b, i, root) {
+                            Ok(lines) => {
+                                for (k, line) in lines.iter().enumerate() {
+                                    out.push_str(&format!(
+                                        "    {}.{}   {line}\n",
+                                        self.address(b, i),
+                                        k + 1
+                                    ));
+                                }
+                            }
+                            Err(e) => out.push_str(&format!("    (mixin: {e:#})\n")),
+                        }
+                    }
                 }
             }
         }
