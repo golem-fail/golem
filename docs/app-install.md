@@ -44,6 +44,7 @@ The scaffold writes `scripts/install-<app>-<platform>.sh` (for native iOS/Androi
 **Without a terminal** (for example from an agent), use one of these:
 
 ```bash
+golem install-script --list           # the frameworks that have a template
 golem install-script --print expo     # write the Expo template to stdout, then fill in its {{VALUES}}
 golem install-script --template expo --app requester --path apps/requester-app
 ```

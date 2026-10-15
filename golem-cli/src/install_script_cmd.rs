@@ -21,6 +21,36 @@ use crate::scaffold::{
 
 const OTHER_LABEL: &str = "Other (type manually)";
 
+/// Each template, with the line the prompt and `--list` show.
+const FRAMEWORKS: [(&str, InstallFramework); 8] = [
+    (
+        "native-ios     (Xcode / xcodebuild)",
+        InstallFramework::NativeIos,
+    ),
+    (
+        "native-android (Gradle / adb)",
+        InstallFramework::NativeAndroid,
+    ),
+    ("tauri          (Tauri 2.x mobile)", InstallFramework::Tauri),
+    (
+        "expo           (Expo — managed React Native w/ prebuild)",
+        InstallFramework::Expo,
+    ),
+    (
+        "capacitor      (Capacitor / Ionic)",
+        InstallFramework::Capacitor,
+    ),
+    (
+        "kmp            (Kotlin Multiplatform / Compose Multiplatform)",
+        InstallFramework::Kmp,
+    ),
+    (
+        "nativescript   (NativeScript 8+)",
+        InstallFramework::NativeScript,
+    ),
+    ("flutter        (Flutter 3.19+)", InstallFramework::Flutter),
+];
+
 /// Where each value comes from: the user at a terminal, or each prompt's
 /// default.
 enum Ask {
@@ -106,6 +136,12 @@ impl Ask {
 
 /// Entry point for `golem install-script`.
 pub fn run(args: &InstallScriptArgs) -> Result<()> {
+    if args.list {
+        for (line, _) in FRAMEWORKS {
+            println!("{line}");
+        }
+        return Ok(());
+    }
     if let Some(framework) = args.print {
         print!("{}", render_install_script(framework, &[])?);
         return Ok(());
@@ -119,39 +155,11 @@ pub fn run(args: &InstallScriptArgs) -> Result<()> {
 }
 
 fn scaffold(ask: &Ask, args: &InstallScriptArgs, cwd: &Path) -> Result<()> {
-    let frameworks = [
-        (
-            "native-ios    (Xcode / xcodebuild)",
-            InstallFramework::NativeIos,
-        ),
-        (
-            "native-android (Gradle / adb)",
-            InstallFramework::NativeAndroid,
-        ),
-        ("tauri          (Tauri 2.x mobile)", InstallFramework::Tauri),
-        (
-            "expo           (Expo — managed React Native w/ prebuild)",
-            InstallFramework::Expo,
-        ),
-        (
-            "capacitor      (Capacitor / Ionic)",
-            InstallFramework::Capacitor,
-        ),
-        (
-            "kmp            (Kotlin Multiplatform / Compose Multiplatform)",
-            InstallFramework::Kmp,
-        ),
-        (
-            "nativescript   (NativeScript 8+)",
-            InstallFramework::NativeScript,
-        ),
-        ("flutter        (Flutter 3.19+)", InstallFramework::Flutter),
-    ];
     let framework = match args.template {
         Some(f) => f,
         None => {
-            let labels: Vec<&str> = frameworks.iter().map(|(l, _)| *l).collect();
-            frameworks[ask
+            let labels: Vec<&str> = FRAMEWORKS.iter().map(|(l, _)| *l).collect();
+            FRAMEWORKS[ask
                 .select("Framework", &labels, 0)
                 .context("framework selection cancelled")?]
             .1
@@ -1164,6 +1172,16 @@ mod tests {
             app: Some(app.into()),
             path: Some(path.into()),
             ..InstallScriptArgs::default()
+        }
+    }
+
+    #[test]
+    fn the_list_names_each_template_in_order() {
+        let listed: Vec<InstallFramework> = FRAMEWORKS.iter().map(|(_, f)| *f).collect();
+        assert_eq!(listed, InstallFramework::ALL);
+        for (line, f) in FRAMEWORKS {
+            assert_eq!(line.split_whitespace().next(), Some(f.label()), "{line}");
+            assert_eq!(line.find('('), Some(15), "aligned: {line}");
         }
     }
 

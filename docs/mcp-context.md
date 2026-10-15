@@ -3562,7 +3562,7 @@ Items (help("install", item)):
 - frameworks: The templates golem install-script writes, one per framework — native-ios, native-android, tauri, expo, capacitor, kmp, nativescript, flutter
 ```
 
-<details><summary><code>help("install", "quick-start")</code> · Quick start · 1434 chars</summary>
+<details><summary><code>help("install", "quick-start")</code> · Quick start · 1510 chars</summary>
 
 Source: [src/app-install/10-quick-start.md](src/app-install/10-quick-start.md)
 
@@ -3578,6 +3578,7 @@ The scaffold writes `scripts/install-<app>-<platform>.sh` (for native iOS/Androi
 **Without a terminal** (for example from an agent), use one of these:
 
 ```bash
+golem install-script --list           # the frameworks that have a template
 golem install-script --print expo     # write the Expo template to stdout, then fill in its {{VALUES}}
 golem install-script --template expo --app requester --path apps/requester-app
 ```

@@ -332,6 +332,7 @@ Scaffold an install script for an app in your project. In a terminal, golem asks
 
 | Flag | Description |
 |------|-------------|
+| `--list` | List the frameworks that have a template, and exit. |
 | `--print <framework>` | Write the framework's template to stdout, with each `{{VALUE}}` to fill in, and exit. |
 | `--template <framework>` | Ask nothing: each value that no flag gives is its prompt's default. |
 | `--app <name>` | With `--template`: the app's name in `[[apps]]` (default `app`). |

@@ -36,7 +36,7 @@ pub enum Commands {
     Init,
     /// Create a new flow template
     Create(CreateArgs),
-    /// Scaffold an app install script (interactive; `--print <framework>` writes a template)
+    /// Scaffold an app install script (interactive; `--list` names the templates, `--print <framework>` writes one)
     InstallScript(InstallScriptArgs),
     /// Inspect the persistent install cache
     Cache(CacheArgs),
@@ -176,6 +176,9 @@ pub struct McpArgs {
 
 #[derive(clap::Args, Debug, Default)]
 pub struct InstallScriptArgs {
+    /// List the frameworks that have a template, and exit.
+    #[arg(long, conflicts_with_all = ["print", "template", "app", "path"])]
+    pub list: bool,
     /// Write the framework's template to stdout, with each `{{VALUE}}` to
     /// fill in, and exit.
     #[arg(long, value_name = "FRAMEWORK", conflicts_with_all = ["template", "app", "path"])]
