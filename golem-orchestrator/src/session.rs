@@ -1911,11 +1911,14 @@ async fn run_op_checked(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -
             }
             match draft.export(&path, *overwrite, &work.project_root) {
                 Ok(done) => {
-                    let hints = draft
+                    let mut hints: Vec<String> = draft
                         .mixin_matches(&available)
                         .iter()
                         .map(|m| match_hint(&draft, m))
                         .collect();
+                    let mut own = draft.own_files().to_vec();
+                    own.push(done.path.clone());
+                    hints.extend(draft.repeated_runs(&work.project_root, &own));
                     work.draft = draft;
                     OpResult::Exported {
                         path: done.path,
@@ -3098,6 +3101,39 @@ mod tests {
         .await;
         match &refused.result {
             OpResult::Failed(e) => assert!(e.contains("main:1: the mixins overlap"), "{e}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_export_hints_at_steps_another_flow_repeats() {
+        let (s, dir) = session_with_mixin();
+        std::fs::create_dir_all(dir.path().join("e2e")).expect("dir");
+        std::fs::write(
+            dir.path().join("e2e/checkout.test.toml"),
+            "[flow]\nname = \"c\"\n\n[[block]]\nname = \"auth\"\nsteps = [\n  { action = \"assert_visible\", on_text = \"Pay 42\" },\n  { action = \"assert_visible\", on_text = \"Total\" },\n  { on_text = \"42\", action = \"assert_visible\" },\n  { action = \"tap\", on_text = \"Other\" },\n]\n",
+        )
+        .expect("other flow");
+        for step in [
+            r#"{ action = "assert_visible", on_text = "Total" }"#,
+            r#"{ action = "assert_visible", on_text = "Pay 42" }"#,
+            r#"{ action = "assert_visible", on_text = "Total" }"#,
+            r#"{ action = "assert_visible", on_text = "42" }"#,
+        ] {
+            act_toon(&run(&s, act(step)).await);
+        }
+        let out = dir.path().join("e2e/mine.test.toml");
+        let export = Op::Export {
+            path: out,
+            overwrite: true,
+            mixins: Vec::new(),
+        };
+        match run(&s, export).await.result {
+            OpResult::Exported { hints, .. } => assert_eq!(
+                hints,
+                ["hint: main:2–4 also in e2e/checkout.test.toml auth:1–3 · consider a mixin"],
+                "the file it writes SHALL NOT count"
+            ),
             other => panic!("{other:?}"),
         }
     }

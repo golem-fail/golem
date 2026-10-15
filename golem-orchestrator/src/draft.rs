@@ -107,6 +107,11 @@ impl Draft {
     }
 
     /// The draft as TOML text.
+    /// The flow file the session opened from, and each file it exported.
+    pub fn own_files(&self) -> &[PathBuf] {
+        &self.own
+    }
+
     pub fn text(&self) -> String {
         self.doc.to_string()
     }
