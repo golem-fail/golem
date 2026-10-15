@@ -425,6 +425,130 @@ impl Draft {
     }
 }
 
+/// The steps of each block and the teardown of a flow file's text, as
+/// parsed tables, labelled as an address prefix (`main`, `teardown`).
+fn file_places(text: &str) -> Vec<(String, Vec<toml::Table>)> {
+    let Ok(doc) = text.parse::<toml::Table>() else {
+        return Vec::new();
+    };
+    let steps_of = |t: &toml::Table| -> Vec<toml::Table> {
+        t.get("steps")
+            .and_then(toml::Value::as_array)
+            .map(|a| a.iter().filter_map(|s| s.as_table().cloned()).collect())
+            .unwrap_or_default()
+    };
+    let mut out: Vec<(String, Vec<toml::Table>)> = doc
+        .get("block")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .enumerate()
+        .map(|(b, t)| {
+            let label = t
+                .get("name")
+                .and_then(toml::Value::as_str)
+                .map_or_else(|| format!("block_{b}"), str::to_string);
+            (label, steps_of(t))
+        })
+        .collect();
+    if let Some(t) = doc
+        .get("teardown")
+        .and_then(toml::Value::as_array)
+        .and_then(|a| a.first())
+        .and_then(toml::Value::as_table)
+    {
+        out.push(("teardown".to_string(), steps_of(t)));
+    }
+    out
+}
+
+/// The `*.test.toml` files of the project, as `reusables` walks it.
+fn flow_files(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.')
+            || matches!(name.as_str(), "node_modules" | "target" | "build" | "dist")
+        {
+            continue;
+        }
+        if path.is_dir() {
+            if depth < 6 && name != "__mixins__" && name != "__fixtures__" {
+                flow_files(&path, out, depth + 1);
+            }
+        } else if name.ends_with(".test.toml") {
+            out.push(path);
+        }
+    }
+}
+
+/// The fewest equal steps in a row that make a repeated run.
+const MIN_RUN: usize = 3;
+
+impl Draft {
+    /// Each run of three or more steps of the draft that another flow of
+    /// the project repeats, longest first for each place: a hint that the
+    /// steps belong in a mixin. `skip` names the draft's own files.
+    pub fn repeated_runs(&self, project_root: &Path, skip: &[PathBuf]) -> Vec<String> {
+        let mut files = Vec::new();
+        flow_files(project_root, &mut files, 0);
+        let same = |a: &Path, b: &Path| {
+            a == b
+                || a.canonicalize()
+                    .ok()
+                    .zip(b.canonicalize().ok())
+                    .is_some_and(|(a, b)| a == b)
+        };
+        let mut out = Vec::new();
+        for (place, mine) in self.places() {
+            for file in files.iter().filter(|f| !skip.iter().any(|s| same(s, f))) {
+                let Ok(text) = std::fs::read_to_string(file) else {
+                    continue;
+                };
+                let rel = file.strip_prefix(project_root).unwrap_or(file).display();
+                for (label, theirs) in file_places(&text) {
+                    for (i, j, k) in common_runs(&mine, &theirs) {
+                        out.push(format!(
+                            "hint: {}–{} also in {rel} {label}:{}–{} · consider a mixin",
+                            self.place_address(place, i),
+                            i + k,
+                            j + 1,
+                            j + k
+                        ));
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Each maximal run of `MIN_RUN` or more equal steps that `a` and `b`
+/// share, as (start in `a`, start in `b`, length).
+fn common_runs(a: &[toml::Table], b: &[toml::Table]) -> Vec<(usize, usize, usize)> {
+    let mut out = Vec::new();
+    for i in 0..a.len() {
+        for j in 0..b.len() {
+            if a[i] != b[j] || (i > 0 && j > 0 && a[i - 1] == b[j - 1]) {
+                continue;
+            }
+            let k = a[i..]
+                .iter()
+                .zip(&b[j..])
+                .take_while(|(x, y)| x == y)
+                .count();
+            if k >= MIN_RUN {
+                out.push((i, j, k));
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,5 +673,33 @@ mod tests {
             m.load_mixin_line(),
             r#"{ action = "load_mixin", mixin = "login", vars = { email = "a@b.test" } }"#
         );
+    }
+
+    #[test]
+    fn only_runs_of_three_or_more_equal_steps_count() {
+        let t = |x: &str| table(&format!(r#"{{ action = "tap", on_text = "{x}" }}"#));
+        let mine = [t("a"), t("b"), t("c"), t("d"), t("x"), t("a"), t("b")];
+        let theirs = [t("z"), t("a"), t("b"), t("c"), t("d"), t("e")];
+        assert_eq!(common_runs(&mine, &theirs), [(0, 1, 4)]);
+        let reordered = [
+            table(r#"{ on_text = "a", action = "tap" }"#),
+            t("b"),
+            t("c"),
+        ];
+        assert_eq!(
+            common_runs(&mine, &reordered),
+            [(0, 0, 3)],
+            "key order SHALL NOT matter"
+        );
+    }
+
+    #[test]
+    fn a_flow_file_gives_its_blocks_and_teardown() {
+        let places = file_places(
+            "[flow]\nname = \"f\"\n\n[[block]]\nname = \"auth\"\n[[block.steps]]\naction = \"tap\"\non_text = \"a\"\n\n[[block]]\nsteps = [{ action = \"tap\", on_text = \"b\" }]\n\n[[teardown]]\nsteps = [{ action = \"stop\" }]\n",
+        );
+        let labels: Vec<(&str, usize)> =
+            places.iter().map(|(l, s)| (l.as_str(), s.len())).collect();
+        assert_eq!(labels, [("auth", 1), ("block_1", 1), ("teardown", 1)]);
     }
 }
