@@ -293,6 +293,13 @@ async fn open(msg: &serde_json::Value, home: &Home, resources: &Resources) -> se
             project_root,
             child_env,
             idle_timeout,
+            policy: match msg.get("policy").filter(|p| !p.is_null()) {
+                Some(p) => match serde_json::from_value(p.clone()) {
+                    Ok(policy) => Some(policy),
+                    Err(e) => return error(&format!("the policy does not parse: {e}")),
+                },
+                None => None,
+            },
             flow,
             boot: msg["boot"].as_bool().unwrap_or(true),
             seed: msg["seed"].as_u64(),

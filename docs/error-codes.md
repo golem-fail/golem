@@ -14,6 +14,7 @@ A code is five characters: `<severity><domain><number>`, e.g. `EF408`.
   |--------|--------|-------|
   | `H` | Host — toolchain, orchestrator, ports | SRE / CI |
   | `D` | Device — boot, companion, driver comms | Device farm |
+  | `S` | Policy — the user's `golem mcp` policy refused an action (MCP results only; `golem run` never shows it) | The user (`golem mcp-config`) |
   | `A` | App — build, install, launch | App developer |
   | `F` | Flow — runtime test logic | Test writer / app developer¹ |
   | `P` | Parsing — test file, params, suite config | Test writer |
@@ -52,6 +53,8 @@ Codes appear in every output format:
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |
 | `F509` | A block ran more times than its `max_iterations`. | Fix the loop that re-enters the block, or raise its `max_iterations`. |
 | `X000` | golem did not classify this error. | Read the message, and report it to the golem maintainers. |
+| `S001` | The user's `golem mcp` policy denies this action. | Tell the user; the user changes the policy with `golem mcp-config`. |
+| `S002` | This action needs the user's permission. | Ask the user; if the user agrees, call act again with the same step. |
 | `P400` | The `action` is not a known action. | Fix the spelling; see the actions reference. |
 | `P404` | A block, subflow or fixture that the flow names does not exist. | Fix the name or path in `next`, `goto`, `run_flow` or `load_fixture`. |
 | `P422` | A required field is missing or not valid. | Add or fix the field that the message names. |

@@ -38,6 +38,8 @@ pub struct McpOptions {
     /// Open sessions on the device-free stub driver. Debug builds only,
     /// for the integration tests.
     pub stub: bool,
+    /// Where the policy for the steps the LLM writes comes from.
+    pub policy: crate::policy_cmd::PolicySource,
 }
 
 /// The MCP server.
@@ -48,6 +50,9 @@ pub struct GolemMcp {
     /// The soft timeout in force: `options.soft_timeout`, else the one
     /// picked for the client at `initialize`.
     soft_timeout: Arc<std::sync::Mutex<Duration>>,
+    /// The policy of the last `session_open`, else of the server's
+    /// project: `help` leaves out what it denies.
+    policy: Arc<std::sync::Mutex<golem_parser::policy::Policy>>,
     #[allow(dead_code)] // read by the `tool_handler` macro
     tool_router: ToolRouter<Self>,
 }
@@ -524,6 +529,12 @@ impl GolemMcp {
             soft_timeout: Arc::new(std::sync::Mutex::new(
                 options.soft_timeout.unwrap_or(DEFAULT_SOFT_TIMEOUT),
             )),
+            policy: Arc::new(std::sync::Mutex::new(
+                options
+                    .policy
+                    .policy(&options.project_root)
+                    .unwrap_or_default(),
+            )),
             options,
             tool_router: compact_schemas(Self::tool_router()),
         }
@@ -589,6 +600,14 @@ impl GolemMcp {
             "seed": p.seed,
             "wait_ms": self.soft_timeout().as_millis() as u64,
         });
+        // Read on each open, so a change with golem mcp-config applies to
+        // the next session.
+        let policy = match self.options.policy.policy(&project_root) {
+            Ok(p) => p,
+            Err(e) => return tool_error(format!("{e:#}")),
+        };
+        msg["policy"] = serde_json::to_value(&policy).unwrap_or_default();
+        *self.policy.lock().unwrap_or_else(|e| e.into_inner()) = policy;
         if self.options.stub {
             msg["stub"] = serde_json::json!(true);
         }
@@ -1048,7 +1067,29 @@ impl GolemMcp {
         &self,
         Parameters(p): Parameters<HelpParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        match crate::help::help(p.topic.as_deref(), p.item.as_deref()) {
+        use golem_parser::policy::Mode;
+        let policy = self
+            .policy
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mode = p
+            .item
+            .as_deref()
+            .filter(|item| golem_parser::policy::ActionClass::of(item).is_some())
+            .map(|item| policy.mode(item));
+        // A heading can name a field (`min_matches`), not an action.
+        let denied = Box::new(move |action: &str| {
+            golem_parser::policy::ActionClass::of(action).is_some()
+                && policy.mode(action) == Mode::Deny
+        });
+        match crate::help::help_without(p.topic.as_deref(), p.item.as_deref(), denied) {
+            Ok(mut answer) if mode == Some(Mode::Ask) => {
+                answer.push_str(
+                    "\nThe user's policy asks for this action: ask the user before you call act; the first act fails with ES002.\n",
+                );
+                text(answer)
+            }
             Ok(answer) => text(answer),
             Err(why) => tool_error(why),
         }
@@ -1100,6 +1141,11 @@ impl GolemMcp {
             if r["opened"] == true {
                 if let Some(line) = reuse_summary(&self.options.project_root) {
                     note.push_str(&line);
+                }
+                let policy = self.policy.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(line) = policy.summary_line() {
+                    note.push_str(&line);
+                    note.push('\n');
                 }
             }
             return text(note);

@@ -51,6 +51,39 @@ const TOPICS: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// Whether the user's policy denies an action.
+pub type Denied = Box<dyn Fn(&str) -> bool>;
+
+thread_local! {
+    /// Actions the user's policy denies, while [`help_without`] answers.
+    static HIDDEN: std::cell::RefCell<Option<Denied>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Whether the part is an action that the user's policy denies: each name
+/// in its heading is denied.
+fn hidden(p: &HelpPart) -> bool {
+    let names = heading_names(p.text);
+    !names.is_empty()
+        && HIDDEN.with(|h| {
+            h.borrow()
+                .as_ref()
+                .is_some_and(|denied| names.iter().all(|n| denied(n)))
+        })
+}
+
+/// [`help`], as if the actions `denied` names did not exist: no list shows
+/// them, and asking for one answers why there is none.
+pub fn help_without(
+    topic: Option<&str>,
+    item: Option<&str>,
+    denied: Denied,
+) -> Result<String, String> {
+    HIDDEN.with(|h| *h.borrow_mut() = Some(denied));
+    let answer = help(topic, item);
+    HIDDEN.with(|h| *h.borrow_mut() = None);
+    answer
+}
+
 /// The answer to `help(topic, item)`, or why there is none.
 pub fn help(topic: Option<&str>, item: Option<&str>) -> Result<String, String> {
     let Some(topic) = topic else {
@@ -70,7 +103,13 @@ pub fn help(topic: Option<&str>, item: Option<&str>) -> Result<String, String> {
             return Ok(code);
         }
     }
-    resolve(topic, page, item).map(render)
+    let address = resolve(topic, page, item)?;
+    if part(address).is_some_and(hidden) {
+        return Err(format!(
+            "{item}: denied by the user's policy (golem mcp-config)"
+        ));
+    }
+    Ok(render(address))
 }
 
 fn index() -> String {
@@ -107,6 +146,7 @@ fn children(address: &str) -> impl Iterator<Item = &'static HelpPart> + '_ {
             .strip_prefix(address)
             .and_then(|rest| rest.strip_prefix('/'))
             .is_some_and(|rest| !rest.contains('/'))
+            && !hidden(p)
     })
 }
 
@@ -717,5 +757,21 @@ mod tests {
         assert!(f404.contains("\nFix: "), "{f404}");
         assert_eq!(help(Some("codes"), Some("F404")), Ok(f404));
         assert!(help(Some("codes"), Some("registry")).is_ok());
+    }
+
+    #[test]
+    fn a_denied_action_is_in_no_list_and_has_no_answer() {
+        let denied = || Box::new(|a: &str| a == "bash") as Denied;
+        let act = help_without(Some("act"), None, denied()).expect("act");
+        assert!(!act.contains("bash"), "{act}");
+        assert!(act.contains("run"), "{act}");
+        let external = help_without(Some("act"), Some("external"), denied()).expect("external");
+        assert!(!external.contains("- bash"), "{external}");
+        let err = help_without(Some("act"), Some("bash"), denied()).expect_err("denied");
+        assert!(err.contains("denied by the user's policy"), "{err}");
+        assert!(
+            help(Some("act"), Some("bash")).is_ok(),
+            "without a policy, every action SHALL answer"
+        );
     }
 }

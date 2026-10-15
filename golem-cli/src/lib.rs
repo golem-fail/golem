@@ -9,6 +9,7 @@ pub mod install_script_cmd;
 pub mod mcp;
 #[cfg(test)]
 mod mcp_context;
+pub mod policy_cmd;
 pub mod probe_cmd;
 pub mod scaffold;
 pub mod session_cmd;
@@ -431,13 +432,26 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 print!("{}", mcp::client_config(client, &exe, &project_root, &env));
                 return Ok(0);
             }
+            let policy = policy_cmd::PolicySource {
+                user_config: Some(policy_cmd::user_config_path()?),
+                deny: args.deny,
+                ask: args.ask,
+            };
+            // A config that does not parse stops the server here, not at
+            // the first session_open.
+            policy.policy(&project_root)?;
             mcp::serve(mcp::McpOptions {
                 socket: ipc::socket_path(),
                 project_root,
                 soft_timeout: args.soft_timeout.map(std::time::Duration::from_secs),
                 stub: cfg!(debug_assertions) && args.stub_session,
+                policy,
             })
             .await?;
+        }
+
+        Commands::McpConfig(args) => {
+            return policy_cmd::run(&args);
         }
 
         Commands::Probe(args) => {
@@ -847,6 +861,12 @@ fn render_queue_wait_with_color(
         let _ = writeln!(out, "{INDENT}{body}");
     }
     out
+}
+
+/// The project `golem mcp` would use from the working directory.
+pub(crate) fn project_root_for_policy() -> std::path::PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    project::find_project_root(&cwd).unwrap_or(cwd)
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ A failed or warned step carries a code such as `EF404`: `<severity><domain><numb
   - `A`: the app's build, install or launch.
   - `D`: the device, its boot or the companion.
   - `H`: the host: tools, ports, the golem daemon.
+  - `S`: the user's `golem mcp` policy refused the action (MCP only).
   - `X`: golem did not classify the error.
 - Number: the cause, the same for `E` and `W`.
 
