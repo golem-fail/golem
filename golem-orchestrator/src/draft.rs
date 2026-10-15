@@ -861,21 +861,27 @@ pub fn reusables(project_root: &Path) -> Vec<Reusable> {
             if !path.is_dir() {
                 if name.ends_with(".test.toml") {
                     let text = std::fs::read_to_string(&path).unwrap_or_default();
-                    if let Ok(flow) = golem_parser::parse_flow(&text) {
-                        if flow.flow.explicit_only {
-                            let names = var_refs(&text)
+                    let (names, problem) = match golem_parser::parse_flow(&text) {
+                        Ok(flow) if flow.flow.explicit_only => (
+                            var_refs(&text)
                                 .into_iter()
                                 .filter(|v| !flow.flow.vars.contains_key(v))
-                                .collect();
-                            out.push(Reusable {
-                                kind: ReuseKind::Subflow,
-                                name: name.trim_end_matches(".test.toml").to_string(),
-                                path,
-                                names,
-                                problem: None,
-                            });
+                                .collect(),
+                            None,
+                        ),
+                        Ok(_) => continue,
+                        Err(e) if declares_explicit_only(&text) => {
+                            (Vec::new(), Some(format!("{e:#}")))
                         }
-                    }
+                        Err(_) => continue,
+                    };
+                    out.push(Reusable {
+                        kind: ReuseKind::Subflow,
+                        name: name.trim_end_matches(".test.toml").to_string(),
+                        path,
+                        names,
+                        problem,
+                    });
                 }
                 continue;
             }
@@ -916,6 +922,25 @@ pub fn reusables(project_root: &Path) -> Vec<Reusable> {
     walk(project_root, &mut out, 0);
     out.sort_by(|a, b| (a.kind, &a.name, &a.path).cmp(&(b.kind, &b.name, &b.path)));
     out
+}
+
+/// Whether a flow that does not parse says `explicit_only = true`: from
+/// its TOML when that parses, else from a line of its text. A broken
+/// subflow is still listed, with why it does not parse.
+fn declares_explicit_only(text: &str) -> bool {
+    match text.parse::<toml::Table>() {
+        Ok(table) => table
+            .get("flow")
+            .and_then(|f| f.get("explicit_only"))
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false),
+        Err(_) => text.lines().any(|line| {
+            line.split('#')
+                .next()
+                .and_then(|l| l.split_once('='))
+                .is_some_and(|(k, v)| k.trim() == "explicit_only" && v.trim() == "true")
+        }),
+    }
 }
 
 /// The `${var}`s a file reads, by their root name (`user` for
@@ -1424,6 +1449,37 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             "a fixture's values SHALL NOT be listed"
         );
     }
+    #[test]
+    fn reusables_lists_a_broken_explicit_only_flow_with_why() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let write = |name: &str, text: &str| {
+            std::fs::write(dir.path().join(name), text).expect("write");
+        };
+        // Valid TOML, but no flow: a block with no name.
+        write(
+            "not_a_flow.test.toml",
+            "[flow]\nname = \"a\"\nexplicit_only = true\n\n[[block]]\nsteps = 3\n",
+        );
+        write(
+            "bad_toml.test.toml",
+            "[flow]\nname = \"b\"\nexplicit_only = true # a subflow\nsteps = [\n",
+        );
+        write("broken_run.test.toml", "[flow]\nname = \"c\"\nsteps = [\n");
+        let found = reusables(dir.path());
+        let summary: Vec<(ReuseKind, &str, bool)> = found
+            .iter()
+            .map(|r| (r.kind, r.name.as_str(), r.problem.is_some()))
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (ReuseKind::Subflow, "bad_toml", true),
+                (ReuseKind::Subflow, "not_a_flow", true),
+            ],
+            "a broken flow SHALL be listed only when it says explicit_only = true"
+        );
+    }
+
     #[test]
     fn a_draft_built_with_every_tool_validates_and_parses() {
         let dir = tempfile::tempdir().expect("tempdir");
