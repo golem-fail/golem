@@ -408,6 +408,8 @@ steps = [
 ]
 ```
 
+A teardown step can be a [`load_mixin`](actions-reference.md#load_mixin--inline-a-reusable-step-sequence), for example to share a logout sequence between flows.
+
 Skip teardown with `--no-teardown`.
 
 ## Data-Driven Tests

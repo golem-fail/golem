@@ -1743,17 +1743,43 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         Ok(parsed) => (parsed.step, parsed.line),
         Err(e) => return OpResult::Failed(format!("{e:#}")),
     };
-    let timeout_ms = golem_runner::policy::effective_timeout(&step, work.base_timeout_ms);
-    // Read before the step runs: after a tap the element may be gone.
-    let text_alternative = if step.on_accessibility_label.is_some() {
-        match work.driver.get_hierarchy().await {
-            Ok((root, meta)) => {
-                golem_runner::probe::text_alternative(&root, meta.keyboard_height, &step)
-            }
-            Err(_) => None,
+    // `load_mixin` is a parse-time action, so the runner never sees it: run
+    // the mixin's steps in its place, as `golem run` does.
+    let mixin = (step.action == "load_mixin").then(|| {
+        step.params
+            .get("mixin")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    });
+    let steps = if mixin.is_some() {
+        let flow_dir = work
+            .draft
+            .source_dir()
+            .map_or_else(|| work.project_root.clone(), Path::to_path_buf);
+        match golem_parser::mixin::expand_mixins(
+            std::slice::from_ref(&step),
+            &flow_dir,
+            &work.project_root,
+        ) {
+            Ok(steps) => steps,
+            Err(e) => return OpResult::Failed(format!("{e:#}")),
         }
     } else {
-        None
+        vec![step]
+    };
+    // Read before the step runs: after a tap the element may be gone. A
+    // mixin's steps live in the mixin file, so the hint would not fit there.
+    let text_alternative = match steps.as_slice() {
+        [step] if mixin.is_none() && step.on_accessibility_label.is_some() => {
+            match work.driver.get_hierarchy().await {
+                Ok((root, meta)) => {
+                    golem_runner::probe::text_alternative(&root, meta.keyboard_height, step)
+                }
+                Err(_) => None,
+            }
+        }
+        _ => None,
     };
     let Work {
         device,
@@ -1770,7 +1796,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
         base_timeout_ms,
         ..
     } = work;
-    // The context lives for one step; what must outlast it (step counter,
+    // The context lives for one act; what must outlast it (step counter,
     // RNG, browser) moves in and back out.
     let mut ctx = golem_runner::context::ExecutionContext {
         device: Some(device),
@@ -1789,15 +1815,24 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
             "session",
         )
     };
-    let report = golem_runner::single_step::execute_single_step(
-        &step,
-        driver.as_ref(),
-        vars,
-        &mut ctx,
-        apps,
-        *base_timeout_ms,
-    )
-    .await;
+    let mut reports = Vec::with_capacity(steps.len());
+    for step in &steps {
+        let timeout_ms = golem_runner::policy::effective_timeout(step, *base_timeout_ms);
+        let report = golem_runner::single_step::execute_single_step(
+            step,
+            driver.as_ref(),
+            vars,
+            &mut ctx,
+            apps,
+            *base_timeout_ms,
+        )
+        .await;
+        let failed = matches!(report.outcome, golem_report::StepOutcome::Failed { .. });
+        reports.push((report, timeout_ms));
+        if failed {
+            break;
+        }
+    }
     *step_count = ctx.global_step_index;
     *rng = ctx.rng.into_inner().unwrap_or_else(|e| e.into_inner());
     let tree = if tree {
@@ -1805,37 +1840,73 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
     } else {
         None
     };
-    let passed = !matches!(report.outcome, golem_report::StepOutcome::Failed { .. });
+    let passed = reports.len() == steps.len()
+        && reports
+            .iter()
+            .all(|(r, _)| !matches!(r.outcome, golem_report::StepOutcome::Failed { .. }));
     // Only a step that passed belongs in the flow; it goes in as written,
-    // so a `${var}` stays a reference.
+    // so a `${var}` stays a reference and a mixin stays one `load_mixin`.
     if passed {
         if let Err(e) = work.draft.record(&line, comment) {
             return OpResult::Failed(format!("the step passed, but the draft refused it: {e:#}"));
         }
     }
-    let mut toon = golem_report::toon::format_step_toon(&report)
-        .trim_start()
-        .to_string();
-    let notes = [
-        passed
-            .then(|| slow_warning(report.duration_ms, timeout_ms))
-            .flatten(),
-        passed
-            .then(|| text_alternative.map(|text| label_hint(&text)))
-            .flatten(),
-        fix_line(&report.outcome),
-    ];
-    for note in notes.into_iter().flatten() {
-        if !toon.ends_with('\n') {
+    let mut toon = String::new();
+    if let Some(name) = &mixin {
+        let ms: u64 = reports.iter().map(|(r, _)| r.duration_ms).sum();
+        let ran = reports.len();
+        toon.push_str(&if passed {
+            format!("+load_mixin:{name} {ran} steps d:{ms}\n")
+        } else {
+            format!(
+                "!load_mixin:{name} failed at step {ran} of {} d:{ms}\n",
+                steps.len()
+            )
+        });
+    }
+    let indent = if mixin.is_some() { "  " } else { "" };
+    for (report, timeout_ms) in &reports {
+        let step_passed = !matches!(report.outcome, golem_report::StepOutcome::Failed { .. });
+        let line = golem_report::toon::format_step_toon(report);
+        toon.push_str(indent);
+        toon.push_str(line.trim_start());
+        toon.push('\n');
+        let notes = [
+            step_passed
+                .then(|| slow_warning(report.duration_ms, *timeout_ms))
+                .flatten(),
+            fix_line(&report.outcome),
+        ];
+        for note in notes.into_iter().flatten() {
+            toon.push_str(indent);
+            toon.push_str(&note);
             toon.push('\n');
         }
-        toon.push_str(&note);
+    }
+    if let Some(text) = passed.then_some(text_alternative).flatten() {
+        toon.push_str(&label_hint(&text));
         toon.push('\n');
     }
+    if mixin.is_none() {
+        // A single step's line stands alone, as before mixins ran here.
+        toon = toon.trim_end_matches('\n').to_string();
+        if toon.contains('\n') {
+            toon.push('\n');
+        }
+    }
+    let step = match (&mixin, reports.as_slice()) {
+        (None, [(report, _)]) => golem_report::json::step_json(report),
+        _ => serde_json::json!({
+            "action": "load_mixin",
+            "mixin": mixin,
+            "outcome": if passed { "success" } else { "failed" },
+            "steps": reports.iter().map(|(r, _)| golem_report::json::step_json(r)).collect::<Vec<_>>(),
+        }),
+    };
     OpResult::Act {
         passed,
         toon,
-        step: golem_report::json::step_json(&report),
+        step,
         tree,
     }
 }
@@ -2494,6 +2565,112 @@ mod tests {
             matches!(done.result, OpResult::Act { passed: true, .. }),
             "{done:?}"
         );
+    }
+
+    async fn draft_of(s: &Session) -> String {
+        match run(s, Op::DraftShow).await.result {
+            OpResult::Draft(text) => text,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// A session on the mock screen whose project holds the mixin `pay`:
+    /// tap `${what}`, then assert `${then}`.
+    fn session_with_mixin() -> (Session, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("__mixins__")).expect("mixins");
+        std::fs::write(
+            dir.path().join("__mixins__/pay.toml"),
+            "[[step]]\naction = \"tap\"\non_text = \"${what}\"\n\n[[step]]\naction = \"assert_visible\"\non_text = \"${then}\"\ntimeout = 300\n",
+        )
+        .expect("mixin");
+        let s = Session::from_parts(
+            Parts {
+                device: device(),
+                bundle: "fail.golem.test".into(),
+                driver: Arc::new(MockPlatformDriver::new(screen())),
+                lease: None,
+                project_root: dir.path().to_path_buf(),
+                apps: Vec::new(),
+                child_env: None,
+            },
+            DEFAULT_IDLE_TIMEOUT,
+        );
+        (s, dir)
+    }
+
+    #[tokio::test]
+    async fn an_act_on_load_mixin_runs_the_mixin_steps_and_records_one_step() {
+        let (s, _dir) = session_with_mixin();
+        let done = run(
+            &s,
+            act(r#"{ action = "load_mixin", mixin = "pay", vars = { what = "Pay 42", then = "Total" } }"#),
+        )
+        .await;
+        match &done.result {
+            OpResult::Act {
+                passed, toon, step, ..
+            } => {
+                assert!(passed, "{toon}");
+                let lines: Vec<&str> = toon.lines().collect();
+                assert!(lines[0].starts_with("+load_mixin:pay 2 steps"), "{toon}");
+                assert!(lines[1].starts_with("  +tap:on_text=\"Pay 42\""), "{toon}");
+                assert!(
+                    lines[2].starts_with("  +assert_visible:on_text=\"Total\""),
+                    "{toon}"
+                );
+                assert_eq!(step["steps"].as_array().map(Vec::len), Some(2), "{step}");
+            }
+            other => panic!("{other:?}"),
+        }
+        let draft = draft_of(&s).await;
+        assert!(
+            draft.contains(r#"{ action = "load_mixin", mixin = "pay", vars = { what = "Pay 42", then = "Total" } }"#),
+            "the draft SHALL record the load_mixin step, not its steps:\n{draft}"
+        );
+        assert!(!draft.contains("assert_visible"), "{draft}");
+    }
+
+    #[tokio::test]
+    async fn an_act_on_load_mixin_stops_at_the_inner_step_that_fails() {
+        let (s, _dir) = session_with_mixin();
+        let done = run(
+            &s,
+            act(r#"{ action = "load_mixin", mixin = "pay", vars = { what = "Pay 42", then = "Refund" } }"#),
+        )
+        .await;
+        match &done.result {
+            OpResult::Act { passed, toon, .. } => {
+                assert!(!passed, "{toon}");
+                assert!(
+                    toon.starts_with("!load_mixin:pay failed at step 2 of 2"),
+                    "{toon}"
+                );
+                assert!(
+                    toon.contains("  !assert_visible:on_text=\"Refund\""),
+                    "{toon}"
+                );
+                assert!(toon.contains("  fix: "), "{toon}");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            !draft_of(&s).await.contains("load_mixin"),
+            "a mixin that failed SHALL NOT be recorded"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_act_on_a_missing_mixin_names_the_mixin() {
+        let (s, _dir) = session_with_mixin();
+        let done = run(&s, act(r#"{ action = "load_mixin", mixin = "gone" }"#)).await;
+        match &done.result {
+            OpResult::Failed(e) => {
+                assert!(e.contains("gone"), "{e}");
+                assert!(!e.contains("Unknown action"), "{e}");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[tokio::test]

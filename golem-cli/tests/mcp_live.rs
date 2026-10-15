@@ -384,6 +384,66 @@ async fn live_mcp_an_edited_flow_passes_again_with_draft_run() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
+async fn live_mcp_act_runs_a_mixin_and_records_one_load_mixin_step() {
+    let live = Live::new();
+    let scratch = live.scratch();
+    std::fs::create_dir_all(scratch.path().join("__mixins__")).expect("mixins");
+    std::fs::copy(
+        live.root.join("e2e/__mixins__/launch_and_wait.toml"),
+        scratch.path().join("__mixins__/launch_and_wait.toml"),
+    )
+    .expect("mixin");
+    let flow = scratch.path().join("mixin.test.toml");
+    std::fs::write(
+        &flow,
+        "[flow]\nname = \"m\"\n\n[[flow.apps]]\nname = \"app\"\ndevices = [{ os = [\"ios:latest\", \"android:latest\"] }]\n\n[[block]]\nname = \"main\"\nsteps = [\n  { action = \"stop\", app = \"app\" },\n]\n",
+    )
+    .expect("flow");
+    let mcp = live.mcp(&[]).await;
+    live.open(
+        &mcp,
+        serde_json::json!({ "flow": flow.display().to_string(), "run": false }),
+    )
+    .await;
+    let step = r#"{ action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "app", wait_element = "Submit" } }"#;
+    let ran = mcp.ok("act", serde_json::json!({ "step": step })).await;
+    assert!(
+        ran.starts_with("+load_mixin:launch_and_wait 2 steps"),
+        "{ran}"
+    );
+    // A slow launch adds a `warning:` line under its step.
+    let inner: Vec<&str> = ran.lines().filter(|l| l.starts_with("  +")).collect();
+    assert_eq!(inner.len(), 2, "{ran}");
+    assert!(inner[0].starts_with("  +launch"), "{ran}");
+    assert!(inner[1].starts_with("  +assert_visible"), "{ran}");
+    let draft = mcp.ok("draft_show", serde_json::json!({})).await;
+    assert!(draft.contains(step), "{draft}");
+    let exported = mcp
+        .ok(
+            "export_flow",
+            serde_json::json!({ "path": flow.display().to_string(), "overwrite": true }),
+        )
+        .await;
+    assert!(exported.starts_with("exported "), "{exported}");
+    mcp.ok("session_close", serde_json::json!({ "teardown": false }))
+        .await;
+    drop(mcp);
+
+    let run = live
+        .golem_run(&flow, &live.platform)
+        .output()
+        .await
+        .expect("golem run");
+    assert!(
+        run.status.success(),
+        "the exported flow SHALL pass under golem run:\n{}\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "needs a live device: GOLEM_E2E_PLATFORM=android|ios"]
 async fn live_mcp_app_logs_show_the_launch_line_and_a_crash() {
     let live = Live::new();
     let mcp = live.mcp(&[]).await;
