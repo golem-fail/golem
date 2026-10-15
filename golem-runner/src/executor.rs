@@ -72,7 +72,8 @@ pub(crate) fn step_target(step: &golem_parser::Step) -> String {
     if let Some(ref i) = step.input {
         // Truncate by CHARS, not bytes — `&i[..20]` panics when byte 20 lands
         // inside a multibyte char (e.g. typing Japanese / emoji).
-        let shown: String = i.chars().take(20).collect();
+        // Mask before the cut, or the cut can leave part of a secret.
+        let shown: String = golem_common::secrets::mask(i).chars().take(20).collect();
         parts.push(format!("input=\"{shown}\""));
     }
     if step.auto_scroll == Some(true) {

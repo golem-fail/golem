@@ -120,6 +120,8 @@ pub enum FailureCode {
     ParseDeviceConstraint,
     /// P462: add_media given a file that isn't a supported image/video format.
     ParseUnsupportedMedia,
+    /// P463: a step's `secret` path is not in the value it saved.
+    ParseSecretPath,
 
     // ── A: app build / install / lifecycle ──
     /// A403: install script path traversal blocked.
@@ -235,7 +237,8 @@ impl FailureCode {
             | ParseVariable
             | ParseFlowFile
             | ParseDeviceConstraint
-            | ParseUnsupportedMedia => Domain::Parsing,
+            | ParseUnsupportedMedia
+            | ParseSecretPath => Domain::Parsing,
             AppInstallPathBlocked
             | AppInstallScriptNotFound
             | AppInstallTimeout
@@ -301,6 +304,7 @@ impl FailureCode {
             ParseFlowFile => 460,
             ParseDeviceConstraint => 461,
             ParseUnsupportedMedia => 462,
+            ParseSecretPath => 463,
             AppInstallPathBlocked => 403,
             AppInstallScriptNotFound => 404,
             AppInstallTimeout => 408,
@@ -330,7 +334,7 @@ impl FailureCode {
     }
 
     /// Every code, in registry order.
-    pub const ALL: [FailureCode; 44] = [
+    pub const ALL: [FailureCode; 45] = [
         Self::FlowExplicitFail,
         Self::FlowElementNotFound,
         Self::FlowElementOffscreen,
@@ -350,6 +354,7 @@ impl FailureCode {
         Self::ParseFlowFile,
         Self::ParseDeviceConstraint,
         Self::ParseUnsupportedMedia,
+        Self::ParseSecretPath,
         Self::AppInstallPathBlocked,
         Self::AppInstallScriptNotFound,
         Self::AppInstallTimeout,
@@ -410,6 +415,7 @@ impl FailureCode {
             ParseUnsupportedMedia => {
                 "`add_media` got a file that is not a supported image or video."
             }
+            ParseSecretPath => "A `secret` path names no key of the value the step saved.",
             AppInstallPathBlocked => "The install script path is outside the project.",
             AppInstallScriptNotFound => "The install script or the app bundle does not exist.",
             AppInstallTimeout => "The app install ran past its timeout.",
@@ -477,6 +483,7 @@ impl FailureCode {
             ParseFlowFile => "Fix the file at the line that the message names.",
             ParseDeviceConstraint => "Relax the device constraints, or add a device that matches.",
             ParseUnsupportedMedia => "Use a supported image or video file.",
+            ParseSecretPath => "Fix the path in `secret`, so the value under it is masked.",
             AppInstallPathBlocked => "Keep `install_script` inside the project directory.",
             AppInstallScriptNotFound => {
                 "Fix the `install_script` or bundle path, or build the app first."

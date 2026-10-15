@@ -269,6 +269,31 @@ pub async fn execute_step_with_policy(
     ctx: &ExecutionContext<'_>,
     apps: &[golem_parser::AppConfig],
 ) -> Result<StepOutcome> {
+    let outcome = run_with_policy(step, driver, vars, base_timeout_ms, ctx, apps).await;
+    // Tag a secret before the step's report goes out, so the report is
+    // masked too.
+    let missing = crate::secrets::register_step(step, vars);
+    match outcome {
+        Ok(StepOutcome::Success) if !missing.is_empty() => Ok(StepOutcome::Warning {
+            message: format!(
+                "secret names {}, which the value saved in {:?} does not have; the value under the real path is not masked",
+                missing.join(", "),
+                step.save_to.as_deref().unwrap_or_default()
+            ),
+            code: FailureCode::ParseSecretPath,
+        }),
+        other => other,
+    }
+}
+
+async fn run_with_policy(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    vars: &mut VariableStore,
+    base_timeout_ms: u64,
+    ctx: &ExecutionContext<'_>,
+    apps: &[golem_parser::AppConfig],
+) -> Result<StepOutcome> {
     let timeout_ms = effective_timeout(step, base_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
@@ -741,6 +766,37 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
+    #[tokio::test]
+    async fn a_secret_path_the_saved_value_lacks_turns_the_step_into_a_warning() {
+        let driver = golem_driver::MockPlatformDriver::new(tree(vec![]));
+        let mut vars = VariableStore::new();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let ctx = crate::context::test_ctx(tmp.path());
+        let step: Step = toml::from_str(
+            "action = \"bash\"\nrun = \"echo tok-5555\"\nsave_to = \"out\"\nsecret = [\"token\"]\n",
+        )
+        .expect("step");
+        let outcome = execute_step_with_policy(&step, &driver, &mut vars, 5000, &ctx, &[])
+            .await
+            .expect("ok");
+        match outcome {
+            StepOutcome::Warning { message, code } => {
+                assert_eq!(code, FailureCode::ParseSecretPath);
+                assert!(message.contains("token"), "{message}");
+            }
+            other => panic!("{other:?}"),
+        }
+        let whole: Step = toml::from_str(
+            "action = \"bash\"\nrun = \"echo tok-5555\"\nsave_to = \"out\"\nsecret = true\n",
+        )
+        .expect("step");
+        let outcome = execute_step_with_policy(&whole, &driver, &mut vars, 5000, &ctx, &[])
+            .await
+            .expect("ok");
+        assert_eq!(outcome, StepOutcome::Success);
+        assert_eq!(golem_common::secrets::mask("got tok-5555"), "got ${out}");
+    }
+
     // 1. Step succeeds -> StepOutcome::Success
     // -----------------------------------------------------------------
     #[tokio::test]

@@ -85,6 +85,7 @@ pub mod probe;
 pub mod recovery;
 pub mod resolution;
 pub mod scroll;
+pub mod secrets;
 pub mod single_step;
 pub mod subflow;
 pub mod teardown;

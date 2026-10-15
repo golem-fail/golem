@@ -59,6 +59,7 @@ Codes appear in every output format:
 | `P460` | The flow or mixin file is not valid TOML, or does not fit the schema. | Fix the file at the line that the message names. |
 | `P461` | No device can satisfy the flow's device constraints. | Relax the device constraints, or add a device that matches. |
 | `P462` | `add_media` got a file that is not a supported image or video. | Use a supported image or video file. |
+| `P463` | A `secret` path names no key of the value the step saved. | Fix the path in `secret`, so the value under it is masked. |
 | `A403` | The install script path is outside the project. | Keep `install_script` inside the project directory. |
 | `A404` | The install script or the app bundle does not exist. | Fix the `install_script` or bundle path, or build the app first. |
 | `A408` | The app install ran past its timeout. | Make the install faster, or raise `install_timeout_ms`. |

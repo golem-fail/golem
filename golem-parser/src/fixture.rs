@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct Fixture {
     pub vars: IndexMap<String, String>,
+    /// The keys of `vars` whose values golem masks in all output.
+    pub secret: Vec<String>,
 }
 
 /// Internal representation for deserializing a fixture TOML file
@@ -18,13 +20,25 @@ pub struct Fixture {
 struct FixtureFile {
     #[serde(default)]
     vars: IndexMap<String, String>,
+    #[serde(default)]
+    secret: Vec<String>,
 }
 
-/// Parse a fixture TOML file. Fixture files contain only [vars].
+/// Parse a fixture TOML file: `[vars]`, and a root `secret` list that
+/// names the keys of `[vars]` that are secret.
 pub fn parse_fixture(toml_str: &str) -> anyhow::Result<Fixture> {
     let fixture_file: FixtureFile = toml::from_str(toml_str)?;
+    // A typo in `secret` would leave the real value unmasked.
+    if let Some(missing) = fixture_file
+        .secret
+        .iter()
+        .find(|k| !fixture_file.vars.contains_key(k.as_str()))
+    {
+        anyhow::bail!("secret names {missing:?}, which is not a key of [vars]");
+    }
     Ok(Fixture {
         vars: fixture_file.vars,
+        secret: fixture_file.secret,
     })
 }
 
@@ -515,5 +529,17 @@ key = "value"
             Some("a=b,c=d (x)"),
             "value SHALL be stored verbatim without interpretation"
         );
+    }
+
+    #[test]
+    fn a_fixture_names_its_secret_keys() {
+        let f = parse_fixture(
+            "secret = [\"password\"]\n\n[vars]\nuser = \"qa\"\npassword = \"s3cret\"\n",
+        )
+        .expect("parse");
+        assert_eq!(f.secret, vec!["password".to_string()]);
+        let err = parse_fixture("secret = [\"pasword\"]\n\n[vars]\npassword = \"s3cret\"\n")
+            .expect_err("a secret key that is not in [vars] SHALL fail to parse");
+        assert!(err.to_string().contains("\"pasword\""), "{err}");
     }
 }

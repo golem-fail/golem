@@ -29,6 +29,7 @@ Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-le
 - [Data-Driven Tests](#data-driven-tests)
 - [Variables](#variables)
   - [Built-in variables](#built-in-variables)
+- [Secrets](#secrets)
 - [Fake Data Generators](#fake-data-generators)
 - [Multi-App Flows](#multi-app-flows)
 - [Devices](#devices)
@@ -296,6 +297,7 @@ Find the element a step acts on. Prefer `on_text`; use `on_accessibility_label` 
 | `retry` | `0` | Retry count on failure |
 | `retry_delay` | `1000` | Delay between retries (ms) |
 | `save_to` | — | Save result to a variable |
+| `secret` | — | With `save_to`: `true` masks the whole saved value in all output, and a list of paths, such as `["token"]`, masks only those — see [Secrets](#secrets) |
 | `app` | — | Target a specific app (for multi-app flows) |
 
 ### Timeout Multipliers
@@ -477,6 +479,32 @@ golem reserves the `_` prefix and fills these in per step:
 `_hardware`, `_loop` and `_perf` are also readable by a branch condition
 (`[[block.branch]] if_var = "_hardware", equals = "real"`); the device and app
 builtins resolve in `${…}` interpolation only.
+
+## Secrets
+<!-- summary: secret in a fixture or on a save_to step: golem masks the value in all output -->
+
+golem shows variable values in its output: the step lines, the reports, the logs and the MCP results. Tag a value as secret where it enters the run, and golem replaces the value with its reference everywhere it writes. For example, `t:"staging-password"` shows as `t:"${qa.password}"`.
+
+Tag a value in one of these places:
+
+- **A fixture.** A root `secret` list names the keys of `[vars]` that are secret. See [`load_fixture`](actions-reference.md#load_fixture--load-fixture-data).
+- **A step with `save_to`.** `secret = true` tags the whole saved value. `secret = ["token", "user.refresh_token"]` tags only those paths, for example the token of a test user that an HTTP step creates. If a path is not in the saved value, the step passes with the warning WP463, because the value under the real path is not masked.
+- **`create_inbox`.** The inbox password (`pass`) is always secret.
+
+To keep a secret out of every file, get it from the environment or a secret manager with a step:
+
+```toml
+{ action = "bash", run = "op read op://qa/password", save_to = "pw", secret = true }
+```
+
+golem masks the value, not the variable. A string made from a secret, such as `"Bearer ${user.token}"`, shows as `Bearer ${user.token}`, and a response that sends the token back is masked too. golem masks a secret of any length. A short secret, such as a PIN, also masks the same text elsewhere in the output: the output is harder to read, but the secret does not show. For an object such as the result of `run`, name the paths: `secret = true` also masks fields such as `exit_code`.
+
+The limits:
+
+- golem cannot mask pixels. A screenshot or a screen recording shows a secret that the app displays. Password fields usually show dots.
+- golem cannot mask a changed form of a value: base64, URL encoding, a hash, or a value split across lines.
+- Masking hides a value. It does not stop a step from using the value: a step can still send it with `bash` or `post_http`.
+- Use test accounts, not real users.
 
 ## Fake Data Generators
 <!-- summary: ${fake:…} in short; help("fake") has the rest -->

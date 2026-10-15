@@ -69,6 +69,7 @@ pub fn emit(level: Level, message: impl AsRef<str>) {
     if level == Level::Debug && !crate::is_debug() {
         return;
     }
+    let message = crate::secrets::mask(message.as_ref());
     let message = message.as_ref();
     match SCOPE.try_with(|s| s.sink.clone()) {
         Ok(sink) => sink(level, message),

@@ -229,6 +229,10 @@ fn crash_heads(crashes: Vec<LogLine>, limit: usize) -> Vec<LogLine> {
 }
 
 fn cut(mut line: LogLine) -> LogLine {
+    // Mask before the cut, or the cut can leave part of a secret.
+    if let std::borrow::Cow::Owned(masked) = golem_common::secrets::mask(&line.message) {
+        line.message = masked;
+    }
     if let Some((at, _)) = line.message.char_indices().nth(MAX_MESSAGE) {
         line.message.truncate(at);
         line.message.push('…');

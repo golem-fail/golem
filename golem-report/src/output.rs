@@ -83,8 +83,13 @@ pub fn write_results_to_dir(
     Ok(written)
 }
 
-/// Render a report in the specified format.
+/// Render a report in the specified format, with each secret value
+/// masked.
 pub fn render(report: &SuiteReport, format: &OutputFormat) -> Result<String> {
+    render_unmasked(report, format).map(|text| golem_common::secrets::mask(&text).into_owned())
+}
+
+fn render_unmasked(report: &SuiteReport, format: &OutputFormat) -> Result<String> {
     match format {
         OutputFormat::Human => Ok(crate::human::format_suite(report)),
         OutputFormat::Json => {

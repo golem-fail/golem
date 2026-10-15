@@ -1139,6 +1139,7 @@ version = "0.16.1"
 dependencies = [
  "anyhow",
  "chrono",
+ "golem-common",
  "golem-events",
  "serde",
  "serde_json",

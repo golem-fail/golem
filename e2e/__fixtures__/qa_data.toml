@@ -1,6 +1,11 @@
 # Fixture for e2e/load_fixture.test.toml. `load_fixture … as = "cfg"` loads
 # this [vars] table under the `cfg` namespace, referenced as ${cfg.key}.
 # Generators are evaluated at load (seed-deterministic), same as [flow.vars].
+# `secret` names the keys golem masks in all output: the password types
+# into the field, but every step line and report shows ${cfg.password}.
+secret = ["password"]
+
 [vars]
 username = "qa-user-42"
+password = "qa-pass-8642"
 token = "${fake:uuid}"

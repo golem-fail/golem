@@ -31,12 +31,15 @@ pub fn load_fixture_into_store(
     let fixture = parse_fixture(&content)?;
 
     // 3. Evaluate generators — convert HashMap to Vec of pairs for evaluate_generators
-    let vars: Vec<(String, String)> = fixture.vars.into_iter().collect();
+    let vars: Vec<(String, String)> = fixture.vars.clone().into_iter().collect();
     let evaluated = evaluate_generators(&vars, rng)?;
 
     // 4. Build object: wrap all evaluated VarValues under the namespace
     let mut object = HashMap::new();
     for (key, value) in evaluated {
+        if fixture.secret.contains(&key) {
+            crate::secrets::register_value(&value, &format!("{namespace}.{key}"));
+        }
         object.insert(key, value);
     }
 
@@ -64,6 +67,30 @@ mod tests {
             fs::create_dir_all(parent).expect("Failed to create fixture directory");
         }
         fs::write(&file_path, content).expect("Failed to write fixture file");
+    }
+
+    #[test]
+    fn a_secret_fixture_key_is_masked_and_the_others_are_not() {
+        let tmp = TempDir::new().expect("temp dir");
+        write_fixture(
+            tmp.path(),
+            "qa",
+            "secret = [\"password\"]\n\n[vars]\nuser = \"qa-user\"\npassword = \"pw-9876\"\n",
+        );
+        let mut store = VariableStore::new();
+        load_fixture_into_store(
+            "qa",
+            "qa",
+            tmp.path(),
+            tmp.path(),
+            &mut store,
+            &mut seeded_rng(),
+        )
+        .expect("load");
+        assert_eq!(
+            golem_common::secrets::mask("qa-user pw-9876"),
+            "qa-user ${qa.password}"
+        );
     }
 
     // ---------------------------------------------------------------

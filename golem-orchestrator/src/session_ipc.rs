@@ -126,7 +126,7 @@ pub(crate) fn spawn(
         reply["type"] = serde_json::json!("session_reply");
         reply["id"] = id;
         let mut w = writer.lock().await;
-        let _ = w.write_all(format!("{reply}\n").as_bytes()).await;
+        let _ = w.write_all(&crate::ipc::wire_line(&reply)).await;
     });
 }
 
@@ -436,7 +436,7 @@ fn watch_idle(session: Arc<Session>, home: Home, sessions: Arc<std::sync::atomic
                 if let Home::Conn(_, writer) = &home {
                     let notice = serde_json::json!({ "type": "session_ended", "reason": reason });
                     let mut w = writer.lock().await;
-                    let _ = w.write_all(format!("{notice}\n").as_bytes()).await;
+                    let _ = w.write_all(&crate::ipc::wire_line(&notice)).await;
                 }
                 break;
             }
@@ -697,6 +697,39 @@ mod tests {
             )
             .await
         }
+    }
+
+    #[tokio::test]
+    async fn a_fixture_secret_never_reaches_the_client() {
+        let d = daemon().await;
+        std::fs::create_dir_all(d.dir.path().join("__fixtures__")).expect("fixtures");
+        std::fs::write(
+            d.dir.path().join("__fixtures__/qa.toml"),
+            "secret = [\"password\"]\n\n[vars]\nuser = \"qa-user\"\npassword = \"s3cret-Pw-42\"\n",
+        )
+        .expect("fixture");
+        assert_eq!(d.open("s").await["result"]["opened"], true);
+        let loaded = d
+            .call(
+                "session_act",
+                serde_json::json!({ "session": "s", "step": r#"{ action = "load_fixture", fixture = "qa", as = "qa" }"# }),
+            )
+            .await;
+        assert_eq!(loaded["result"]["passed"], true, "{loaded}");
+        let typed = d
+            .call(
+                "session_act",
+                serde_json::json!({ "session": "s", "step": r#"{ action = "type", on_text = "Submit", input = "${qa.password} ${qa.user}" }"# }),
+            )
+            .await;
+        assert_eq!(typed["result"]["passed"], true, "{typed}");
+        let wire = typed.to_string();
+        assert!(!wire.contains("s3cret-Pw-42"), "{wire}");
+        assert!(wire.contains("${qa.password}"), "{wire}");
+        assert!(
+            wire.contains("qa-user"),
+            "a fixture value that is not secret SHALL still show: {wire}"
+        );
     }
 
     #[tokio::test]

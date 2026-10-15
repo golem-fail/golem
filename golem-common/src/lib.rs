@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub mod command;
 pub mod diag;
 pub mod host_queue;
+pub mod secrets;
 
 static DEBUG: AtomicBool = AtomicBool::new(false);
 

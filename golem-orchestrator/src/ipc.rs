@@ -537,6 +537,15 @@ pub async fn start_server(path: &Path, identity: &Identity) -> Result<Orchestrat
 }
 
 /// Handle a single client connection.
+/// One line to a client, with each secret value masked: everything the
+/// daemon sends (run events, results, session replies) passes here.
+pub(crate) fn wire_line(msg: &impl std::fmt::Display) -> Vec<u8> {
+    let line = msg.to_string();
+    let mut out = golem_common::secrets::mask(&line).into_owned().into_bytes();
+    out.push(b'\n');
+    out
+}
+
 async fn handle_client(stream: UnixStream, shared: &ServerShared) {
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -557,7 +566,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                     Err(e) => {
                         let resp = serde_json::json!({"type": "error", "message": format!("invalid JSON: {e}")});
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                         continue;
                     }
                 };
@@ -578,7 +587,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             .active_sessions
                             .load(std::sync::atomic::Ordering::Acquire));
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     Some("drain") => {
                         shared
@@ -599,7 +608,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             "pid": std::process::id(),
                         });
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     Some("submit") if !greeted => {
                         let resp = serde_json::json!({
@@ -611,7 +620,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             ),
                         });
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     Some(kind) if greeted && kind.starts_with("session_") => {
                         crate::session_ipc::spawn(
@@ -647,7 +656,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             }),
                         };
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     Some("submit")
                         if shared.draining.load(std::sync::atomic::Ordering::Acquire) =>
@@ -657,7 +666,7 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                             "message": "the golem daemon is draining for a newer golem; run again",
                         });
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{resp}\n").as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     Some("submit") => {
                         let _run = RunGuard::new(&shared.active_runs);
@@ -685,13 +694,13 @@ async fn handle_client(stream: UnixStream, shared: &ServerShared) {
                     Some(other) => {
                         let resp = serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")});
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                     None => {
                         let resp =
                             serde_json::json!({"type": "error", "message": "missing 'type' field"});
                         let mut w = writer.lock().await;
-                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                        let _ = w.write_all(&wire_line(&resp)).await;
                     }
                 }
             }
@@ -898,7 +907,7 @@ async fn handle_submit(
     if paths.is_empty() {
         let resp = serde_json::json!({"type": "error", "message": "no flow_paths provided"});
         let mut w = writer.lock().await;
-        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+        let _ = w.write_all(&wire_line(&resp)).await;
         return;
     }
 
@@ -953,7 +962,7 @@ async fn handle_submit(
                 "message": format!("failed to load golem.toml under {}: {e}", project_root.display()),
             });
             let mut w = writer.lock().await;
-            let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+            let _ = w.write_all(&wire_line(&resp)).await;
             return;
         }
     };
@@ -969,9 +978,9 @@ async fn handle_submit(
         while let Ok(event) = event_rx.recv().await {
             let wire: golem_events::WireEvent = (&event).into();
             if let Ok(json_str) = serde_json::to_string(&wire) {
-                let line = format!("{{\"type\":\"event\",\"event\":{json_str}}}\n");
+                let line = format!("{{\"type\":\"event\",\"event\":{json_str}}}");
                 let mut w = event_writer.lock().await;
-                if w.write_all(line.as_bytes()).await.is_err() {
+                if w.write_all(&wire_line(&line)).await.is_err() {
                     break; // client disconnected
                 }
             }
@@ -1109,7 +1118,7 @@ async fn handle_submit(
         }
     };
     let mut w = writer.lock().await;
-    let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+    let _ = w.write_all(&wire_line(&resp)).await;
 }
 
 /// Submit work to a running orchestrator and wait for results.
