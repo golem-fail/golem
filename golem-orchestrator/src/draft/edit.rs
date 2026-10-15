@@ -147,7 +147,7 @@ impl Draft {
     }
 
     /// Put `step` in place of step `i`, keeping its comments and layout.
-    fn replace_step(&mut self, b: usize, i: usize, mut step: InlineTable) -> Result<()> {
+    pub(super) fn replace_step(&mut self, b: usize, i: usize, mut step: InlineTable) -> Result<()> {
         let table = self.block_table_mut(b).context("no such block")?;
         match table.get_mut("steps") {
             Some(Item::Value(Value::Array(a))) => {
@@ -212,7 +212,7 @@ impl Draft {
 
     /// Take step `i` out of block `b`, with its status; returns it with
     /// its comments.
-    fn remove_step(&mut self, b: usize, i: usize) -> Result<(InlineTable, Vec<String>)> {
+    pub(super) fn remove_step(&mut self, b: usize, i: usize) -> Result<(InlineTable, Vec<String>)> {
         let step = self.step_value(b, i).context("no such step")?;
         let comments = self.own_comments(b, i);
         let table = self.block_table_mut(b).context("no such block")?;

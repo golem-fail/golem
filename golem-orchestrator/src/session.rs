@@ -213,7 +213,13 @@ pub enum Op {
     /// Change the draft without touching the device.
     Edit(DraftEdit),
     /// Check the draft and write it to `path`.
-    Export { path: PathBuf, overwrite: bool },
+    Export {
+        path: PathBuf,
+        overwrite: bool,
+        /// Put a `load_mixin` step in place of each run of steps that
+        /// starts at `at` (`main:3`) and matches the mixin.
+        mixins: Vec<(String, String)>,
+    },
 }
 
 impl Op {
@@ -405,6 +411,8 @@ pub enum OpResult {
         counts: String,
         unverified: Vec<String>,
         warnings: Vec<String>,
+        /// Each run of steps in the file that a mixin holds.
+        hints: Vec<String>,
     },
     /// The session holds its device now.
     Opened {
@@ -506,6 +514,11 @@ struct Work {
     /// What the steps an LLM writes may do; `None` allows everything.
     policy: Option<golem_parser::policy::Policy>,
     approvals: Approvals,
+    /// The mixin hints already given, so each shows once.
+    hinted: std::collections::HashSet<String>,
+    /// The mixins the draft can load, and when golem read them: finding
+    /// them walks the project, which is too slow for every `act`.
+    mixins: Option<(Instant, Vec<crate::draft::Mixin>)>,
 }
 
 /// The `ask` steps of a session, by [`step_key`]: refused once, then
@@ -979,6 +992,8 @@ impl Work {
             recovery: None,
             policy: None,
             approvals: Approvals::default(),
+            hinted: Default::default(),
+            mixins: None,
         }
     }
 }
@@ -1647,6 +1662,202 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
     if let Some(Err(refusal)) = written.map(|step| check_policy(work, step)) {
         return OpResult::Failed(refusal);
     }
+    let result = run_op_checked(work, op, status).await;
+    with_reuse_hints(work, op, result)
+}
+
+/// Add a hint for each new run of steps that a mixin holds, after an
+/// operation that changed the draft's steps.
+fn with_reuse_hints(work: &mut Work, op: &Op, result: OpResult) -> OpResult {
+    let changes_steps = matches!(
+        op,
+        Op::Act { .. }
+            | Op::Edit(
+                DraftEdit::RecordOnly { .. }
+                    | DraftEdit::StepEdit { .. }
+                    | DraftEdit::StepDelete { .. }
+                    | DraftEdit::StepMove { .. }
+                    | DraftEdit::TeardownAdd { .. }
+            )
+    );
+    let changed = match &result {
+        OpResult::Act { passed, .. } => *passed,
+        OpResult::Edited(_) => true,
+        _ => false,
+    };
+    if !changes_steps || !changed {
+        return result;
+    }
+    let hints = reuse_hints(work, matches!(op, Op::Act { .. }));
+    if hints.is_empty() {
+        return result;
+    }
+    let lines = hints.join("\n");
+    match result {
+        OpResult::Act {
+            passed,
+            mut toon,
+            step,
+            tree,
+        } => {
+            if !toon.ends_with('\n') {
+                toon.push('\n');
+            }
+            toon.push_str(&lines);
+            toon.push('\n');
+            OpResult::Act {
+                passed,
+                toon,
+                step,
+                tree,
+            }
+        }
+        OpResult::Edited(mut text) => {
+            if !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(&lines);
+            text.push('\n');
+            OpResult::Edited(text)
+        }
+        other => other,
+    }
+}
+
+/// How long the session keeps the list of mixins before it reads them
+/// again: a person can add a mixin while the session runs.
+const MIXINS_FRESH: Duration = Duration::from_secs(30);
+
+/// The mixins this draft can load: from the flow's directory up, or every
+/// mixin of the project for a draft that is not a file yet.
+fn draft_mixins(work: &mut Work) -> Vec<crate::draft::Mixin> {
+    if let Some((read, mixins)) = &work.mixins {
+        if read.elapsed() < MIXINS_FRESH {
+            return mixins.clone();
+        }
+    }
+    let mixins = read_draft_mixins(work);
+    work.mixins = Some((Instant::now(), mixins.clone()));
+    mixins
+}
+
+fn read_draft_mixins(work: &Work) -> Vec<crate::draft::Mixin> {
+    match work.draft.source_dir() {
+        Some(dir) => crate::draft::mixins_for(dir, &work.project_root),
+        None => crate::draft::mixins_for(&work.project_root, &work.project_root)
+            .into_iter()
+            .chain(crate::draft::all_mixins(&work.project_root))
+            .fold(Vec::new(), |mut seen: Vec<crate::draft::Mixin>, m| {
+                if !seen.iter().any(|s| s.name == m.name) {
+                    seen.push(m);
+                }
+                seen
+            }),
+    }
+}
+
+/// The hint line for a match.
+fn match_hint(draft: &crate::draft::Draft, m: &crate::draft::MixinMatch) -> String {
+    let first = draft.place_address(m.place, m.start);
+    let last = draft.place_address(m.place, m.start + m.len - 1);
+    let last_step = last.rsplit(':').next().unwrap_or_default();
+    let vars = if m.vars.is_empty() {
+        "no vars".to_string()
+    } else {
+        format!(
+            "vars: {}",
+            m.vars.keys().cloned().collect::<Vec<_>>().join(", ")
+        )
+    };
+    format!(
+        "hint: {first}–{last_step} match mixin {:?} ({vars}) · export_flow(mixins = [{{ at = \"{first}\", mixin = \"{}\" }}]) replaces them",
+        m.mixin, m.mixin
+    )
+}
+
+/// New hints: each run of steps a mixin holds whole, and after an `act`,
+/// a mixin whose first steps the block's last steps are.
+fn reuse_hints(work: &mut Work, early: bool) -> Vec<String> {
+    let mixins = draft_mixins(work);
+    if mixins.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for m in work.draft.mixin_matches(&mixins) {
+        let key = format!("{}|{}", work.draft.place_address(m.place, m.start), m.mixin);
+        if work.hinted.insert(key) {
+            out.push(match_hint(&work.draft, &m));
+        }
+    }
+    if early {
+        if let Some(ins) = work.draft.insertion().cloned() {
+            let before = ins
+                .at
+                .unwrap_or_else(|| work.draft.steps_in_block(ins.block));
+            for (start, k, name, total) in work.draft.mixin_starts(ins.block, before, &mixins) {
+                let first = work
+                    .draft
+                    .place_address(crate::draft::Place::Block(ins.block), start);
+                let key = format!("start|{first}|{name}");
+                if work.hinted.insert(key) {
+                    let last = start + k;
+                    out.push(format!(
+                        "hint: {first}–{last} start mixin {name:?} ({total} steps) · reuse_list(name = \"{name}\") shows them; a load_mixin step runs them all"
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Put a `load_mixin` step in place of each requested run, after checking
+/// that the run still matches: the model can edit steps after a hint.
+fn apply_mixins(
+    draft: &mut crate::draft::Draft,
+    requested: &[(String, String)],
+    mixins: &[crate::draft::Mixin],
+) -> Result<()> {
+    let current = draft.mixin_matches(mixins);
+    let listing = || {
+        let shown: Vec<String> = current
+            .iter()
+            .map(|m| format!("{} {:?}", draft.place_address(m.place, m.start), m.mixin))
+            .collect();
+        if shown.is_empty() {
+            "none".to_string()
+        } else {
+            shown.join(", ")
+        }
+    };
+    let mut chosen: Vec<crate::draft::MixinMatch> = Vec::new();
+    for (at, mixin) in requested {
+        let (place, start) = draft.parse_place(at)?;
+        let Some(m) = current
+            .iter()
+            .find(|m| m.place == place && m.start == start && &m.mixin == mixin)
+        else {
+            anyhow::bail!(
+                "{at} does not match mixin {mixin:?}; current matches: {}",
+                listing()
+            );
+        };
+        if chosen
+            .iter()
+            .any(|c| c.place == m.place && c.start < m.start + m.len && m.start < c.start + c.len)
+        {
+            anyhow::bail!("{at}: the mixins overlap");
+        }
+        chosen.push(m.clone());
+    }
+    chosen.sort_by_key(|m| std::cmp::Reverse((m.place, m.start)));
+    for m in chosen {
+        draft.replace_run(m.place, m.start, m.len, &m.load_mixin_line())?;
+    }
+    Ok(())
+}
+
+async fn run_op_checked(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResult {
     match op {
         Op::DraftRun { restart, stop_at } => draft_run(work, *restart, stop_at.as_deref(), status)
             .await
@@ -1678,7 +1889,11 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
             Ok(Some(listing)) => OpResult::Edited(format!("draft updated\n{listing}")),
             Err(e) => OpResult::Failed(format!("{e:#}")),
         },
-        Op::Export { path, overwrite } => {
+        Op::Export {
+            path,
+            overwrite,
+            mixins,
+        } => {
             let path = if path.is_absolute() {
                 path.clone()
             } else {
@@ -1688,14 +1903,29 @@ async fn run_op(work: &mut Work, op: &Op, status: &Arc<Mutex<Status>>) -> OpResu
                     .unwrap_or_else(|| work.project_root.clone())
                     .join(path)
             };
-            match work.draft.export(&path, *overwrite, &work.project_root) {
-                Ok(done) => OpResult::Exported {
-                    path: done.path,
-                    steps: done.steps,
-                    counts: done.counts.to_string(),
-                    unverified: done.unverified,
-                    warnings: done.warnings,
-                },
+            // Changed on a copy: a failed export leaves the draft as it was.
+            let mut draft = work.draft.clone();
+            let available = draft_mixins(work);
+            if let Err(e) = apply_mixins(&mut draft, mixins, &available) {
+                return OpResult::Failed(format!("{e:#}"));
+            }
+            match draft.export(&path, *overwrite, &work.project_root) {
+                Ok(done) => {
+                    let hints = draft
+                        .mixin_matches(&available)
+                        .iter()
+                        .map(|m| match_hint(&draft, m))
+                        .collect();
+                    work.draft = draft;
+                    OpResult::Exported {
+                        path: done.path,
+                        steps: done.steps,
+                        counts: done.counts.to_string(),
+                        unverified: done.unverified,
+                        warnings: done.warnings,
+                        hints,
+                    }
+                }
                 Err(e) => OpResult::Failed(format!("{e:#}")),
             }
         }
@@ -2246,6 +2476,14 @@ mod tests {
         }
     }
 
+    /// An empty project directory, shared by the tests that need no
+    /// project files: the system temp root holds other tests' files.
+    fn empty_project() -> PathBuf {
+        let dir = std::env::temp_dir().join("golem-session-tests-empty-project");
+        std::fs::create_dir_all(&dir).expect("empty project");
+        dir
+    }
+
     fn session_on(
         driver: Arc<dyn PlatformDriver>,
         lease: Option<DeviceLease>,
@@ -2257,7 +2495,7 @@ mod tests {
                 bundle: "fail.golem.test".into(),
                 driver,
                 lease,
-                project_root: std::env::temp_dir(),
+                project_root: empty_project(),
                 apps: Vec::new(),
                 child_env: None,
             },
@@ -2723,6 +2961,215 @@ mod tests {
         );
     }
 
+    fn act_toon(done: &Outcome) -> &str {
+        match &done.result {
+            OpResult::Act { passed, toon, .. } => {
+                assert!(passed, "{toon}");
+                toon
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn steps_that_match_a_mixin_get_a_hint_once_and_an_early_hint() {
+        let (s, dir) = session_with_mixin();
+        std::fs::write(
+            dir.path().join("__mixins__/pay3.toml"),
+            "[[step]]\naction = \"tap\"\non_text = \"${what}\"\n\n[[step]]\naction = \"assert_visible\"\non_text = \"${then}\"\ntimeout = 300\n\n[[step]]\naction = \"assert_visible\"\non_text = \"42\"\ntimeout = 300\n",
+        )
+        .expect("mixin");
+        let tap = run(&s, act(r#"{ action = "tap", on_text = "Pay 42" }"#)).await;
+        assert!(!act_toon(&tap).contains("hint:"), "{tap:?}");
+        let assert = run(
+            &s,
+            act(r#"{ on_text = "Total", action = "assert_visible", timeout = 300 }"#),
+        )
+        .await;
+        let toon = act_toon(&assert);
+        assert!(
+            toon.contains(r#"hint: main:1–2 match mixin "pay" (vars: then, what) · export_flow(mixins = [{ at = "main:1", mixin = "pay" }]) replaces them"#),
+            "{toon}"
+        );
+        assert!(
+            toon.contains(r#"hint: main:1–2 start mixin "pay3" (3 steps)"#),
+            "{toon}"
+        );
+        let again = run(
+            &s,
+            act(r#"{ action = "assert_visible", on_text = "Total", timeout = 300 }"#),
+        )
+        .await;
+        assert!(
+            !act_toon(&again).contains("mixin \"pay\" (vars"),
+            "a hint SHALL show once: {again:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn export_puts_load_mixin_in_place_of_the_matching_steps() {
+        let (s, dir) = session_with_mixin();
+        for step in [
+            r#"{ action = "assert_visible", on_text = "42", timeout = 300 }"#,
+            r#"{ action = "tap", on_text = "Pay 42" }"#,
+            r#"{ action = "assert_visible", on_text = "Total", timeout = 300 }"#,
+        ] {
+            act_toon(&run(&s, act(step)).await);
+        }
+        let out = dir.path().join("flow.test.toml");
+        let export = |at: &str| Op::Export {
+            path: out.clone(),
+            overwrite: true,
+            mixins: vec![(at.to_string(), "pay".to_string())],
+        };
+        match run(&s, export("main:1")).await.result {
+            OpResult::Failed(e) => assert!(
+                e.contains(r#"main:1 does not match mixin "pay"; current matches: main:2 "pay""#),
+                "{e}"
+            ),
+            other => panic!("{other:?}"),
+        }
+        assert!(!out.exists(), "a refused export SHALL write nothing");
+        match run(&s, export("main:2")).await.result {
+            OpResult::Exported { hints, .. } => assert!(hints.is_empty(), "{hints:?}"),
+            other => panic!("{other:?}"),
+        }
+        let written = std::fs::read_to_string(&out).expect("written");
+        assert!(
+            written.contains(r#"{ action = "load_mixin", mixin = "pay", vars = { then = "Total", what = "Pay 42" } }"#),
+            "{written}"
+        );
+        assert!(!written.contains(r#"on_text = "Pay 42" }"#), "{written}");
+        let steps = match run(&s, Op::DraftSteps(crate::draft::StepsQuery::default()))
+            .await
+            .result
+        {
+            OpResult::Draft(text) => text,
+            other => panic!("{other:?}"),
+        };
+        assert!(
+            steps.contains(r#"main:2 ✓ { action = "load_mixin""#),
+            "{steps}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_edit_that_makes_a_match_gets_a_hint_and_overlaps_are_refused() {
+        let (s, dir) = session_with_mixin();
+        for step in [
+            r#"{ action = "tap", on_text = "Pay 42" }"#,
+            // No timeout: the mixin's step has one, so this does not match.
+            r#"{ action = "assert_visible", on_text = "42" }"#,
+        ] {
+            act_toon(&run(&s, act(step)).await);
+        }
+        let edited = run(
+            &s,
+            Op::Edit(DraftEdit::StepEdit {
+                at: "main:2".into(),
+                step: Some(
+                    r#"{ action = "assert_visible", on_text = "Pay 42", timeout = 300 }"#.into(),
+                ),
+                comment: None,
+                inline: false,
+            }),
+        )
+        .await;
+        match &edited.result {
+            OpResult::Edited(text) => {
+                assert!(
+                    text.contains(r#"hint: main:1–2 match mixin "pay""#),
+                    "{text}"
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        let refused = run(
+            &s,
+            Op::Export {
+                path: dir.path().join("flow.test.toml"),
+                overwrite: true,
+                mixins: vec![
+                    ("main:1".into(), "pay".into()),
+                    ("main:1".into(), "pay".into()),
+                ],
+            },
+        )
+        .await;
+        match &refused.result {
+            OpResult::Failed(e) => assert!(e.contains("main:1: the mixins overlap"), "{e}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_export_without_mixins_lists_the_matches_as_hints() {
+        let (s, dir) = session_with_mixin();
+        for step in [
+            r#"{ action = "tap", on_text = "Pay 42" }"#,
+            r#"{ action = "assert_visible", on_text = "Total", timeout = 300 }"#,
+        ] {
+            act_toon(&run(&s, act(step)).await);
+        }
+        let out = dir.path().join("flow.test.toml");
+        match run(
+            &s,
+            Op::Export {
+                path: out,
+                overwrite: true,
+                mixins: Vec::new(),
+            },
+        )
+        .await
+        .result
+        {
+            OpResult::Exported { hints, .. } => assert_eq!(
+                hints,
+                [
+                    r#"hint: main:1–2 match mixin "pay" (vars: then, what) · export_flow(mixins = [{ at = "main:1", mixin = "pay" }]) replaces them"#
+                ]
+            ),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn teardown_steps_that_match_a_mixin_are_replaced_too() {
+        let (s, dir) = session_with_mixin();
+        for step in [
+            r#"{ action = "tap", on_text = "Pay 42" }"#,
+            r#"{ action = "assert_visible", on_text = "Total", timeout = 300 }"#,
+        ] {
+            let done = run(
+                &s,
+                Op::Edit(DraftEdit::TeardownAdd {
+                    step: step.into(),
+                    comment: None,
+                }),
+            )
+            .await;
+            assert!(matches!(done.result, OpResult::Edited(_)), "{done:?}");
+        }
+        let out = dir.path().join("flow.test.toml");
+        let done = run(
+            &s,
+            Op::Export {
+                path: out.clone(),
+                overwrite: true,
+                mixins: vec![("teardown:1".into(), "pay".into())],
+            },
+        )
+        .await;
+        assert!(matches!(done.result, OpResult::Exported { .. }), "{done:?}");
+        let written = std::fs::read_to_string(&out).expect("written");
+        let teardown = written.split("[[teardown]]").nth(1).expect("teardown");
+        assert!(
+            teardown.contains(r#"action = "load_mixin", mixin = "pay""#),
+            "{written}"
+        );
+        assert!(!teardown.contains(r#"action = "tap""#), "{written}");
+    }
+
     #[tokio::test]
     async fn an_act_on_load_mixin_stops_at_the_inner_step_that_fails() {
         let (s, _dir) = session_with_mixin();
@@ -3026,7 +3473,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
         Session::start(
             OpenRequest {
                 query: TargetQuery::default(),
-                project_root: std::env::temp_dir(),
+                project_root: empty_project(),
                 child_env: None,
                 idle_timeout: DEFAULT_IDLE_TIMEOUT,
                 policy: None,
@@ -3497,6 +3944,7 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
             Op::Export {
                 path: path.clone(),
                 overwrite: false,
+                mixins: Vec::new(),
             },
         )
         .await

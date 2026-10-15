@@ -262,6 +262,12 @@ pub(crate) fn note_text(reply: &serde_json::Value) -> Option<String> {
                 warning.as_str().unwrap_or_default()
             ));
         }
+        if let Some(hints) = r["hints"].as_array().filter(|h| !h.is_empty()) {
+            out.push_str("hints:\n");
+            for hint in hints {
+                out.push_str(&format!("  {}\n", hint.as_str().unwrap_or_default()));
+            }
+        }
         return Some(out);
     }
     if r["opened"] == true {

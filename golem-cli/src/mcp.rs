@@ -344,6 +344,16 @@ pub struct ExportParams {
     /// Needed to replace a file this session did not open or export.
     #[serde(default)]
     pub overwrite: bool,
+    /// From a mixin hint: put a load_mixin step in place of the matching steps.
+    pub mixins: Option<Vec<MixinAt>>,
+}
+
+#[derive(Debug, Deserialize, serde::Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MixinAt {
+    /// First step, block:step.
+    pub at: String,
+    pub mixin: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Default)]
@@ -861,7 +871,7 @@ impl GolemMcp {
         let reply = self
             .op(
                 "session_export",
-                serde_json::json!({ "path": p.path, "overwrite": p.overwrite }),
+                serde_json::json!({ "path": p.path, "overwrite": p.overwrite, "mixins": p.mixins }),
             )
             .await?;
         self.render(&reply, false)

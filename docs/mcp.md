@@ -520,6 +520,16 @@ Under a `load_mixin` step, `draft_steps` lists the mixin's steps as they would r
 
 Only `?` goes into the file, as a `# unverified` line above the step. A step that passes in the session loses the line. `export_flow` gives the count of each status and lists the unverified steps.
 
+**Mixin hints.** After each tool that changes steps (`act`, `act(run = false)`, `step_edit`, `step_delete`, `step_move` and `teardown_add`), golem compares the draft's steps with the project's mixins that the flow can load. A run of steps that a mixin holds whole gets a hint, once:
+
+```text
+hint: main:3–4 match mixin "login" (vars: email, password) · export_flow(mixins = [{ at = "main:3", mixin = "login" }]) replaces them
+```
+
+golem compares parsed steps, so comments, key order and the step form do not matter. A mixin value that is exactly `${x}` matches any value, and the same `x` must match the same value at each place; a value such as `"Hi ${name}"` matches as a pattern; `${fake:…}` and `${_…}` match only themselves. After `act`, when the block's last steps are the first two or more steps of a longer mixin, an early hint says so (`hint: main:3–5 start mixin "login" (6 steps)`), so the model can run the whole mixin with one `load_mixin` step instead.
+
+`export_flow(mixins = [{ at, mixin }])` puts a `load_mixin` step in place of each run, in the file and in the draft. golem binds the vars from the match, and checks the match again at `at`: if the steps changed after the hint, or two entries overlap, the export writes nothing and lists the current matches. The `load_mixin` step keeps the status of the steps it replaces. The draft keeps the expanded steps until the export, so `draft_run` and the cursor work on them as written. An export without `mixins` lists each match under `hints:`. Teardown steps match too, at `teardown:N`.
+
 `export_flow` checks the draft as `golem run` does before it boots a device: with `golem.toml` merged in and mixins expanded, each step's action and required keys, each block that `start` or a `goto` names, and each branch. If the check fails, the tool writes nothing and lists the errors. If it passes, the tool writes the file and returns the warnings that `golem run` would give. `act`, `teardown_add` and `step_edit` already refuse a step that fails the check. `block_link` refuses a branch that fails it, but a `goto` can name a block that you add later.
 
 `draft_steps` takes these arguments:
