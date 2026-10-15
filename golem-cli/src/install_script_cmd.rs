@@ -1,26 +1,124 @@
-//! Interactive `golem install-script` subcommand — scaffolds a bash
-//! install script for a supported framework.
+//! `golem install-script`: scaffolds a bash install script for a supported
+//! framework.
 //!
-//! Uses `dialoguer` for arrow-key selection, default-valued text input,
-//! and y/n confirmation prompts. Non-TTY stdin falls back to line reader.
+//! In a terminal, `dialoguer` asks for each value. With `--template`, each
+//! value is its prompt's default, so the command runs without prompts.
+//! `--print` writes a template to stdout.
 
 #![allow(clippy::disallowed_macros)] // a command renderer: stdout is its output
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, Select};
 
-use crate::scaffold::{update_golem_toml_install_script, write_install_script, InstallFramework};
+use crate::cli::InstallScriptArgs;
+use crate::scaffold::{
+    render_install_script, update_golem_toml_install_script, write_install_script, InstallFramework,
+};
 
 const OTHER_LABEL: &str = "Other (type manually)";
 
-/// Entry point for `golem install-script`.
-pub fn run() -> Result<()> {
-    let theme = ColorfulTheme::default();
+/// Where each value comes from: the user at a terminal, or each prompt's
+/// default.
+enum Ask {
+    Terminal(Box<ColorfulTheme>),
+    Defaults,
+}
 
+impl Ask {
+    fn select<S: ToString>(&self, prompt: &str, items: &[S], default: usize) -> Result<usize> {
+        match self {
+            Ask::Terminal(theme) => Ok(Select::with_theme(&**theme)
+                .with_prompt(prompt)
+                .items(items)
+                .default(default)
+                .interact()?),
+            Ask::Defaults => Ok(default),
+        }
+    }
+
+    /// A text value. Without a default, the user must type one, and
+    /// `--template` cannot give one.
+    fn input(&self, prompt: &str, default: Option<String>, allow_empty: bool) -> Result<String> {
+        match (self, default) {
+            (Ask::Defaults, Some(d)) => Ok(d),
+            (Ask::Defaults, None) => bail!("no default for {prompt:?}: pass --path"),
+            (Ask::Terminal(theme), default) => {
+                let mut input = Input::<String>::with_theme(&**theme)
+                    .with_prompt(prompt)
+                    .allow_empty(allow_empty);
+                if let Some(d) = default {
+                    input = input.default(d);
+                }
+                if !allow_empty {
+                    input = input.validate_with(|s: &String| -> std::result::Result<(), &str> {
+                        if s.trim().is_empty() {
+                            Err("required")
+                        } else {
+                            Ok(())
+                        }
+                    });
+                }
+                Ok(input.interact_text()?)
+            }
+        }
+    }
+
+    fn confirm(&self, prompt: &str, default: bool) -> Result<bool> {
+        match self {
+            Ask::Terminal(theme) => Ok(Confirm::with_theme(&**theme)
+                .with_prompt(prompt)
+                .default(default)
+                .interact()?),
+            Ask::Defaults => Ok(default),
+        }
+    }
+
+    /// The project directory: `--path`, else one that discovery `found`
+    /// (the first one without a terminal), else one the user types.
+    fn dir(
+        &self,
+        path: Option<&str>,
+        found: Vec<String>,
+        prompt: &str,
+        none_prompt: &str,
+        none_default: Option<String>,
+    ) -> Result<String> {
+        if let Some(p) = path {
+            return Ok(p.to_string());
+        }
+        if found.is_empty() {
+            return self.input(none_prompt, none_default, false);
+        }
+        let mut items = found;
+        items.push(OTHER_LABEL.into());
+        let idx = self.select(prompt, &items, 0)?;
+        if idx == items.len() - 1 {
+            self.input("Enter path", None, false)
+        } else {
+            Ok(items.swap_remove(idx))
+        }
+    }
+}
+
+/// Entry point for `golem install-script`.
+pub fn run(args: &InstallScriptArgs) -> Result<()> {
+    if let Some(framework) = args.print {
+        print!("{}", render_install_script(framework, &[])?);
+        return Ok(());
+    }
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let ask = match args.template {
+        Some(_) => Ask::Defaults,
+        None => Ask::Terminal(Box::default()),
+    };
+    scaffold(&ask, args, &cwd)
+}
+
+fn scaffold(ask: &Ask, args: &InstallScriptArgs, cwd: &Path) -> Result<()> {
     let frameworks = [
         (
             "native-ios    (Xcode / xcodebuild)",
@@ -49,154 +147,109 @@ pub fn run() -> Result<()> {
         ),
         ("flutter        (Flutter 3.19+)", InstallFramework::Flutter),
     ];
-    let idx = Select::with_theme(&theme)
-        .with_prompt("Framework")
-        .items(&frameworks.iter().map(|(l, _)| *l).collect::<Vec<_>>())
-        .default(0)
-        .interact()
-        .context("framework selection cancelled")?;
-    let framework = frameworks[idx].1;
+    let framework = match args.template {
+        Some(f) => f,
+        None => {
+            let labels: Vec<&str> = frameworks.iter().map(|(l, _)| *l).collect();
+            frameworks[ask
+                .select("Framework", &labels, 0)
+                .context("framework selection cancelled")?]
+            .1
+        }
+    };
 
     // app_name is used for: default output filename, iOS scheme default,
     // and as the name key when we scaffold an [[apps]] entry in golem.toml.
     // Bundle id is asked later, only if the user opts into updating golem.toml.
-    let app_name: String = Input::with_theme(&theme)
-        .with_prompt("App name (matches [[apps]] and [[flow.apps]] name)")
-        .default("app".into())
-        .interact_text()?;
+    let app_name = match &args.app {
+        Some(a) => a.clone(),
+        None => ask.input(
+            "App name (matches [[apps]] and [[flow.apps]] name)",
+            Some("app".into()),
+            false,
+        )?,
+    };
+    let path = args.path.as_deref();
+    let dir_default = Some(".".to_string());
 
     let mut placeholders: Vec<(&'static str, String)> = Vec::new();
 
     match framework {
         InstallFramework::NativeIos => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_xcode_projects(&cwd, 5);
-            let project = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Xcode project or workspace path (e.g. MyApp.xcodeproj)")
-                    .validate_with(|s: &String| -> std::result::Result<(), &str> {
-                        if s.trim().is_empty() {
-                            Err("required")
-                        } else {
-                            Ok(())
-                        }
-                    })
-                    .interact_text()?
-            } else {
-                let mut items: Vec<String> = found
-                    .iter()
-                    .map(|p| {
-                        p.strip_prefix(&cwd)
-                            .unwrap_or(p)
-                            .to_string_lossy()
-                            .to_string()
-                    })
-                    .collect();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Xcode project or workspace")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
+            // `--path` names the project or workspace, or a directory that
+            // has one.
+            let search = path.map_or_else(|| cwd.to_path_buf(), |p| cwd.join(p));
+            let is_bundle = |p: &str| p.ends_with(".xcodeproj") || p.ends_with(".xcworkspace");
+            let found: Vec<String> = discover_xcode_projects(&search, 5)
+                .iter()
+                .map(|p| {
+                    p.strip_prefix(cwd)
+                        .unwrap_or(p)
+                        .to_string_lossy()
+                        .to_string()
+                })
+                .collect();
+            let project = match path {
+                Some(p) if is_bundle(p) => p.to_string(),
+                _ if matches!(ask, Ask::Defaults) && found.is_empty() => bail!(
+                    "no .xcodeproj or .xcworkspace under {}: pass --path to one",
+                    search.display()
+                ),
+                _ => ask.dir(
+                    None,
+                    found,
+                    "Xcode project or workspace",
+                    "Xcode project or workspace path (e.g. MyApp.xcodeproj)",
+                    None,
+                )?,
             };
 
-            let schemes = discover_xcode_schemes(&project);
+            let schemes = discover_xcode_schemes(&cwd.join(&project).to_string_lossy());
             let scheme = if schemes.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Xcode scheme")
-                    .default(app_name.clone())
-                    .interact_text()?
+                ask.input("Xcode scheme", Some(app_name.clone()), false)?
             } else if schemes.len() == 1 {
                 println!("  using scheme: {}", schemes[0]);
                 schemes[0].clone()
             } else {
                 let mut items = schemes.clone();
                 items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Xcode scheme")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
+                let idx = ask.select("Xcode scheme", &items, 0)?;
                 if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter scheme")
-                        .interact_text()?
+                    ask.input("Enter scheme", None, false)?
                 } else {
                     items[idx].clone()
                 }
             };
             let config_items = ["Debug", "Release"];
-            let config_idx = Select::with_theme(&theme)
-                .with_prompt("Configuration")
-                .items(&config_items)
-                .default(0)
-                .interact()?;
+            let config_idx = ask.select("Configuration", &config_items, 0)?;
             placeholders.push(("XCODE_PROJECT", project));
             placeholders.push(("XCODE_SCHEME", scheme));
             placeholders.push(("CONFIGURATION", config_items[config_idx].into()));
         }
         InstallFramework::NativeAndroid => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_android_roots(&cwd, 5);
-            let gradle_root = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Gradle project root (directory with settings.gradle)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Gradle project root")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter gradle root path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
-            let module: String = Input::with_theme(&theme)
-                .with_prompt("Module name (gradle submodule, e.g. 'app')")
-                .default("app".into())
-                .interact_text()?;
+            let gradle_root = ask.dir(
+                path,
+                discover_android_roots(cwd, 5),
+                "Gradle project root",
+                "Gradle project root (directory with settings.gradle)",
+                dir_default,
+            )?;
+            let module = ask.input(
+                "Module name (gradle submodule, e.g. 'app')",
+                Some("app".into()),
+                false,
+            )?;
             placeholders.push(("GRADLE_ROOT", gradle_root));
             placeholders.push(("MODULE_NAME", module));
         }
         InstallFramework::Tauri => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_tauri_dirs(&cwd, 5);
-            let tauri_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Tauri project directory (contains src-tauri/)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Tauri project directory")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
+            let tauri_dir = ask.dir(
+                path,
+                discover_tauri_dirs(cwd, 5),
+                "Tauri project directory",
+                "Tauri project directory (contains src-tauri/)",
+                dir_default,
+            )?;
 
             // Detect package manager from lockfile in the tauri dir.
             let pm_items = [
@@ -207,17 +260,15 @@ pub fn run() -> Result<()> {
                 ("cargo tauri", "cargo (direct)"),
             ];
             let default_idx = detect_tauri_command(&cwd.join(&tauri_dir), &pm_items);
-            let pm_idx = Select::with_theme(&theme)
-                .with_prompt("Tauri CLI runner")
-                .items(&pm_items.iter().map(|(_, label)| *label).collect::<Vec<_>>())
-                .default(default_idx)
-                .interact()?;
+            let pm_idx = ask.select(
+                "Tauri CLI runner",
+                &pm_items.iter().map(|(_, label)| *label).collect::<Vec<_>>(),
+                default_idx,
+            )?;
             let tauri_cmd = pm_items[pm_idx].0.to_string();
 
-            let ios_scheme: String = Input::with_theme(&theme)
-                .with_prompt("iOS scheme name")
-                .default(format!("{}_iOS", app_name))
-                .interact_text()?;
+            let ios_scheme =
+                ask.input("iOS scheme name", Some(format!("{}_iOS", app_name)), false)?;
             // Frontend dependency install, detected from lockfiles
             // INDEPENDENTLY of the Tauri CLI runner: `cargo tauri` is a normal
             // choice in a project whose frontend is still npm, so deriving one
@@ -245,29 +296,13 @@ pub fn run() -> Result<()> {
             placeholders.push(("PM_INSTALL", pm_install));
         }
         InstallFramework::Expo => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_expo_dirs(&cwd, 5);
-            let expo_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Expo project directory (contains app.json / app.config.*)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Expo project directory")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
+            let expo_dir = ask.dir(
+                path,
+                discover_expo_dirs(cwd, 5),
+                "Expo project directory",
+                "Expo project directory (contains app.json / app.config.*)",
+                dir_default,
+            )?;
 
             // Package-manager runner + install command, detected from lockfiles.
             // (runner, install, label). detect_tauri_command matches on the
@@ -281,18 +316,19 @@ pub fn run() -> Result<()> {
             let detect_items: Vec<(&str, &str)> =
                 pm_items.iter().map(|(r, _, l)| (*r, *l)).collect();
             let default_idx = detect_tauri_command(&cwd.join(&expo_dir), &detect_items);
-            let pm_idx = Select::with_theme(&theme)
-                .with_prompt("Package manager")
-                .items(&pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>())
-                .default(default_idx)
-                .interact()?;
+            let pm_idx = ask.select(
+                "Package manager",
+                &pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>(),
+                default_idx,
+            )?;
             let (pm_runner, pm_install, _) = pm_items[pm_idx];
 
             // Expo names the iOS scheme after the app (its `name` in app.json).
-            let ios_scheme: String = Input::with_theme(&theme)
-                .with_prompt("iOS scheme name (Expo names it after the app)")
-                .default(app_name.clone())
-                .interact_text()?;
+            let ios_scheme = ask.input(
+                "iOS scheme name (Expo names it after the app)",
+                Some(app_name.clone()),
+                false,
+            )?;
 
             placeholders.push(("EXPO_DIR", expo_dir));
             placeholders.push(("PM_RUNNER", pm_runner.to_string()));
@@ -300,29 +336,13 @@ pub fn run() -> Result<()> {
             placeholders.push(("IOS_SCHEME", ios_scheme));
         }
         InstallFramework::Capacitor => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_capacitor_dirs(&cwd, 5);
-            let cap_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Capacitor project directory (contains capacitor.config.*)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Capacitor project directory")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
+            let cap_dir = ask.dir(
+                path,
+                discover_capacitor_dirs(cwd, 5),
+                "Capacitor project directory",
+                "Capacitor project directory (contains capacitor.config.*)",
+                dir_default,
+            )?;
             let project = cwd.join(&cap_dir);
 
             // (cap runner, install, script runner, label)
@@ -335,22 +355,23 @@ pub fn run() -> Result<()> {
             let detect_items: Vec<(&str, &str)> =
                 pm_items.iter().map(|(r, _, _, l)| (*r, *l)).collect();
             let default_idx = detect_tauri_command(&project, &detect_items);
-            let pm_idx = Select::with_theme(&theme)
-                .with_prompt("Package manager")
-                .items(&pm_items.iter().map(|(_, _, _, l)| *l).collect::<Vec<_>>())
-                .default(default_idx)
-                .interact()?;
+            let pm_idx = ask.select(
+                "Package manager",
+                &pm_items.iter().map(|(_, _, _, l)| *l).collect::<Vec<_>>(),
+                default_idx,
+            )?;
             let (cap_cmd, pm_install, pm_run, _) = pm_items[pm_idx];
 
-            let web_build: String = Input::with_theme(&theme)
-                .with_prompt("Web build command (empty for none)")
-                .default(default_web_build(&project, pm_run))
-                .allow_empty(true)
-                .interact_text()?;
-            let web_dir: String = Input::with_theme(&theme)
-                .with_prompt("Web assets directory (webDir in the Capacitor config)")
-                .default(detect_capacitor_web_dir(&project).unwrap_or_else(|| "www".into()))
-                .interact_text()?;
+            let web_build = ask.input(
+                "Web build command (empty for none)",
+                Some(default_web_build(&project, pm_run)),
+                true,
+            )?;
+            let web_dir = ask.input(
+                "Web assets directory (webDir in the Capacitor config)",
+                Some(detect_capacitor_web_dir(&project).unwrap_or_else(|| "www".into())),
+                false,
+            )?;
 
             placeholders.push(("CAP_DIR", cap_dir));
             placeholders.push(("CAP_CMD", cap_cmd.to_string()));
@@ -359,38 +380,24 @@ pub fn run() -> Result<()> {
             placeholders.push(("WEB_DIR", web_dir));
         }
         InstallFramework::Kmp => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_kmp_dirs(&cwd, 5);
-            let kmp_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Kotlin Multiplatform project root (contains settings.gradle.kts)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Kotlin Multiplatform project root")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
+            let kmp_dir = ask.dir(
+                path,
+                discover_kmp_dirs(cwd, 5),
+                "Kotlin Multiplatform project root",
+                "Kotlin Multiplatform project root (contains settings.gradle.kts)",
+                dir_default,
+            )?;
             let project = cwd.join(&kmp_dir);
-            let android_module: String = Input::with_theme(&theme)
-                .with_prompt("Android app module")
-                .default(detect_kmp_android_module(&project).unwrap_or_else(|| "composeApp".into()))
-                .interact_text()?;
-            let ios_dir: String = Input::with_theme(&theme)
-                .with_prompt("Xcode app directory (relative to the project root)")
-                .default(detect_kmp_ios_dir(&project).unwrap_or_else(|| "iosApp".into()))
-                .interact_text()?;
+            let android_module = ask.input(
+                "Android app module",
+                Some(detect_kmp_android_module(&project).unwrap_or_else(|| "composeApp".into())),
+                false,
+            )?;
+            let ios_dir = ask.input(
+                "Xcode app directory (relative to the project root)",
+                Some(detect_kmp_ios_dir(&project).unwrap_or_else(|| "iosApp".into())),
+                false,
+            )?;
             let default_scheme = project
                 .join(&ios_dir)
                 .read_dir()
@@ -407,10 +414,7 @@ pub fn run() -> Result<()> {
                         .next()
                 })
                 .unwrap_or_else(|| ios_dir.clone());
-            let xcode_scheme: String = Input::with_theme(&theme)
-                .with_prompt("Xcode scheme")
-                .default(default_scheme)
-                .interact_text()?;
+            let xcode_scheme = ask.input("Xcode scheme", Some(default_scheme), false)?;
 
             placeholders.push(("KMP_DIR", kmp_dir));
             placeholders.push(("ANDROID_MODULE", android_module));
@@ -418,29 +422,13 @@ pub fn run() -> Result<()> {
             placeholders.push(("XCODE_SCHEME", xcode_scheme));
         }
         InstallFramework::NativeScript => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_nativescript_dirs(&cwd, 5);
-            let ns_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("NativeScript project directory (contains nativescript.config.*)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("NativeScript project directory")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
+            let ns_dir = ask.dir(
+                path,
+                discover_nativescript_dirs(cwd, 5),
+                "NativeScript project directory",
+                "NativeScript project directory (contains nativescript.config.*)",
+                dir_default,
+            )?;
             let project = cwd.join(&ns_dir);
 
             // (local CLI runner, install, label). A project that pins the
@@ -454,49 +442,35 @@ pub fn run() -> Result<()> {
             let detect_items: Vec<(&str, &str)> =
                 pm_items.iter().map(|(r, _, l)| (*r, *l)).collect();
             let default_idx = detect_tauri_command(&project, &detect_items);
-            let pm_idx = Select::with_theme(&theme)
-                .with_prompt("Package manager")
-                .items(&pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>())
-                .default(default_idx)
-                .interact()?;
+            let pm_idx = ask.select(
+                "Package manager",
+                &pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>(),
+                default_idx,
+            )?;
             let (local_cmd, pm_install, _) = pm_items[pm_idx];
-            let ns_cmd: String = Input::with_theme(&theme)
-                .with_prompt("NativeScript CLI command")
-                .default(default_ns_cmd(&project, local_cmd))
-                .interact_text()?;
+            let ns_cmd = ask.input(
+                "NativeScript CLI command",
+                Some(default_ns_cmd(&project, local_cmd)),
+                false,
+            )?;
 
             placeholders.push(("NS_DIR", ns_dir));
             placeholders.push(("NS_CMD", ns_cmd));
             placeholders.push(("PM_INSTALL", pm_install.to_string()));
         }
         InstallFramework::Flutter => {
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let found = discover_flutter_dirs(&cwd, 5);
-            let flutter_dir = if found.is_empty() {
-                Input::with_theme(&theme)
-                    .with_prompt("Flutter project directory (contains pubspec.yaml)")
-                    .default(".".into())
-                    .interact_text()?
-            } else {
-                let mut items = found.clone();
-                items.push(OTHER_LABEL.into());
-                let idx = Select::with_theme(&theme)
-                    .with_prompt("Flutter project directory")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
-                if idx == items.len() - 1 {
-                    Input::with_theme(&theme)
-                        .with_prompt("Enter path")
-                        .interact_text()?
-                } else {
-                    items[idx].clone()
-                }
-            };
-            let flutter_cmd: String = Input::with_theme(&theme)
-                .with_prompt("Flutter CLI command")
-                .default(default_flutter_cmd(&cwd.join(&flutter_dir)).to_string())
-                .interact_text()?;
+            let flutter_dir = ask.dir(
+                path,
+                discover_flutter_dirs(cwd, 5),
+                "Flutter project directory",
+                "Flutter project directory (contains pubspec.yaml)",
+                dir_default,
+            )?;
+            let flutter_cmd = ask.input(
+                "Flutter CLI command",
+                Some(default_flutter_cmd(&cwd.join(&flutter_dir)).to_string()),
+                false,
+            )?;
 
             placeholders.push(("FLUTTER_DIR", flutter_dir));
             placeholders.push(("FLUTTER_CMD", flutter_cmd));
@@ -505,12 +479,12 @@ pub fn run() -> Result<()> {
 
     // For native-{ios,android}, include platform in default filename so the
     // same app can have separate scripts. Cross-platform frameworks don't.
-    let default_output = default_output_path(framework, &app_name);
-    let output_path_str: String = Input::with_theme(&theme)
-        .with_prompt("Output path")
-        .default(default_output)
-        .interact_text()?;
-    let output_path = PathBuf::from(&output_path_str);
+    let output_path_str = ask.input(
+        "Output path",
+        Some(default_output_path(framework, &app_name)),
+        false,
+    )?;
+    let output_path = cwd.join(&output_path_str);
 
     let ph_refs: Vec<(&str, &str)> = placeholders.iter().map(|(k, v)| (*k, v.as_str())).collect();
     write_install_script(&output_path, framework, &ph_refs).with_context(|| {
@@ -519,25 +493,26 @@ pub fn run() -> Result<()> {
             output_path.display()
         )
     })?;
-    println!("\n✓ wrote {}", output_path.display());
+    println!("\n✓ wrote {output_path_str}");
 
-    let golem_toml = find_golem_toml();
+    let golem_toml =
+        golem_orchestrator::project::find_project_root(cwd).map(|p| p.join("golem.toml"));
     match golem_toml {
         Some(path) => {
             // Show relative path in the prompt rather than absolute noise.
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let display_path = pathdiff_relative(&path, &cwd).unwrap_or_else(|| path.clone());
-            let yes = Confirm::with_theme(&theme)
-                .with_prompt(format!("Add to [[apps]] in {}?", display_path.display()))
-                .default(true)
-                .interact()?;
+            let display_path = pathdiff_relative(&path, cwd).unwrap_or_else(|| path.clone());
+            let yes = ask.confirm(
+                &format!("Add to [[apps]] in {}?", display_path.display()),
+                true,
+            )?;
             if yes {
                 // Ask for bundle id only now — it's only needed when writing the
                 // [[apps]] entry. Leave blank if the entry already has one.
-                let bundle_input: String = Input::with_theme(&theme)
-                    .with_prompt("Bundle id (optional — leave blank if already set in [[apps]])")
-                    .allow_empty(true)
-                    .interact_text()?;
+                let bundle_input = ask.input(
+                    "Bundle id (optional — leave blank if already set in [[apps]])",
+                    Some(String::new()),
+                    true,
+                )?;
                 let bundle_id = if bundle_input.trim().is_empty() {
                     None
                 } else {
@@ -573,7 +548,7 @@ pub fn run() -> Result<()> {
                     ),
                 }
             } else {
-                let snippet = install_script_snippet(framework, &output_path.display().to_string());
+                let snippet = install_script_snippet(framework, &output_path_str);
                 println!(
                     "\nAdd to [[apps]] in golem.toml (or [[flow.apps]] in a flow file):\n  [[apps]]\n  name = \"{}\"\n  {}",
                     app_name, snippet
@@ -588,11 +563,6 @@ pub fn run() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn find_golem_toml() -> Option<PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
-    golem_orchestrator::project::find_project_root(&cwd).map(|p| p.join("golem.toml"))
 }
 
 fn pathdiff_relative(path: &Path, base: &Path) -> Option<PathBuf> {
@@ -1187,6 +1157,79 @@ fn install_script_snippet(framework: InstallFramework, output_path: &str) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn flags(template: InstallFramework, app: &str, path: &str) -> InstallScriptArgs {
+        InstallScriptArgs {
+            template: Some(template),
+            app: Some(app.into()),
+            path: Some(path.into()),
+            ..InstallScriptArgs::default()
+        }
+    }
+
+    #[test]
+    fn each_template_prints_as_standalone_bash_with_its_values_to_fill() {
+        for framework in InstallFramework::ALL {
+            let text = render_install_script(framework, &[]).expect("render");
+            assert!(text.starts_with("#!/usr/bin/env bash"), "{framework:?}");
+            assert!(
+                !text.contains("{{>"),
+                "{framework:?}: partials SHALL be spliced"
+            );
+            assert!(
+                text.contains("{{"),
+                "{framework:?}: the values to fill SHALL show"
+            );
+        }
+    }
+
+    #[test]
+    fn with_template_the_script_is_written_without_prompts() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::write(
+            root.join("golem.toml"),
+            "[[apps]]\nname = \"requester\"\nbundle = \"com.x.requester\"\n",
+        )
+        .expect("golem.toml");
+        let app = root.join("apps/requester-app");
+        std::fs::create_dir_all(&app).expect("app dir");
+        std::fs::write(app.join("bun.lock"), "").expect("lockfile");
+
+        scaffold(
+            &Ask::Defaults,
+            &flags(InstallFramework::Expo, "requester", "apps/requester-app"),
+            root,
+        )
+        .expect("SHALL scaffold without a terminal");
+
+        let script = std::fs::read_to_string(root.join("scripts/install-requester.sh"))
+            .expect("the script SHALL be written");
+        for line in [
+            "EXPO_DIR=\"apps/requester-app\"",
+            "PM_RUNNER=\"bunx expo\"",
+            "IOS_SCHEME=\"requester\"",
+        ] {
+            assert!(script.contains(line), "{line}");
+        }
+        let toml = std::fs::read_to_string(root.join("golem.toml")).expect("golem.toml");
+        assert!(
+            toml.contains("install_script = \"scripts/install-requester.sh\""),
+            "{toml}"
+        );
+    }
+
+    #[test]
+    fn with_template_native_ios_needs_a_project_to_find() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let err = scaffold(
+            &Ask::Defaults,
+            &flags(InstallFramework::NativeIos, "app", "ios"),
+            tmp.path(),
+        )
+        .expect_err("no project");
+        assert!(err.to_string().contains("pass --path"), "{err}");
+    }
 
     #[test]
     fn pathdiff_basic() {

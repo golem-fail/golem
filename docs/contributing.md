@@ -33,7 +33,7 @@ Any non-test code change — even making a `fn` `pub` — counts as its real cat
 
 ## Docs built from parts
 
-Five pages are built from parts in [`docs/src`](src): `actions-reference`, `selectors`, `test-structure`, `fake-data` and `error-codes`. Do not edit `docs/<page>.md` itself. Edit the part in `docs/src/<page>/`, then write the page:
+Six pages are built from parts in [`docs/src`](src): `actions-reference`, `selectors`, `test-structure`, `fake-data`, `error-codes` and `app-install`. Do not edit `docs/<page>.md` itself. Edit the part in `docs/src/<page>/`, then write the page:
 
 ```bash
 GOLEM_UPDATE_DOCS=1 cargo nextest run -p golem-docs

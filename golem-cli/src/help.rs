@@ -40,6 +40,11 @@ const TOPICS: &[(&str, &str, &str)] = &[
         "the .test.toml file: blocks, branches, steps, vars, data, teardown, devices",
     ),
     (
+        "install",
+        "app-install",
+        "the app install script: its arguments, install_script forms, templates (golem install-script --print)",
+    ),
+    (
         "fake",
         "fake-data",
         "fake data such as ${fake:email}, person, address, credit_card",
