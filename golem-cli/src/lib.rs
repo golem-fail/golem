@@ -11,6 +11,7 @@ pub mod mcp;
 mod mcp_context;
 pub mod policy_cmd;
 pub mod probe_cmd;
+mod project_setup;
 pub mod scaffold;
 pub mod session_cmd;
 mod terminal;
