@@ -716,6 +716,16 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
+    async fn app_running(&self, bundle_id: &str) -> Result<Option<bool>> {
+        if self.physical {
+            return Ok(None);
+        }
+        let out = self
+            .simctl(&["spawn", &self.device_id, "launchctl", "list"])
+            .await?;
+        Ok(Some(launchctl_runs(&out, bundle_id)))
+    }
+
     async fn app_logs(
         &self,
         bundle_id: &str,
@@ -1110,9 +1120,36 @@ impl PlatformDriver for IosDriver {
 // Tests
 // ===========================================================================
 
+/// Whether `launchctl list` on a simulator shows `bundle` with a pid: an
+/// app's line is `PID STATUS UIKitApplication:<bundle>[…]`, with `-` for
+/// the pid once it exits.
+fn launchctl_runs(listing: &str, bundle: &str) -> bool {
+    let label = format!("UIKitApplication:{bundle}[");
+    listing.lines().any(|l| {
+        let mut cols = l.split_whitespace();
+        let pid = cols.next().unwrap_or_default();
+        let name = cols.nth(1).unwrap_or_default();
+        name.starts_with(&label) && pid.parse::<u32>().is_ok()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launchctl_shows_whether_the_app_runs() {
+        let listing = "PID\tStatus\tLabel\n15918\t0\tUIKitApplication:fail.golem.test[c13c][rb-legacy]\n-\t1\tUIKitApplication:crashed.app[aa01][rb-legacy]\n";
+        assert!(launchctl_runs(listing, "fail.golem.test"));
+        assert!(
+            !launchctl_runs(listing, "crashed.app"),
+            "an exited app has no pid"
+        );
+        assert!(
+            !launchctl_runs(listing, "fail.golem"),
+            "a prefix SHALL not match"
+        );
+    }
     use golem_element::Bounds;
 
     // -----------------------------------------------------------------------

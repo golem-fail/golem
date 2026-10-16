@@ -227,7 +227,17 @@ pub(crate) async fn run_step_recovery(
             return result;
         }
         let state = witness.take_state();
-        match decide(state, *zero_progress, MAX_COMPANION_RESTARTS) {
+        let decision = decide(state, *zero_progress, MAX_COMPANION_RESTARTS);
+        // An app that exits takes the companion's session with it, so the
+        // death would read as the companion's fault. A launch is where that
+        // shows first; any other step checks once the restarts are spent,
+        // since a flow may stop its app on purpose and then go on.
+        if step.action == "launch" || decision == RecoveryDecision::GiveUp {
+            if let Some(e) = app_exited(step_driver, step, apps).await {
+                return Err(e);
+            }
+        }
+        match decision {
             RecoveryDecision::DeemDone => {
                 // The mutation committed; restart so the next step has a live
                 // companion, then treat this step as done. Best-effort: even if
@@ -266,6 +276,69 @@ pub(crate) async fn run_step_recovery(
             }
         }
     }
+}
+
+/// Launch the flow's first app at its start. A launch that fails because
+/// the app exited (a crash at launch) is A504, not the companion's fault.
+async fn launch_first_app(
+    driver: &dyn PlatformDriver,
+    bundle: &str,
+    timeout: std::time::Duration,
+    lifecycle: &str,
+) -> Result<()> {
+    let err = match tokio::time::timeout(timeout, driver.launch_app(bundle)).await {
+        Ok(Ok(_)) => return Ok(()),
+        Ok(Err(e)) => e.context(format!(
+            "app_lifecycle {lifecycle}: failed to launch {bundle}"
+        )),
+        Err(_) => anyhow::anyhow!(
+            "app_lifecycle {lifecycle}: launch of {bundle} timed out after {}ms \
+             (companion unresponsive?)",
+            timeout.as_millis()
+        ),
+    };
+    if let Ok(Some(false)) = driver.app_running(bundle).await {
+        return Err(app_exited_error(bundle));
+    }
+    Err(err)
+}
+
+/// The app a companion death can blame: the step's `app`, by name or
+/// bundle, else the flow's first app.
+fn step_bundle<'a>(
+    step: &'a golem_parser::Step,
+    apps: &'a [golem_parser::AppConfig],
+) -> Option<&'a str> {
+    match step.app.as_deref() {
+        Some(r) => apps
+            .iter()
+            .find(|a| a.name == r)
+            .map_or(Some(r), |a| a.bundle.as_deref()),
+        None => apps.first().and_then(|a| a.bundle.as_deref()),
+    }
+}
+
+/// An A504 error when the step's app no longer runs.
+async fn app_exited(
+    driver: &dyn PlatformDriver,
+    step: &golem_parser::Step,
+    apps: &[golem_parser::AppConfig],
+) -> Option<anyhow::Error> {
+    let bundle = step_bundle(step, apps)?;
+    match driver.app_running(bundle).await {
+        Ok(Some(false)) => Some(app_exited_error(bundle)),
+        _ => None,
+    }
+}
+
+fn app_exited_error(bundle: &str) -> anyhow::Error {
+    golem_events::coded(
+        golem_events::FailureCode::AppExited,
+        anyhow::anyhow!(
+            "the app {bundle} exited (it crashed or quit), and the companion lost it. \
+             The crash is in the app's log: app_logs, or golem session logs"
+        ),
+    )
 }
 
 /// Resolve `${…}` variable references and inline `${fake:…}` generators in
@@ -389,17 +462,7 @@ pub async fn execute_flow<'a>(
                     .ok_or_else(|| anyhow::anyhow!(
                         "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
                         app.name))?;
-                tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
-                    .await
-                    .map_err(|_| {
-                        anyhow::anyhow!(
-                            "app_lifecycle reset: launch of {} timed out after {}ms \
-                         (companion unresponsive?)",
-                            bundle,
-                            lifecycle_timeout.as_millis()
-                        )
-                    })?
-                    .with_context(|| format!("app_lifecycle reset: failed to launch {}", bundle))?;
+                launch_first_app(driver, bundle, lifecycle_timeout, "reset").await?;
             }
         }
         golem_parser::AppLifecycle::Launch => {
@@ -411,19 +474,7 @@ pub async fn execute_flow<'a>(
                     .ok_or_else(|| anyhow::anyhow!(
                         "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
                         app.name))?;
-                tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
-                    .await
-                    .map_err(|_| {
-                        anyhow::anyhow!(
-                            "app_lifecycle launch: launch of {} timed out after {}ms \
-                         (companion unresponsive?)",
-                            bundle,
-                            lifecycle_timeout.as_millis()
-                        )
-                    })?
-                    .with_context(|| {
-                        format!("app_lifecycle launch: failed to launch {}", bundle)
-                    })?;
+                launch_first_app(driver, bundle, lifecycle_timeout, "launch").await?;
             }
         }
         golem_parser::AppLifecycle::Manual => {}
@@ -5705,6 +5756,84 @@ action = "screenshot"
             2,
             "the step SHALL be retried (2 taps), not demoted to a Warning after 1"
         );
+    }
+
+    /// Run `step` on a companion that dies on each try. A tap runs in a
+    /// flow with an app; a launch in one without, since a flow's start
+    /// launches its apps.
+    async fn run_dying(step: Step, running: Option<bool>) -> (FlowResult, u32) {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        let launch = step.action == "launch";
+        driver.set_error_coded(
+            if launch { "launch_app" } else { "tap" },
+            FailureCode::DeviceCompanionUnreachable,
+            "connection refused",
+        );
+        driver.set_app_running(running);
+        let fake = FakeRecovery::new();
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+        let mut flow = make_flow(vec![make_block(Some("b"), vec![step])]);
+        if !launch {
+            flow.flow.apps =
+                vec![toml::from_str("name = \"app\"\nbundle = \"fail.golem.test\"").expect("app")];
+        }
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not hard-error");
+        (result, fake.restart_count())
+    }
+
+    fn launch_step() -> Step {
+        Step {
+            action: "launch".to_string(),
+            app: Some("fail.golem.test".to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_launch_whose_app_exited_fails_with_a504_and_no_restart() {
+        let (result, restarts) = run_dying(launch_step(), Some(false)).await;
+        assert_eq!(result.failed_code, Some(FailureCode::AppExited));
+        let reason = result.failed_reason.unwrap_or_default();
+        assert!(
+            reason.contains("fail.golem.test") && reason.contains("app_logs"),
+            "{reason}"
+        );
+        assert_eq!(
+            restarts, 0,
+            "a crashed app SHALL not cost companion restarts"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_launch_whose_app_runs_recovers_the_companion_as_before() {
+        for running in [Some(true), None] {
+            let (result, restarts) = run_dying(launch_step(), running).await;
+            assert_eq!(
+                result.failed_code,
+                Some(FailureCode::DeviceCompanionUnrecoverable),
+                "{running:?}"
+            );
+            assert_eq!(restarts, MAX_COMPANION_RESTARTS, "{running:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn another_step_blames_an_exited_app_once_the_restarts_are_spent() {
+        let (result, restarts) = run_dying(tap_step("OK"), Some(false)).await;
+        assert_eq!(result.failed_code, Some(FailureCode::AppExited));
+        assert_eq!(restarts, MAX_COMPANION_RESTARTS);
     }
 
     // Bug 1: `if_fail = "ignore"` MUST NOT suppress the device-fatal D506

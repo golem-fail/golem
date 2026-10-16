@@ -151,6 +151,11 @@ pub enum FailureCode {
     AppStateQueryFailed,
     /// A503: app launch or stop failed.
     AppLifecycleFailed,
+    /// A504: the app's process exited (a crash, often at launch) and took
+    /// the companion's session with it. Its own code because the companion
+    /// dies with it, and D506 would send the user to restart a healthy
+    /// device.
+    AppExited,
 
     // ── D: device / driver / companion ──
     /// D404: device not found / discovery failed.
@@ -255,7 +260,8 @@ impl FailureCode {
             | AppInstallFailed
             | AppDevBundleError
             | AppStateQueryFailed
-            | AppLifecycleFailed => Domain::App,
+            | AppLifecycleFailed
+            | AppExited => Domain::App,
             DeviceNotFound
             | DeviceBootTimeout
             | DeviceBusy
@@ -324,6 +330,7 @@ impl FailureCode {
             AppDevBundleError => 501,
             AppStateQueryFailed => 502,
             AppLifecycleFailed => 503,
+            AppExited => 504,
             DeviceNotFound => 404,
             DeviceBootTimeout => 408,
             DeviceBusy => 409,
@@ -346,7 +353,7 @@ impl FailureCode {
     }
 
     /// Every code, in registry order.
-    pub const ALL: [FailureCode; 47] = [
+    pub const ALL: [FailureCode; 48] = [
         Self::FlowExplicitFail,
         Self::FlowElementNotFound,
         Self::FlowElementOffscreen,
@@ -376,6 +383,7 @@ impl FailureCode {
         Self::AppDevBundleError,
         Self::AppStateQueryFailed,
         Self::AppLifecycleFailed,
+        Self::AppExited,
         Self::DeviceNotFound,
         Self::DeviceBootTimeout,
         Self::DeviceBusy,
@@ -439,6 +447,7 @@ impl FailureCode {
             AppDevBundleError => "The app shows a React Native error overlay instead of its UI.",
             AppStateQueryFailed => "golem could not read the app's state after the install.",
             AppLifecycleFailed => "The app did not launch or stop.",
+            AppExited => "The app's process exited: it crashed, often at launch.",
             DeviceNotFound => "No device matches.",
             DeviceBootTimeout => "The device did not finish booting in time.",
             DeviceBusy => "Every matching device stayed busy past `--max-device-wait`.",
@@ -511,6 +520,7 @@ impl FailureCode {
             AppDevBundleError => "Fix the JavaScript error that the overlay names.",
             AppStateQueryFailed => "Check that the app installed; install it again.",
             AppLifecycleFailed => "Check the bundle id and the app's crash log (`app_logs`).",
+            AppExited => "Read the crash in the app's log (`app_logs`, or `golem session logs`).",
             DeviceNotFound => "Boot or connect a device; `golem devices` lists them.",
             DeviceBootTimeout => {
                 "Boot the simulator or emulator by hand once, and check its image."
@@ -656,6 +666,7 @@ mod tests {
         for code in [
             AppStateQueryFailed,
             AppLifecycleFailed,
+            AppExited,
             // A broken bundle is not a blocked install: the app is on the
             // device, it just can't render. Counting it would inflate the
             // "N blocked by a failed install" summary with dev-loop typos.

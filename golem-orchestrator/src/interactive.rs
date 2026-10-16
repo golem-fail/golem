@@ -83,6 +83,35 @@ pub fn lease(
     })
 }
 
+/// A first line for the tree when `bundle` is not the app on screen: the
+/// tree then shows another app, so a step would act on that one.
+///
+/// Only a driver that knows the foreground app (Android) can say. iOS
+/// reads the session's app and brings it to the front, so its tree shows
+/// that app or fails; asking `app_running` on every tree would cost a
+/// `simctl spawn` (about 300 ms) for nothing.
+pub async fn foreground_warning(
+    driver: &dyn golem_driver::PlatformDriver,
+    bundle: &str,
+) -> Option<String> {
+    let fg = driver.foreground_app().await.ok().flatten()?;
+    (fg != bundle).then(|| format!("warning: the app in the foreground is {fg}, not {bundle}"))
+}
+
+/// `err`, with the reason when the tree failed because `bundle` exited.
+pub async fn explain_tree_error(
+    driver: &dyn golem_driver::PlatformDriver,
+    bundle: &str,
+    err: anyhow::Error,
+) -> anyhow::Error {
+    match driver.app_running(bundle).await {
+        Ok(Some(false)) => err.context(format!(
+            "{bundle} is not running (it crashed or quit); app_logs shows why"
+        )),
+        _ => err,
+    }
+}
+
 /// The visible tree on `driver`'s screen, as TOON.
 pub async fn visible_tree(driver: &dyn golem_driver::PlatformDriver) -> Result<String> {
     let (root, meta) = driver.get_hierarchy().await?;

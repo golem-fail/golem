@@ -320,6 +320,14 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.stop_app(bundle_id).await
     }
 
+    async fn app_running(&self, bundle_id: &str) -> anyhow::Result<Option<bool>> {
+        self.inner.app_running(bundle_id).await
+    }
+
+    async fn foreground_app(&self) -> anyhow::Result<Option<String>> {
+        self.inner.foreground_app().await
+    }
+
     async fn clear_app_data(&self, bundle_id: &str) -> anyhow::Result<()> {
         self.inner.clear_app_data(bundle_id).await
     }

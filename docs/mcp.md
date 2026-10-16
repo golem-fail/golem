@@ -431,6 +431,8 @@ An item is the last part of a section's name (`tap`), its path (`interaction/tap
 
 golem tests as a person does. A step finds its element only in the visible tree: the elements on the screen, not the elements that are off the screen or hidden under other elements. `tree` returns the visible tree. `tree(full = true)` returns every element, marked as a hint. Use the full tree to find where to scroll, but never to decide that a step passed. `probe` lists off-screen matches as hints for the same reason.
 
+On Android, when the app in the foreground is not the session's app, the tree's first line is a warning that says so: a step would act on the other app. On iOS, the tree reads the session's app and brings it to the front. A tree that fails because the app is not running says so, and `app_logs` shows why the app stopped. An app that exits at launch, such as a crash, fails with `A504`, not as a companion fault.
+
 ## Sessions
 
 A session holds one device, one app, the variables and a flow draft. Each MCP server has one session at a time.

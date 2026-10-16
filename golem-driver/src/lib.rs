@@ -122,6 +122,18 @@ pub trait PlatformDriver: Send + Sync {
     /// Stop/force-kill the app
     async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()>;
 
+    /// Whether the app's process runs. `None` when the driver cannot tell
+    /// (a physical iOS device, the stub).
+    async fn app_running(&self, _bundle_id: &str) -> anyhow::Result<Option<bool>> {
+        Ok(None)
+    }
+
+    /// The bundle id of the app in the foreground. `None` when the driver
+    /// cannot tell.
+    async fn foreground_app(&self) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
     /// Clear app data/cache
     async fn clear_app_data(&self, bundle_id: &str) -> anyhow::Result<()>;
 

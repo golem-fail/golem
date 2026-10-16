@@ -79,6 +79,10 @@ pub struct MockPlatformDriver {
     /// How long `get_hierarchy` sleeps before it answers, to model a busy
     /// device. Zero by default.
     hierarchy_delay: Mutex<std::time::Duration>,
+    /// What `app_running` and `foreground_app` return. `None` (cannot
+    /// tell) by default.
+    app_running: Mutex<Option<bool>>,
+    foreground: Mutex<Option<String>>,
 }
 
 /// Map a caller-supplied method name to the canonical trait method name
@@ -105,6 +109,8 @@ impl MockPlatformDriver {
             reconnect_port: Mutex::new(None),
             hierarchy_queue: Mutex::new(VecDeque::new()),
             launch_warning: Mutex::new(None),
+            app_running: Mutex::new(None),
+            foreground: Mutex::new(None),
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
             type_verify: Mutex::new(None),
             system_alert_accept: Mutex::new(false),
@@ -251,6 +257,16 @@ impl MockPlatformDriver {
     }
 
     /// Set the warning string `launch_app` surfaces (as `Ok(Some(_))`).
+    /// Set what `app_running` returns.
+    pub fn set_app_running(&self, running: Option<bool>) {
+        *self.app_running.lock().expect("lock poisoned") = running;
+    }
+
+    /// Set what `foreground_app` returns.
+    pub fn set_foreground_app(&self, bundle: Option<&str>) {
+        *self.foreground.lock().expect("lock poisoned") = bundle.map(str::to_string);
+    }
+
     pub fn set_launch_warning(&self, warning: &str) {
         *self.launch_warning.lock().expect("lock poisoned") = Some(warning.to_string());
     }
@@ -391,6 +407,14 @@ impl PlatformDriver for MockPlatformDriver {
         self.record_call("stop_app", vec![bundle_id.to_string()]);
         self.check_error("stop_app")?;
         Ok(())
+    }
+
+    async fn app_running(&self, _bundle_id: &str) -> anyhow::Result<Option<bool>> {
+        Ok(*self.app_running.lock().expect("lock poisoned"))
+    }
+
+    async fn foreground_app(&self) -> anyhow::Result<Option<String>> {
+        Ok(self.foreground.lock().expect("lock poisoned").clone())
     }
 
     async fn clear_app_data(&self, bundle_id: &str) -> anyhow::Result<()> {
