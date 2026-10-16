@@ -1349,7 +1349,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
             ),
             (
                 serde_json::json!({ "if_visible": "A", "if_var": "n", "equals": "1", "goto": "after" }),
-                "both visibility check and if_var",
+                "more than one condition",
             ),
             (
                 serde_json::json!({ "if_visibel": "A", "goto": "after" }),

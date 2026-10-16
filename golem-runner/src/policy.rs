@@ -99,7 +99,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // stabilisation; a 1x = 5s budget consistently underflows).
         "tap" | "double_tap" | "backspace" | "clear_text" | "long_press" | "swipe" | "pinch"
         | "gesture" | "rotate" | "type" | "assert_visible" | "assert_not_visible"
-        | "assert_alert" | "accept_alert" | "dismiss_alert" | "read" => 2,
+        | "assert_alert" | "assert_no_alert" | "accept_alert" | "dismiss_alert" | "read" => 2,
 
         // 5x — app lifecycle. Stop is fast (~1-2s) but its post-settle
         // animation can drag, leaving the next launch racing against a

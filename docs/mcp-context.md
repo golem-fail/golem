@@ -563,7 +563,7 @@ Topics:
 
 ### act
 
-<details><summary><code>help("act")</code> · Actions · 2634 chars · + 10 items, 40 sub-items</summary>
+<details><summary><code>help("act")</code> · Actions · 2651 chars · + 10 items, 41 sub-items</summary>
 
 Source: [src/actions-reference/00-intro.llm.md](src/actions-reference/00-intro.llm.md) (LLM text)
 
@@ -602,7 +602,7 @@ help("act", action) gives one action's fields and examples.
 
 Items (help("act", item)):
 - interaction: Touch and keyboard input on an element — tap, double_tap, type, backspace, clear_text, long_press, swipe, scroll, pinch, gesture, rotate, hide_keyboard
-- assertions: Check what the screen shows; each waits up to its timeout — assert_visible, assert_not_visible, assert_alert
+- assertions: Check what the screen shows; each waits up to its timeout — assert_visible, assert_not_visible, assert_alert, assert_no_alert
 - reading: Read an element's text into a variable — read
 - app-lifecycle: Start, stop and reset an app, and set its permissions — launch, app-permissions, stop, clear_data
 - device-controls: Change device settings: dark mode, location, hardware buttons — set_dark_mode, set_location, press
@@ -953,7 +953,7 @@ Step Options (help("flow", "step/options"))):
 
 </details>
 
-<details><summary><code>help("act", "assertions")</code> · Assertions · 282 chars · + 3 items</summary>
+<details><summary><code>help("act", "assertions")</code> · Assertions · 330 chars · + 4 items</summary>
 
 Source: [src/actions-reference/20-assertions/00-intro.md](src/actions-reference/20-assertions/00-intro.md)
 
@@ -966,6 +966,7 @@ Items (help("act", item)):
 - assert_visible: Wait for / assert element exists
 - assert_not_visible: Wait for / assert element absent
 - assert_alert: Assert alert is displayed
+- assert_no_alert: Assert no alert is displayed
 ```
 
 <details><summary><code>help("act", "assert_visible")</code> · assert_visible — Wait for / assert element exists · 702 chars</summary>
@@ -1016,6 +1017,23 @@ Verify an alert/dialog is showing. Optionally match alert text with a glob patte
 ```toml
 { action = "assert_alert" }
 { action = "assert_alert", on_text = "Are you sure*" }
+```
+````
+
+</details>
+
+<details><summary><code>help("act", "assert_no_alert")</code> · assert_no_alert — Assert no alert is displayed · 348 chars</summary>
+
+Source: [src/actions-reference/20-assertions/40-assert_no_alert.md](src/actions-reference/20-assertions/40-assert_no_alert.md)
+
+````text
+### `assert_no_alert` — Assert no alert is displayed
+
+Verify that no alert or dialog shows, from the app or from the OS. It waits for a showing alert to go, up to the step's `timeout`. With `on_text`, only an alert whose text matches the glob fails it.
+
+```toml
+{ action = "assert_no_alert" }
+{ action = "assert_no_alert", on_text = "Error*" }
 ```
 ````
 
@@ -2874,7 +2892,7 @@ A device must match every key given. A skipped block's `next` and `[[block.branc
 
 </details>
 
-<details><summary><code>help("flow", "branching")</code> · Branching · 2422 chars</summary>
+<details><summary><code>help("flow", "branching")</code> · Branching · 2875 chars</summary>
 
 Source: [src/test-structure/20-block/20-branching.md](src/test-structure/20-block/20-branching.md)
 
@@ -2897,19 +2915,32 @@ The app opens on either screen. golem waits for the first one to show, and goes 
 
 **The arms race.** golem checks the arms after the block's steps finish (for a `for_each` block, after the last row; for a `run_flow` block, after the child flow returns). It first waits for the screen to settle, then reads one tree on each poll and checks each arm on it, in order. The first arm that matches wins.
 
-- `if_visible` and `if_not_visible` wait for their condition up to the timeout of `assert_visible`. Set `timeout` (in ms) on the arm to change that. `timeout = 0` checks once.
+- `if_visible`, `if_not_visible` and `if_alert` wait for their condition up to the timeout of `assert_visible`. Set `timeout` (in ms) on the arm to change that. `timeout = 0` checks once.
 - `if_var` arms are checked once, at once. A `timeout` on one is an error.
 
 | Condition | Matches when |
 |---|---|
 | `if_visible = "…"` | an element with this text (glob) is on screen |
 | `if_not_visible = "…"` | no element with this text is on screen |
+| `if_alert = "…"` | an alert or dialog shows, from the app or the OS, whose text matches the glob, as `assert_alert` matches it. `"*"` matches any alert. |
 | `if_var = "x"`, `equals = "…"` | the variable equals the string exactly |
 | `if_var = "x"`, `matches = "…"` | the variable matches the glob pattern |
 | `if_var = "x"`, `gte = N` | the variable, read as an integer, is ≥ `N` (an integer). A non-integer value never matches. |
 | (no condition) | always: this arm is the else |
 
-`if_var` without `equals`, `matches` or `gte` never matches.
+`if_var` without `equals`, `matches` or `gte` never matches. An arm has one condition.
+
+A first launch that may or may not ask for a permission:
+
+```toml
+[[block]]
+name = "start"
+steps = [{ action = "launch", app = "app" }]
+branch = [
+  { if_alert = "*", timeout = 5000, goto = "answer_prompt" },
+  { if_visible = "Home", goto = "home" },
+]
+```
 
 **When no arm matches,** the flow takes the else: the last arm, if it has no condition, or the block's `next`. Without an else, the flow fails with `EF406`. The failure names the block, each arm and why it did not match, and the texts on the screen. A block with a branch never goes on to the next block in the file.
 

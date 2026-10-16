@@ -22,6 +22,7 @@
   - [`assert_visible`](#assert_visible--wait-for--assert-element-exists)
   - [`assert_not_visible`](#assert_not_visible--wait-for--assert-element-absent)
   - [`assert_alert`](#assert_alert--assert-alert-is-displayed)
+  - [`assert_no_alert`](#assert_no_alert--assert-no-alert-is-displayed)
 - [Reading](#reading)
   - [`read`](#read--read-element-text)
 - [App Lifecycle](#app-lifecycle)
@@ -330,6 +331,15 @@ Verify an alert/dialog is showing. Optionally match alert text with a glob patte
 ```toml
 { action = "assert_alert" }
 { action = "assert_alert", on_text = "Are you sure*" }
+```
+
+### `assert_no_alert` — Assert no alert is displayed
+
+Verify that no alert or dialog shows, from the app or from the OS. It waits for a showing alert to go, up to the step's `timeout`. With `on_text`, only an alert whose text matches the glob fails it.
+
+```toml
+{ action = "assert_no_alert" }
+{ action = "assert_no_alert", on_text = "Error*" }
 ```
 
 ## Reading

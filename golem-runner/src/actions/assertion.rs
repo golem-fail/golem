@@ -31,6 +31,39 @@ pub(crate) async fn handle_assert_not_visible(
 ///
 /// If the step has a `text` field, the alert element's text is glob-matched
 /// against it. If no `text` is provided, any alert satisfies the assertion.
+/// Whether an alert shows whose text matches `pattern` (any alert when
+/// `None`), as `assert_alert` matches it.
+pub(crate) fn alert_matches(root: &golem_element::Element, pattern: Option<&str>) -> bool {
+    golem_driver::common::find_alert(root).is_some_and(|alert| {
+        pattern.is_none_or(|p| glob_match(p, alert.text.as_deref().unwrap_or("")))
+    })
+}
+
+/// Assert that no alert shows (or none whose text matches `on_text`).
+/// Polls until it goes, as `assert_not_visible` does, up to the step's
+/// `timeout` (default 10s).
+pub(crate) async fn handle_assert_no_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let timeout_ms = step.timeout.unwrap_or(10_000);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    loop {
+        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+        let Some(alert) = golem_driver::common::find_alert(&root)
+            .filter(|_| alert_matches(&root, step.on_text.as_deref()))
+        else {
+            return Ok(());
+        };
+        if tokio::time::Instant::now() >= deadline {
+            crate::fail_code!(
+                golem_events::FailureCode::FlowUnexpectedlyPresent,
+                "an alert still shows after {:.1}s: {:?}",
+                timeout_ms as f64 / 1000.0,
+                alert.text.as_deref().unwrap_or(""),
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
 pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     // Poll for the alert until the surrounding step timeout fires.
     // A one-shot `get_hierarchy()` raced the dialog open animation
@@ -236,6 +269,48 @@ mod tests {
     }
 
     // ── assert_alert tests ────────────────────────────────────────────
+
+    fn root_with_alert() -> golem_element::Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Alert",
+            "Delete this item?",
+            Bounds::new(50, 200, 275, 150),
+        ));
+        root
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn assert_no_alert_passes_without_one_and_when_it_goes() {
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 375, 812)));
+        handle_assert_no_alert(&make_step("assert_no_alert"), &driver)
+            .await
+            .expect("no alert");
+        driver.push_hierarchy(root_with_alert());
+        driver.push_hierarchy(root_with_alert());
+        handle_assert_no_alert(&make_step("assert_no_alert"), &driver)
+            .await
+            .expect("SHALL wait for the alert to go");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn assert_no_alert_fails_while_one_shows_and_on_text_narrows_it() {
+        let driver = MockPlatformDriver::new(root_with_alert());
+        let mut step = make_step("assert_no_alert");
+        step.timeout = Some(1_000);
+        let err = handle_assert_no_alert(&step, &driver)
+            .await
+            .expect_err("the alert stays");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowUnexpectedlyPresent)
+        );
+        assert!(err.to_string().contains("Delete this item?"), "{err}");
+        step.on_text = Some("Error*".into());
+        handle_assert_no_alert(&step, &driver)
+            .await
+            .expect("an alert that does not match on_text SHALL not fail it");
+    }
 
     #[tokio::test]
     async fn assert_alert_succeeds_when_alert_present() {

@@ -66,6 +66,7 @@ pub enum ValidationErrorKind {
 const KNOWN_ACTIONS: &[&str] = &[
     "add_media",
     "assert_alert",
+    "assert_no_alert",
     "assert_not_visible",
     "assert_visible",
     "await_email",
@@ -785,12 +786,22 @@ fn validate_branch(
         });
     }
 
-    // 8. Conflicting branch condition — should not have both if_visible/if_not_visible and if_var
-    let has_visibility = branch.if_visible.is_some() || branch.if_not_visible.is_some();
-    let has_var = branch.if_var.is_some();
-    if has_visibility && has_var {
+    // 8. Conflicting branch condition — one condition per arm
+    let conditions = [
+        branch.if_visible.is_some(),
+        branch.if_not_visible.is_some(),
+        branch.if_alert.is_some(),
+        branch.if_var.is_some(),
+    ]
+    .into_iter()
+    .filter(|c| *c)
+    .count();
+    if conditions > 1 {
         errors.push(ValidationError {
-            message: "Branch condition has both visibility check and if_var".to_string(),
+            message: format!(
+                "Branch arm ({}) has more than one condition (if_visible, if_not_visible, if_alert, if_var); give each its own arm",
+                branch.describe()
+            ),
             kind: ValidationErrorKind::ConflictingBranchCondition,
         });
     }
@@ -876,6 +887,25 @@ steps = [{{ action = "screenshot" }}]
             )),
             vec![],
             "next alone SHALL be the else"
+        );
+    }
+
+    #[test]
+    fn an_arm_has_one_condition() {
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ if_visible = "A", if_alert = "*", goto = "a" }"#
+            )),
+            vec![ValidationErrorKind::ConflictingBranchCondition]
+        );
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ if_alert = "*", goto = "a" }, { goto = "b" }"#
+            )),
+            vec![],
+            "if_alert SHALL be a condition, not the else"
         );
     }
 
