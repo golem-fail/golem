@@ -149,7 +149,24 @@ pub fn run(args: &InstallScriptArgs) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let ask = match args.template {
         Some(_) => Ask::Defaults,
-        None => Ask::Terminal(Box::default()),
+        None => {
+            let frameworks: Vec<&str> = InstallFramework::ALL.map(|f| f.label()).to_vec();
+            crate::terminal::require_with(
+                "golem install-script",
+                &[
+                    (
+                        "golem install-script --print FRAMEWORK",
+                        "read a template, then adapt it",
+                    ),
+                    (
+                        "golem install-script --template FRAMEWORK --app NAME --path DIR",
+                        "write one without prompts",
+                    ),
+                ],
+                &format!("frameworks: {}", frameworks.join(", ")),
+            )?;
+            Ask::Terminal(Box::default())
+        }
     };
     scaffold(&ask, args, &cwd)
 }
