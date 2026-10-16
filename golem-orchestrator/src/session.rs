@@ -2097,7 +2097,17 @@ const RESTARTED: &str = "companion restarted: it had stopped answering";
 async fn read(work: &Work, op: &Op) -> Result<OpResult> {
     match op {
         Op::Tree { full, json } => {
-            let tree = read_tree(work.driver.as_ref(), *full, *json).await?;
+            let tree = match read_tree(work.driver.as_ref(), *full, *json).await {
+                Ok(t) => t,
+                Err(e) => {
+                    return Err(match work.app_bundle() {
+                        Some(b) => {
+                            crate::interactive::explain_tree_error(work.driver.as_ref(), b, e).await
+                        }
+                        None => e,
+                    })
+                }
+            };
             let warning = match (work.app_bundle(), json) {
                 (Some(bundle), false) => {
                     crate::interactive::foreground_warning(work.driver.as_ref(), bundle).await
@@ -2677,20 +2687,40 @@ mod tests {
             "{t}"
         );
 
-        let d = MockPlatformDriver::new(screen());
-        d.set_app_running(Some(false));
-        let t = tree_of(d).await;
-        assert!(
-            t.starts_with("warning: fail.golem.test is not running"),
-            "{t}"
-        );
-
-        for (fg, running) in [(Some("fail.golem.test"), Some(false)), (None, None)] {
+        // iOS: no foreground app to compare, and the tree read itself
+        // brings the session's app to the front.
+        for (fg, running) in [
+            (Some("fail.golem.test"), Some(true)),
+            (None, Some(false)),
+            (None, None),
+        ] {
             let d = MockPlatformDriver::new(screen());
             d.set_foreground_app(fg);
             d.set_app_running(running);
             let t = tree_of(d).await;
             assert!(t.starts_with("tree "), "{fg:?} {running:?}: {t}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_tree_that_fails_because_the_app_exited_says_so() {
+        let d = MockPlatformDriver::new(screen());
+        d.set_error(
+            "get_hierarchy",
+            "hierarchy (app init) timed out on main thread",
+        );
+        d.set_app_running(Some(false));
+        let s = session_on(Arc::new(d), None, Duration::from_secs(60));
+        let op = Op::Tree {
+            full: false,
+            json: false,
+        };
+        match run(&s, op).await.result {
+            OpResult::Failed(e) => assert!(
+                e.contains("fail.golem.test is not running") && e.contains("app_logs"),
+                "{e}"
+            ),
+            other => panic!("{other:?}"),
         }
     }
 
