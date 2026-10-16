@@ -523,8 +523,11 @@ Add an image or video file to the device's photo library. golem checks the file'
 iOS: simulator only; gate on `_hardware` (see [`clear_data`](#clear_data--clear-app-data) for the branch), or put the file in the device's library before the run.
 
 ## Alerts
+<!-- collapsed -->
 
 Accept or dismiss a dialog from the app or the OS.
+
+An OS prompt, such as a permission request, is in the tree on Android and on iOS. It covers the app: while it shows, the app's elements are not in the visible tree, so a step cannot target them and `assert_visible` on them fails. `tree(full = true)` still lists them, as hints. `assert_alert` sees the prompt, and `accept_alert` or `dismiss_alert` answers it.
 
 ### `accept_alert` — Accept dialog
 
@@ -539,7 +542,7 @@ The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` 
 
 ### `dismiss_alert` — Dismiss dialog
 
-Tap the negative button (Cancel, No) on the current in-app alert. It may not reach an OS prompt (an iOS permission dialog, for example); `accept_alert` handles those.
+Tap the negative button (Cancel, No, Don't Allow) on the current alert, in the app or from the OS (an iOS permission prompt, for example).
 
 ```toml
 { action = "dismiss_alert" }

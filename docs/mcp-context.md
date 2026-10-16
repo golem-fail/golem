@@ -563,7 +563,7 @@ Topics:
 
 ### act
 
-<details><summary><code>help("act")</code> · Actions · 2605 chars · + 10 items, 42 sub-items</summary>
+<details><summary><code>help("act")</code> · Actions · 2634 chars · + 10 items, 40 sub-items</summary>
 
 Source: [src/actions-reference/00-intro.llm.md](src/actions-reference/00-intro.llm.md) (LLM text)
 
@@ -607,7 +607,7 @@ Items (help("act", item)):
 - app-lifecycle: Start, stop and reset an app, and set its permissions — launch, app-permissions, stop, clear_data
 - device-controls: Change device settings: dark mode, location, hardware buttons — set_dark_mode, set_location, press
 - capture: Screenshots, screen recordings, and media files pushed to the device — screenshot, recording, add_media
-- alerts: Accept or dismiss a dialog from the app or the OS — accept_alert, dismiss_alert
+- alerts: Accept or dismiss a dialog from the app or the OS — 2 items: help("act", "alerts") lists them; read it first
 - external: Links, pushes, shell commands, email, fixtures, mixins and HTTP — open_link, push_notification, bash, run, create_inbox, await_email, load_fixture, load_mixin, get_http, post_http, put_http, patch_http, delete_http
 - browser: Drive a host browser, for web state that the app depends on — 20 items: help("act", "browser") lists them; read it first
 - flow-control: End the flow on purpose — fail
@@ -1347,7 +1347,7 @@ iOS: simulator only; gate on `_hardware` (see `clear_data` (help("act", "clear_d
 
 </details>
 
-<details><summary><code>help("act", "alerts")</code> · Alerts · 152 chars · + 2 items</summary>
+<details><summary><code>help("act", "alerts")</code> · Alerts · 513 chars · + 2 items</summary>
 
 Source: [src/actions-reference/70-alerts/00-intro.md](src/actions-reference/70-alerts/00-intro.md)
 
@@ -1355,6 +1355,8 @@ Source: [src/actions-reference/70-alerts/00-intro.md](src/actions-reference/70-a
 ## Alerts
 
 Accept or dismiss a dialog from the app or the OS.
+
+An OS prompt, such as a permission request, is in the tree on Android and on iOS. It covers the app: while it shows, the app's elements are not in the visible tree, so a step cannot target them and `assert_visible` on them fails. `tree(full = true)` still lists them, as hints. `assert_alert` sees the prompt, and `accept_alert` or `dismiss_alert` answers it.
 
 Items (help("act", item)):
 - accept_alert: Accept dialog
@@ -1380,14 +1382,14 @@ The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` 
 
 </details>
 
-<details><summary><code>help("act", "dismiss_alert")</code> · dismiss_alert — Dismiss dialog · 362 chars</summary>
+<details><summary><code>help("act", "dismiss_alert")</code> · dismiss_alert — Dismiss dialog · 334 chars</summary>
 
 Source: [src/actions-reference/70-alerts/20-dismiss_alert.md](src/actions-reference/70-alerts/20-dismiss_alert.md)
 
 ````text
 ### `dismiss_alert` — Dismiss dialog
 
-Tap the negative button (Cancel, No) on the current in-app alert. It may not reach an OS prompt (an iOS permission dialog, for example); `accept_alert` handles those.
+Tap the negative button (Cancel, No, Don't Allow) on the current alert, in the app or from the OS (an iOS permission prompt, for example).
 
 ```toml
 { action = "dismiss_alert" }

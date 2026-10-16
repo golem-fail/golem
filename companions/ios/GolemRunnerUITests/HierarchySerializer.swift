@@ -18,22 +18,23 @@ enum HierarchySerializer {
     /// Serialize any system alerts presented by SpringBoard (deep-link
     /// "Open in <App>?" confirms, photo-library prompts, etc.). These
     /// are owned by `com.apple.springboard`, not the app under test, so
-    /// they don't appear in `serialize(app:)`. Returning them as
-    /// additional top-level entries lets `find_alert` on the runner side
-    /// pick them up without needing to know which process owns the
-    /// alert — closer to what a user sees on screen.
-    static func serializeSpringBoardAlerts() -> [[String: Any]] {
+    /// they don't appear in `serialize(app:)`. `/hierarchy` returns them
+    /// as `system_alerts`, and the host puts them over the app's tree.
+    static func serializeSpringBoardAlerts(
+        candidateBundles: [String] = ["com.apple.springboard", "com.apple.springboard.SystemApp"]
+    ) -> [[String: Any]] {
         // System alert ownership varies on iOS — SpringBoard for most,
         // but iOS 26+ openURL confirmations show up under
         // `com.apple.springboard.SystemApp` or sometimes the calling
-        // simulator's launchd path. Probe each candidate.
-        let candidateBundles = [
-            "com.apple.springboard",
-            "com.apple.springboard.SystemApp",
-        ]
+        // simulator's launchd path.
         var out: [[String: Any]] = []
         for bid in candidateBundles {
             let app = XCUIApplication(bundleIdentifier: bid)
+            // /hierarchy calls this on every poll: one cheap existence
+            // check per kind before any count or snapshot.
+            if !app.alerts.firstMatch.exists && !app.sheets.firstMatch.exists {
+                continue
+            }
             // .alerts (UIAlertController .alert)
             let alerts = app.alerts
             for i in 0..<alerts.count {

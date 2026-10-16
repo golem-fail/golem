@@ -6,7 +6,7 @@ mod webview;
 #[cfg(test)]
 use golem_element::Element;
 
-pub use alerts::{detect_anr, find_alert, find_alert_buttons};
+pub use alerts::{cover_with_alerts, detect_anr, find_alert, find_alert_buttons};
 pub use hierarchy::{parse_hierarchy, CornerPosition, CutoutRect, HierarchyMeta, RoundedCorner};
 pub use http::{CompanionClient, CompanionHealth};
 

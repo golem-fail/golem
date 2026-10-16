@@ -225,6 +225,12 @@ pub trait PlatformDriver: Send + Sync {
         Ok(false)
     }
 
+    /// The negative of `accept_system_alert`: tap the alert's refusing
+    /// button ("Don't Allow", "Cancel"). Default: `Ok(false)`.
+    async fn dismiss_system_alert(&self) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     /// Prepare to type `text` into the next-focused field. Called by the
     /// runner BEFORE the focus tap, so any input-method switch is in
     /// place when the field gains focus. Android uses this to lazily

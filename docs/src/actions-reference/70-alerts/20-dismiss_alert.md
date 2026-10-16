@@ -1,6 +1,6 @@
 ### `dismiss_alert` — Dismiss dialog
 
-Tap the negative button (Cancel, No) on the current in-app alert. It may not reach an OS prompt (an iOS permission dialog, for example); `accept_alert` handles those.
+Tap the negative button (Cancel, No, Don't Allow) on the current alert, in the app or from the OS (an iOS permission prompt, for example).
 
 ```toml
 { action = "dismiss_alert" }

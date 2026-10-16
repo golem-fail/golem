@@ -506,6 +506,13 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(*self.system_alert_accept.lock().expect("lock poisoned"))
     }
 
+    /// Answers as `accept_system_alert` does: whether a system alert is up.
+    async fn dismiss_system_alert(&self) -> anyhow::Result<bool> {
+        self.record_call("dismiss_system_alert", vec![]);
+        self.check_error("dismiss_system_alert")?;
+        Ok(*self.system_alert_accept.lock().expect("lock poisoned"))
+    }
+
     fn reconnect(&self, port: u16) {
         self.record_call("reconnect", vec![port.to_string()]);
         *self.reconnect_port.lock().expect("lock poisoned") = Some(port);
