@@ -5,14 +5,14 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 
 | Text | Characters |
 |------|-----------:|
-| Instructions | 340 |
+| Instructions | 477 |
 | Tool list (31 tools, as `tools/list` JSON) | 12993 |
-| Both, kept in context by most clients | 13333 |
+| Both, kept in context by most clients | 13470 |
 
 ## Instructions
 
 ```text
-golem (MCP server): Mobile e2e testing on iOS and Android simulators and emulators. Use when the user wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs. Start with session_open; help() explains steps and the flow file.
+golem (MCP server): Mobile e2e testing on iOS and Android simulators and emulators. Use when the user wants to write, edit or run an e2e test flow (.test.toml) for a mobile app, or to reproduce and debug a mobile app bug: drive the screen, read the UI tree, read crash logs. Start with session_open; help() explains steps and the flow file. To write a flow, record steps with act, arrange them with block_* and step_*, and write the file only with export_flow, which checks it.
 ```
 
 ## Tools

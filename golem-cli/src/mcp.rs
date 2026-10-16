@@ -436,7 +436,9 @@ macro_rules! when_to_use {
 pub const INSTRUCTIONS: &str = concat!(
     "golem (MCP server): ",
     when_to_use!(),
-    " Start with session_open; help() explains steps and the flow file."
+    " Start with session_open; help() explains steps and the flow file. To write a flow, record \
+     steps with act, arrange them with block_* and step_*, and write the file only with \
+     export_flow, which checks it."
 );
 
 /// The last line of an opened session: where the docs are.
@@ -1569,6 +1571,15 @@ mod tests {
             missing.is_empty(),
             "docs/mcp.md SHALL describe: {missing:?}"
         );
+    }
+
+    /// With tool search, the instructions and the tool names are all a
+    /// model sees before it picks a tool.
+    #[test]
+    fn the_instructions_name_the_authoring_workflow() {
+        for name in ["session_open", "act", "block_*", "step_*", "export_flow"] {
+            assert!(INSTRUCTIONS.contains(name), "{name}");
+        }
     }
 
     /// A client keeps the instructions in context in every session, used
