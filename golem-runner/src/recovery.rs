@@ -390,6 +390,10 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.accept_system_alert().await
     }
 
+    async fn dismiss_system_alert(&self) -> anyhow::Result<bool> {
+        self.inner.dismiss_system_alert().await
+    }
+
     async fn prepare_type(&self, text: &str) -> anyhow::Result<()> {
         self.inner.prepare_type(text).await
     }

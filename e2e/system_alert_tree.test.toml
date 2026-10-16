@@ -1,0 +1,37 @@
+[flow]
+name = "System alert covers the app"
+tags = ["ios", "alert", "permissions"]
+
+# A system permission prompt (SpringBoard) covers the app: the tree lists
+# the alert, and the app's elements behind it are not visible, so an
+# assert behind it fails until the prompt is answered (#413).
+#
+# iOS 18 runtime: the photo prompt on iOS 26 is #414's subject.
+[[flow.apps]]
+name = "app-b"
+[[flow.apps.devices]]
+os = "ios:18"
+type = "phone"
+
+[[block]]
+name = "prompt_covers_app"
+steps = [
+  # Forget the photo grant, so "Load" asks for it again.
+  { action = "bash", run = "xcrun simctl privacy ${_udid} reset photos fail.golem.testb" },
+  { action = "launch", app = "app-b" },
+  { action = "tap", on_text = "Load" },
+  { action = "assert_alert" },
+  { action = "assert_not_visible", on_text = "Load", timeout = 3000 },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Load", timeout = 15000 },
+]
+
+[[block]]
+name = "dismiss_refuses_the_prompt"
+steps = [
+  { action = "bash", run = "xcrun simctl privacy ${_udid} reset photos fail.golem.testb" },
+  { action = "launch", app = "app-b" },
+  { action = "tap", on_text = "Load" },
+  { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Dims: denied", timeout = 10000 },
+]

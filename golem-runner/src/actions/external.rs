@@ -605,6 +605,22 @@ pub(crate) async fn handle_accept_alert(
     // under sweep load, while the surrounding step still had budget
     // left to find them.
     loop {
+        // OS-owned prompt (iOS SpringBoard) first: accept it deterministically
+        // by querying SpringBoard's alert and tapping the affirmative by its
+        // label. The tree lists a system alert too, but its last button is
+        // not always the affirmative (the photo prompt's is the middle one).
+        // Preferred over the poke below because the UI-interruption-monitor
+        // fires only at iOS's discretion (~40% misses on the photo prompt).
+        // No-op (Ok(false)) on platforms without a system-alert layer / when
+        // no prompt is up, so we fall through to the poke + re-loop. A companion
+        // DEATH here is NOT swallowed into `false` (which would spin until the
+        // step deadline → EF408); it propagates so recovery can engage.
+        match driver.accept_system_alert().await {
+            Ok(true) => return wait_for_alert_gone(driver).await,
+            Ok(false) => {}
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+            Err(_) => {}
+        }
         // A system prompt (iOS SpringBoard) blocks the app's own hierarchy
         // fetch, so this can error while the prompt is up. Tolerate a *transient*
         // error and keep poking rather than aborting the accept — bailing here
@@ -643,20 +659,6 @@ pub(crate) async fn handle_accept_alert(
                 }
             }
         }
-        // OS-owned prompt (iOS SpringBoard): accept it deterministically by
-        // querying SpringBoard's alert and tapping the affirmative directly.
-        // Preferred over the poke below because the UI-interruption-monitor
-        // fires only at iOS's discretion (~40% misses on the photo prompt).
-        // No-op (Ok(false)) on platforms without a system-alert layer / when
-        // no prompt is up, so we fall through to the poke + re-loop. A companion
-        // DEATH here is NOT swallowed into `false` (which would spin until the
-        // step deadline → EF408); it propagates so recovery can engage.
-        match driver.accept_system_alert().await {
-            Ok(true) => return wait_for_alert_gone(driver).await,
-            Ok(false) => {}
-            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
-            Err(_) => {}
-        }
         // Re-poke every iteration: a system permission prompt (iOS) appears
         // asynchronously after the triggering action, so a single early poke
         // can fire before the prompt is on screen and miss it entirely,
@@ -669,6 +671,22 @@ pub(crate) async fn handle_accept_alert(
         let _ = driver.poke_for_system_alert().await;
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
+}
+
+/// A button that refuses: "Don't Allow", "Cancel", "No", "Not Now".
+fn is_negative(button: &golem_element::Element) -> bool {
+    const NEGATIVE: &[&str] = &[
+        "don't allow",
+        "don’t allow",
+        "cancel",
+        "no",
+        "not now",
+        "deny",
+    ];
+    [&button.text, &button.accessibility_label]
+        .into_iter()
+        .flatten()
+        .any(|t| NEGATIVE.contains(&t.trim().to_lowercase().as_str()))
 }
 
 /// Block until the alert window is gone from the hierarchy. Called
@@ -716,17 +734,19 @@ pub(crate) async fn handle_dismiss_alert(
     driver: &dyn PlatformDriver,
     ctx: &crate::context::ExecutionContext<'_>,
 ) -> Result<()> {
-    // Mirror accept_alert's structure. dismiss_alert only resolves
-    // in-app dialogs cleanly — system dialogs are auto-handled by the
-    // companion's UIInterruptionMonitor with the *positive* button,
-    // not the negative one. The monitor doesn't expose a per-call
-    // choice. If a test author needs to assert a particular system
-    // dialog appeared and was cancelled, that's a future enhancement
-    // (e.g. a configurable monitor verb).
+    // An iOS system prompt is in the tree too, but a tap through the app
+    // fires XCTest's interruption monitor, which allows it. So a system
+    // prompt goes first, refused by its label on SpringBoard.
     //
     // No internal deadline — the step's timeout governs (see
     // accept_alert for rationale).
     loop {
+        match driver.dismiss_system_alert().await {
+            Ok(true) => return wait_for_alert_gone(driver).await,
+            Ok(false) => {}
+            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+            Err(_) => {}
+        }
         let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
@@ -736,8 +756,13 @@ pub(crate) async fn handle_dismiss_alert(
                     "dismiss_alert failed: no buttons found in alert"
                 );
             }
-            // First button is the negative action (Cancel, No).
-            let btn = &buttons[0];
+            // The negative action by its label, else the first button
+            // (Cancel, No). An OS prompt does not put its negative first:
+            // the iOS photo prompt lists "Limit Access…" before "Don't Allow".
+            let btn = buttons
+                .iter()
+                .find(|b| is_negative(b))
+                .unwrap_or(&buttons[0]);
             let b = btn.effective_bounds();
             let (x, y) = (b.center_x(), b.center_y());
             ctx.substep(golem_events::SubstepEvent::Tap {

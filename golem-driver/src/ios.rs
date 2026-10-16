@@ -335,6 +335,17 @@ fn is_safe_container_path(path: &str) -> bool {
         && path.contains("/Containers/Data/Application/")
 }
 
+/// The SpringBoard alerts the companion reported with the hierarchy.
+fn system_alerts(wrapper: &serde_json::Value) -> Result<Vec<Element>> {
+    let Some(alerts) = wrapper.get("system_alerts").and_then(|v| v.as_array()) else {
+        return Ok(Vec::new());
+    };
+    alerts
+        .iter()
+        .map(|a| Ok(parse_hierarchy(&serde_json::to_string(a)?)?.0))
+        .collect()
+}
+
 /// Read `safe_area_top` from the companion hierarchy wrapper as an `i32`,
 /// defaulting to 0 when absent or non-integer.
 fn safe_area_top_from_wrapper(wrapper: &serde_json::Value) -> i32 {
@@ -564,7 +575,9 @@ impl PlatformDriver for IosDriver {
         // Reconstruct wrapper with enriched tree for parse_hierarchy
         let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
         let enriched_str = build_enriched_hierarchy(&original, &raw, css_safe_area_top)?;
-        parse_hierarchy(&enriched_str)
+        let (mut root, meta) = parse_hierarchy(&enriched_str)?;
+        crate::common::cover_with_alerts(&mut root, system_alerts(&wrapper)?);
+        Ok((root, meta))
     }
 
     async fn poke_for_system_alert(&self) -> Result<()> {
@@ -586,6 +599,15 @@ impl PlatformDriver for IosDriver {
         let parsed: serde_json::Value = serde_json::from_str(&resp)?;
         Ok(parsed
             .get("accepted")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false))
+    }
+
+    async fn dismiss_system_alert(&self) -> Result<bool> {
+        let resp = self.client.post_json("/dismiss-system-alert", "{}").await?;
+        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+        Ok(parsed
+            .get("dismissed")
             .and_then(|v| v.as_bool())
             .unwrap_or(false))
     }

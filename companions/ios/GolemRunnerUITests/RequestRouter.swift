@@ -55,6 +55,8 @@ final class RequestRouter {
             return handlePokeInterruptionMonitor(query: query)
         case ("POST", "/accept-system-alert"):
             return handleAcceptSystemAlert(query: query)
+        case ("POST", "/dismiss-system-alert"):
+            return handleDismissSystemAlert(query: query)
         case ("GET", "/debug/probe"):
             return handleDebugProbe(query: query)
         case ("POST", "/tap"):
@@ -254,7 +256,7 @@ final class RequestRouter {
         return .json([
             "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.17.0",
+            "version": "0.17.3",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -302,7 +304,7 @@ final class RequestRouter {
         }) else {
             return gatewayTimeout("hierarchy (app init)")
         }
-        guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
+        guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int, [[String: Any]]) in
             // Only foreground the app when it isn't already frontmost. golem
             // reads /hierarchy repeatedly (warm-up + every assert), so an
             // unconditional activate() here fired dozens of FrontBoard
@@ -315,13 +317,14 @@ final class RequestRouter {
                 application.activate()
             }
             let tree = HierarchySerializer.serialize(app: application)
-            // NB: SpringBoard-owned alerts (deep-link "Open in App?"
-            // confirms, permission prompts, …) are deliberately NOT
-            // merged into this hierarchy. Querying SpringBoard from
-            // main here blocks for several seconds in normal flow,
-            // tipping every /hierarchy past the 5s watchdog. Callers
-            // that need to interact with system dialogs (accept_alert,
-            // dismiss_alert) should call /system-alert separately.
+            // SpringBoard-owned alerts (deep-link "Open in App?" confirms,
+            // permission prompts, …) cover the app, so the host must see
+            // them. Only SpringBoard's `.alerts` / `.sheets` are queried:
+            // its full snapshot is what blocked /hierarchy for seconds.
+            // SpringBoard only: querying `SpringBoard.SystemApp` on every
+            // poll cost about 4 s per /hierarchy on iOS 26.
+            let systemAlerts = HierarchySerializer.serializeSpringBoardAlerts(
+                candidateBundles: ["com.apple.springboard"])
             // Detect keyboard area: from the top of the toolbar (above keys)
             // to the bottom of the screen. Includes toolbar, predictions, and keys.
             let kbHeight: Int
@@ -355,19 +358,22 @@ final class RequestRouter {
             // Bottom safe area: 34pt on home indicator devices (status bar > 20pt), 0 otherwise
             let safeBottom = safeTop > 20 ? 34 : 0
 
-            return (tree, kbHeight, safeTop, safeBottom)
+            return (tree, kbHeight, safeTop, safeBottom, systemAlerts)
         }) else {
             return gatewayTimeout("hierarchy")
         }
-        let (hierarchy, keyboardHeight, safeAreaTop, safeAreaBottom) = result
+        let (hierarchy, keyboardHeight, safeAreaTop, safeAreaBottom, systemAlerts) = result
         // Wrap hierarchy with metadata
-        let response: [String: Any] = [
+        var response: [String: Any] = [
             "tree": hierarchy,
             "keyboard_height": keyboardHeight,
             "safe_area_top": safeAreaTop,
             "safe_area_bottom": safeAreaBottom,
             "device_model": Self.deviceModel
         ]
+        if !systemAlerts.isEmpty {
+            response["system_alerts"] = systemAlerts
+        }
         return .json(response)
     }
 
@@ -431,7 +437,27 @@ final class RequestRouter {
             "Allow Full Access", "Allow Access to All Photos",
             "Open", "Allow", "Allow Once", "Allow While Using App",
         ]
-        guard let accepted = runOnMain(timeout: Self.kTimeoutFast, { () -> Bool in
+        guard let accepted = tapSystemAlertButton(labels) else {
+            return gatewayTimeout("accept-system-alert")
+        }
+        return .json(["accepted": accepted])
+    }
+
+    /// The negative of `handleAcceptSystemAlert`. A tap on the app cannot
+    /// do it: an XCUI action on the app while a system alert is up fires
+    /// the UI-interruption monitor, which answers with the affirmative.
+    private func handleDismissSystemAlert(query: [String: String]) -> HTTPResponse {
+        let labels = ["Don’t Allow", "Don't Allow", "Cancel", "Not Now", "Deny", "No"]
+        guard let dismissed = tapSystemAlertButton(labels) else {
+            return gatewayTimeout("dismiss-system-alert")
+        }
+        return .json(["dismissed": dismissed])
+    }
+
+    /// Tap the first of `labels` that SpringBoard's alert has. `nil` when
+    /// the main thread did not answer in time.
+    private func tapSystemAlertButton(_ labels: [String]) -> Bool? {
+        return runOnMain(timeout: Self.kTimeoutFast, { () -> Bool in
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             let alert = springboard.alerts.firstMatch
             guard alert.exists else { return false }
@@ -443,10 +469,7 @@ final class RequestRouter {
                 }
             }
             return false
-        }) else {
-            return gatewayTimeout("accept-system-alert")
-        }
-        return .json(["accepted": accepted])
+        })
     }
 
     /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.
