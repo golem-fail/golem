@@ -194,8 +194,13 @@ pub enum Op {
         comment: Option<String>,
     },
     /// Read the tree: the visible one, or the full one as a hint; as TOON,
-    /// or with `json` as the element tree.
-    Tree { full: bool, json: bool },
+    /// or with `json` as the element tree. TOON leaves out the rows with
+    /// nothing to select by, unless `all_rows`.
+    Tree {
+        full: bool,
+        json: bool,
+        all_rows: bool,
+    },
     /// Report what a selector matches, polling up to `timeout_ms`.
     Probe { selector: String, timeout_ms: u64 },
     /// Capture the screen as PNG.
@@ -2083,8 +2088,12 @@ const RESTARTED: &str = "companion restarted: it had stopped answering";
 /// A read-only operation: the tree, a probe or a screenshot.
 async fn read(work: &Work, op: &Op) -> Result<OpResult> {
     match op {
-        Op::Tree { full, json } => Ok(OpResult::Tree(
-            read_tree(work.driver.as_ref(), *full, *json).await?,
+        Op::Tree {
+            full,
+            json,
+            all_rows,
+        } => Ok(OpResult::Tree(
+            read_tree(work.driver.as_ref(), *full, *json, !*all_rows).await?,
         )),
         Op::Probe {
             selector,
@@ -2208,7 +2217,7 @@ async fn act(work: &mut Work, step: &str, tree: bool, comment: Option<&str>) -> 
     *step_count = ctx.global_step_index;
     *rng = ctx.rng.into_inner().unwrap_or_else(|e| e.into_inner());
     let tree = if tree {
-        read_tree(driver.as_ref(), false, false).await.ok()
+        read_tree(driver.as_ref(), false, false, true).await.ok()
     } else {
         None
     };
@@ -2519,9 +2528,14 @@ fn slow_warning(duration_ms: u64, timeout_ms: u64) -> Option<String> {
     ))
 }
 
-async fn read_tree(driver: &dyn PlatformDriver, full: bool, json: bool) -> Result<String> {
+async fn read_tree(
+    driver: &dyn PlatformDriver,
+    full: bool,
+    json: bool,
+    compact: bool,
+) -> Result<String> {
     if !full && !json {
-        return crate::interactive::visible_tree(driver).await;
+        return crate::interactive::visible_tree(driver, compact).await;
     }
     let (root, meta) = driver.get_hierarchy().await?;
     if json {
@@ -2539,6 +2553,7 @@ async fn read_tree(driver: &dyn PlatformDriver, full: bool, json: bool) -> Resul
         &TreeHeader {
             full: true,
             keyboard_height: meta.keyboard_height,
+            compact,
         },
     ))
 }
@@ -2774,6 +2789,7 @@ mod tests {
             Op::Tree {
                 full: false,
                 json: false,
+                all_rows: false,
             },
         )
         .await;
@@ -3522,6 +3538,7 @@ mod tests {
             Op::Tree {
                 full: false,
                 json: false,
+                all_rows: false,
             },
         )
         .await
@@ -3562,6 +3579,7 @@ mod tests {
         let Begin::Started(first) = s.begin(Op::Tree {
             full: false,
             json: false,
+            all_rows: false,
         }) else {
             panic!("SHALL start");
         };
@@ -3616,6 +3634,7 @@ mod tests {
         let _ = s.begin(Op::Tree {
             full: false,
             json: false,
+            all_rows: false,
         });
         tokio::time::advance(Duration::from_secs(600)).await;
         assert_eq!(
@@ -3644,6 +3663,7 @@ mod tests {
         let _ = s.begin(Op::Tree {
             full: false,
             json: false,
+            all_rows: false,
         });
         assert!(
             rm.try_allocate(&device(), 0).is_err(),

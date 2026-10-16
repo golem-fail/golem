@@ -225,6 +225,9 @@ pub struct TreeParams {
     /// Add off-screen elements: hint, never proof.
     #[serde(default)]
     pub full: bool,
+    /// Also rows with no text, label or id.
+    #[serde(default)]
+    pub all_rows: bool,
     /// "toon" (default) or "json".
     pub format: Option<String>,
 }
@@ -742,7 +745,7 @@ impl GolemMcp {
         let reply = self
             .op(
                 "session_tree",
-                serde_json::json!({ "full": p.full, "json": json }),
+                serde_json::json!({ "full": p.full, "json": json, "all_rows": p.all_rows }),
             )
             .await?;
         self.render(&reply, json)

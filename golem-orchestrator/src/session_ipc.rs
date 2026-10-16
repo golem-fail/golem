@@ -201,6 +201,7 @@ async fn handle(
         "session_tree" => Some(Op::Tree {
             full: msg["full"].as_bool().unwrap_or(false),
             json: msg["json"].as_bool().unwrap_or(false),
+            all_rows: msg["all_rows"].as_bool().unwrap_or(false),
         }),
         "session_probe" => Some(Op::Probe {
             selector: msg["selector"].as_str().unwrap_or_default().to_string(),

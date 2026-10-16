@@ -431,6 +431,8 @@ An item is the last part of a section's name (`tap`), its path (`interaction/tap
 
 golem tests as a person does. A step finds its element only in the visible tree: the elements on the screen, not the elements that are off the screen or hidden under other elements. `tree` returns the visible tree. `tree(full = true)` returns every element, marked as a hint. Use the full tree to find where to scroll, but never to decide that a step passed. `probe` lists off-screen matches as hints for the same reason.
 
+The TOON tree, from `tree` and `act(tree = true)`, leaves out the rows that have no text, label or id and no `button`, `square` or `small` trait: layout wrappers that a step cannot select by. The header counts the rows it left out, and the other rows keep their `[n]`. `tree(all_rows = true)` shows every row. `golem session tree` does the same, with `--all-rows`. `golem tree` shows every row.
+
 ## Sessions
 
 A session holds one device, one app, the variables and a flow draft. Each MCP server has one session at a time.

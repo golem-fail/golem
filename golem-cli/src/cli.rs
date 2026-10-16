@@ -359,6 +359,10 @@ pub struct SessionTreeArgs {
     #[arg(long)]
     pub full: bool,
 
+    /// Every row, also those with no text, label or id to select by
+    #[arg(long)]
+    pub all_rows: bool,
+
     /// Output format
     #[arg(long, value_enum, default_value_t = TreeOutput::Toon)]
     pub output: TreeOutput,

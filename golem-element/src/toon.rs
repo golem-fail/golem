@@ -39,6 +39,9 @@ pub struct TreeHeader {
     pub full: bool,
     /// The soft keyboard's height, when it is up.
     pub keyboard_height: i32,
+    /// Leave out the rows that [`says_nothing`]. The other rows keep their
+    /// `[n]`, so an index means the same element in every form.
+    pub compact: bool,
 }
 
 /// Whether `e` gets a line: it has text, a label or an id, takes a tap, or
@@ -50,6 +53,21 @@ pub fn is_selectable(e: &Element) -> bool {
         .flatten()
         .any(|s| !s.is_empty());
     has_text || has_label || e.clickable || element_has_trait(e, "button")
+}
+
+/// A row a model cannot select by: no text, label or id, and no trait that
+/// tells it apart. Such rows are layout wrappers that take a tap (iOS marks
+/// most `other` elements so). A square or small row stays, since it can be
+/// an icon button with no label.
+pub fn says_nothing(e: &Element) -> bool {
+    let named = [&e.text, &e.accessibility_label, &e.accessibility_id]
+        .into_iter()
+        .flatten()
+        .any(|s| !s.is_empty());
+    !named
+        && !["button", "square", "small"]
+            .iter()
+            .any(|t| element_has_trait(e, t))
 }
 
 /// The selectable elements of `root`, in pre-order. Element `[n]` in the
@@ -86,6 +104,16 @@ pub fn encode_tree(root: &Element, header: &TreeHeader) -> String {
     if header.full {
         out.push_str(" · hint only: not what the user sees");
     }
+    let left_out = if header.compact {
+        nodes.iter().filter(|e| says_nothing(e)).count()
+    } else {
+        0
+    };
+    if left_out > 0 {
+        out.push_str(&format!(
+            " · {left_out} without text, label or id left out (all_rows shows them)"
+        ));
+    }
     out.push('\n');
     if nodes.is_empty() {
         out.push_str("(no selectable elements)\n");
@@ -93,6 +121,9 @@ pub fn encode_tree(root: &Element, header: &TreeHeader) -> String {
     }
     let mut enclosing: Vec<Bounds> = Vec::new();
     for (i, e) in nodes.iter().enumerate() {
+        if header.compact && says_nothing(e) {
+            continue;
+        }
         let bounds = *e.effective_bounds();
         while enclosing
             .last()
@@ -248,6 +279,35 @@ mod tests {
     }
 
     #[test]
+    fn a_compact_tree_leaves_out_rows_with_nothing_to_select_by() {
+        let mut root = el("window", (0, 0, 400, 800));
+        let mut wrapper = el("other", (0, 0, 400, 800));
+        wrapper.clickable = true;
+        let mut card = el("other", (0, 100, 400, 300));
+        card.clickable = true;
+        card.children
+            .push(text(el("staticText", (20, 120, 200, 40)), "Title"));
+        let mut icon = el("other", (340, 120, 40, 40));
+        icon.clickable = true;
+        card.children.push(icon);
+        wrapper.children.push(card);
+        root.children.push(wrapper);
+        let header = |compact| TreeHeader {
+            compact,
+            ..TreeHeader::default()
+        };
+        let all = encode_tree(&root, &header(false));
+        assert_eq!(all.lines().count(), 5, "{all}");
+        assert_eq!(
+            encode_tree(&root, &header(true)),
+            "tree visible 400x800 n:4 · 2 without text, label or id left out (all_rows shows them)\n\
+             [3] staticText \"Title\" 20,120 200x40 @120,140  ·has_text·short_text·wide·\n\
+             [4] other 340,120 40x40 @360,140  ·no_text·square·\n",
+            "the index SHALL stay that of the full list; a square or small row SHALL stay"
+        );
+    }
+
+    #[test]
     fn a_native_screen() {
         assert_eq!(
             encode_tree(&visible(&native_screen(), 0), &TreeHeader::default()),
@@ -288,6 +348,7 @@ mod tests {
         let header = TreeHeader {
             full: false,
             keyboard_height: 1400,
+            compact: false,
         };
         assert_eq!(
             encode_tree(&visible(&root, 1400), &header),
@@ -307,6 +368,7 @@ mod tests {
             &TreeHeader {
                 full: true,
                 keyboard_height: 0,
+                compact: false,
             },
         );
         let first = text.lines().next().unwrap_or_default();

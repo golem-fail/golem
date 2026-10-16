@@ -67,7 +67,7 @@ pub async fn run(args: &SessionArgs) -> Result<i32> {
         }
         SessionCommands::Tree(a) => {
             let json = a.output == TreeOutput::Json;
-            let msg = serde_json::json!({ "full": a.full, "json": json });
+            let msg = serde_json::json!({ "full": a.full, "json": json, "all_rows": a.all_rows });
             let reply = call(&a.name.name, "session_tree", msg, Connect::Attach).await?;
             print!("{}", done_text(&reply)?);
             Ok(0)

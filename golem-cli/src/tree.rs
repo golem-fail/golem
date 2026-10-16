@@ -130,6 +130,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         let header = golem_element::toon::TreeHeader {
             full: args.full,
             keyboard_height: meta.keyboard_height,
+            compact: false,
         };
         print!("{}", golem_element::toon::encode_tree(&display, &header));
     }

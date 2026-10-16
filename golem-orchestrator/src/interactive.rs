@@ -83,14 +83,19 @@ pub fn lease(
     })
 }
 
-/// The visible tree on `driver`'s screen, as TOON.
-pub async fn visible_tree(driver: &dyn golem_driver::PlatformDriver) -> Result<String> {
+/// The visible tree on `driver`'s screen, as TOON; `compact` leaves out
+/// the rows with nothing to select by.
+pub async fn visible_tree(
+    driver: &dyn golem_driver::PlatformDriver,
+    compact: bool,
+) -> Result<String> {
     let (root, meta) = driver.get_hierarchy().await?;
     let mut viewport = Viewport::from_root(&root);
     viewport.height -= meta.keyboard_height;
     let header = TreeHeader {
         full: false,
         keyboard_height: meta.keyboard_height,
+        compact,
     };
     Ok(encode_tree(&filter_viewport(&root, &viewport), &header))
 }

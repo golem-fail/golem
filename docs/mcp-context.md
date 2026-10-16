@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 477 |
-| Tool list (31 tools, as `tools/list` JSON) | 12993 |
-| Both, kept in context by most clients | 13470 |
+| Tool list (31 tools, as `tools/list` JSON) | 13076 |
+| Both, kept in context by most clients | 13553 |
 
 ## Instructions
 
@@ -516,13 +516,14 @@ The screen: one line per targetable element. Target by selector keys, not index.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `all_rows` | boolean | Also rows with no text, label or id. |
 | `format` | string | "toon" (default) or "json". |
 | `full` | boolean | Add off-screen elements: hint, never proof. |
 
-<details><summary>As <code>tools/list</code> sends it · 320 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 403 chars</summary>
 
 ```json
-{"name":"tree","description":"The screen: one line per targetable element. Target by selector keys, not index.","inputSchema":{"properties":{"format":{"description":"\"toon\" (default) or \"json\".","type":"string"},"full":{"description":"Add off-screen elements: hint, never proof.","type":"boolean"}},"type":"object"}}
+{"name":"tree","description":"The screen: one line per targetable element. Target by selector keys, not index.","inputSchema":{"properties":{"all_rows":{"description":"Also rows with no text, label or id.","type":"boolean"},"format":{"description":"\"toon\" (default) or \"json\".","type":"string"},"full":{"description":"Add off-screen elements: hint, never proof.","type":"boolean"}},"type":"object"}}
 ```
 
 </details>
