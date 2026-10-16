@@ -14,17 +14,26 @@ pub fn is_interactive() -> bool {
 /// Fail without a terminal, naming each `(command, what it does)` that
 /// works without one, and the command for the user to run in a terminal.
 pub fn require(command: &str, without: &[(&str, &str)]) -> Result<()> {
+    require_with(command, without, "")
+}
+
+/// [`require`], with a `note` line after the commands, such as the values
+/// they take.
+pub fn require_with(command: &str, without: &[(&str, &str)], note: &str) -> Result<()> {
     if is_interactive() {
         return Ok(());
     }
-    bail!("{}", message(command, without))
+    bail!("{}", message(command, without, note))
 }
 
-fn message(command: &str, without: &[(&str, &str)]) -> String {
+fn message(command: &str, without: &[(&str, &str)], note: &str) -> String {
     let mut out = format!("{command} is interactive and needs a terminal. Without one:\n");
     let width = without.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
     for (cmd, what) in without {
         out.push_str(&format!("  {cmd:<width$}    # {what}\n"));
+    }
+    if !note.is_empty() {
+        out.push_str(&format!("  {note}\n"));
     }
     out.push_str(&format!(
         "  or ask the user to run `{command}` in a terminal"
@@ -42,12 +51,14 @@ mod tests {
             message(
                 "golem install-script",
                 &[(
-                    "golem install-script --print expo",
+                    "golem install-script --print FRAMEWORK",
                     "read a template, then adapt it"
-                )]
+                )],
+                "frameworks: expo, flutter"
             ),
             "golem install-script is interactive and needs a terminal. Without one:\n  \
-             golem install-script --print expo    # read a template, then adapt it\n  \
+             golem install-script --print FRAMEWORK    # read a template, then adapt it\n  \
+             frameworks: expo, flutter\n  \
              or ask the user to run `golem install-script` in a terminal"
         );
     }
