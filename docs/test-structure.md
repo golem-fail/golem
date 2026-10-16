@@ -202,26 +202,26 @@ steps = [
 A device must match every key given. A skipped block's `next` and `[[block.branch]]` are not evaluated: the flow continues with the next block in document order.
 
 ### Branching
-<!-- summary: if_visible, if_not_visible or if_var, then goto a block -->
+<!-- summary: Arms race on the screen; the first that matches goes to its block, else the else or fail -->
 
-Control flow between blocks with conditions:
+A block's `branch` says where the flow goes after the block's steps. Each arm has a condition and a `goto`:
 
 ```toml
 [[block]]
-name = "check_state"
-steps = [
-  { action = "assert_visible", on_text = "Welcome", if_fail = "ignore" },
+name = "start"
+steps = [{ action = "launch", app = "app" }]
+branch = [
+  { if_visible = "Allow notifications", goto = "permissions" },
+  { if_visible = "Home", goto = "home" },
 ]
-
-[[block.branch]]
-if_visible = "Dashboard"
-goto = "already_logged_in"
-
-[[block.branch]]
-goto = "login_required"            # Unconditional fallback
 ```
 
-Branches are checked after the block's steps finish (for a `for_each` block, after the last row; for a `run_flow` block, after the child flow returns). They are checked in order, and the first match wins. If none matches, the flow continues with the next block in document order.
+The app opens on either screen. golem waits for the first one to show, and goes to its block as soon as it shows.
+
+**The arms race.** golem checks the arms after the block's steps finish (for a `for_each` block, after the last row; for a `run_flow` block, after the child flow returns). It first waits for the screen to settle, then reads one tree on each poll and checks each arm on it, in order. The first arm that matches wins.
+
+- `if_visible` and `if_not_visible` wait for their condition up to the timeout of `assert_visible`. Set `timeout` (in ms) on the arm to change that. `timeout = 0` checks once.
+- `if_var` arms are checked once, at once. A `timeout` on one is an error.
 
 | Condition | Matches when |
 |---|---|
@@ -230,14 +230,30 @@ Branches are checked after the block's steps finish (for a `for_each` block, aft
 | `if_var = "x"`, `equals = "…"` | the variable equals the string exactly |
 | `if_var = "x"`, `matches = "…"` | the variable matches the glob pattern |
 | `if_var = "x"`, `gte = N` | the variable, read as an integer, is ≥ `N` (an integer). A non-integer value never matches. |
-| (no condition) | always |
+| (no condition) | always: this arm is the else |
 
-`if_var` without `equals`, `matches` or `gte` never matches. A block with any `[[block.branch]]` ignores its `next`, even when no branch matches — put an unconditional `goto` last instead.
+`if_var` without `equals`, `matches` or `gte` never matches.
+
+**When no arm matches,** the flow takes the else: the last arm, if it has no condition, or the block's `next`. Without an else, the flow fails with `EF406`. The failure names the block, each arm and why it did not match, and the texts on the screen. A block with a branch never goes on to the next block in the file.
+
+```toml
+[[block]]
+name = "pay"
+steps = [{ action = "tap", on_text = "Pay" }]
+next = "receipt"                                      # the else
+branch = [{ if_visible = "Error", timeout = 0, goto = "retry" }]
+```
+
+golem checks the arms when it reads the flow:
+
+- An arm with no condition that is not the last arm is an error: the arms after it never run.
+- An arm with no condition and `next` on the same block is an error: both are the else.
+- Two arms with the same condition and timeout give a warning: the second never wins.
 
 ### Block `next`
-<!-- summary: Go to a named block after this one; ignored with branches -->
+<!-- summary: Go to a named block after this one; with a branch, the else -->
 
-Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
+Jump to a named block after completion (instead of falling through). On a block with a `branch`, `next` is the else: the flow goes there when no arm matches.
 
 ```toml
 [[block]]

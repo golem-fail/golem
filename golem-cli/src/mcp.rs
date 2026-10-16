@@ -923,7 +923,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's next; add branches. After its steps a block takes the first branch that holds; with branches, next is ignored and no match goes to the next block in the file. Without branches: next, else the next block."
+        description = "Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block."
     )]
     async fn block_link(
         &self,

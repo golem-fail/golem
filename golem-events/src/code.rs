@@ -95,6 +95,10 @@ pub enum FailureCode {
     FlowAssertionMismatch,
     /// F417: alert/dialog present but interaction failed (no/wrong buttons).
     FlowAlertInteraction,
+    /// F406: no branch arm matched, and the block has no else (an arm with
+    /// no condition, or `next`). A flow that went on to the next block in
+    /// the file instead would run in the wrong block.
+    FlowNoBranchMatched,
     /// F424: external action failed (bash/run/http non-zero, await_email no match).
     FlowExternalFailed,
     /// F504: flow max_runtime exceeded.
@@ -240,6 +244,7 @@ impl FailureCode {
             | FlowUnexpectedlyPresent
             | FlowAssertionMismatch
             | FlowAlertInteraction
+            | FlowNoBranchMatched
             | FlowExternalFailed
             | FlowMaxRuntime
             | FlowMaxSteps
@@ -308,6 +313,7 @@ impl FailureCode {
             FlowUnexpectedlyPresent => 409,
             FlowAssertionMismatch => 412,
             FlowAlertInteraction => 417,
+            FlowNoBranchMatched => 406,
             FlowExternalFailed => 424,
             FlowMaxRuntime => 504,
             FlowMaxSteps => 508,
@@ -353,7 +359,7 @@ impl FailureCode {
     }
 
     /// Every code, in registry order.
-    pub const ALL: [FailureCode; 48] = [
+    pub const ALL: [FailureCode; 49] = [
         Self::FlowExplicitFail,
         Self::FlowElementNotFound,
         Self::FlowElementOffscreen,
@@ -361,6 +367,7 @@ impl FailureCode {
         Self::FlowUnexpectedlyPresent,
         Self::FlowAssertionMismatch,
         Self::FlowAlertInteraction,
+        Self::FlowNoBranchMatched,
         Self::FlowExternalFailed,
         Self::FlowMaxRuntime,
         Self::FlowMaxSteps,
@@ -415,6 +422,7 @@ impl FailureCode {
             FlowUnexpectedlyPresent => "`assert_not_visible`: the element is still on screen.",
             FlowAssertionMismatch => "The alert or text did not match the expected value.",
             FlowAlertInteraction => "An alert is shown, but golem could not press its button.",
+            FlowNoBranchMatched => "No branch arm matched the screen, and the block has no else.",
             FlowExternalFailed => {
                 "A `bash`, `run` or HTTP step failed, or `await_email` found no match."
             }
@@ -490,6 +498,7 @@ impl FailureCode {
             FlowUnexpectedlyPresent => "Wait for the screen change first, or report the app bug.",
             FlowAssertionMismatch => "Fix the expected value, or report the app bug.",
             FlowAlertInteraction => "Name a button that the alert has.",
+            FlowNoBranchMatched => "Add an arm for the screen the flow saw, or an else: an arm with no condition, last, or `next`.",
             FlowExternalFailed => {
                 "Read the output or response; fix the script, endpoint or email filter."
             }

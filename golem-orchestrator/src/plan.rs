@@ -440,6 +440,21 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
                 )
             }),
     );
+    warnings.extend(
+        golem_parser::validation::lint_duplicate_branch_arms(flow)
+            .into_iter()
+            .map(|issue| {
+                format!(
+                    "{}:{}: branch arms {} and {} are the same ({}), so arm {} never wins",
+                    path.display(),
+                    issue.block_name.as_deref().unwrap_or("<unnamed>"),
+                    issue.first,
+                    issue.second,
+                    issue.condition,
+                    issue.second,
+                )
+            }),
+    );
     warnings
 }
 

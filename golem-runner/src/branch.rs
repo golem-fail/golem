@@ -1,113 +1,252 @@
+//! A block's branch: its arms race on one tree per poll, and the first arm
+//! that matches, in order, wins.
+
+use std::time::Duration;
+
+use tokio::time::Instant;
+
 use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_element::glob::GlobMatcher;
 use golem_element::selector::Selector;
-use golem_parser::BranchCondition;
+use golem_element::Element;
+use golem_parser::{Block, BranchCondition};
 use golem_vars::VariableStore;
 
-/// Evaluate an ordered list of branch conditions and return the target block name
-/// of the first matching condition. Returns `None` if no condition matches.
+const POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// How many texts of the last screen a no-match failure quotes.
+const SCREEN_TEXTS: usize = 12;
+
+/// Where the flow goes after `block`'s steps: the goto of the first arm that
+/// matches, else the else arm's goto, else the block's `next`.
+///
+/// Each poll reads one tree and checks each live arm on it, in order. A
+/// visibility arm stays live until its `timeout` (default: `assert_visible`'s)
+/// runs out, so `timeout = 0` checks once. An `if_var` arm is checked on the
+/// first poll only. The first poll reads a settled tree, so `if_not_visible`
+/// does not match a screen that is not drawn yet.
+///
+/// With no match and no else, the flow fails with F406: falling through to
+/// the next block in the file would run the flow in the wrong block.
 pub async fn evaluate_branch(
-    conditions: &[BranchCondition],
+    block: &Block,
     driver: &dyn PlatformDriver,
     vars: &VariableStore,
-) -> Result<Option<String>> {
-    for cond in conditions {
-        if matches_condition(cond, driver, vars).await? {
-            return Ok(Some(cond.goto.clone()));
+    base_timeout_ms: u64,
+) -> Result<String> {
+    let (arms, else_arm) = match block.branch.split_last() {
+        Some((last, rest)) if last.is_else() => (rest, Some(last)),
+        _ => (block.branch.as_slice(), None),
+    };
+    let default_ms = crate::policy::effective_timeout(
+        &golem_parser::Step {
+            action: "assert_visible".into(),
+            ..Default::default()
+        },
+        base_timeout_ms,
+    );
+    let start = Instant::now();
+    let deadlines: Vec<Option<Instant>> = arms
+        .iter()
+        .map(|a| {
+            a.is_screen()
+                .then(|| start + Duration::from_millis(a.timeout.unwrap_or(default_ms)))
+        })
+        .collect();
+    let mut live = vec![true; arms.len()];
+    let mut screen: Option<Element> = None;
+    let mut first = true;
+    loop {
+        let wants_tree = arms.iter().zip(&live).any(|(a, l)| *l && a.is_screen());
+        let tree = if wants_tree {
+            match read_tree(driver, first).await {
+                Ok(t) => Some(t),
+                Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
+                Err(_) if deadlines.iter().flatten().any(|d| Instant::now() < *d) => None,
+                Err(e) => return Err(e),
+            }
+        } else {
+            None
+        };
+        for (i, arm) in arms.iter().enumerate() {
+            if !live[i] {
+                continue;
+            }
+            let hit = if arm.is_screen() {
+                match &tree {
+                    Some((root, kb)) => screen_matches(arm, root, *kb),
+                    None => false,
+                }
+            } else {
+                live[i] = false;
+                var_matches(arm, vars)
+            };
+            if hit {
+                return Ok(arm.goto.clone());
+            }
         }
+        if let Some((root, _)) = tree {
+            screen = Some(root);
+        }
+        let now = Instant::now();
+        for (l, d) in live.iter_mut().zip(&deadlines) {
+            if d.is_some_and(|d| now >= d) {
+                *l = false;
+            }
+        }
+        first = false;
+        if !live.iter().any(|l| *l) {
+            break;
+        }
+        tokio::time::sleep(POLL_INTERVAL).await;
     }
-    Ok(None)
+    if let Some(arm) = else_arm {
+        return Ok(arm.goto.clone());
+    }
+    if let Some(next) = &block.next {
+        return Ok(next.clone());
+    }
+    Err(golem_events::coded(
+        golem_events::FailureCode::FlowNoBranchMatched,
+        anyhow::anyhow!("{}", no_match(block, arms, vars, screen.as_ref())),
+    ))
 }
 
-/// Matches for `text_pattern` in the visible tree, the same tree
-/// `assert_visible` judges against.
-async fn visible_text_matches(
-    driver: &dyn PlatformDriver,
-    text_pattern: &str,
-) -> Result<Vec<golem_element::FindResult>> {
-    let (hierarchy, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+/// The tree to check: settled on the first poll, as read after that. With
+/// the keyboard's height, which hides what lies under it.
+async fn read_tree(driver: &dyn PlatformDriver, settle: bool) -> Result<(Element, i32)> {
+    if settle {
+        let (root, meta, _) = crate::resolution::wait_for_settle(driver).await?;
+        return Ok((root, meta.keyboard_height));
+    }
+    let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+    Ok((root, meta.keyboard_height))
+}
+
+/// Whether a visibility arm holds on `root`'s visible tree, the tree
+/// `assert_visible` judges.
+fn screen_matches(arm: &BranchCondition, root: &Element, keyboard_height: i32) -> bool {
+    let (text, want) = match (&arm.if_visible, &arm.if_not_visible) {
+        (Some(t), _) => (t, true),
+        (_, Some(t)) => (t, false),
+        _ => return false,
+    };
     let selector = Selector {
-        text: Some(text_pattern.to_string()),
+        text: Some(text.clone()),
         ..Selector::default()
     };
-    let (_, _, results) =
-        crate::resolution::visible_matches(&hierarchy, meta.keyboard_height, &selector);
-    Ok(results)
+    let (_, _, results) = crate::resolution::visible_matches(root, keyboard_height, &selector);
+    results.is_empty() != want
 }
 
-/// Check whether a single branch condition matches the current state.
-async fn matches_condition(
-    cond: &BranchCondition,
-    driver: &dyn PlatformDriver,
+/// Whether an `if_var` arm holds. An unset variable, or one that is not a
+/// string, matches nothing.
+fn var_matches(arm: &BranchCondition, vars: &VariableStore) -> bool {
+    let Some(name) = &arm.if_var else {
+        return false;
+    };
+    let Some(value) = vars.get(name).and_then(|v| v.as_str().map(str::to_string)) else {
+        return false;
+    };
+    if let Some(expected) = &arm.equals {
+        return &value == expected;
+    }
+    if let Some(pattern) = &arm.matches {
+        return GlobMatcher::new(pattern).is_match(&value);
+    }
+    if let Some(threshold) = arm.gte {
+        return value.parse::<i64>().is_ok_and(|n| n >= threshold);
+    }
+    false
+}
+
+/// The F406 message: the block, each arm and why it did not match, and
+/// what the screen showed.
+fn no_match(
+    block: &Block,
+    arms: &[BranchCondition],
     vars: &VariableStore,
-) -> Result<bool> {
-    // Screen-based: if_visible
-    if let Some(ref text_pattern) = cond.if_visible {
-        let results = visible_text_matches(driver, text_pattern).await?;
-        return Ok(!results.is_empty());
+    screen: Option<&Element>,
+) -> String {
+    let name = block.name.as_deref().unwrap_or("<unnamed>");
+    let mut out = format!("block {name:?}: no branch arm matched, and the block has no else");
+    for arm in arms {
+        let why = if arm.is_screen() {
+            let ms = arm
+                .timeout
+                .map_or(String::new(), |t| format!(", timeout {t}ms"));
+            format!("not on screen{ms}")
+        } else {
+            match arm.if_var.as_deref().and_then(|n| vars.get(n)) {
+                Some(v) => format!("value {:?}", v.as_str().unwrap_or("<not a string>")),
+                None => "not set".to_string(),
+            }
+        };
+        out.push_str(&format!("\n  {} → {}: {why}", arm.describe(), arm.goto));
     }
-
-    // Screen-based: if_not_visible
-    if let Some(ref text_pattern) = cond.if_not_visible {
-        let results = visible_text_matches(driver, text_pattern).await?;
-        return Ok(results.is_empty());
+    if let Some(root) = screen {
+        let mut texts = Vec::new();
+        collect_texts(root, &mut texts);
+        let more = texts.len().saturating_sub(SCREEN_TEXTS);
+        texts.truncate(SCREEN_TEXTS);
+        if texts.is_empty() {
+            out.push_str("\n  screen: no text");
+        } else {
+            let quoted: Vec<String> = texts.iter().map(|t| format!("{t:?}")).collect();
+            out.push_str(&format!("\n  screen: {}", quoted.join(", ")));
+        }
+        if more > 0 {
+            out.push_str(&format!(", and {more} more"));
+        }
     }
+    out
+}
 
-    // Variable-based: if_var + (equals | matches | gte)
-    if let Some(ref var_name) = cond.if_var {
-        let value = vars.get(var_name);
-
-        // if_var + equals
-        if let Some(ref expected) = cond.equals {
-            return match value {
-                Some(val) => match val.as_str() {
-                    Some(s) => Ok(s == expected),
-                    None => Ok(false),
-                },
-                None => Ok(false),
-            };
-        }
-
-        // if_var + matches (glob)
-        if let Some(ref pattern) = cond.matches {
-            return match value {
-                Some(val) => match val.as_str() {
-                    Some(s) => {
-                        let matcher = GlobMatcher::new(pattern);
-                        Ok(matcher.is_match(s))
-                    }
-                    None => Ok(false),
-                },
-                None => Ok(false),
-            };
-        }
-
-        // if_var + gte
-        if let Some(threshold) = cond.gte {
-            return match value {
-                Some(val) => match val.as_str() {
-                    Some(s) => match s.parse::<i64>() {
-                        Ok(num) => Ok(num >= threshold),
-                        Err(_) => Ok(false),
-                    },
-                    None => Ok(false),
-                },
-                None => Ok(false),
-            };
-        }
-
-        // if_var specified but no comparison operator -- treat as undefined, skip
-        return Ok(false);
+fn collect_texts(e: &Element, out: &mut Vec<String>) {
+    if let Some(t) = e
+        .text
+        .as_deref()
+        .or(e.accessibility_label.as_deref())
+        .filter(|t| !t.trim().is_empty())
+    {
+        out.push(t.to_string());
     }
-
-    // Default condition: no if_visible, if_not_visible, or if_var -- always matches
-    Ok(true)
+    for c in &e.children {
+        collect_texts(c, out);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One poll, as the branch checked before arms waited: each screen arm
+    /// with `timeout = 0`, and `None` when no arm matches.
+    async fn eval(
+        conditions: &[BranchCondition],
+        driver: &dyn PlatformDriver,
+        vars: &VariableStore,
+    ) -> Result<Option<String>> {
+        let mut block: Block = toml::from_str("name = \"b\"").expect("block");
+        block.branch = conditions
+            .iter()
+            .map(|c| BranchCondition {
+                timeout: c.is_screen().then_some(0),
+                ..c.clone()
+            })
+            .collect();
+        match evaluate_branch(&block, driver, vars, 1000).await {
+            Ok(target) => Ok(Some(target)),
+            Err(e)
+                if golem_events::extract_code(&e)
+                    == Some(golem_events::FailureCode::FlowNoBranchMatched) =>
+            {
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
     use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
@@ -181,6 +320,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -193,6 +333,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -205,6 +346,7 @@ mod tests {
             equals: Some(equals.to_string()),
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -217,6 +359,7 @@ mod tests {
             equals: None,
             matches: Some(pattern.to_string()),
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -229,6 +372,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: Some(threshold),
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -241,6 +385,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -248,13 +393,108 @@ mod tests {
     // ---------------------------------------------------------------
     // 1. if_visible matches when element exists
     // ---------------------------------------------------------------
+    fn block_of(branch: Vec<BranchCondition>) -> Block {
+        let mut block: Block = toml::from_str("name = \"start\"").expect("block");
+        block.branch = branch;
+        block
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_arm_whose_screen_appears_first_wins_as_soon_as_it_appears() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Home"]));
+        for _ in 0..4 {
+            driver.push_hierarchy(empty_hierarchy());
+        }
+        let block = block_of(vec![
+            cond_if_visible("Allow notifications", "permissions"),
+            cond_if_visible("Home", "home"),
+        ]);
+        let start = Instant::now();
+        let target = evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
+            .await
+            .expect("an arm matches");
+        assert_eq!(target, "home");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "SHALL win when the screen appears, not at the timeout: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_screen_arm_waits_its_timeout_and_timeout_0_checks_once() {
+        let vars = make_vars(&[]);
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut arm = cond_if_visible("Home", "home");
+        let assert_ms = crate::policy::effective_timeout(
+            &golem_parser::Step {
+                action: "assert_visible".into(),
+                ..Default::default()
+            },
+            10_000,
+        );
+        for (timeout, at_least, below) in [
+            (None, assert_ms, assert_ms + 1_000),
+            (Some(2_000), 2_000, 3_000),
+            (Some(0), 0, 1_000),
+        ] {
+            arm.timeout = timeout;
+            let start = Instant::now();
+            let err = evaluate_branch(&block_of(vec![arm.clone()]), &driver, &vars, 10_000)
+                .await
+                .expect_err("Home never shows");
+            let ms = start.elapsed().as_millis() as u64;
+            assert!(
+                (at_least..below).contains(&ms),
+                "{timeout:?}: waited {ms}ms"
+            );
+            assert_eq!(
+                golem_events::extract_code(&err),
+                Some(golem_events::FailureCode::FlowNoBranchMatched)
+            );
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_if_var_arm_is_checked_once_and_a_later_screen_arm_still_waits() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Home"]));
+        for _ in 0..3 {
+            driver.push_hierarchy(empty_hierarchy());
+        }
+        let vars = make_vars(&[("plan", "free")]);
+        let block = block_of(vec![
+            cond_if_var_equals("plan", "pro", "pro"),
+            cond_if_visible("Home", "home"),
+        ]);
+        assert_eq!(
+            evaluate_branch(&block, &driver, &vars, 10_000)
+                .await
+                .expect("Home shows"),
+            "home"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn with_no_match_the_else_arm_wins_without_waiting_on_it() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut arm = cond_if_visible("Home", "home");
+        arm.timeout = Some(0);
+        let block = block_of(vec![arm, cond_default("fallback")]);
+        assert_eq!(
+            evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
+                .await
+                .expect("the else"),
+            "fallback"
+        );
+    }
+
     #[tokio::test]
     async fn if_visible_matches_when_element_exists() {
         let driver = MockPlatformDriver::new(hierarchy_with_text(&["Try Premium Free"]));
         let vars = VariableStore::new();
         let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("premium".to_string()));
@@ -269,7 +509,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -284,7 +524,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("free_flow".to_string()));
@@ -299,7 +539,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -322,7 +562,7 @@ mod tests {
         let driver = MockPlatformDriver::new(hierarchy_with_offscreen_text("Try Premium Free"));
         let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &VariableStore::new())
+        let result = eval(&conditions, &driver, &VariableStore::new())
             .await
             .expect("should not error");
         assert_eq!(result, Some("free_flow".to_string()));
@@ -333,7 +573,7 @@ mod tests {
         let driver = MockPlatformDriver::new(hierarchy_with_offscreen_text("Try Premium Free"));
         let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
 
-        let result = evaluate_branch(&conditions, &driver, &VariableStore::new())
+        let result = eval(&conditions, &driver, &VariableStore::new())
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -348,7 +588,7 @@ mod tests {
         let vars = make_vars(&[("variant", "premium")]);
         let conditions = vec![cond_if_var_equals("variant", "premium", "premium_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("premium_flow".to_string()));
@@ -363,7 +603,7 @@ mod tests {
         let vars = make_vars(&[("variant", "free")]);
         let conditions = vec![cond_if_var_equals("variant", "premium", "premium_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -378,7 +618,7 @@ mod tests {
         let vars = make_vars(&[("country", "JP-Tokyo")]);
         let conditions = vec![cond_if_var_matches("country", "JP*", "japan_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("japan_flow".to_string()));
@@ -393,7 +633,7 @@ mod tests {
         let vars = make_vars(&[("country", "US-California")]);
         let conditions = vec![cond_if_var_matches("country", "JP*", "japan_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -408,7 +648,7 @@ mod tests {
         let vars = make_vars(&[("_loop", "10")]);
         let conditions = vec![cond_if_var_gte("_loop", 10, "timeout_error")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("timeout_error".to_string()));
@@ -423,7 +663,7 @@ mod tests {
         let vars = make_vars(&[("_loop", "5")]);
         let conditions = vec![cond_if_var_gte("_loop", 10, "timeout_error")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -438,7 +678,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_default("fallback")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("fallback".to_string()));
@@ -457,7 +697,7 @@ mod tests {
             cond_default("fallback"),
         ];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("first_match".to_string()));
@@ -475,7 +715,7 @@ mod tests {
             cond_if_var_equals("variant", "enterprise", "enterprise_flow"),
         ];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -490,7 +730,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions: Vec<BranchCondition> = vec![];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -509,7 +749,7 @@ mod tests {
             cond_default("fallback"),
         ];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("fallback".to_string()));
@@ -524,7 +764,7 @@ mod tests {
         let vars = VariableStore::new(); // no variables set
         let conditions = vec![cond_if_var_equals("missing_var", "anything", "target")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -539,7 +779,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_visible("Try *", "premium")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("premium".to_string()));
@@ -554,7 +794,7 @@ mod tests {
         let vars = make_vars(&[("_loop", "not_a_number")]);
         let conditions = vec![cond_if_var_gte("_loop", 10, "timeout_error")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -575,7 +815,7 @@ mod tests {
 
         // "Try Premium Free" is NOT visible, so first condition fails.
         // variant == "premium" matches, so second condition wins.
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("premium_flow".to_string()));
@@ -596,7 +836,7 @@ mod tests {
 
         // "Try Premium Free" is absent, skip.
         // "Get Started" is present — wins.
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("free".to_string()));
@@ -618,7 +858,7 @@ mod tests {
 
         let conditions = vec![cond_if_var_equals("user", "Alice", "user_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &store)
+        let result = eval(&conditions, &driver, &store)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -633,7 +873,7 @@ mod tests {
         let vars = make_vars(&[("_loop", "15")]);
         let conditions = vec![cond_if_var_gte("_loop", 10, "timeout_error")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("timeout_error".to_string()));
@@ -648,7 +888,7 @@ mod tests {
         let vars = make_vars(&[("country", "US")]);
         let conditions = vec![cond_if_var_matches("country", "US", "us_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("us_flow".to_string()));
@@ -663,7 +903,7 @@ mod tests {
         let vars = make_vars(&[("region", "A1")]);
         let conditions = vec![cond_if_var_matches("region", "A?", "region_a_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("region_a_flow".to_string()));
@@ -678,7 +918,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_var_gte("counter", 5, "loop_end")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -693,7 +933,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_var_matches("missing", "JP*", "japan_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -709,7 +949,7 @@ mod tests {
         // "Error *" is not present — should match
         let conditions = vec![cond_if_not_visible("Error *", "success_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("success_flow".to_string()));
@@ -724,7 +964,7 @@ mod tests {
         let vars = make_vars(&[("score", "-3")]);
         let conditions = vec![cond_if_var_gte("score", -5, "above_min")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("above_min".to_string()));
@@ -745,10 +985,11 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            timeout: None,
             goto: "orphan".to_string(),
         }];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -763,7 +1004,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_visible("Anything", "target")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, None);
@@ -778,7 +1019,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_not_visible("Anything", "empty_screen")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(result, Some("empty_screen".to_string()));
@@ -802,10 +1043,11 @@ mod tests {
             equals: Some("premium".to_string()),
             matches: None,
             gte: None,
+            timeout: None,
             goto: "target".to_string(),
         }];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -831,10 +1073,11 @@ mod tests {
             equals: Some("free".to_string()),
             matches: None,
             gte: None,
+            timeout: None,
             goto: "target".to_string(),
         }];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -861,10 +1104,11 @@ mod tests {
             equals: Some("premium".to_string()),
             matches: Some("*".to_string()),
             gte: Some(0),
+            timeout: None,
             goto: "target".to_string(),
         }];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -892,10 +1136,11 @@ mod tests {
             equals: None,
             matches: Some("JP*".to_string()),
             gte: Some(0),
+            timeout: None,
             goto: "target".to_string(),
         }];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -914,7 +1159,7 @@ mod tests {
         let vars = make_vars(&[("note", "")]);
         let conditions = vec![cond_if_var_equals("note", "", "blank_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -934,7 +1179,7 @@ mod tests {
         let vars = make_vars(&[("count", "0")]);
         let conditions = vec![cond_if_var_gte("count", 0, "boundary")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -954,7 +1199,7 @@ mod tests {
         let vars = make_vars(&[("score", "-6")]);
         let conditions = vec![cond_if_var_gte("score", -5, "above_min")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars)
+        let result = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error");
         assert_eq!(
@@ -977,7 +1222,7 @@ mod tests {
         let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
 
         // 2. evaluate_branch SHALL return the underlying fetch error.
-        let result = evaluate_branch(&conditions, &driver, &vars).await;
+        let result = eval(&conditions, &driver, &vars).await;
 
         assert!(
             result.is_err(),
@@ -1003,7 +1248,7 @@ mod tests {
         let vars = VariableStore::new();
         let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
 
-        let result = evaluate_branch(&conditions, &driver, &vars).await;
+        let result = eval(&conditions, &driver, &vars).await;
 
         let message = result
             .expect_err("expected Err from failing fetch")
@@ -1027,12 +1272,12 @@ mod tests {
         let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
 
         // 1. While the error is set, evaluation fails.
-        let failed = evaluate_branch(&conditions, &driver, &vars).await;
+        let failed = eval(&conditions, &driver, &vars).await;
         assert!(failed.is_err(), "set_error SHALL make evaluation fail");
 
         // 2. After clearing, evaluation succeeds and the condition matches.
         driver.clear_error("get_hierarchy");
-        let recovered = evaluate_branch(&conditions, &driver, &vars)
+        let recovered = eval(&conditions, &driver, &vars)
             .await
             .expect("should not error after clear_error");
         assert_eq!(

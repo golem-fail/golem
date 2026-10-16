@@ -275,11 +275,10 @@ pub struct DeviceFilter {
     pub physical: Option<bool>,
 }
 
-/// One entry in a block's `[[block.branch]]` list: an optional condition
-/// (visibility check or `if_var` comparison) and where to jump if it holds.
-/// A branch with no condition fields set is an unconditional `goto` —
-/// typically the last entry, acting as a default/else case.
-#[derive(Deserialize, Debug, Clone)]
+/// One arm of a block's `branch` list: an optional condition (a
+/// visibility check or an `if_var` comparison) and where to go if it holds.
+/// An arm with no condition is the else: it must be the last arm.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BranchCondition {
     pub if_visible: Option<String>,
@@ -288,7 +287,41 @@ pub struct BranchCondition {
     pub equals: Option<String>,
     pub matches: Option<String>,
     pub gte: Option<i64>,
+    /// How long a visibility arm waits, in ms; 0 checks once. Default: the
+    /// timeout of `assert_visible`.
+    pub timeout: Option<u64>,
     pub goto: String,
+}
+
+impl BranchCondition {
+    /// The arm checks the screen.
+    pub fn is_screen(&self) -> bool {
+        self.if_visible.is_some() || self.if_not_visible.is_some()
+    }
+
+    /// The arm has no condition: the else.
+    pub fn is_else(&self) -> bool {
+        !self.is_screen() && self.if_var.is_none()
+    }
+
+    /// The condition as written, for messages: `if_visible "Home"`.
+    pub fn describe(&self) -> String {
+        if let Some(t) = &self.if_visible {
+            format!("if_visible {t:?}")
+        } else if let Some(t) = &self.if_not_visible {
+            format!("if_not_visible {t:?}")
+        } else if let Some(v) = &self.if_var {
+            let cmp = match (&self.equals, &self.matches, self.gte) {
+                (Some(e), _, _) => format!("equals {e:?}"),
+                (_, Some(m), _) => format!("matches {m:?}"),
+                (_, _, Some(g)) => format!("gte {g}"),
+                _ => String::new(),
+            };
+            format!("if_var {v} {cmp}").trim_end().to_string()
+        } else {
+            "else".to_string()
+        }
+    }
 }
 
 /// An anchor for relational selectors — either a text pattern or a nested selector group.
