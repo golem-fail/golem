@@ -454,6 +454,8 @@ Only an explicit `session_close` runs the teardown. A teardown can change the ap
 
 `session_open(flow = "e2e/login.test.toml")` runs the flow first, as `golem run` would: install, apps, launch and steps. Then the session opens where the flow stops, with the flow's variables.
 
+Before any device work, golem checks the flow as `export_flow` does. A flow that fails the check opens no session, and the result names each error. The warnings that `golem run` would print are in the result too, so a flow written by hand gets the same check as an exported one.
+
 - `stop_at = "block"` or `"block:step"` stops the flow before that step. Steps count from 1.
 - `break_on_failure = true` opens the session at a failed step, so that you can look at the screen. Without it, a failed flow ends as `golem run` ends it, and no session opens.
 - `run = false` installs the app and does the setup, but runs no steps. The cursor is before the first step of the start block. Use it to edit a flow. Do not give `stop_at` with `run = false`.

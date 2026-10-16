@@ -1261,7 +1261,7 @@ async fn open_flow(
     };
     let (project, _) = crate::project::ProjectConfig::load_from(&req.project_root)?;
     let stub = cfg!(debug_assertions) && f.stub;
-    let slot = check_flow(
+    let (slot, warnings) = check_flow(
         &path,
         &project.apps,
         &req.project_root,
@@ -1352,6 +1352,9 @@ async fn open_flow(
         anyhow::bail!("the flow did not reach the session, so no session opened:\n{toon}");
     };
     let mut summary = toon;
+    for w in &warnings {
+        summary.push_str(&format!("warning: {w}\n"));
+    }
     match (&h.failure, &h.stopped_at) {
         (Some(failure), _) => {
             summary.push_str(&format!("session open at the failed step: {failure}\n"))
@@ -1409,16 +1412,21 @@ fn flow_query(query: &TargetQuery, slot: &crate::plan::DeviceSlot) -> TargetQuer
     q
 }
 
-/// Refuse a flow that would not run as one session on one device, and a
-/// `stop_at` it does not have, before any device work. Returns the flow's
-/// one device slot.
+/// Refuse a flow that would not run as one session on one device, that
+/// fails the check `export_flow` runs, or that has no `stop_at`, before any
+/// device work. Returns the flow's one device slot, and the warnings that
+/// `golem run` would print.
 async fn check_flow(
     path: &std::path::Path,
     apps: &[golem_parser::ProjectAppConfig],
     project_root: &std::path::Path,
     platform: Option<golem_devices::Platform>,
     stop_at: Option<&golem_runner::context::StopAt>,
-) -> Result<crate::plan::DeviceSlot> {
+) -> Result<(crate::plan::DeviceSlot, Vec<String>)> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let warnings = crate::plan::check_flow_text(&text, path, project_root)
+        .with_context(|| path.display().to_string())?;
     let planned = crate::plan::plan(
         &[path.to_path_buf()],
         apps,
@@ -1449,7 +1457,9 @@ async fn check_flow(
             platform.map_or_else(String::new, |p| p.to_string())
         ),
     };
-    let Some(stop) = stop_at else { return Ok(slot) };
+    let Some(stop) = stop_at else {
+        return Ok((slot, warnings));
+    };
     let flow = &planned.flows[0].flow;
     let Some(block) = flow
         .block
@@ -1477,7 +1487,7 @@ async fn check_flow(
             block.steps.len()
         );
     }
-    Ok(slot)
+    Ok((slot, warnings))
 }
 
 /// The steps a flow run passed, as (block label, 0-based step).
@@ -3972,6 +3982,45 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
                 other => panic!("{stop} SHALL fail: {other:?}"),
             }
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_flow_open_checks_the_flow_as_export_flow_does() {
+        let (dir, _) = flow_dir();
+        let path = dir.path().join("s.test.toml");
+        let text = std::fs::read_to_string(&path).expect("flow");
+        std::fs::write(
+            &path,
+            text.replace("name = \"one\"\n", "name = \"one\"\nnext = \"nowhere\"\n"),
+        )
+        .expect("flow");
+        let s = open_flow(dir.path(), None, true);
+        match s.wait(Duration::from_secs(30)).await {
+            Waited::Done(Outcome {
+                result: OpResult::Failed(e),
+                ..
+            }) => assert!(
+                e.contains("nowhere") && e.contains("does not validate"),
+                "{e}"
+            ),
+            other => panic!("SHALL fail before device work: {other:?}"),
+        }
+
+        std::fs::write(
+            &path,
+            text.replace(
+                "on_text = \"${target}\" }",
+                "on_text = \"${target}\", on_txt = \"x\" }",
+            ),
+        )
+        .expect("flow");
+        let s = open_flow(dir.path(), Some("two:2"), false);
+        let summary = opened(&s).await;
+        assert!(
+            summary.contains("warning: ") && summary.contains("on_txt"),
+            "the warnings golem run gives SHALL be in the result: {summary}"
+        );
+        s.close("closed", false).await;
     }
 
     #[tokio::test]
