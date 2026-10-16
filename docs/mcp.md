@@ -435,7 +435,7 @@ golem tests as a person does. A step finds its element only in the visible tree:
 
 A session holds one device, one app, the variables and a flow draft. Each MCP server has one session at a time.
 
-1. `session_open` picks the device and the app. It can first run a flow (see below). If the project has mixins, fixtures or subflows, its result names how many of each, for example `reuse: 2 mixins, 1 subflow (reuse_list)`. `devices` lists every device in any state, with the port of a live companion.
+1. `session_open` picks the device and the app. It can first run a flow (see below). If the project has mixins, fixtures or subflows, its result names how many of each, for example `reuse: 2 mixins, 1 subflow (reuse_list)`. If the project lacks a part that golem needs to install its apps, the result says so, one line for each part: `setup: no golem.toml · golem init creates one`, or `setup: app "x" has no install_script · help("install")`. `golem doctor` checks the same parts. `devices` lists every device in any state, with the port of a live companion.
 2. `act`, `probe`, `tree`, `screenshot` and `app_logs` work on that device.
 3. `session_close` ends the session and releases the device.
 
