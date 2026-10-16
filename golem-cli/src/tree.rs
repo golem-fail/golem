@@ -58,6 +58,13 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     };
 
     println!("── {name} ({platform}, port {port}) ──");
+    if !bundle.is_empty() {
+        if let Some(w) =
+            golem_orchestrator::interactive::foreground_warning(driver.as_ref(), bundle).await
+        {
+            println!("{w}");
+        }
+    }
 
     if args.verbose {
         println!("  device_id: {device_id}");

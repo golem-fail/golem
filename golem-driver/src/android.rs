@@ -884,6 +884,21 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
+    async fn app_running(&self, bundle_id: &str) -> Result<Option<bool>> {
+        // `pidof` exits 1 when nothing runs; `|| true` keeps that an answer.
+        let out = self
+            .adb(&["shell", "pidof", bundle_id, "||", "true"])
+            .await?;
+        Ok(Some(!out.trim().is_empty()))
+    }
+
+    async fn foreground_app(&self) -> Result<Option<String>> {
+        let out = self
+            .adb(&["shell", "dumpsys", "activity", "activities"])
+            .await?;
+        Ok(resumed_package(&out))
+    }
+
     async fn app_logs(
         &self,
         bundle_id: &str,
@@ -1243,9 +1258,27 @@ fn parse_launcher_component(output: &str, bundle_id: &str) -> Option<String> {
     (package == bundle_id && !activity.is_empty()).then(|| last.to_string())
 }
 
+/// The package of the resumed activity in `dumpsys activity activities`.
+fn resumed_package(dumpsys: &str) -> Option<String> {
+    dumpsys
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("topResumedActivity=") || l.starts_with("ResumedActivity:"))
+        .and_then(|l| l.split_whitespace().find(|w| w.contains('/')))
+        .and_then(|w| w.split('/').next())
+        .map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_resumed_package_comes_from_dumpsys() {
+        let out = "  Display #0\n    topResumedActivity=ActivityRecord{70598017 u0 fail.golem.test/.MainActivity t71}\n  ResumedActivity: ActivityRecord{1 u0 other.app/.Main t2}\n";
+        assert_eq!(resumed_package(out).as_deref(), Some("fail.golem.test"));
+        assert_eq!(resumed_package("nothing resumed\n"), None);
+    }
     use golem_element::Bounds;
 
     #[test]

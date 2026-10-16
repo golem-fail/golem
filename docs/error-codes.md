@@ -70,6 +70,7 @@ Codes appear in every output format:
 | `A501` | The app shows a React Native error overlay instead of its UI. | Fix the JavaScript error that the overlay names. |
 | `A502` | golem could not read the app's state after the install. | Check that the app installed; install it again. |
 | `A503` | The app did not launch or stop. | Check the bundle id and the app's crash log (`app_logs`). |
+| `A504` | The app's process exited: it crashed, often at launch. | Read the crash in the app's log (`app_logs`, or `golem session logs`). |
 | `D404` | No device matches. | Boot or connect a device; `golem devices` lists them. |
 | `D408` | The device did not finish booting in time. | Boot the simulator or emulator by hand once, and check its image. |
 | `D409` | Every matching device stayed busy past `--max-device-wait`. | Free a device, add a device, or raise `--max-device-wait`. |

@@ -492,6 +492,9 @@ pub struct LogEntry {
 
 /// The state an operation works on. One operation holds it at a time.
 struct Work {
+    /// The app the session names, as `--bundle` gave it; empty when the
+    /// session names it through `apps`, or names none.
+    bundle: String,
     device: DeviceInfo,
     driver: Arc<dyn PlatformDriver>,
     leases: Vec<DeviceLease>,
@@ -971,11 +974,21 @@ fn stub_parts(project_root: PathBuf) -> Parts {
 }
 
 impl Work {
+    /// The session's app: its bundle, else the first app's.
+    fn app_bundle(&self) -> Option<&str> {
+        Some(self.bundle.as_str())
+            .filter(|b| !b.is_empty())
+            .or_else(|| self.apps.first().and_then(|a| a.bundle.as_deref()))
+    }
+}
+
+impl Work {
     fn from_parts(parts: Parts) -> Work {
         let mut vars = golem_vars::VariableStore::new();
         vars.push_scope(golem_vars::Scope::new(golem_vars::ScopeLevel::Flow));
         let draft = new_draft(&parts.device, &parts.apps);
         Work {
+            bundle: parts.bundle,
             capture: capture_for(&parts.project_root),
             device: parts.device,
             driver: parts.driver,
@@ -2083,9 +2096,19 @@ const RESTARTED: &str = "companion restarted: it had stopped answering";
 /// A read-only operation: the tree, a probe or a screenshot.
 async fn read(work: &Work, op: &Op) -> Result<OpResult> {
     match op {
-        Op::Tree { full, json } => Ok(OpResult::Tree(
-            read_tree(work.driver.as_ref(), *full, *json).await?,
-        )),
+        Op::Tree { full, json } => {
+            let tree = read_tree(work.driver.as_ref(), *full, *json).await?;
+            let warning = match (work.app_bundle(), json) {
+                (Some(bundle), false) => {
+                    crate::interactive::foreground_warning(work.driver.as_ref(), bundle).await
+                }
+                _ => None,
+            };
+            Ok(OpResult::Tree(match warning {
+                Some(w) => format!("{w}\n{tree}"),
+                None => tree,
+            }))
+        }
         Op::Probe {
             selector,
             timeout_ms,
@@ -2624,6 +2647,51 @@ mod tests {
             },
             idle,
         )
+    }
+
+    #[tokio::test]
+    async fn the_tree_warns_when_the_session_app_is_not_on_screen() {
+        let tree_of = |driver: MockPlatformDriver| async move {
+            let s = session_on(Arc::new(driver), None, Duration::from_secs(60));
+            match run(
+                &s,
+                Op::Tree {
+                    full: false,
+                    json: false,
+                },
+            )
+            .await
+            .result
+            {
+                OpResult::Tree(t) => t,
+                other => panic!("{other:?}"),
+            }
+        };
+        let d = MockPlatformDriver::new(screen());
+        d.set_foreground_app(Some("com.other"));
+        let t = tree_of(d).await;
+        assert!(
+            t.starts_with(
+                "warning: the app in the foreground is com.other, not fail.golem.test\ntree "
+            ),
+            "{t}"
+        );
+
+        let d = MockPlatformDriver::new(screen());
+        d.set_app_running(Some(false));
+        let t = tree_of(d).await;
+        assert!(
+            t.starts_with("warning: fail.golem.test is not running"),
+            "{t}"
+        );
+
+        for (fg, running) in [(Some("fail.golem.test"), Some(false)), (None, None)] {
+            let d = MockPlatformDriver::new(screen());
+            d.set_foreground_app(fg);
+            d.set_app_running(running);
+            let t = tree_of(d).await;
+            assert!(t.starts_with("tree "), "{fg:?} {running:?}: {t}");
+        }
     }
 
     #[tokio::test]

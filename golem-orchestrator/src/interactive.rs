@@ -83,6 +83,24 @@ pub fn lease(
     })
 }
 
+/// A first line for the tree when `bundle` is not the app on screen: the
+/// tree then shows another app, so a step would act on that one.
+pub async fn foreground_warning(
+    driver: &dyn golem_driver::PlatformDriver,
+    bundle: &str,
+) -> Option<String> {
+    if let Ok(Some(fg)) = driver.foreground_app().await {
+        return (fg != bundle)
+            .then(|| format!("warning: the app in the foreground is {fg}, not {bundle}"));
+    }
+    match driver.app_running(bundle).await {
+        Ok(Some(false)) => Some(format!(
+            "warning: {bundle} is not running, so the tree shows another app; app_logs shows why it stopped"
+        )),
+        _ => None,
+    }
+}
+
 /// The visible tree on `driver`'s screen, as TOON.
 pub async fn visible_tree(driver: &dyn golem_driver::PlatformDriver) -> Result<String> {
     let (root, meta) = driver.get_hierarchy().await?;
