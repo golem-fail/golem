@@ -1,42 +1,26 @@
 ### expo
 <!-- summary: Expo prebuild and a local Release build, or EAS; golem run --dev -->
 
-Expo / React Native. One cross-platform script honouring `EXPO_BUILD_MODE`:
-- `local` (default): `expo prebuild` + a **Release** native build (embeds the JS bundle → runs offline, no Metro), then `simctl` / `adb` install. Fully local — no Expo account, works on a simulator/emulator with no signing account.
-- `eas`: build in the cloud via EAS, download the artifact, install it. Reuses the latest finished build unless `GOLEM_REBUILD=1`. Needs `EXPO_TOKEN`. **Written but unverified in golem's own CI** (no account) — validate against a real project before relying on it.
+Expo / React Native, one script for both platforms. `EXPO_BUILD_MODE` picks the build:
 
-Detects package manager from lockfiles; auto-discovers the iOS scheme from the generated app project when not set.
+- `local` (default): `expo prebuild`, then a **Release** native build, then `simctl` or `adb` install. The build embeds the JS bundle, so the app runs without Metro. It needs no Expo account and no signing account on a simulator or emulator.
+- `eas`: an EAS cloud build, downloaded and installed. It uses the latest finished build unless `GOLEM_REBUILD=1`, and needs `EXPO_TOKEN`. **golem's own CI does not test this mode**, so try it on your project first.
 
-Expo (managed) only — it relies on `expo prebuild` to generate the native projects. **Bare React Native** (a `@react-native-community/cli` project with no `expo` dependency) commits its own `ios/` + `android/` and has no `prebuild`; use **native-ios** + **native-android** for those.
+The script finds the package manager from the lockfile, and the iOS scheme from the generated project.
 
-**Iterating on JS: `golem run --dev`.** A Release build embeds the bundle, so
-every JS change costs a full native rebuild. Build a Debug build once
-(`npx expo run:ios` / `npx expo run:android` — these also install and launch
-it), leave `npx expo start` running, and then `golem run --dev` skips
-build+install entirely: the per-flow relaunch re-fetches the current bundle
-from the dev server, so a JS edit is picked up with no rebuild and no
-reinstall. golem waits for the dev server and fails with `H503` if it never
-answers, rather than letting the resulting red error screen read as a
-missing selector. Local iteration only — a CI run should test the artifact
-it ships. Simulators and emulators only; a physical device also needs
-`adb reverse tcp:8081 tcp:8081` or a reachable LAN host.
+The template is for Expo only: it needs `expo prebuild`. A **bare React Native** project (no `expo` dependency) commits its own `ios/` and `android/`; use **native-ios** and **native-android** for it.
 
-**Broken JS is reported as `A501`, not as a failing test.** With a bundle
-that can't build, every selector times out and the run would otherwise
-blame the flow. Two things prevent that:
+**Iterating on JS: `golem run --dev`.** A Release build embeds the bundle, so each JS change needs a native rebuild. Instead:
 
-- Before any flow runs, `--dev` asks the dev server for the app's bundle. A
-  build failure stops the run and quotes the error (`SyntaxError: App.tsx:
-  Unexpected token (9:15)`). This is the only signal available on iOS,
-  where React Native's error overlay renders nothing golem can see.
-- During a run, a step that fails against a visible error overlay is
-  reported as `A501` with the overlay's own message instead of as a missing
-  selector. This covers both of React Native's overlays: the native redbox,
-  shown when the bundle never ran (Android — the same failures leave an iOS
-  simulator blank), and the JS LogBox, shown when the app mounted and then
-  threw, which renders on both platforms and also reports the source
-  position (`boom at App.tsx (35:43)`).
+1. Build and install a Debug build once: `npx expo run:ios` or `npx expo run:android`.
+2. Keep `npx expo start` running.
+3. Run `golem run --dev`. golem skips the build and the install. Each flow relaunches the app, which loads the current bundle from the dev server.
 
-  A LogBox minimised to its badge, or open on a console warning or console
-  error, leaves a working app underneath and is deliberately left alone —
-  a flow failing there is failing on its own merits.
+If the dev server does not answer, golem fails with `H503`. Use `--dev` for local work only: a CI run should test the artifact that ships. It works on simulators and emulators; a physical device also needs `adb reverse tcp:8081 tcp:8081` or a LAN host that the device can reach.
+
+**Broken JS fails with `A501`, not as a failing test:**
+
+- Before any flow, `--dev` asks the dev server for the bundle. A build error stops the run and quotes it (`SyntaxError: App.tsx: Unexpected token (9:15)`). On iOS this is the only signal, because the error overlay shows nothing golem can read.
+- A step that fails while React Native's error overlay shows reports `A501` with the overlay's message. This covers the native redbox (the bundle never ran; Android only, an iOS simulator stays blank) and the JS LogBox (the app threw after it mounted; both platforms, with the source position, `boom at App.tsx (35:43)`).
+
+golem ignores a LogBox that is minimized to its badge, or that shows a console warning or error: the app under it still works.

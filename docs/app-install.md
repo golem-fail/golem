@@ -133,11 +133,11 @@ The script inherits golem's environment, plus:
 ## Parameterizing installs: `install_env` + profiles
 <!-- summary: install_env values and --profile app definitions -->
 
-Two composable knobs let one script cover staging/sandbox/prod, Debug/Release, or local-vs-cloud builds without hand-editing scripts.
+One script can cover staging and production, Debug and Release, or a local and a cloud build. Two settings do this: `install_env` and profiles.
 
 ### `install_env` — inject environment values
 
-Declare env vars on an app; golem injects them into the install script's process:
+golem sets these variables in the install script's environment:
 
 ```toml
 [[apps]]
@@ -147,26 +147,20 @@ install_script = "scripts/install.sh"
 install_env = { APP_ENV = "staging", SANDBOX_ID = "${sandbox_id}" }
 ```
 
-Values interpolate `${var}` through the var engine **at install time**, so dynamic values flow from `--var`:
-
-```bash
-golem run flows/ --var sandbox_id=12345      # SANDBOX_ID becomes "12345"
-```
-
-Injection is the existing `--var` — there is no separate `--install-env` flag. Because install runs *before* any flow step, only install-time scopes resolve: CLI `--var`, project/flow vars, and the builtins `_platform` / `_udid` / `_app`. A `${...}` referencing a flow-step, device-, or per-row `each` var **fails the install loudly** (naming the var) rather than silently interpolating to empty and building the wrong artifact.
+`${var}` resolves at install time, so `golem run --var sandbox_id=12345` sets `SANDBOX_ID` to `12345`. The install runs before any step, so only these resolve: `--var`, project and flow vars, and the builtins `_platform`, `_udid` and `_app`. Any other variable fails the install, and the error names it.
 
 ### Profiles — select app *definitions* by `--profile`
 
-The same app `name` may appear in multiple `[[apps]]` / `[[flow.apps]]` entries, disambiguated by a `profile` field. A `profile`-less entry is the catch-all default. `golem run --profile <name>` picks, per app, the matching entry — else falls back to the catch-all.
+Several `[[apps]]` or `[[flow.apps]]` entries can share a `name` if each has its own `profile`. An entry without `profile` is the default. `golem run --profile <name>` uses, for each app, the entry with that profile, else the default.
 
 ```toml
-# Default (bare `golem run`): local dev build.
+# golem run: local build.
 [[apps]]
 name = "app-e"
 bundle = "com.example.teste"
 install_script = "scripts/install-app-e.sh"
 
-# `golem run --profile eas`: same script, cloud build (via install_env).
+# golem run --profile eas: the same script, a cloud build.
 [[apps]]
 name = "app-e"
 profile = "eas"
@@ -175,40 +169,29 @@ install_script = "scripts/install-app-e.sh"
 install_env = { EXPO_BUILD_MODE = "eas", EAS_PROFILE = "preview" }
 ```
 
-- Entries key by `(name, profile)`. A flow entry field-merges over the project entry of the **same** key (flow wins); different profile keys never bleed into each other. Profile entries are self-contained — restate shared fields (e.g. `bundle`), nothing inherits across profiles.
-- Falling back to the catch-all is by design — golem notes it, it is not an error. It **hard-errors** only when a referenced app has neither a `(name, profile)` entry nor a catch-all. A `--profile` that matches nothing across every app is flagged as a likely typo.
-- The script never sees the profile name — `--profile` only selects which entry (hence which `install_script` / `install_env`) is active. This is the CI/local lever: a `ci` profile can use a release/standalone build while the default uses a dev build, without duplicating flows.
+- A flow entry merges over the project entry with the same name and profile; the flow wins. Entries of different profiles share nothing, so repeat fields such as `bundle`.
+- The default as a fallback is not an error. It is an error only when an app has neither its profile's entry nor a default. A `--profile` that no app has gets a warning: it is likely a typo.
+- The script does not see the profile. The profile only picks the entry, and so its `install_script` and `install_env`.
 
 ## Install cache
 <!-- summary: golem installs once per app and device, and when it installs again -->
 
-Two layers of caching, both transparent in the default mode:
+**In one run,** golem runs an app's install script at most once per device. After a failed install, the other flows for that app and device skip, with the reason.
 
-**In-memory (per suite)** — keyed on `(device_udid, bundle_id)`. Within a single `golem run`, the script runs at most once per combination.
+**Across runs,** `.golem/install-cache.json` remembers each install. A later `golem run` skips the build and the install when all three checks pass:
 
-- `Succeeded` → subsequent flows on the same device skip the script and go straight to launch
-- `FailedScript` / `FailedNoScript` → subsequent flows using that combo are **skipped** with a clear reason (no repeated retries on broken setups)
+1. The app is on the device (`simctl get_app_container`, `adb shell pm path`).
+2. The app's install time on the device is the cached one. A reinstall by another tool (Xcode Run, `simctl install`) fails this check.
+3. The source fingerprint is the cached one: `git rev-parse HEAD` plus a hash of `git status --porcelain`, or without git, a hash of the files that `.gitignore` does not exclude.
 
-**Persistent (cross-run)** — `.golem/install-cache.json`, keyed `(udid, bundle)` → `{ fingerprint, device_install_time, installed_version, installed_at }`. Subsequent `golem run` invocations skip both build AND install when **all three** integrity gates pass:
+A hit prints `skipped (cache hit)`. A miss builds and installs, and prints why:
 
-1. **Device-present** — device reports the bundle as installed (`xcrun simctl get_app_container` / `adb shell pm path`)
-2. **Install-time matches** — device's bundle mtime / `lastUpdateTime` matches the cached `device_install_time`. Catches external reinstalls (Xcode "Run", manual `simctl install`)
-3. **Fingerprint matches** — current source fingerprint equals the cached one. Tier 1: `git rev-parse HEAD` + sha1 of `git status --porcelain`. Tier 2 (non-git): content hash of the project tree honouring `.gitignore`
+- `source fingerprint changed (git:abc → git:def)`: a commit or an edit. A dirty tree shows a suffix, `git:abc1234+0a1b`.
+- `device install-time differs`: another tool reinstalled the app.
+- `bundle no longer installed on device`: the simulator was reset, or the app was removed.
+- `fingerprint unavailable`: golem could not compute one.
 
-Any gate failing → cache miss, normal build+install runs, fresh entry written.
-
-**On hit** the live stream prints `skipped (cache hit)` — terse. A hit always means **all three gates passed**; the source-fingerprint identity is implied (you almost always know what state your tree is in already, so listing it on every hit is noise).
-
-**On miss** the stream prints a specific reason so you can see *why* a build was triggered. Examples:
-
-- `cache miss on iPhone 17 — source fingerprint changed (git:abc → git:def)` — you committed / edited code (label shows clean→dirty or rev→rev movement)
-- `cache miss on iPhone 17 — device install-time differs (... — external reinstall?)` — Xcode "Run", manual `simctl install`, or another tool replaced the binary
-- `cache miss on iPhone 17 — bundle no longer installed on device` — sim was reset / app was uninstalled
-- `cache miss on iPhone 17 — fingerprint unavailable (no git, no readable source tree)` — neither tier could compute a fingerprint (extremely rare)
-
-The "no prior cache entry" case (first-time install on a fresh checkout) is silent — that's the normal path on a cold cache, not a cache invalidation worth flagging.
-
-Where the label *does* render (in fingerprint-changed misses): clean trees show just the rev (`git:abc1234`); dirty trees include a 4-char porcelain-hash suffix (`git:abc1234+0a1b`) so two dirty trees with the same commit but different uncommitted edits render distinctly.
+A first install, with no cache entry, prints no reason.
 
 ## Cache flags: `--rebuild` and `--no-build`
 <!-- summary: --rebuild forces an install; --no-build skips it -->
@@ -290,45 +273,29 @@ The script installs only an artifact that the current build wrote. It fails if t
 ### expo
 <!-- summary: Expo prebuild and a local Release build, or EAS; golem run --dev -->
 
-Expo / React Native. One cross-platform script honouring `EXPO_BUILD_MODE`:
-- `local` (default): `expo prebuild` + a **Release** native build (embeds the JS bundle → runs offline, no Metro), then `simctl` / `adb` install. Fully local — no Expo account, works on a simulator/emulator with no signing account.
-- `eas`: build in the cloud via EAS, download the artifact, install it. Reuses the latest finished build unless `GOLEM_REBUILD=1`. Needs `EXPO_TOKEN`. **Written but unverified in golem's own CI** (no account) — validate against a real project before relying on it.
+Expo / React Native, one script for both platforms. `EXPO_BUILD_MODE` picks the build:
 
-Detects package manager from lockfiles; auto-discovers the iOS scheme from the generated app project when not set.
+- `local` (default): `expo prebuild`, then a **Release** native build, then `simctl` or `adb` install. The build embeds the JS bundle, so the app runs without Metro. It needs no Expo account and no signing account on a simulator or emulator.
+- `eas`: an EAS cloud build, downloaded and installed. It uses the latest finished build unless `GOLEM_REBUILD=1`, and needs `EXPO_TOKEN`. **golem's own CI does not test this mode**, so try it on your project first.
 
-Expo (managed) only — it relies on `expo prebuild` to generate the native projects. **Bare React Native** (a `@react-native-community/cli` project with no `expo` dependency) commits its own `ios/` + `android/` and has no `prebuild`; use **native-ios** + **native-android** for those.
+The script finds the package manager from the lockfile, and the iOS scheme from the generated project.
 
-**Iterating on JS: `golem run --dev`.** A Release build embeds the bundle, so
-every JS change costs a full native rebuild. Build a Debug build once
-(`npx expo run:ios` / `npx expo run:android` — these also install and launch
-it), leave `npx expo start` running, and then `golem run --dev` skips
-build+install entirely: the per-flow relaunch re-fetches the current bundle
-from the dev server, so a JS edit is picked up with no rebuild and no
-reinstall. golem waits for the dev server and fails with `H503` if it never
-answers, rather than letting the resulting red error screen read as a
-missing selector. Local iteration only — a CI run should test the artifact
-it ships. Simulators and emulators only; a physical device also needs
-`adb reverse tcp:8081 tcp:8081` or a reachable LAN host.
+The template is for Expo only: it needs `expo prebuild`. A **bare React Native** project (no `expo` dependency) commits its own `ios/` and `android/`; use **native-ios** and **native-android** for it.
 
-**Broken JS is reported as `A501`, not as a failing test.** With a bundle
-that can't build, every selector times out and the run would otherwise
-blame the flow. Two things prevent that:
+**Iterating on JS: `golem run --dev`.** A Release build embeds the bundle, so each JS change needs a native rebuild. Instead:
 
-- Before any flow runs, `--dev` asks the dev server for the app's bundle. A
-  build failure stops the run and quotes the error (`SyntaxError: App.tsx:
-  Unexpected token (9:15)`). This is the only signal available on iOS,
-  where React Native's error overlay renders nothing golem can see.
-- During a run, a step that fails against a visible error overlay is
-  reported as `A501` with the overlay's own message instead of as a missing
-  selector. This covers both of React Native's overlays: the native redbox,
-  shown when the bundle never ran (Android — the same failures leave an iOS
-  simulator blank), and the JS LogBox, shown when the app mounted and then
-  threw, which renders on both platforms and also reports the source
-  position (`boom at App.tsx (35:43)`).
+1. Build and install a Debug build once: `npx expo run:ios` or `npx expo run:android`.
+2. Keep `npx expo start` running.
+3. Run `golem run --dev`. golem skips the build and the install. Each flow relaunches the app, which loads the current bundle from the dev server.
 
-  A LogBox minimised to its badge, or open on a console warning or console
-  error, leaves a working app underneath and is deliberately left alone —
-  a flow failing there is failing on its own merits.
+If the dev server does not answer, golem fails with `H503`. Use `--dev` for local work only: a CI run should test the artifact that ships. It works on simulators and emulators; a physical device also needs `adb reverse tcp:8081 tcp:8081` or a LAN host that the device can reach.
+
+**Broken JS fails with `A501`, not as a failing test:**
+
+- Before any flow, `--dev` asks the dev server for the bundle. A build error stops the run and quotes it (`SyntaxError: App.tsx: Unexpected token (9:15)`). On iOS this is the only signal, because the error overlay shows nothing golem can read.
+- A step that fails while React Native's error overlay shows reports `A501` with the overlay's message. This covers the native redbox (the bundle never ran; Android only, an iOS simulator stays blank) and the JS LogBox (the app threw after it mounted; both platforms, with the source position, `boom at App.tsx (35:43)`).
+
+golem ignores a LogBox that is minimized to its badge, or that shows a console warning or error: the app under it still works.
 
 ### capacitor
 <!-- summary: Web build, cap sync, then a native build and install -->

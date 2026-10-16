@@ -1,11 +1,11 @@
 ## Parameterizing installs: `install_env` + profiles
 <!-- summary: install_env values and --profile app definitions -->
 
-Two composable knobs let one script cover staging/sandbox/prod, Debug/Release, or local-vs-cloud builds without hand-editing scripts.
+One script can cover staging and production, Debug and Release, or a local and a cloud build. Two settings do this: `install_env` and profiles.
 
 ### `install_env` — inject environment values
 
-Declare env vars on an app; golem injects them into the install script's process:
+golem sets these variables in the install script's environment:
 
 ```toml
 [[apps]]
@@ -15,26 +15,20 @@ install_script = "scripts/install.sh"
 install_env = { APP_ENV = "staging", SANDBOX_ID = "${sandbox_id}" }
 ```
 
-Values interpolate `${var}` through the var engine **at install time**, so dynamic values flow from `--var`:
-
-```bash
-golem run flows/ --var sandbox_id=12345      # SANDBOX_ID becomes "12345"
-```
-
-Injection is the existing `--var` — there is no separate `--install-env` flag. Because install runs *before* any flow step, only install-time scopes resolve: CLI `--var`, project/flow vars, and the builtins `_platform` / `_udid` / `_app`. A `${...}` referencing a flow-step, device-, or per-row `each` var **fails the install loudly** (naming the var) rather than silently interpolating to empty and building the wrong artifact.
+`${var}` resolves at install time, so `golem run --var sandbox_id=12345` sets `SANDBOX_ID` to `12345`. The install runs before any step, so only these resolve: `--var`, project and flow vars, and the builtins `_platform`, `_udid` and `_app`. Any other variable fails the install, and the error names it.
 
 ### Profiles — select app *definitions* by `--profile`
 
-The same app `name` may appear in multiple `[[apps]]` / `[[flow.apps]]` entries, disambiguated by a `profile` field. A `profile`-less entry is the catch-all default. `golem run --profile <name>` picks, per app, the matching entry — else falls back to the catch-all.
+Several `[[apps]]` or `[[flow.apps]]` entries can share a `name` if each has its own `profile`. An entry without `profile` is the default. `golem run --profile <name>` uses, for each app, the entry with that profile, else the default.
 
 ```toml
-# Default (bare `golem run`): local dev build.
+# golem run: local build.
 [[apps]]
 name = "app-e"
 bundle = "com.example.teste"
 install_script = "scripts/install-app-e.sh"
 
-# `golem run --profile eas`: same script, cloud build (via install_env).
+# golem run --profile eas: the same script, a cloud build.
 [[apps]]
 name = "app-e"
 profile = "eas"
@@ -43,6 +37,6 @@ install_script = "scripts/install-app-e.sh"
 install_env = { EXPO_BUILD_MODE = "eas", EAS_PROFILE = "preview" }
 ```
 
-- Entries key by `(name, profile)`. A flow entry field-merges over the project entry of the **same** key (flow wins); different profile keys never bleed into each other. Profile entries are self-contained — restate shared fields (e.g. `bundle`), nothing inherits across profiles.
-- Falling back to the catch-all is by design — golem notes it, it is not an error. It **hard-errors** only when a referenced app has neither a `(name, profile)` entry nor a catch-all. A `--profile` that matches nothing across every app is flagged as a likely typo.
-- The script never sees the profile name — `--profile` only selects which entry (hence which `install_script` / `install_env`) is active. This is the CI/local lever: a `ci` profile can use a release/standalone build while the default uses a dev build, without duplicating flows.
+- A flow entry merges over the project entry with the same name and profile; the flow wins. Entries of different profiles share nothing, so repeat fields such as `bundle`.
+- The default as a fallback is not an error. It is an error only when an app has neither its profile's entry nor a default. A `--profile` that no app has gets a warning: it is likely a typo.
+- The script does not see the profile. The profile only picks the entry, and so its `install_script` and `install_env`.
