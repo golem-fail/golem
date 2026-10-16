@@ -514,6 +514,7 @@ mod tests {
         r#"{ action = "accept_alert" }"#,
         r#"{ action = "add_media", path = "fixtures/cat.jpg" }"#,
         r#"{ action = "assert_alert", on_text = "Delete?" }"#,
+        r#"{ action = "assert_no_alert" }"#,
         r#"{ action = "assert_not_visible", on_text = "Loading" }"#,
         r#"{ action = "assert_visible", on_text = "Hi, Test", auto_scroll = true }"#,
         r#"{ action = "await_email", inbox = "${inbox}", save_to = "mail", timeout = 60000 }"#,

@@ -283,6 +283,8 @@ pub struct DeviceFilter {
 pub struct BranchCondition {
     pub if_visible: Option<String>,
     pub if_not_visible: Option<String>,
+    /// An alert shows whose text matches this glob (`"*"`: any alert).
+    pub if_alert: Option<String>,
     pub if_var: Option<String>,
     pub equals: Option<String>,
     pub matches: Option<String>,
@@ -296,7 +298,7 @@ pub struct BranchCondition {
 impl BranchCondition {
     /// The arm checks the screen.
     pub fn is_screen(&self) -> bool {
-        self.if_visible.is_some() || self.if_not_visible.is_some()
+        self.if_visible.is_some() || self.if_not_visible.is_some() || self.if_alert.is_some()
     }
 
     /// The arm has no condition: the else.
@@ -310,6 +312,8 @@ impl BranchCondition {
             format!("if_visible {t:?}")
         } else if let Some(t) = &self.if_not_visible {
             format!("if_not_visible {t:?}")
+        } else if let Some(t) = &self.if_alert {
+            format!("if_alert {t:?}")
         } else if let Some(v) = &self.if_var {
             let cmp = match (&self.equals, &self.matches, self.gte) {
                 (Some(e), _, _) => format!("equals {e:?}"),

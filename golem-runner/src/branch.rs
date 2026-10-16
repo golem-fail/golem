@@ -124,9 +124,12 @@ async fn read_tree(driver: &dyn PlatformDriver, settle: bool) -> Result<(Element
     Ok((root, meta.keyboard_height))
 }
 
-/// Whether a visibility arm holds on `root`'s visible tree, the tree
-/// `assert_visible` judges.
+/// Whether a screen arm holds: a visibility arm on `root`'s visible tree,
+/// the tree `assert_visible` judges; `if_alert` as `assert_alert` judges.
 fn screen_matches(arm: &BranchCondition, root: &Element, keyboard_height: i32) -> bool {
+    if let Some(pattern) = &arm.if_alert {
+        return crate::actions::alert_matches(root, Some(pattern));
+    }
     let (text, want) = match (&arm.if_visible, &arm.if_not_visible) {
         (Some(t), _) => (t, true),
         (_, Some(t)) => (t, false),
@@ -172,7 +175,12 @@ fn no_match(
     let name = block.name.as_deref().unwrap_or("<unnamed>");
     let mut out = format!("block {name:?}: no branch arm matched, and the block has no else");
     for arm in arms {
-        let why = if arm.is_screen() {
+        let why = if arm.if_alert.is_some() {
+            let ms = arm
+                .timeout
+                .map_or(String::new(), |t| format!(", timeout {t}ms"));
+            format!("no matching alert{ms}")
+        } else if arm.is_screen() {
             let ms = arm
                 .timeout
                 .map_or(String::new(), |t| format!(", timeout {t}ms"));
@@ -316,6 +324,7 @@ mod tests {
         BranchCondition {
             if_visible: Some(text.to_string()),
             if_not_visible: None,
+            if_alert: None,
             if_var: None,
             equals: None,
             matches: None,
@@ -329,6 +338,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: Some(text.to_string()),
+            if_alert: None,
             if_var: None,
             equals: None,
             matches: None,
@@ -342,6 +352,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some(var.to_string()),
             equals: Some(equals.to_string()),
             matches: None,
@@ -355,6 +366,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some(var.to_string()),
             equals: None,
             matches: Some(pattern.to_string()),
@@ -368,6 +380,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some(var.to_string()),
             equals: None,
             matches: None,
@@ -381,6 +394,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: None,
             equals: None,
             matches: None,
@@ -397,6 +411,42 @@ mod tests {
         let mut block: Block = toml::from_str("name = \"start\"").expect("block");
         block.branch = branch;
         block
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_if_alert_arm_waits_for_an_alert_whose_text_matches() {
+        let mut alert_screen = empty_hierarchy();
+        alert_screen.children.push(make_element(
+            "Alert",
+            Some("Allow notifications?"),
+            Bounds::new(50, 200, 275, 150),
+        ));
+        let driver = MockPlatformDriver::new(alert_screen);
+        for _ in 0..3 {
+            driver.push_hierarchy(hierarchy_with_text(&["Home"]));
+        }
+        let arm = |pattern: &str| BranchCondition {
+            if_alert: Some(pattern.into()),
+            goto: "answer".into(),
+            ..Default::default()
+        };
+        let vars = make_vars(&[]);
+        assert_eq!(
+            evaluate_branch(&block_of(vec![arm("Allow*")]), &driver, &vars, 10_000)
+                .await
+                .expect("the alert shows"),
+            "answer"
+        );
+        let mut other = arm("Delete*");
+        other.timeout = Some(0);
+        let err = evaluate_branch(&block_of(vec![other]), &driver, &vars, 10_000)
+            .await
+            .expect_err("no matching alert");
+        assert!(
+            err.to_string()
+                .contains("if_alert \"Delete*\" → answer: no matching alert"),
+            "{err}"
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -981,6 +1031,7 @@ mod tests {
         let conditions = vec![BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some("variant".to_string()),
             equals: None,
             matches: None,
@@ -1039,6 +1090,7 @@ mod tests {
         let conditions = vec![BranchCondition {
             if_visible: Some("Try Premium Free".to_string()),
             if_not_visible: None,
+            if_alert: None,
             if_var: Some("variant".to_string()),
             equals: Some("premium".to_string()),
             matches: None,
@@ -1069,6 +1121,7 @@ mod tests {
         let conditions = vec![BranchCondition {
             if_visible: None,
             if_not_visible: Some("Try Premium Free".to_string()),
+            if_alert: None,
             if_var: Some("variant".to_string()),
             equals: Some("free".to_string()),
             matches: None,
@@ -1100,6 +1153,7 @@ mod tests {
         let conditions = vec![BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some("variant".to_string()),
             equals: Some("premium".to_string()),
             matches: Some("*".to_string()),
@@ -1132,6 +1186,7 @@ mod tests {
         let conditions = vec![BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some("variant".to_string()),
             equals: None,
             matches: Some("JP*".to_string()),

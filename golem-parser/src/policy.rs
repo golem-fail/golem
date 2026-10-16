@@ -103,8 +103,8 @@ impl ActionClass {
     /// The class of `action`, or `None` for an action golem does not know.
     pub fn of(action: &str) -> Option<ActionClass> {
         Some(match action {
-            "assert_alert" | "assert_not_visible" | "assert_visible" | "read" | "screenshot"
-            | "load_fixture" | "load_mixin" | "fail" => ActionClass::Read,
+            "assert_alert" | "assert_no_alert" | "assert_not_visible" | "assert_visible"
+            | "read" | "screenshot" | "load_fixture" | "load_mixin" | "fail" => ActionClass::Read,
             "tap" | "double_tap" | "type" | "backspace" | "clear_text" | "long_press" | "swipe"
             | "scroll" | "pinch" | "gesture" | "rotate" | "hide_keyboard" | "launch" | "stop"
             | "open_link" | "press" | "set_dark_mode" | "accept_alert" | "dismiss_alert" => {

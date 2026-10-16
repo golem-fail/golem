@@ -64,3 +64,18 @@ steps = [
   { action = "dismiss_alert" },
   { action = "assert_visible", on_text = "Question No" },
 ]
+
+# Branch on an alert, then check that it went. No else: if the alert does
+# not show, the flow fails with EF406.
+[[block]]
+name = "branch_on_alert"
+steps = [{ action = "tap", on_text = "Show Confirm" }]
+branch = [{ if_alert = "Are you sure*", goto = "answer_alert" }]
+
+[[block]]
+name = "answer_alert"
+steps = [
+  { action = "accept_alert" },
+  { action = "assert_no_alert" },
+  { action = "assert_visible", on_text = "Confirm OK" },
+]

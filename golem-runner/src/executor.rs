@@ -2592,6 +2592,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: None,
             equals: None,
             matches: None,
@@ -2605,6 +2606,7 @@ mod tests {
         BranchCondition {
             if_visible: Some(text.to_string()),
             if_not_visible: None,
+            if_alert: None,
             if_var: None,
             equals: None,
             matches: None,
@@ -2620,6 +2622,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some(var.to_string()),
             equals: None,
             matches: None,
@@ -2633,6 +2636,7 @@ mod tests {
         BranchCondition {
             if_visible: None,
             if_not_visible: None,
+            if_alert: None,
             if_var: Some(var.to_string()),
             equals: Some(value.to_string()),
             matches: None,
