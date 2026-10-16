@@ -150,18 +150,20 @@ pub fn run(args: &InstallScriptArgs) -> Result<()> {
     let ask = match args.template {
         Some(_) => Ask::Defaults,
         None => {
-            crate::terminal::require(
+            let frameworks: Vec<&str> = InstallFramework::ALL.map(|f| f.label()).to_vec();
+            crate::terminal::require_with(
                 "golem install-script",
                 &[
                     (
-                        "golem install-script --print expo",
+                        "golem install-script --print FRAMEWORK",
                         "read a template, then adapt it",
                     ),
                     (
-                        "golem install-script --template expo --app NAME --path DIR",
+                        "golem install-script --template FRAMEWORK --app NAME --path DIR",
                         "write one without prompts",
                     ),
                 ],
+                &format!("frameworks: {}", frameworks.join(", ")),
             )?;
             Ask::Terminal(Box::default())
         }

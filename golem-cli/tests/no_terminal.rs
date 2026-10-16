@@ -23,7 +23,10 @@ fn golem_without_a_terminal(args: &[&str]) -> (i32, String) {
 #[test]
 fn each_interactive_command_names_a_way_on_without_a_terminal() {
     for (args, way_on) in [
-        (&["install-script"][..], "golem install-script --print expo"),
+        (
+            &["install-script"][..],
+            "frameworks: native-ios, native-android, tauri, expo",
+        ),
         (&["mcp-config"][..], "golem mcp-config show"),
         (
             &["mcp-config", "set", "shell", "allow"][..],
