@@ -569,12 +569,12 @@ The cursor does not move. `act` still records at the cursor, which is where the 
 
 ### Blocks
 
-A flow is a list of blocks. After a block's last step, the flow goes to the first `branch` whose condition is true. A block with branches ignores `next`: when no branch matches, the flow goes to the next block in the file. A block without branches goes to `next`, else to the next block in the file.
+A flow is a list of blocks. After a block's last step, its `branch` arms race: each poll reads one tree, and the first arm that matches wins. An `if_visible` or `if_not_visible` arm waits like `assert_visible`; `timeout` (ms) on the arm changes that, and `timeout = 0` checks once. When no arm matches, the flow takes the else: a last arm with no condition, or the block's `next`. Without an else, the flow fails with `EF406`. A block without branches goes to `next`, else to the next block in the file. `help("flow", "branching")` has the rules.
 
 | Tool | What it does |
 |------|--------------|
 | `block_begin(name, next?)` | Moves the cursor to the end of block `name`. If the draft has no block with that name, the tool creates it at the end of the draft. |
-| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`) and a `goto`. The tool refuses a branch with two conditions, or with `if_var` and no comparison. |
+| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`), an optional `timeout` for a screen arm, and a `goto`. The tool refuses a branch with two conditions, or with `if_var` and no comparison. |
 | `block_rename(name, to)` | Renames the block, and each `next`, `goto` and `[flow] start` that names it. |
 | `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
 

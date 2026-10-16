@@ -12,6 +12,7 @@
 | `F409` | `assert_not_visible`: the element is still on screen. | Wait for the screen change first, or report the app bug. |
 | `F412` | The alert or text did not match the expected value. | Fix the expected value, or report the app bug. |
 | `F417` | An alert is shown, but golem could not press its button. | Name a button that the alert has. |
+| `F406` | No branch arm matched the screen, and the block has no else. | Add an arm for the screen the flow saw, or an else: an arm with no condition, last, or `next`. |
 | `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |
 | `F504` | The flow ran past `max_runtime`. | Raise `max_runtime`, or find the slow or looping blocks. |
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |

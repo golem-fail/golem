@@ -1,7 +1,7 @@
 ### Block `next`
-<!-- summary: Go to a named block after this one; ignored with branches -->
+<!-- summary: Go to a named block after this one; with a branch, the else -->
 
-Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
+Jump to a named block after completion (instead of falling through). On a block with a `branch`, `next` is the else: the flow goes there when no arm matches.
 
 ```toml
 [[block]]

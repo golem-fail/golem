@@ -41,6 +41,11 @@ goto = "wrong"
 [[block]]
 name = "route_visible"
 steps = [{ action = "assert_visible", on_text = "Counter" }]
+# Checked once (timeout = 0), then the next arm wins.
+[[block.branch]]
+if_visible = "ZZ-NONEXISTENT-ZZ"
+timeout = 0
+goto = "wrong"
 [[block.branch]]
 if_visible = "Counter"
 goto = "route_not_visible"

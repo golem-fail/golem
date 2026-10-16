@@ -44,6 +44,11 @@ pub enum ValidationErrorKind {
     /// A step's `secret` is not `true` or a list of paths, or the step
     /// saves nothing (`save_to`) for it to tag.
     InvalidSecret,
+    /// A branch arm with no condition (the else) is not the last arm, or the
+    /// block also has `next`, which is the else too.
+    InvalidElse,
+    /// `timeout` on an `if_var` arm, which is always instant.
+    InvalidBranchTimeout,
 }
 
 /// Every action a step may name.
@@ -560,6 +565,45 @@ pub fn lint_push_notification_phys(flow: &FlowFile) -> Vec<PushNotificationPhysI
 /// `auto_scroll = true` (the resolver uses it to constrain scroll-into-
 /// view to the container). On any other step it's silently dropped —
 /// most often a footgun for swipes ported from a scroll snippet.
+/// Two arms of one block with the same condition and timeout: the second
+/// can never win.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DuplicateArmIssue {
+    pub block_name: Option<String>,
+    /// 1-based arm numbers.
+    pub first: usize,
+    pub second: usize,
+    pub condition: String,
+}
+
+pub fn lint_duplicate_branch_arms(flow: &FlowFile) -> Vec<DuplicateArmIssue> {
+    let mut out = Vec::new();
+    for block in &flow.block {
+        for (j, b) in block.branch.iter().enumerate() {
+            let same = |a: &BranchCondition| {
+                BranchCondition {
+                    goto: String::new(),
+                    ..a.clone()
+                } == BranchCondition {
+                    goto: String::new(),
+                    ..b.clone()
+                }
+            };
+            if let Some(i) = block.branch[..j].iter().position(same) {
+                if !b.is_else() {
+                    out.push(DuplicateArmIssue {
+                        block_name: block.name.clone(),
+                        first: i + 1,
+                        second: j + 1,
+                        condition: b.describe(),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn lint_within_no_op(flow: &FlowFile) -> Vec<WithinNoOpIssue> {
     let mut issues = Vec::new();
     for block in &flow.block {
@@ -661,6 +705,36 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
         }
 
         let name = block.name.as_deref().unwrap_or("<unnamed>");
+        let last = block.branch.len().saturating_sub(1);
+        for (i, arm) in block.branch.iter().enumerate() {
+            if arm.is_else() && i != last {
+                errors.push(ValidationError {
+                    message: format!(
+                        "Block '{name}': branch arm {} has no condition, so it is the else and SHALL be the last arm; the arms after it never run",
+                        i + 1
+                    ),
+                    kind: ValidationErrorKind::InvalidElse,
+                });
+            }
+            if arm.is_else() && block.next.is_some() {
+                errors.push(ValidationError {
+                    message: format!(
+                        "Block '{name}': has both a branch arm with no condition and next; each is the else when no arm matches, so keep one"
+                    ),
+                    kind: ValidationErrorKind::InvalidElse,
+                });
+            }
+            if arm.if_var.is_some() && arm.timeout.is_some() {
+                errors.push(ValidationError {
+                    message: format!(
+                        "Block '{name}': branch arm {} ({}) has a timeout; an if_var arm is checked at once, so remove it",
+                        i + 1,
+                        arm.describe()
+                    ),
+                    kind: ValidationErrorKind::InvalidBranchTimeout,
+                });
+            }
+        }
         if block.max_iterations == Some(0) {
             errors.push(ValidationError {
                 message: format!(
@@ -738,6 +812,107 @@ fn validate_branch(
 mod tests {
     use super::*;
     use crate::parse_flow;
+
+    fn branch_flow(block_extra: &str, branch: &str) -> FlowFile {
+        parse_flow(&format!(
+            r#"
+[flow]
+name = "b"
+[[flow.apps]]
+name = "app"
+bundle = "x"
+[[flow.apps.devices]]
+os = "ios"
+
+[[block]]
+name = "start"
+steps = [{{ action = "screenshot" }}]
+{block_extra}
+branch = [{branch}]
+
+[[block]]
+name = "a"
+steps = [{{ action = "screenshot" }}]
+
+[[block]]
+name = "b"
+steps = [{{ action = "screenshot" }}]
+"#
+        ))
+        .expect("parse")
+    }
+
+    fn kinds(flow: &FlowFile) -> Vec<ValidationErrorKind> {
+        validate_flow(flow).into_iter().map(|e| e.kind).collect()
+    }
+
+    #[test]
+    fn the_else_arm_is_last_and_not_beside_next() {
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ if_visible = "A", goto = "a" }, { goto = "b" }"#
+            )),
+            vec![]
+        );
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ goto = "b" }, { if_visible = "A", goto = "a" }"#
+            )),
+            vec![ValidationErrorKind::InvalidElse]
+        );
+        assert_eq!(
+            kinds(&branch_flow(
+                "next = \"a\"",
+                r#"{ if_visible = "A", goto = "a" }, { goto = "b" }"#
+            )),
+            vec![ValidationErrorKind::InvalidElse]
+        );
+        assert_eq!(
+            kinds(&branch_flow(
+                "next = \"b\"",
+                r#"{ if_visible = "A", goto = "a" }"#
+            )),
+            vec![],
+            "next alone SHALL be the else"
+        );
+    }
+
+    #[test]
+    fn a_timeout_on_an_if_var_arm_is_an_error() {
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ if_var = "x", equals = "1", timeout = 5, goto = "a" }"#
+            )),
+            vec![ValidationErrorKind::InvalidBranchTimeout]
+        );
+        assert_eq!(
+            kinds(&branch_flow(
+                "",
+                r#"{ if_visible = "A", timeout = 0, goto = "a" }"#
+            )),
+            vec![]
+        );
+    }
+
+    #[test]
+    fn two_arms_with_the_same_condition_and_timeout_warn() {
+        let flow = branch_flow(
+            "",
+            r#"{ if_visible = "A", goto = "a" }, { if_visible = "B", goto = "b" }, { if_visible = "A", goto = "b" }, { if_visible = "A", timeout = 0, goto = "b" }"#,
+        );
+        assert_eq!(
+            lint_duplicate_branch_arms(&flow),
+            vec![DuplicateArmIssue {
+                block_name: Some("start".into()),
+                first: 1,
+                second: 3,
+                condition: "if_visible \"A\"".into(),
+            }]
+        );
+    }
 
     // 1. Valid flow passes validation (empty errors)
     #[test]

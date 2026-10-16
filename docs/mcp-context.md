@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 477 |
-| Tool list (31 tools, as `tools/list` JSON) | 12993 |
-| Both, kept in context by most clients | 13470 |
+| Tool list (31 tools, as `tools/list` JSON) | 13030 |
+| Both, kept in context by most clients | 13507 |
 
 ## Instructions
 
@@ -107,7 +107,7 @@ Remove a block and its steps. Refused while a next, goto or start names it.
 
 ### `block_link`
 
-Set a block's next; add branches. After its steps a block takes the first branch that holds; with branches, next is ignored and no match goes to the next block in the file. Without branches: next, else the next block.
+Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -115,10 +115,10 @@ Set a block's next; add branches. After its steps a block takes the first branch
 | `branches` | array | [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, or if_var with equals, matches or gte. |
 | `next` | string |  |
 
-<details><summary>As <code>tools/list</code> sends it · 530 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 567 chars</summary>
 
 ```json
-{"name":"block_link","description":"Set a block's next; add branches. After its steps a block takes the first branch that holds; with branches, next is ignored and no match goes to the next block in the file. Without branches: next, else the next block.","inputSchema":{"properties":{"block":{"type":"string"},"branches":{"description":"[{ \"if_visible\": \"Error\", \"goto\": \"retry\" }]; or if_not_visible, or if_var with equals, matches or gte.","type":"array"},"next":{"type":"string"}},"required":["block"],"type":"object"}}
+{"name":"block_link","description":"Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.","inputSchema":{"properties":{"block":{"type":"string"},"branches":{"description":"[{ \"if_visible\": \"Error\", \"goto\": \"retry\" }]; or if_not_visible, or if_var with equals, matches or gte.","type":"array"},"next":{"type":"string"}},"required":["block"],"type":"object"}}
 ```
 
 </details>
@@ -2808,7 +2808,7 @@ Performance data appears in all output formats: human (table), JSON (objects), J
 
 </details>
 
-<details><summary><code>help("flow", "block")</code> · Block · 1063 chars · + 3 items</summary>
+<details><summary><code>help("flow", "block")</code> · Block · 1098 chars · + 3 items</summary>
 
 Source: [src/test-structure/20-block/00-intro.md](src/test-structure/20-block/00-intro.md)
 
@@ -2839,8 +2839,8 @@ steps = [
 
 Items (help("flow", item)):
 - platform: where: run a block only on devices that match
-- branching: if_visible, if_not_visible or if_var, then goto a block
-- next: Go to a named block after this one; ignored with branches
+- branching: Arms race on the screen; the first that matches goes to its block, else the else or fail
+- next: Go to a named block after this one; with a branch, the else
 ````
 
 <details><summary><code>help("flow", "platform")</code> · Platform-Specific Blocks · 663 chars</summary>
@@ -2872,31 +2872,31 @@ A device must match every key given. A skipped block's `next` and `[[block.branc
 
 </details>
 
-<details><summary><code>help("flow", "branching")</code> · Branching · 1292 chars</summary>
+<details><summary><code>help("flow", "branching")</code> · Branching · 2422 chars</summary>
 
 Source: [src/test-structure/20-block/20-branching.md](src/test-structure/20-block/20-branching.md)
 
 ````text
 ### Branching
 
-Control flow between blocks with conditions:
+A block's `branch` says where the flow goes after the block's steps. Each arm has a condition and a `goto`:
 
 ```toml
 [[block]]
-name = "check_state"
-steps = [
-  { action = "assert_visible", on_text = "Welcome", if_fail = "ignore" },
+name = "start"
+steps = [{ action = "launch", app = "app" }]
+branch = [
+  { if_visible = "Allow notifications", goto = "permissions" },
+  { if_visible = "Home", goto = "home" },
 ]
-
-[[block.branch]]
-if_visible = "Dashboard"
-goto = "already_logged_in"
-
-[[block.branch]]
-goto = "login_required"            # Unconditional fallback
 ```
 
-Branches are checked after the block's steps finish (for a `for_each` block, after the last row; for a `run_flow` block, after the child flow returns). They are checked in order, and the first match wins. If none matches, the flow continues with the next block in document order.
+The app opens on either screen. golem waits for the first one to show, and goes to its block as soon as it shows.
+
+**The arms race.** golem checks the arms after the block's steps finish (for a `for_each` block, after the last row; for a `run_flow` block, after the child flow returns). It first waits for the screen to settle, then reads one tree on each poll and checks each arm on it, in order. The first arm that matches wins.
+
+- `if_visible` and `if_not_visible` wait for their condition up to the timeout of `assert_visible`. Set `timeout` (in ms) on the arm to change that. `timeout = 0` checks once.
+- `if_var` arms are checked once, at once. A `timeout` on one is an error.
 
 | Condition | Matches when |
 |---|---|
@@ -2905,21 +2905,37 @@ Branches are checked after the block's steps finish (for a `for_each` block, aft
 | `if_var = "x"`, `equals = "…"` | the variable equals the string exactly |
 | `if_var = "x"`, `matches = "…"` | the variable matches the glob pattern |
 | `if_var = "x"`, `gte = N` | the variable, read as an integer, is ≥ `N` (an integer). A non-integer value never matches. |
-| (no condition) | always |
+| (no condition) | always: this arm is the else |
 
-`if_var` without `equals`, `matches` or `gte` never matches. A block with any `[[block.branch]]` ignores its `next`, even when no branch matches — put an unconditional `goto` last instead.
+`if_var` without `equals`, `matches` or `gte` never matches.
+
+**When no arm matches,** the flow takes the else: the last arm, if it has no condition, or the block's `next`. Without an else, the flow fails with `EF406`. The failure names the block, each arm and why it did not match, and the texts on the screen. A block with a branch never goes on to the next block in the file.
+
+```toml
+[[block]]
+name = "pay"
+steps = [{ action = "tap", on_text = "Pay" }]
+next = "receipt"                                      # the else
+branch = [{ if_visible = "Error", timeout = 0, goto = "retry" }]
+```
+
+golem checks the arms when it reads the flow:
+
+- An arm with no condition that is not the last arm is an error: the arms after it never run.
+- An arm with no condition and `next` on the same block is an error: both are the else.
+- Two arms with the same condition and timeout give a warning: the second never wins.
 ````
 
 </details>
 
-<details><summary><code>help("flow", "next")</code> · Block next · 334 chars</summary>
+<details><summary><code>help("flow", "next")</code> · Block next · 367 chars</summary>
 
 Source: [src/test-structure/20-block/30-next.md](src/test-structure/20-block/30-next.md)
 
 ````text
 ### Block `next`
 
-Jump to a named block after completion (instead of falling through). A block with `[[block.branch]]` entries ignores `next`.
+Jump to a named block after completion (instead of falling through). On a block with a `branch`, `next` is the else: the flow goes there when no arm matches.
 
 ```toml
 [[block]]
@@ -4499,7 +4515,7 @@ Items (help("codes", item)):
 - registry: Every code with its meaning and fix
 ```
 
-<details><summary><code>help("codes", "registry")</code> · Registry · 5881 chars</summary>
+<details><summary><code>help("codes", "registry")</code> · Registry · 6052 chars</summary>
 
 Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 
@@ -4515,6 +4531,7 @@ Source: [src/error-codes/10-registry.md](src/error-codes/10-registry.md)
 | `F409` | `assert_not_visible`: the element is still on screen. | Wait for the screen change first, or report the app bug. |
 | `F412` | The alert or text did not match the expected value. | Fix the expected value, or report the app bug. |
 | `F417` | An alert is shown, but golem could not press its button. | Name a button that the alert has. |
+| `F406` | No branch arm matched the screen, and the block has no else. | Add an arm for the screen the flow saw, or an else: an arm with no condition, last, or `next`. |
 | `F424` | A `bash`, `run` or HTTP step failed, or `await_email` found no match. | Read the output or response; fix the script, endpoint or email filter. |
 | `F504` | The flow ran past `max_runtime`. | Raise `max_runtime`, or find the slow or looping blocks. |
 | `F508` | The flow ran more than `max_steps` steps, usually in a loop. | Fix the `next` or branch loop, or raise `max_steps`. |

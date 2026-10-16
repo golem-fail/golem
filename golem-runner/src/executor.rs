@@ -374,7 +374,8 @@ pub(crate) fn interpolate_for_run(
 /// 1. Start at the first block (or the block named by `start_block`).
 /// 2. Execute all steps in the current block via [`execute_step_with_policy`].
 /// 3. After all steps complete:
-///    a. If the block has `branch` conditions, evaluate via [`evaluate_branch`] and goto target.
+///    a. If the block has `branch` arms, go where [`evaluate_branch`] says: the
+///       first arm that matches, else the else arm or `next`, else fail (F406).
 ///    b. If the block has `next`, jump to that named block.
 ///    c. Otherwise, fall through to the next block in document order.
 /// 4. When no more blocks remain, the flow ends successfully.
@@ -704,15 +705,8 @@ pub async fn execute_flow<'a>(
 
             // Determine next block (same logic as normal blocks)
             if !block.branch.is_empty() {
-                match evaluate_branch(&block.branch, driver, vars).await? {
-                    Some(target) => {
-                        current_idx = find_block_index(blocks, &target)?;
-                        continue;
-                    }
-                    None => {
-                        current_idx += 1;
-                    }
-                }
+                let target = evaluate_branch(block, driver, vars, default_timeout_ms).await?;
+                current_idx = find_block_index(blocks, &target)?;
             } else if let Some(ref next) = block.next {
                 current_idx = find_block_index(blocks, next)?;
             } else {
@@ -1479,15 +1473,8 @@ pub async fn execute_flow<'a>(
 
         // Determine next block
         if !block.branch.is_empty() {
-            match evaluate_branch(&block.branch, driver, vars).await? {
-                Some(target) => {
-                    current_idx = find_block_index(blocks, &target)?;
-                    continue;
-                }
-                None => {
-                    current_idx += 1; // No branch matched, fall through
-                }
-            }
+            let target = evaluate_branch(block, driver, vars, default_timeout_ms).await?;
+            current_idx = find_block_index(blocks, &target)?;
         } else if let Some(ref next) = block.next {
             current_idx = find_block_index(blocks, next)?;
         } else {
@@ -2609,6 +2596,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -2621,6 +2609,9 @@ mod tests {
             equals: None,
             matches: None,
             gte: None,
+            // One check: these tests are about where the flow goes, not
+            // about how long an arm waits.
+            timeout: Some(0),
             goto: goto.to_string(),
         }
     }
@@ -2633,6 +2624,7 @@ mod tests {
             equals: None,
             matches: None,
             gte: Some(threshold),
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -2645,6 +2637,7 @@ mod tests {
             equals: Some(value.to_string()),
             matches: None,
             gte: None,
+            timeout: None,
             goto: goto.to_string(),
         }
     }
@@ -3037,23 +3030,21 @@ mod tests {
     // ---------------------------------------------------------------
     // 12. Branch with no match falls through to next block
     // ---------------------------------------------------------------
-    #[tokio::test]
-    async fn branch_no_match_falls_through() {
-        // "Login" is NOT visible, so the branch condition won't match
-        let driver = MockPlatformDriver::new(empty_hierarchy());
+    async fn run_branch_flow(
+        branch: Vec<BranchCondition>,
+        next: Option<&str>,
+    ) -> (Result<FlowResult>, usize) {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Welcome"]));
         let mut vars = VariableStore::new();
         let mut ctx = test_ctx(Path::new("."));
-
+        let mut check = make_block_with_branch(Some("check"), vec![make_success_step()], branch);
+        check.next = next.map(str::to_string);
         let flow = make_flow(vec![
-            make_block_with_branch(
-                Some("check"),
-                vec![make_success_step()],
-                vec![cond_if_visible("Login", "login_block")],
-            ),
-            make_block(Some("fallthrough"), vec![make_success_step()]),
+            check,
+            make_block(Some("following"), vec![make_success_step()]),
             make_block(Some("login_block"), vec![make_success_step()]),
+            make_block(Some("other"), vec![make_success_step()]),
         ]);
-
         let result = execute_flow(
             &flow,
             &driver,
@@ -3063,18 +3054,54 @@ mod tests {
             &mut ctx,
             None,
         )
-        .await
-        .expect("execute_flow should not error");
+        .await;
+        let shots = driver
+            .get_calls()
+            .iter()
+            .filter(|c| c.0 == "screenshot")
+            .count();
+        (result, shots)
+    }
 
-        assert!(result.success);
-        // check + fallthrough + login_block = 3 screenshots (fallthrough falls into login_block)
-        let calls = driver.get_calls();
-        let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+    #[tokio::test]
+    async fn no_branch_match_without_an_else_fails_f406_and_says_what_it_saw() {
+        let (result, shots) =
+            run_branch_flow(vec![cond_if_visible("Login", "login_block")], None).await;
+        let err = result.expect_err("no arm matched and no else");
         assert_eq!(
-            screenshot_calls.len(),
-            3,
-            "no branch match should fall through to next block"
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowNoBranchMatched)
         );
+        let msg = err.to_string();
+        for part in [
+            "block \"check\"",
+            "if_visible \"Login\" → login_block: not on screen",
+            "screen: \"Welcome\"",
+        ] {
+            assert!(msg.contains(part), "{part}: {msg}");
+        }
+        assert_eq!(
+            shots, 1,
+            "the flow SHALL NOT go on to the next block in the file"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_branch_match_takes_the_else_arm_or_next() {
+        for (branch, next) in [
+            (
+                vec![
+                    cond_if_visible("Login", "login_block"),
+                    cond_default("other"),
+                ],
+                None,
+            ),
+            (vec![cond_if_visible("Login", "login_block")], Some("other")),
+        ] {
+            let (result, shots) = run_branch_flow(branch, next).await;
+            assert!(result.expect("SHALL take the else").success);
+            assert_eq!(shots, 2, "check, then other: {next:?}");
+        }
     }
 
     // ---------------------------------------------------------------

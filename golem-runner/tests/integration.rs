@@ -653,23 +653,21 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 10. Branch with no match falls through to next block
+// 10. Branch with no match takes `next`, not the following block
 // ---------------------------------------------------------------------------
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_branch_no_match_falls_through() {
+async fn test_branch_no_match_goes_to_next_not_the_following_block() {
     let toml = r#"
 [flow]
-name = "branch fallthrough test"
+name = "branch else test"
 
 [[block]]
 name = "check"
+next = "login_block"
 steps = [
   { action = "screenshot" },
 ]
-
-[[block.branch]]
-if_visible = "Login"
-goto = "login_block"
+branch = [{ if_visible = "Login", goto = "fallthrough" }]
 
 [[block]]
 name = "fallthrough"
@@ -684,7 +682,8 @@ steps = [
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
-    // "Login" is NOT in the hierarchy, so branch won't match
+    assert!(golem_parser::validation::validate_flow(&flow).is_empty());
+    // "Login" is NOT in the hierarchy, so the arm does not match.
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
@@ -703,13 +702,10 @@ steps = [
 
     assert_success(&result);
 
-    // check + fallthrough + login_block = 3 screenshots (fallthrough cascades)
+    // check, then next (login_block): the block in between does not run.
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(
-        screenshot_count, 3,
-        "all blocks should execute when branch doesn't match"
-    );
+    assert_eq!(screenshot_count, 2, "next SHALL be the else");
 }
 
 // ---------------------------------------------------------------------------
