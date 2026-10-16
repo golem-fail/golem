@@ -390,8 +390,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             println!("Created flow: {}", path.display());
         }
 
-        Commands::InstallScript => {
-            install_script_cmd::run()?;
+        Commands::InstallScript(args) => {
+            install_script_cmd::run(&args)?;
         }
 
         Commands::Cache(args) => match args.command {

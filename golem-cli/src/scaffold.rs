@@ -130,7 +130,7 @@ pub fn create_flow(name: &str, dir: &Path) -> Result<PathBuf> {
 // ── Install-script scaffolding ─────────────────────────────────────
 
 /// Supported framework templates for `golem install-script`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InstallFramework {
     NativeIos,
     NativeAndroid,
@@ -138,11 +138,23 @@ pub enum InstallFramework {
     Expo,
     Capacitor,
     Kmp,
+    #[value(name = "nativescript")]
     NativeScript,
     Flutter,
 }
 
 impl InstallFramework {
+    pub const ALL: [InstallFramework; 8] = [
+        InstallFramework::NativeIos,
+        InstallFramework::NativeAndroid,
+        InstallFramework::Tauri,
+        InstallFramework::Expo,
+        InstallFramework::Capacitor,
+        InstallFramework::Kmp,
+        InstallFramework::NativeScript,
+        InstallFramework::Flutter,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             InstallFramework::NativeIos => "native-ios",

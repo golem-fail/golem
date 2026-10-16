@@ -328,7 +328,17 @@ Create a new flow template at `flows/<name>.test.toml`.
 
 ## `golem install-script`
 
-Interactively scaffold an install script for an app in your project. Prompts for framework (native-ios, native-android, tauri), the relevant build config (xcode project/scheme, gradle root/module, tauri CLI runner), discovers candidates automatically where possible, and writes a bash script under `scripts/`. Optionally updates `golem.toml` with a matching `[[apps]]` entry so flows inherit the script by name.
+Scaffold an install script for an app in your project. In a terminal, golem asks for the framework (native-ios, native-android, tauri, expo, capacitor, kmp, nativescript, flutter) and the build config (for example the Xcode project and scheme, or the Gradle root and module). It finds candidates where it can, and writes a bash script under `scripts/`. It can also add the script to the app's `[[apps]]` entry in `golem.toml`, so flows inherit the script by name.
+
+| Flag | Description |
+|------|-------------|
+| `--list` | List the frameworks that have a template, and exit. |
+| `--print <framework>` | Write the framework's template to stdout, with each `{{VALUE}}` to fill in, and exit. |
+| `--template <framework>` | Ask nothing: each value that no flag gives is its prompt's default. |
+| `--app <name>` | With `--template`: the app's name in `[[apps]]` (default `app`). |
+| `--path <dir>` | With `--template`: the app's project directory. For `native-ios`, the `.xcodeproj` or `.xcworkspace`, or a directory that has one. |
+
+In a monorepo, run `--template` once for each app, with its own `--app` and `--path`.
 
 See [App Install](app-install.md) for the full resolution and execution model.
 

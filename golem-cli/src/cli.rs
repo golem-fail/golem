@@ -36,8 +36,8 @@ pub enum Commands {
     Init,
     /// Create a new flow template
     Create(CreateArgs),
-    /// Interactively scaffold an app install script
-    InstallScript,
+    /// Scaffold an app install script (interactive; `--list` names the templates, `--print <framework>` writes one)
+    InstallScript(InstallScriptArgs),
     /// Inspect the persistent install cache
     Cache(CacheArgs),
     /// Read the embedded audit out of an annotated a11y screenshot: list the
@@ -172,6 +172,28 @@ pub struct McpArgs {
     /// server. It can only make the policy stricter
     #[arg(long, value_name = "CLASS|ACTION")]
     pub ask: Vec<String>,
+}
+
+#[derive(clap::Args, Debug, Default)]
+pub struct InstallScriptArgs {
+    /// List the frameworks that have a template, and exit.
+    #[arg(long, conflicts_with_all = ["print", "template", "app", "path"])]
+    pub list: bool,
+    /// Write the framework's template to stdout, with each `{{VALUE}}` to
+    /// fill in, and exit.
+    #[arg(long, value_name = "FRAMEWORK", conflicts_with_all = ["template", "app", "path"])]
+    pub print: Option<crate::scaffold::InstallFramework>,
+    /// Use this framework's template without prompts: each value not given
+    /// by a flag is its prompt's default.
+    #[arg(long, value_name = "FRAMEWORK")]
+    pub template: Option<crate::scaffold::InstallFramework>,
+    /// The app's name in `[[apps]]` (default "app").
+    #[arg(long, requires = "template")]
+    pub app: Option<String>,
+    /// The app's project directory (for native-ios: the .xcodeproj or
+    /// .xcworkspace, or a directory with one).
+    #[arg(long, requires = "template")]
+    pub path: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -1058,7 +1080,40 @@ mod tests {
     #[test]
     fn install_script_subcommand() {
         let cli = parse(&["install-script"]);
-        assert!(matches!(cli.command, Commands::InstallScript));
+        assert!(matches!(cli.command, Commands::InstallScript(_)));
+    }
+
+    #[test]
+    fn install_script_print_and_template_flags() {
+        let Commands::InstallScript(a) = parse(&["install-script", "--print", "expo"]).command
+        else {
+            panic!("expected InstallScript");
+        };
+        assert_eq!(a.print, Some(crate::scaffold::InstallFramework::Expo));
+        let Commands::InstallScript(a) = parse(&[
+            "install-script",
+            "--template",
+            "nativescript",
+            "--app",
+            "requester",
+            "--path",
+            "apps/r",
+        ])
+        .command
+        else {
+            panic!("expected InstallScript");
+        };
+        assert_eq!(
+            a.template,
+            Some(crate::scaffold::InstallFramework::NativeScript)
+        );
+        assert!(Cli::try_parse_from(["golem", "install-script", "--app", "x"]).is_err());
+        let about = <Cli as clap::CommandFactory>::command()
+            .find_subcommand("install-script")
+            .and_then(|c| c.get_about())
+            .map(|a| a.to_string())
+            .unwrap_or_default();
+        assert!(about.contains("--print <framework>"), "{about}");
     }
 
     // 31. `cache info` nested subcommand
