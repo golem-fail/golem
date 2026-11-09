@@ -124,7 +124,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_KEY_CFBundleDisplayName = "Test Native (Golem)";
+				INFOPLIST_KEY_NSCameraUsageDescription = "test-app-b asks for the camera for golem e2e coverage.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "test-app-b reads the photo library for golem e2e coverage.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "test-app-b asks to track for golem e2e coverage.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -147,7 +149,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_KEY_CFBundleDisplayName = "Test Native (Golem)";
+				INFOPLIST_KEY_NSCameraUsageDescription = "test-app-b asks for the camera for golem e2e coverage.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "test-app-b reads the photo library for golem e2e coverage.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "test-app-b asks to track for golem e2e coverage.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

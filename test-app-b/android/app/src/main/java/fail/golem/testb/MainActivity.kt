@@ -10,7 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -92,6 +94,14 @@ fun TestScreen() {
     var toggleOn by remember { mutableStateOf(false) }
     var occTapped by remember { mutableStateOf("none") }
     var galleryDims by remember { mutableStateOf("pending") }
+    var camera by remember { mutableStateOf("pending") }
+    var notify by remember { mutableStateOf("pending") }
+    val requestCamera = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> camera = if (granted) "granted" else "denied" }
+    val requestNotify = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> notify = if (granted) "granted" else "denied" }
     val notification by NotificationStore.latestBody.collectAsState()
     val context = LocalContext.current
 
@@ -213,20 +223,44 @@ fun TestScreen() {
         // image into the gallery (indexed into MediaStore); this section reads
         // it back and renders its pixel size, the observable result the
         // add_media e2e asserts.
-        Text(
-            "Dims: $galleryDims",
-            // Meet the 24dp min touch-target (the Compose Button below is
-            // already 48dp by Material default; the bare Text label isn't).
-            modifier = Modifier
-                .heightIn(min = 24.dp)
-                .semantics { contentDescription = "dims-b" }
-        )
+        // Each permission request below shows the OS prompt while the
+        // permission is undecided, and renders the answer here. The
+        // permissions e2e set the state with `launch` `permissions`. One row
+        // with Dims, so the native list below keeps two items on screen.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Dims: $galleryDims",
+                fontSize = 12.sp,
+                // Meet the 24dp min touch-target (the Compose Button below is
+                // already 48dp by Material default; the bare Text label isn't).
+                modifier = Modifier
+                    .heightIn(min = 24.dp)
+                    .semantics { contentDescription = "dims-b" }
+            )
+            Text("Camera: $camera", fontSize = 12.sp)
+            Text("Notifications: $notify", fontSize = 12.sp)
+        }
 
-        Button(
-            onClick = { galleryDims = loadGalleryDims(context) },
-            modifier = Modifier.semantics { contentDescription = "load-gallery" }
-        ) {
-            Text("Load")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { galleryDims = loadGalleryDims(context) },
+                modifier = Modifier.semantics { contentDescription = "load-gallery" }
+            ) {
+                Text("Load")
+            }
+            Button(onClick = { requestCamera.launch(Manifest.permission.CAMERA) }) {
+                Text("Camera")
+            }
+            Button(onClick = {
+                // Below Android 13 notifications need no runtime permission.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    requestNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    notify = "granted"
+                }
+            }) {
+                Text("Notify")
+            }
         }
 
         Divider()

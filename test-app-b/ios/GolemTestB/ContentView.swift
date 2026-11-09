@@ -1,5 +1,8 @@
+import AppTrackingTransparency
+import AVFoundation
 import Photos
 import SwiftUI
+import UserNotifications
 
 // The fixture image is tiny (7×11); real photos are large. Match the fixture
 // by picking the first asset within this bound on both axes rather than
@@ -12,6 +15,9 @@ struct ContentView: View {
     @State private var toggleOn = false
     @State private var occTapped = "none"
     @State private var galleryDims = "pending"
+    @State private var tracking = "pending"
+    @State private var camera = "pending"
+    @State private var notify = "pending"
     @EnvironmentObject var notifications: NotificationStore
 
     var body: some View {
@@ -97,13 +103,51 @@ struct ContentView: View {
                 .accessibilityIdentifier("dims-b")
                 .frame(minHeight: 24)
 
-            Button("Load") {
-                loadGallery()
+            // Each permission request shows its OS prompt while the
+            // permission is undecided, and renders the answer. The
+            // permissions e2e set the state with `launch` `permissions`.
+            HStack(spacing: 12) {
+                Text("Camera: \(camera)").accessibilityIdentifier("camera-b")
+                Text("Notifications: \(notify)").accessibilityIdentifier("notify-b")
+                Text("Tracking: \(tracking)").accessibilityIdentifier("tracking-b")
             }
-            .accessibilityIdentifier("load-gallery")
-            // Meet the 24dp min touch-target (HIG minimum is 44); a bare
-            // SwiftUI Button hugs its label (~20dp) and trips golem's a11y audit.
-            .frame(minHeight: 44)
+            .font(.caption)
+            .frame(minHeight: 24)
+
+            HStack(spacing: 24) {
+                Button("Load") {
+                    loadGallery()
+                }
+                .accessibilityIdentifier("load-gallery")
+                // Meet the 24dp min touch-target (HIG minimum is 44); a bare
+                // SwiftUI Button hugs its label (~20dp) and trips golem's a11y audit.
+                .frame(minHeight: 44)
+
+                Button("Camera") {
+                    AVCaptureDevice.requestAccess(for: .video) { granted in
+                        DispatchQueue.main.async { camera = granted ? "granted" : "denied" }
+                    }
+                }
+                .accessibilityIdentifier("request-camera")
+                .frame(minHeight: 44)
+
+                Button("Notify") {
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
+                        DispatchQueue.main.async { notify = granted ? "granted" : "denied" }
+                    }
+                }
+                .accessibilityIdentifier("request-notifications")
+                .frame(minHeight: 44)
+
+                Button("Track") {
+                    ATTrackingManager.requestTrackingAuthorization { status in
+                        let result = status == .authorized ? "allowed" : "denied"
+                        DispatchQueue.main.async { tracking = result }
+                    }
+                }
+                .accessibilityIdentifier("request-tracking")
+                .frame(minHeight: 44)
+            }
 
             Divider()
 

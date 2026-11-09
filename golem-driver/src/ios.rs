@@ -17,23 +17,47 @@ use golem_element::Element;
 /// Notifications aren't here: iOS doesn't accept a `notifications` simctl token
 /// and Android prompts identically when the app first requests
 /// `POST_NOTIFICATIONS` — let the prompt fire and use `accept_alert` instead.
-fn ios_simctl_token(permission: &str, mode: &str) -> Result<&'static str> {
-    match permission {
-        "camera" => Ok("camera"),
-        "microphone" => Ok("microphone"),
-        "contacts" => Ok("contacts"),
-        "calendar" => Ok("calendar"),
-        "photos" => Ok("photos"),
-        "location" => Ok(if mode == "always" {
-            "location-always"
-        } else {
-            "location"
-        }),
+/// The `simctl privacy` services that put `permission` in `mode`.
+/// `kTCCServiceUserTracking` is missing from `simctl privacy`'s help, but
+/// `simctl` accepts it and it drives the App Tracking Transparency prompt.
+fn ios_simctl_tokens(permission: &str, mode: &str) -> Result<Vec<&'static str>> {
+    Ok(match permission {
+        "camera" => vec!["camera"],
+        "microphone" => vec!["microphone"],
+        "contacts" => vec!["contacts"],
+        "calendar" => vec!["calendar"],
+        "photos" => vec!["photos"],
+        "tracking" => vec!["kTCCServiceUserTracking"],
+        "location" => match mode {
+            "always" => vec!["location-always"],
+            // Refusing or clearing covers both, so an earlier `always` does
+            // not survive.
+            "deny" | "ask" => vec!["location", "location-always"],
+            _ => vec!["location"],
+        },
         other => bail!(
             "Unknown iOS permission: {other:?}. Known: camera, microphone, \
-             location, contacts, calendar, photos. (Notifications: don't \
-             pre-grant — trigger the prompt from the app and use `accept_alert`.)"
+             location, contacts, calendar, photos, notifications, tracking."
         ),
+    })
+}
+
+/// The `simctl privacy` action for a mode: `reset` returns the permission to
+/// "not asked", so the app's next request prompts.
+fn ios_simctl_verb(mode: &str) -> &'static str {
+    match mode {
+        "deny" => "revoke",
+        "ask" => "reset",
+        _ => "grant",
+    }
+}
+
+/// `applesimutils`' value for `notifications` in a mode.
+fn ios_notifications_value(mode: &str) -> &'static str {
+    match mode {
+        "allow" => "YES",
+        "deny" => "NO",
+        _ => "unset",
     }
 }
 
@@ -1026,12 +1050,40 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
+    /// applesimutils restarts SpringBoard to apply notification settings,
+    /// and the restart takes the XCUITest runner down with it.
+    fn permission_restarts_companion(&self, permission: &str) -> bool {
+        permission == "notifications"
+    }
+
     async fn set_permission(
         &self,
         bundle_id: &str,
         permission: &str,
         mode: &str,
     ) -> Result<Option<String>> {
+        if self.physical {
+            bail!(
+                "permissions are simulator-only on iOS — `{}` is a physical \
+                 device, whose privacy settings `simctl` can't change. Run the \
+                 flow on a simulator (`hardware = \"virtual\"` on its devices), \
+                 or branch on `_hardware`.",
+                self.device_id,
+            );
+        }
+        // `simctl privacy` has no notifications service; applesimutils does.
+        // Without it the step fails rather than test a state it didn't set.
+        if permission == "notifications" {
+            if !applesimutils_available() {
+                bail!(
+                    "notifications on iOS needs applesimutils, which isn't \
+                     installed. Install: {APPLESIMUTILS_INSTALL_HINT}"
+                );
+            }
+            self.applesimutils_set(bundle_id, "notifications", ios_notifications_value(mode))
+                .await?;
+            return Ok(None);
+        }
         // photos + grant is the one case `simctl privacy` can't satisfy on iOS
         // 26 — it accepts `grant photos` but the full-library prompt still
         // fires. applesimutils suppresses it; without applesimutils we must NOT
@@ -1050,10 +1102,11 @@ impl PlatformDriver for IosDriver {
             )));
         }
 
-        let token = ios_simctl_token(permission, mode)?;
-        let verb = if mode == "deny" { "revoke" } else { "grant" };
-        self.simctl(&["privacy", &self.device_id, verb, token, bundle_id])
-            .await?;
+        let verb = ios_simctl_verb(mode);
+        for token in ios_simctl_tokens(permission, mode)? {
+            self.simctl(&["privacy", &self.device_id, verb, token, bundle_id])
+                .await?;
+        }
         // See IOS_PERMISSION_TCC_SETTLE_GRACE: a `launch` immediately after
         // would otherwise race the privacy daemons.
         tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
@@ -1158,6 +1211,55 @@ fn launchctl_runs(listing: &str, bundle: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn simctl_privacy_per_mode() {
+        assert_eq!(ios_simctl_verb("allow"), "grant");
+        assert_eq!(ios_simctl_verb("always"), "grant");
+        assert_eq!(ios_simctl_verb("limited"), "grant");
+        assert_eq!(ios_simctl_verb("deny"), "revoke");
+        assert_eq!(ios_simctl_verb("ask"), "reset");
+        assert_eq!(
+            ios_simctl_tokens("tracking", "ask").expect("known"),
+            vec!["kTCCServiceUserTracking"]
+        );
+        assert_eq!(
+            ios_simctl_tokens("location", "always").expect("known"),
+            vec!["location-always"]
+        );
+        for mode in ["deny", "ask"] {
+            assert_eq!(
+                ios_simctl_tokens("location", mode).expect("known"),
+                vec!["location", "location-always"],
+                "{mode} SHALL cover background location too"
+            );
+        }
+        assert!(
+            ios_simctl_tokens("notifications", "allow").is_err(),
+            "not a simctl service"
+        );
+    }
+
+    #[tokio::test]
+    async fn permissions_on_a_physical_iphone_fail_with_a_hint() {
+        let driver = IosDriver::new("REAL-UDID".into(), "app".into(), 0, true);
+        for (permission, mode) in [("camera", "allow"), ("notifications", "ask")] {
+            let err = driver
+                .set_permission("app", permission, mode)
+                .await
+                .expect_err("a physical iPhone SHALL refuse");
+            let msg = format!("{err}");
+            assert!(msg.contains("simulator-only"), "{msg}");
+            assert!(msg.contains("hardware = \"virtual\""), "{msg}");
+        }
+    }
+
+    #[test]
+    fn notifications_values_per_mode() {
+        assert_eq!(ios_notifications_value("allow"), "YES");
+        assert_eq!(ios_notifications_value("deny"), "NO");
+        assert_eq!(ios_notifications_value("ask"), "unset");
+    }
 
     #[test]
     fn launchctl_shows_whether_the_app_runs() {
@@ -1494,7 +1596,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // ios_simctl_token — (permission, mode) → simctl privacy token
+    // ios_simctl_tokens — (permission, mode) → simctl privacy services
     // -----------------------------------------------------------------------
     #[test]
     fn token_known_permissions_match_simctl_tokens() {
@@ -1507,8 +1609,8 @@ mod tests {
             ("photos", "photos"),
         ] {
             assert_eq!(
-                ios_simctl_token(permission, "allow").expect("known permission"),
-                expected,
+                ios_simctl_tokens(permission, "allow").expect("known permission"),
+                vec![expected],
                 "iOS {permission:?} SHALL map to simctl token {expected:?}",
             );
         }
@@ -1516,26 +1618,15 @@ mod tests {
 
     #[test]
     fn token_location_folds_mode_into_token() {
-        // `always` needs the background-capable token; `allow` (foreground) and
-        // `deny` use the plain `location` token (the grant/revoke verb carries
-        // the intent).
         assert_eq!(
-            ios_simctl_token("location", "always").expect("location always"),
-            "location-always"
-        );
-        assert_eq!(
-            ios_simctl_token("location", "allow").expect("location allow"),
-            "location"
-        );
-        assert_eq!(
-            ios_simctl_token("location", "deny").expect("location deny"),
-            "location"
+            ios_simctl_tokens("location", "allow").expect("location allow"),
+            vec!["location"]
         );
     }
 
     #[test]
     fn token_unknown_permission_errors_loudly() {
-        let err = ios_simctl_token("locaiton", "allow").expect_err("unknown SHALL error");
+        let err = ios_simctl_tokens("locaiton", "allow").expect_err("unknown SHALL error");
         let msg = format!("{err}");
         assert!(
             msg.contains("locaiton"),
@@ -1546,25 +1637,19 @@ mod tests {
 
     #[test]
     fn token_rejects_removed_and_dropped_keys() {
-        // location-always is no longer a key (use location=always);
-        // notifications was never a simctl token.
-        assert!(ios_simctl_token("location-always", "allow").is_err());
-        assert!(ios_simctl_token("location-when-in-use", "inuse").is_err());
-        assert!(ios_simctl_token("photo-library", "allow").is_err());
-        let err = ios_simctl_token("notifications", "allow").expect_err("no notifications token");
-        assert!(
-            format!("{err}").contains("accept_alert"),
-            "error should point at the cross-platform pattern"
-        );
+        // location-always is no longer a key (use location=always).
+        assert!(ios_simctl_tokens("location-always", "allow").is_err());
+        assert!(ios_simctl_tokens("location-when-in-use", "inuse").is_err());
+        assert!(ios_simctl_tokens("photo-library", "allow").is_err());
     }
 
     #[test]
     fn token_is_case_sensitive_and_untrimmed() {
-        assert!(ios_simctl_token("Camera", "allow").is_err());
-        assert!(ios_simctl_token("CAMERA", "allow").is_err());
-        assert!(ios_simctl_token(" camera", "allow").is_err());
-        assert!(ios_simctl_token("camera ", "allow").is_err());
-        assert!(ios_simctl_token("", "allow").is_err());
+        assert!(ios_simctl_tokens("Camera", "allow").is_err());
+        assert!(ios_simctl_tokens("CAMERA", "allow").is_err());
+        assert!(ios_simctl_tokens(" camera", "allow").is_err());
+        assert!(ios_simctl_tokens("camera ", "allow").is_err());
+        assert!(ios_simctl_tokens("", "allow").is_err());
     }
 
     // 5. Post-stop grace SHALL be a real, bounded teardown window: nonzero

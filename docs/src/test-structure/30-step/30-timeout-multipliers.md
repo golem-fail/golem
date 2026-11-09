@@ -11,6 +11,7 @@ Each action has a built-in multiplier applied to the base timeout (`step_timeout
 | 5x | 25s | `launch`, `stop` |
 | 6x | 30s | `get_http`, `post_http`, `put_http`, `patch_http`, `delete_http`, `open_link`, `create_inbox` |
 | 8x | 40s | `scroll` (12x with `within`) |
+| 11x | 55s | `launch` whose `permissions` set `notifications` (on iOS, golem restarts its companion after setting them) |
 | 48x | 240s | `await_email` |
 
 The `auto_scroll = true` option sets 8x on any action (12x with `within`).

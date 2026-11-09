@@ -172,7 +172,7 @@ async fn clear_startup_anr(driver: &dyn PlatformDriver, ctx: &ExecutionContext<'
 /// (on success) emit the verbose-only `CompanionRestarted` breadcrumb. `attempt`
 /// is the human-facing "N of max" for the breadcrumb. Propagates the restart's
 /// own error so the caller can decide whether the flow is now unrecoverable.
-async fn restart_and_emit(
+pub(crate) async fn restart_and_emit(
     recovery: &dyn crate::recovery::CompanionRecovery,
     ctx: &ExecutionContext<'_>,
     attempt: u32,
@@ -456,7 +456,7 @@ pub async fn execute_flow<'a>(
             // fresh launch below starts with them in place (required for iOS
             // TCC, which won't apply to a running process).
             for app in apps {
-                apply_launch_permissions(driver, app).await?;
+                apply_launch_permissions(driver, app, ctx).await?;
             }
             if let Some(app) = apps.first() {
                 let bundle = app.bundle.as_deref()
@@ -468,7 +468,7 @@ pub async fn execute_flow<'a>(
         }
         golem_parser::AppLifecycle::Launch => {
             for app in apps {
-                apply_launch_permissions(driver, app).await?;
+                apply_launch_permissions(driver, app, ctx).await?;
             }
             if let Some(app) = apps.first() {
                 let bundle = app.bundle.as_deref()
@@ -1500,7 +1500,7 @@ pub async fn execute_flow<'a>(
 /// Apply an app's launch-time `permissions` map before it's launched.
 ///
 /// Keyed by the cross-platform permission shorthand (`camera`, `photos`, …);
-/// `"allow"` grants, `"deny"` revokes. Applied while the app is stopped (see
+/// `"allow"` grants, `"deny"` refuses, `"ask"` clears the decision. Applied while the app is stopped (see
 /// the lifecycle setup) so the grants are in place at process start; this is
 /// the only reliable way to satisfy iOS TCC, which ignores grants made to an
 /// already-running process. The per-launch `permissions =` on the `launch`
@@ -1508,6 +1508,7 @@ pub async fn execute_flow<'a>(
 async fn apply_launch_permissions(
     driver: &dyn PlatformDriver,
     app: &golem_parser::AppConfig,
+    ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     if app.permissions.is_empty() {
         return Ok(());
@@ -1518,7 +1519,7 @@ async fn apply_launch_permissions(
             app.name
         )
     })?;
-    let warnings = crate::actions::apply_permissions_map(driver, bundle, &app.permissions)
+    let warnings = crate::actions::apply_permissions_map(driver, bundle, &app.permissions, ctx)
         .await
         .with_context(|| format!("app '{}'", app.name))?;
     for warning in warnings {
@@ -4515,7 +4516,7 @@ action = "screenshot"
             Some("com.example"),
             &[("photos", "allow"), ("camera", "deny")],
         );
-        apply_launch_permissions(&driver, &app)
+        apply_launch_permissions(&driver, &app, &test_ctx(Path::new(".")))
             .await
             .expect("SHALL apply permissions");
         let calls = driver.get_calls();
@@ -4538,7 +4539,9 @@ action = "screenshot"
     async fn launch_permissions_empty_is_noop() {
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let app = app_with_permissions(Some("com.example"), &[]);
-        apply_launch_permissions(&driver, &app).await.expect("noop");
+        apply_launch_permissions(&driver, &app, &test_ctx(Path::new(".")))
+            .await
+            .expect("noop");
         assert!(driver.get_calls().iter().all(|c| c.0 != "set_permission"));
     }
 
@@ -4548,7 +4551,41 @@ action = "screenshot"
     async fn launch_permissions_without_bundle_errors() {
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let no_bundle = app_with_permissions(None, &[("photos", "allow")]);
-        assert!(apply_launch_permissions(&driver, &no_bundle).await.is_err());
+        assert!(
+            apply_launch_permissions(&driver, &no_bundle, &test_ctx(Path::new(".")))
+                .await
+                .is_err()
+        );
+    }
+
+    // A permission whose setting kills the companion (iOS notifications via
+    // applesimutils) SHALL get it restarted once, before the app launches.
+    #[tokio::test]
+    async fn launch_permissions_restart_a_companion_they_kill() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        driver.set_permission_restarts_companion("notifications");
+        let fake = FakeRecovery::new();
+        let mut ctx = test_ctx(Path::new("."));
+        ctx.recovery = Some(&fake);
+
+        let camera_only = app_with_permissions(Some("com.example"), &[("camera", "ask")]);
+        apply_launch_permissions(&driver, &camera_only, &ctx)
+            .await
+            .expect("SHALL apply");
+        assert_eq!(
+            fake.restart_count(),
+            0,
+            "camera SHALL not restart the companion"
+        );
+
+        let both = app_with_permissions(
+            Some("com.example"),
+            &[("notifications", "deny"), ("camera", "ask")],
+        );
+        apply_launch_permissions(&driver, &both, &ctx)
+            .await
+            .expect("SHALL apply");
+        assert_eq!(fake.restart_count(), 1, "one restart after all entries");
     }
 
     // ---------------------------------------------------------------

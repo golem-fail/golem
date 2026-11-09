@@ -76,6 +76,9 @@ pub struct MockPlatformDriver {
     /// found and accepted. `false` by default (matches the trait default:
     /// no system-alert layer). Set via `set_system_alert_accept`.
     system_alert_accept: Mutex<bool>,
+    /// Permissions whose setting `permission_restarts_companion` reports
+    /// as killing the companion. Empty by default.
+    companion_killing_permissions: Mutex<Vec<String>>,
     /// How long `get_hierarchy` sleeps before it answers, to model a busy
     /// device. Zero by default.
     hierarchy_delay: Mutex<std::time::Duration>,
@@ -115,7 +118,16 @@ impl MockPlatformDriver {
             type_verify: Mutex::new(None),
             system_alert_accept: Mutex::new(false),
             hierarchy_delay: Mutex::new(std::time::Duration::ZERO),
+            companion_killing_permissions: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Make setting `permission` report that it kills the companion.
+    pub fn set_permission_restarts_companion(&self, permission: &str) {
+        self.companion_killing_permissions
+            .lock()
+            .expect("lock poisoned")
+            .push(permission.to_string());
     }
 
     /// Make `get_hierarchy` sleep for `delay` before it answers.
@@ -463,6 +475,14 @@ impl PlatformDriver for MockPlatformDriver {
     async fn add_media(&self, path: &str) -> anyhow::Result<()> {
         self.record_call("add_media", vec![path.to_string()]);
         Ok(())
+    }
+
+    fn permission_restarts_companion(&self, permission: &str) -> bool {
+        self.companion_killing_permissions
+            .lock()
+            .expect("lock poisoned")
+            .iter()
+            .any(|p| p == permission)
     }
 
     async fn set_permission(
