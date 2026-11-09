@@ -10,14 +10,13 @@ name = "app-b"
 [[flow.apps.devices]]
 os = "ios:latest"
 type = "phone"
-# The `simctl` reset only reaches a simulator (#463 replaces it).
+# iOS permissions can only be set on a simulator.
 hardware = "virtual"
 
 [[block]]
 name = "dismiss_refuses_tracking"
 steps = [
-  { action = "bash", run = "xcrun simctl terminate ${_udid} fail.golem.testb; xcrun simctl privacy ${_udid} reset all fail.golem.testb" },
-  { action = "launch", app = "app-b" },
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
   { action = "tap", on_text = "Track" },
   { action = "dismiss_alert", timeout = 5000 },
   { action = "assert_visible", on_text = "Tracking: denied", timeout = 10000 },
@@ -26,8 +25,7 @@ steps = [
 [[block]]
 name = "accept_allows_tracking"
 steps = [
-  { action = "bash", run = "xcrun simctl terminate ${_udid} fail.golem.testb; xcrun simctl privacy ${_udid} reset all fail.golem.testb" },
-  { action = "launch", app = "app-b" },
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
   { action = "tap", on_text = "Track" },
   { action = "accept_alert", timeout = 5000 },
   { action = "assert_visible", on_text = "Tracking: allowed", timeout = 10000 },
