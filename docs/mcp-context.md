@@ -1077,7 +1077,7 @@ Find an element and capture its text into a variable.
 
 </details>
 
-<details><summary><code>help("act", "app-lifecycle")</code> · App Lifecycle · 273 chars · + 4 items</summary>
+<details><summary><code>help("act", "app-lifecycle")</code> · App Lifecycle · 305 chars · + 4 items</summary>
 
 Source: [src/actions-reference/40-app-lifecycle/00-intro.md](src/actions-reference/40-app-lifecycle/00-intro.md)
 
@@ -1088,7 +1088,7 @@ Start, stop and reset an app, and set its permissions.
 
 Items (help("act", item)):
 - launch: Launch or foreground an app
-- app-permissions: Grant or deny camera, photos, location and other permissions
+- app-permissions: Grant, deny or reset camera, photos, location, notifications, tracking and other permissions
 - stop: Terminate an app
 - clear_data: Clear app data
 ```
@@ -1120,7 +1120,7 @@ A `permissions` map always cold-starts the app, even without `restart = true`. U
 
 </details>
 
-<details><summary><code>help("act", "app-permissions")</code> · App permissions · 1620 chars</summary>
+<details><summary><code>help("act", "app-permissions")</code> · App permissions · 2237 chars</summary>
 
 Source: [src/actions-reference/40-app-lifecycle/20-app-permissions.llm.md](src/actions-reference/40-app-lifecycle/20-app-permissions.llm.md) (LLM text)
 
@@ -1136,26 +1136,33 @@ Set permissions with a `permission = mode` map, in `[[flow.apps]].permissions` (
 
 | Mode | Applies to | Meaning |
 |------|-----------|---------|
-| `allow` / `deny` | any permission | grant / explicitly denied. `location = "allow"` is foreground only. |
+| `allow` | any permission | granted. `location = "allow"` is foreground only. |
+| `deny` | any permission | refused: no prompt, the app sees it denied |
+| `ask` | any permission | not asked yet: the app's next request shows the OS prompt |
 | `always` | `location` only | background + foreground location |
 | `limited` | `photos` only | partial photo-library access |
 
 Any other mode/permission pairing is a parse error.
 
-Permission names: `camera`, `microphone`, `location`, `contacts`, `calendar`, `photos`. Unknown names are an error. Android also accepts a full `android.permission.*` string.
+Permission names: `camera`, `microphone`, `location`, `contacts`, `calendar`, `photos`, `notifications`, `tracking`. Unknown names are an error. Android also accepts a full `android.permission.*` string.
 
-Android: the app's `AndroidManifest.xml` must declare every permission you grant (`photos` needs `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED` and `READ_EXTERNAL_STORAGE`; `location = "always"` also needs `ACCESS_BACKGROUND_LOCATION`).
-
-iOS `photos` grants without a prompt only when `applesimutils` is installed. Without it, the app prompts at runtime; add this after the step that triggers photo access:
+To test a permission prompt, set it to `ask` first, so the prompt shows on every run:
 
 ```toml
-{ action = "accept_alert", if_fail = "ignore" }
+{ action = "launch", app = "app", permissions = { notifications = "ask" } }
+{ action = "tap", on_text = "Enable Notifications" }
+{ action = "accept_alert" }
 ```
 
-Notifications can't be pre-granted. Trigger the request in the app, then accept the system dialog:
+- `tracking` (App Tracking Transparency) is iOS only; on Android it sets nothing.
+- Android `notifications` is a runtime permission from Android 13; below it `allow`/`ask` set nothing and `deny` is an error.
+- iOS permissions need a simulator; on a physical iPhone they are an error (use `hardware = "virtual"` or branch on `_hardware`).
+
+Android: the app's `AndroidManifest.xml` must declare every permission you grant (`photos` needs `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED` and `READ_EXTERNAL_STORAGE`; `location = "always"` also needs `ACCESS_BACKGROUND_LOCATION`; `notifications` needs `POST_NOTIFICATIONS`).
+
+iOS `notifications` and `photos` need `applesimutils`. Without it `notifications` is an error, and `photos` warns and the app prompts at runtime; add this after the step that triggers photo access:
 
 ```toml
-{ action = "tap", on_text = "Enable Notifications" }
 { action = "accept_alert", if_fail = "ignore" }
 ```
 ````
@@ -2719,14 +2726,14 @@ Items (help("flow", item)):
 - performance-monitoring: Per-block memory, CPU, threads and fds; warn and error limits
 ````
 
-<details><summary><code>help("flow", "launch-permissions")</code> · Launch-time permissions · 827 chars</summary>
+<details><summary><code>help("flow", "launch-permissions")</code> · Launch-time permissions · 931 chars</summary>
 
 Source: [src/test-structure/10-flow/05-launch-permissions.md](src/test-structure/10-flow/05-launch-permissions.md)
 
 ````text
 ### Launch-time permissions
 
-An app entry may declare `permissions`. golem grants them **before the app is launched**, so they are in place from process start. A grant that fails is a warning, not a failure: the app then shows its permission prompt when it needs the permission.
+An app entry may declare `permissions`. golem grants them **before the app is launched**, so they are in place from process start. A permission golem can't set fails the flow, with one exception: iOS `photos` without `applesimutils` is a warning, and the app shows its permission prompt when it needs photos.
 
 ```toml
 [[flow.apps]]
@@ -2734,7 +2741,7 @@ name = "app"
 permissions = { photos = "allow", camera = "deny" }
 ```
 
-Keys use the cross-platform permission names (`camera`, `microphone`, `location`, `photos`, …). The value is a **mode**: `"allow"` or `"deny"` for any permission, plus `location = "always"` (background; `allow` is foreground) and `photos = "limited"`. To change a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map. App permissions (help("act", "app-permissions")) owns the full permission and mode reference.
+Keys use the cross-platform permission names (`camera`, `microphone`, `location`, `photos`, …). The value is a **mode**: `"allow"`, `"deny"` or `"ask"` (not asked yet, so the app prompts) for any permission, plus `location = "always"` (background; `allow` is foreground) and `photos = "limited"`. To change a permission later in a flow, relaunch the app with the `launch` action's own `permissions =` map. App permissions (help("act", "app-permissions")) owns the full permission and mode reference.
 ````
 
 </details>
@@ -3060,7 +3067,7 @@ Source: [src/test-structure/30-step/20-options.md](src/test-structure/30-step/20
 
 </details>
 
-<details><summary><code>help("flow", "timeout-multipliers")</code> · Timeout Multipliers · 1251 chars</summary>
+<details><summary><code>help("flow", "timeout-multipliers")</code> · Timeout Multipliers · 1374 chars</summary>
 
 Source: [src/test-structure/30-step/30-timeout-multipliers.md](src/test-structure/30-step/30-timeout-multipliers.md)
 
@@ -3077,6 +3084,7 @@ Each action has a built-in multiplier applied to the base timeout (`step_timeout
 | 5x | 25s | `launch`, `stop` |
 | 6x | 30s | `get_http`, `post_http`, `put_http`, `patch_http`, `delete_http`, `open_link`, `create_inbox` |
 | 8x | 40s | `scroll` (12x with `within`) |
+| 11x | 55s | `launch` whose `permissions` set `notifications` (on iOS, golem restarts its companion after setting them) |
 | 48x | 240s | `await_email` |
 
 The `auto_scroll = true` option sets 8x on any action (12x with `within`).

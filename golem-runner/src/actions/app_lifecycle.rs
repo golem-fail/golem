@@ -12,25 +12,33 @@ use crate::context::ExecutionContext;
 /// non-fatal warnings the driver surfaced (e.g. a photos pre-grant that
 /// couldn't be applied prompt-free and will fall back to a runtime prompt).
 ///
-/// The mode (`allow`/`deny`/`limited`/`always`) is validated by
+/// The mode (`allow`/`deny`/`ask`/`limited`/`always`) is validated by
 /// the parser/runner before it reaches here; the driver maps it to the platform
 /// primitive (`simctl`/`applesimutils`/`pm`). Keys are applied in sorted order
 /// so logs and `--seed` replay stay deterministic. The caller is responsible
 /// for the app being stopped first: iOS TCC ignores grants made to a running
 /// process. Shared by launch-time (`[[flow.apps]].permissions`) and the
-/// `launch` action's per-launch `permissions`.
+/// `launch` action's per-launch `permissions`. A permission whose setting
+/// kills the companion gets it restarted before this returns.
 pub(crate) async fn apply_permissions_map(
     driver: &dyn PlatformDriver,
     bundle_id: &str,
     permissions: &HashMap<String, String>,
+    ctx: &ExecutionContext<'_>,
 ) -> Result<Vec<String>> {
     let mut entries: Vec<(&String, &String)> = permissions.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
     let mut warnings = Vec::new();
+    let mut companion_lost = false;
     for (permission, mode) in entries {
         if let Some(warning) = driver.set_permission(bundle_id, permission, mode).await? {
             warnings.push(warning);
         }
+        companion_lost |= driver.permission_restarts_companion(permission);
+    }
+    if let (true, Some(recovery)) = (companion_lost, ctx.recovery) {
+        // Attempt 0: a planned restart, not one of the recovery budget's.
+        crate::executor::restart_and_emit(recovery, ctx, 0).await?;
     }
     Ok(warnings)
 }
@@ -46,7 +54,7 @@ fn parse_launch_permissions(step: &Step) -> Result<HashMap<String, String>> {
         golem_events::coded(
             golem_events::FailureCode::ParseMissingParam,
             anyhow::anyhow!(
-                "launch 'permissions' must be a table of shorthand = \"allow\"|\"deny\""
+                "launch 'permissions' must be a table of shorthand = \"allow\"|\"deny\"|\"ask\""
             ),
         )
     })?;
@@ -120,7 +128,7 @@ pub(crate) async fn handle_launch(
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     if !permissions.is_empty() {
-        for warning in apply_permissions_map(driver, bundle_id, &permissions).await? {
+        for warning in apply_permissions_map(driver, bundle_id, &permissions, ctx).await? {
             ctx.substep(golem_events::SubstepEvent::DriverWarning { message: warning });
         }
     }

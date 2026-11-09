@@ -1,0 +1,102 @@
+[flow]
+name = "Permission modes: allow, deny and ask"
+tags = ["permissions", "alert", "cross-platform"]
+
+# `deny` refuses with no prompt, `allow` grants with no prompt, and `ask`
+# brings the OS prompt back, even after a refusal the OS has fixed (#463).
+#
+# The status text is the evidence: the app renders the answer as soon as its
+# request returns, so "denied" or "granted" right after the tap means no
+# prompt, and "denied" not yet visible means a prompt is holding the request.
+# `assert_alert`/`assert_no_alert` are not used for that: on Android they
+# read test-app-b's own screen as a dialog (#464).
+#
+# Prompts are only refused here: Android `accept_alert` picks the wrong
+# button on a permission prompt (#464).
+[[flow.apps]]
+name = "app-b"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+# iOS permissions can only be set on a simulator.
+hardware = "virtual"
+
+[[block]]
+name = "camera_deny"
+steps = [
+  { action = "launch", app = "app-b", permissions = { camera = "deny" } },
+  { action = "tap", on_text = "Camera" },
+  { action = "assert_visible", on_text = "Camera: denied" },
+]
+
+[[block]]
+name = "camera_ask_after_deny"
+steps = [
+  { action = "launch", app = "app-b", permissions = { camera = "ask" } },
+  { action = "tap", on_text = "Camera" },
+  { action = "assert_not_visible", on_text = "Camera: denied", timeout = 2000 },
+  { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Camera: denied" },
+]
+
+[[block]]
+name = "camera_allow"
+steps = [
+  { action = "launch", app = "app-b", permissions = { camera = "allow" } },
+  { action = "tap", on_text = "Camera" },
+  { action = "assert_visible", on_text = "Camera: granted" },
+]
+
+[[block]]
+name = "notifications_deny"
+steps = [
+  { action = "launch", app = "app-b", permissions = { notifications = "deny" } },
+  { action = "tap", on_text = "Notify" },
+  { action = "assert_visible", on_text = "Notifications: denied" },
+]
+
+[[block]]
+name = "notifications_ask_after_deny"
+steps = [
+  { action = "launch", app = "app-b", permissions = { notifications = "ask" } },
+  { action = "tap", on_text = "Notify" },
+  { action = "assert_not_visible", on_text = "Notifications: denied", timeout = 2000 },
+  { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Notifications: denied" },
+]
+
+[[block]]
+name = "notifications_allow"
+steps = [
+  { action = "launch", app = "app-b", permissions = { notifications = "allow" } },
+  { action = "tap", on_text = "Notify" },
+  { action = "assert_visible", on_text = "Notifications: granted" },
+]
+
+# Android has no tracking prompt: the same map sets nothing there.
+[[block]]
+name = "tracking_is_nothing_on_android"
+where = { os = "android" }
+steps = [
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "assert_visible", on_text = "GOLEM Test B" },
+]
+
+# The tracking prompt is accepted, not refused: refusing it needs #440.
+[[block]]
+name = "tracking_modes"
+where = { os = "ios" }
+steps = [
+  { action = "launch", app = "app-b", permissions = { tracking = "deny" } },
+  { action = "tap", on_text = "Track" },
+  { action = "assert_visible", on_text = "Tracking: denied" },
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "tap", on_text = "Track" },
+  { action = "assert_alert" },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Tracking: allowed" },
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "tap", on_text = "Track" },
+  { action = "assert_alert" },
+  { action = "accept_alert" },
+]

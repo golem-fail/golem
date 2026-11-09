@@ -7,9 +7,10 @@
 /// Validate a `permissions` map entry — a `permission = mode` pair.
 ///
 /// The value (`mode`) enum:
-/// - `allow` / `deny` — valid for **any** permission (including a raw
+/// - `allow` / `deny` / `ask` — valid for **any** permission (including a raw
 ///   `android.permission.*` string passed through verbatim). For `location`,
-///   `allow` is the foreground/when-in-use grant.
+///   `allow` is the foreground/when-in-use grant. `ask` clears the decision, so
+///   the app's next request shows the OS prompt.
 /// - `limited` — **photos only** (iOS limited-library / Android partial media).
 /// - `always` — **location only** (background + foreground; `allow` is
 ///   foreground-only). There is no `inuse` (use `allow`) or `never` (use `deny`).
@@ -26,12 +27,9 @@ pub fn validate_permission_entry(permission: &str, mode: &str) -> Result<(), Str
         );
     }
     match mode {
-        // `allow`/`deny` are universal: `allow` = grant (for `location`, the
-        // foreground/when-in-use grant); `deny` = explicit-denied (`simctl
-        // privacy revoke` / `pm revoke`, distinct from a not-determined reset).
         // `location` adds one extra grant mode, `always` (background) — there is
         // no `inuse` (use `allow`) and no `never` (use `deny`).
-        "allow" | "deny" => Ok(()),
+        "allow" | "deny" | "ask" => Ok(()),
         "limited" if permission == "photos" => Ok(()),
         "always" if permission == "location" => Ok(()),
         "limited" => Err(format!(
@@ -42,7 +40,7 @@ pub fn validate_permission_entry(permission: &str, mode: &str) -> Result<(), Str
         )),
         other => Err(format!(
             "permission {permission:?} has invalid mode {other:?} — \
-             expected \"allow\" or \"deny\"\
+             expected \"allow\", \"deny\" or \"ask\"\
              {}",
             match permission {
                 "photos" => " (or \"limited\")",
@@ -63,6 +61,20 @@ mod tests {
         assert!(validate_permission_entry("camera", "deny").is_ok());
         // Raw platform permission string passes through with allow/deny.
         assert!(validate_permission_entry("android.permission.CAMERA", "allow").is_ok());
+    }
+
+    #[test]
+    fn ask_is_valid_for_any_key() {
+        for key in ["camera", "notifications", "tracking", "location", "photos"] {
+            assert!(validate_permission_entry(key, "ask").is_ok(), "{key}");
+        }
+        assert!(validate_permission_entry("android.permission.CAMERA", "ask").is_ok());
+    }
+
+    #[test]
+    fn unknown_mode_names_ask() {
+        let err = validate_permission_entry("camera", "reset").expect_err("bad mode");
+        assert!(err.contains("\"ask\""), "{err}");
     }
 
     #[test]

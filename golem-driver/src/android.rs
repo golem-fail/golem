@@ -184,16 +184,20 @@ fn normalize_android_permission(permission: &str, mode: &str, sdk_int: u32) -> R
         // location on Android 10+; `allow` (foreground) grants FINE only.
         // Granting only FINE_LOCATION for `always` leaves the app blocked
         // from background updates.
-        "location" => {
-            if mode == "always" {
-                vec![
-                    "android.permission.ACCESS_FINE_LOCATION",
-                    "android.permission.ACCESS_BACKGROUND_LOCATION",
-                ]
-            } else {
-                vec!["android.permission.ACCESS_FINE_LOCATION"]
-            }
-        }
+        "location" => match mode {
+            "always" => vec![
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.ACCESS_BACKGROUND_LOCATION",
+            ],
+            // Refusing or clearing covers the whole group, so a background
+            // grant left by an earlier `always` does not survive.
+            "deny" | "ask" => vec![
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.ACCESS_COARSE_LOCATION",
+                "android.permission.ACCESS_BACKGROUND_LOCATION",
+            ],
+            _ => vec!["android.permission.ACCESS_FINE_LOCATION"],
+        },
         "contacts" => vec!["android.permission.READ_CONTACTS"],
         "calendar" => vec!["android.permission.READ_CALENDAR"],
         // Photo access changed shape across Android versions:
@@ -218,14 +222,59 @@ fn normalize_android_permission(permission: &str, mode: &str, sdk_int: u32) -> R
                 vec!["android.permission.READ_EXTERNAL_STORAGE"]
             }
         }
+        // A runtime permission from Android 13; below it notifications are on
+        // and the app never asks.
+        "notifications" if sdk_int >= SDK_ANDROID_13 => {
+            vec!["android.permission.POST_NOTIFICATIONS"]
+        }
+        "notifications" if mode == "deny" => bail!(
+            "notifications = \"deny\" needs Android 13 or later: below it, \
+             notifications are not a runtime permission (SDK {sdk_int})"
+        ),
+        // Android has no tracking prompt; one flow serves both platforms.
+        "notifications" | "tracking" => vec![],
         other => bail!(
             "Unknown Android permission shorthand: {other:?}. Known shorthands: \
-             camera, microphone, location, contacts, calendar, photos. Or pass \
-             a full `android.permission.*` string. (Notifications: don't \
-             pre-grant — trigger the prompt from the app and use `accept_alert`.)"
+             camera, microphone, location, contacts, calendar, photos, \
+             notifications, tracking. Or pass a full `android.permission.*` string."
         ),
     };
     Ok(perms.into_iter().map(String::from).collect())
+}
+
+/// The `pm` calls that put one permission in `mode`. The `user-set` and
+/// `user-fixed` flags are what the OS records when the user refuses: with
+/// both set the app gets no prompt. A bare `pm revoke` leaves them clear, so
+/// the next request prompts again.
+fn android_permission_commands(bundle_id: &str, perm: &str, mode: &str) -> Vec<Vec<String>> {
+    let pm = |args: &[&str]| -> Vec<String> {
+        ["shell", "pm"]
+            .iter()
+            .chain(args)
+            .map(|a| a.to_string())
+            .collect()
+    };
+    let flags = ["user-set", "user-fixed"];
+    let with_flags = |verb: &str| -> Vec<String> {
+        let mut v = pm(&[verb, bundle_id, perm]);
+        v.extend(flags.iter().map(|f| f.to_string()));
+        v
+    };
+    match mode {
+        "deny" => vec![
+            pm(&["revoke", bundle_id, perm]),
+            with_flags("set-permission-flags"),
+        ],
+        "ask" => vec![
+            pm(&["revoke", bundle_id, perm]),
+            with_flags("clear-permission-flags"),
+        ],
+        // A grant leaves the flags of an earlier refusal, so they are cleared.
+        _ => vec![
+            pm(&["grant", bundle_id, perm]),
+            with_flags("clear-permission-flags"),
+        ],
+    }
 }
 
 /// Wrap a string in single quotes for safe interpolation into a
@@ -1105,9 +1154,26 @@ impl PlatformDriver for AndroidDriver {
         mode: &str,
     ) -> Result<Option<String>> {
         let sdk = self.sdk_int().await?;
-        let verb = if mode == "deny" { "revoke" } else { "grant" };
-        for perm in normalize_android_permission(permission, mode, sdk)? {
-            self.adb(&["shell", "pm", verb, bundle_id, &perm]).await?;
+        let perms = normalize_android_permission(permission, mode, sdk)?;
+        let grants = !matches!(mode, "deny" | "ask");
+        for (i, perm) in perms.iter().enumerate() {
+            for (j, cmd) in android_permission_commands(bundle_id, perm, mode)
+                .iter()
+                .enumerate()
+            {
+                let args: Vec<&str> = cmd.iter().map(String::as_str).collect();
+                let result = self.adb(&args).await;
+                // Best-effort, so as not to fail where a bare `pm grant` used
+                // to pass: the rest of a refused group (location's coarse and
+                // background), which an app need not declare and which older
+                // Android refuses `pm` on; and the flag cleanup after a grant,
+                // checked only on Android 14 and 16.
+                let optional = if grants { j > 0 } else { i > 0 };
+                if optional {
+                    continue;
+                }
+                result?;
+            }
         }
         Ok(None)
     }
@@ -1762,17 +1828,85 @@ mod tests {
     }
 
     #[test]
-    fn normalize_notifications_now_rejected_with_guidance() {
-        // We dropped `notifications` from pre-grant — the prompt-driven
-        // flow + `accept_alert` is the cross-platform path. The error
-        // message points authors at that pattern.
-        let err = normalize_android_permission("notifications", "allow", 34)
-            .expect_err("notifications SHALL no longer be a shorthand");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("accept_alert"),
-            "error should point at accept_alert, got: {msg}"
+    fn notifications_is_post_notifications_from_android_13() {
+        for mode in ["allow", "deny", "ask"] {
+            assert_eq!(
+                normalize_android_permission("notifications", mode, 33).expect("13+"),
+                vec!["android.permission.POST_NOTIFICATIONS"]
+            );
+        }
+    }
+
+    #[test]
+    fn notifications_below_android_13_sets_nothing_and_cannot_be_denied() {
+        assert!(normalize_android_permission("notifications", "allow", 32)
+            .expect("allow")
+            .is_empty());
+        assert!(normalize_android_permission("notifications", "ask", 32)
+            .expect("ask")
+            .is_empty());
+        let err = normalize_android_permission("notifications", "deny", 32)
+            .expect_err("deny SHALL fail below 13");
+        assert!(format!("{err}").contains("Android 13"), "{err}");
+    }
+
+    #[test]
+    fn tracking_sets_nothing_on_android() {
+        for mode in ["allow", "deny", "ask"] {
+            assert!(normalize_android_permission("tracking", mode, 36)
+                .expect("tracking SHALL be known")
+                .is_empty());
+        }
+    }
+
+    #[test]
+    fn location_deny_and_ask_cover_the_whole_group() {
+        for mode in ["deny", "ask"] {
+            let perms = normalize_android_permission("location", mode, 36).expect("known");
+            assert_eq!(perms[0], "android.permission.ACCESS_FINE_LOCATION");
+            assert!(perms.contains(&"android.permission.ACCESS_COARSE_LOCATION".to_string()));
+            assert!(perms.contains(&"android.permission.ACCESS_BACKGROUND_LOCATION".to_string()));
+        }
+        assert_eq!(
+            normalize_android_permission("location", "allow", 36).expect("known"),
+            vec!["android.permission.ACCESS_FINE_LOCATION"]
         );
+    }
+
+    #[test]
+    fn permission_commands_per_mode() {
+        let cmds = |mode| {
+            android_permission_commands("app", "P", mode)
+                .into_iter()
+                .map(|c| c.join(" "))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            cmds("deny"),
+            vec![
+                "shell pm revoke app P",
+                "shell pm set-permission-flags app P user-set user-fixed"
+            ],
+            "deny SHALL fix the refusal so the app gets no prompt"
+        );
+        assert_eq!(
+            cmds("ask"),
+            vec![
+                "shell pm revoke app P",
+                "shell pm clear-permission-flags app P user-set user-fixed"
+            ],
+            "ask SHALL clear the refusal so the app prompts again"
+        );
+        for grant in ["allow", "always", "limited"] {
+            assert_eq!(
+                cmds(grant),
+                vec![
+                    "shell pm grant app P",
+                    "shell pm clear-permission-flags app P user-set user-fixed"
+                ],
+                "{grant} SHALL grant and drop an earlier refusal"
+            );
+        }
     }
 
     #[test]

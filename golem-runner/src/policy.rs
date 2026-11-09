@@ -66,6 +66,14 @@ pub fn effective_timeout(step: &Step, base_timeout_ms: u64) -> u64 {
     computed.min(MAX_AUTO_TIMEOUT_MS)
 }
 
+/// Whether a `launch` step's `permissions` table sets `permission`.
+fn sets_permission(step: &Step, permission: &str) -> bool {
+    step.params
+        .get("permissions")
+        .and_then(|v| v.as_table())
+        .is_some_and(|t| t.contains_key(permission))
+}
+
 /// Per-action timeout multiplier applied to the base timeout.
 fn action_multiplier(step: &Step) -> u64 {
     // `within = { ... }` on a scrolling step (either action="scroll"
@@ -109,6 +117,9 @@ fn action_multiplier(step: &Step) -> u64 {
         // by a slow launch in the same flow (observed in
         // app_lifecycle.test on Pixel 7a: app loaded ~25s after stop,
         // but step timed out at 15s).
+        // Setting iOS notifications restarts the companion (12-15 s), inside
+        // the launch step.
+        "launch" if sets_permission(step, "notifications") => 11,
         "launch" | "stop" => 5,
 
         // 4x — external scripts (unknown duration)
@@ -1365,6 +1376,25 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
+    #[test]
+    fn launch_setting_notifications_gets_room_for_a_companion_restart() {
+        let mut launch = Step {
+            action: "launch".into(),
+            ..Default::default()
+        };
+        let mut perms = toml::map::Map::new();
+        perms.insert("camera".into(), toml::Value::String("ask".into()));
+        launch
+            .params
+            .insert("permissions".into(), toml::Value::Table(perms.clone()));
+        assert_eq!(effective_timeout(&launch, 5_000), 25_000);
+        perms.insert("notifications".into(), toml::Value::String("deny".into()));
+        launch
+            .params
+            .insert("permissions".into(), toml::Value::Table(perms));
+        assert_eq!(effective_timeout(&launch, 5_000), 55_000);
+    }
+
     // 22. stop also gets 5x like launch
     // -----------------------------------------------------------------
     #[test]

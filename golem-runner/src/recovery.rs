@@ -366,6 +366,10 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.set_permission(bundle_id, permission, mode).await
     }
 
+    fn permission_restarts_companion(&self, permission: &str) -> bool {
+        self.inner.permission_restarts_companion(permission)
+    }
+
     async fn start_recording(&self, name: &str) -> anyhow::Result<()> {
         self.inner.start_recording(name).await
     }

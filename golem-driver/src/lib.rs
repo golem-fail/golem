@@ -160,7 +160,7 @@ pub trait PlatformDriver: Send + Sync {
     /// Add media to device library
     async fn add_media(&self, path: &str) -> anyhow::Result<()>;
 
-    /// Set an app permission to a mode: `allow`/`deny` (universal),
+    /// Set an app permission to a mode: `allow`/`deny`/`ask` (universal),
     /// `limited` (photos), or `always` (location background). The
     /// `(permission, mode)` pair is pre-validated by the parser/runner. Returns
     /// an optional warning (e.g. a pre-grant that couldn't be fully applied and
@@ -171,6 +171,12 @@ pub trait PlatformDriver: Send + Sync {
         permission: &str,
         mode: &str,
     ) -> anyhow::Result<Option<String>>;
+
+    /// Whether setting `permission` kills the companion, so it must be
+    /// restarted before the next request. Default: `false`.
+    fn permission_restarts_companion(&self, _permission: &str) -> bool {
+        false
+    }
 
     /// Start screen recording
     async fn start_recording(&self, name: &str) -> anyhow::Result<()>;

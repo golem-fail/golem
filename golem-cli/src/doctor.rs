@@ -318,7 +318,7 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
             checks.push(Check::warn(
                 "applesimutils (optional)",
                 "not on PATH",
-                "recommended for prompt-free iOS photo-library pre-grant (simctl can't suppress the iOS 26 prompt); without it, `permissions = { photos = \"allow\" }` prompts at runtime — accept with `accept_alert`. Install: `brew tap wix/brew && brew install wix/brew/applesimutils`",
+                "needed for iOS `notifications` permissions (simctl has no notifications service) and for prompt-free photo-library pre-grant (simctl can't suppress the iOS 26 prompt); without it, `notifications` is an error and `photos = \"allow\"` prompts at runtime — accept with `accept_alert`. Install: `brew tap wix/brew && brew install wix/brew/applesimutils`",
             ));
         }
     } else {
