@@ -644,8 +644,7 @@ pub(crate) async fn handle_accept_alert(
                     "accept_alert failed: no buttons found in alert"
                 );
             }
-            // Last button is the positive action (OK, Yes, Open).
-            let btn = &buttons[buttons.len() - 1];
+            let btn = pick_alert_button(&buttons, Answer::Accept)?;
             let b = btn.effective_bounds();
             let (x, y) = (b.center_x(), b.center_y());
             ctx.substep(golem_events::SubstepEvent::Tap {
@@ -742,6 +741,70 @@ async fn answer_system_alert(
     }
 }
 
+/// Android dialog buttons by resource id, most-permissive grant first: the
+/// permission prompt's, then a framework dialog's positive or negative
+/// (`android:id/button1`/`button2`). An id does not change with the device
+/// language, and an `AlertDialog`'s button order does (a neutral button, a
+/// stacked bar).
+const ACCEPT_IDS: &[&str] = &[
+    "permission_allow_button",
+    "permission_allow_foreground_only_button",
+    "permission_allow_one_time_button",
+    "android:id/button1",
+];
+const DISMISS_IDS: &[&str] = &[
+    "permission_deny_button",
+    "permission_deny_and_dont_ask_again_button",
+    "android:id/button2",
+];
+
+/// The button of an in-tree alert that gives `answer`: by resource id, then
+/// for accept the last button (OK, Yes, Open) and for refuse the first one
+/// with a refusing label, else the first button (Cancel, No). A permission
+/// prompt is never answered by position: its "Don't allow" is last, so a
+/// prompt with no button golem knows fails at once and lists its buttons.
+fn pick_alert_button(
+    buttons: &[golem_element::Element],
+    answer: Answer,
+) -> Result<&golem_element::Element> {
+    let (action, ids) = match answer {
+        Answer::Accept => ("accept_alert", ACCEPT_IDS),
+        Answer::Dismiss => ("dismiss_alert", DISMISS_IDS),
+    };
+    if let Some(btn) = ids.iter().find_map(|id| {
+        buttons
+            .iter()
+            .find(|b| b.accessibility_id.as_deref() == Some(*id))
+    }) {
+        return Ok(btn);
+    }
+    if buttons.iter().any(|b| {
+        b.accessibility_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("permission_"))
+    }) {
+        let labels = buttons
+            .iter()
+            .map(|b| {
+                let label = b.text.as_deref().or(b.accessibility_label.as_deref());
+                format!("\"{}\"", label.unwrap_or_default())
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        crate::fail_code!(
+            golem_events::FailureCode::FlowAlertInteraction,
+            "{action} failed: the permission prompt has no button golem knows for this answer. Its buttons: {labels}"
+        );
+    }
+    Ok(match answer {
+        Answer::Accept => &buttons[buttons.len() - 1],
+        Answer::Dismiss => buttons
+            .iter()
+            .find(|b| is_negative(b))
+            .unwrap_or(&buttons[0]),
+    })
+}
+
 /// A button that refuses: "Don't Allow", "Cancel", "No", "Not Now".
 fn is_negative(button: &golem_element::Element) -> bool {
     const NEGATIVE: &[&str] = &[
@@ -829,13 +892,7 @@ pub(crate) async fn handle_dismiss_alert(
                     "dismiss_alert failed: no buttons found in alert"
                 );
             }
-            // The negative action by its label, else the first button
-            // (Cancel, No). An OS prompt does not put its negative first:
-            // the iOS photo prompt lists "Limit Access…" before "Don't Allow".
-            let btn = buttons
-                .iter()
-                .find(|b| is_negative(b))
-                .unwrap_or(&buttons[0]);
+            let btn = pick_alert_button(&buttons, Answer::Dismiss)?;
             let b = btn.effective_bounds();
             let (x, y) = (b.center_x(), b.center_y());
             ctx.substep(golem_events::SubstepEvent::Tap {
@@ -1518,6 +1575,119 @@ mod tests {
         .expect("SHALL not poll to the step timeout")
         .expect("the in-app alert SHALL be accepted");
         assert!(driver.get_calls().iter().any(|c| c.0 == "tap"));
+    }
+
+    fn id_button(id: &str, label: &str, x: i32) -> golem_element::Element {
+        let mut b = make_element_with_text("Button", label, Bounds::new(x, 1500, 100, 100));
+        b.accessibility_id = Some(id.to_string());
+        b
+    }
+
+    fn picked(buttons: &[golem_element::Element], answer: Answer) -> String {
+        pick_alert_button(buttons, answer)
+            .expect("SHALL pick a button")
+            .text
+            .clone()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_permission_prompt_is_answered_by_its_button_ids() {
+        // Android 11+ order: the refusal is last, so accept-by-position
+        // would refuse.
+        let camera = [
+            id_button(
+                "permission_allow_foreground_only_button",
+                "While using the app",
+                0,
+            ),
+            id_button("permission_allow_one_time_button", "Only this time", 100),
+            id_button("permission_deny_button", "Don’t allow", 200),
+        ];
+        assert_eq!(picked(&camera, Answer::Accept), "While using the app");
+        assert_eq!(picked(&camera, Answer::Dismiss), "Don’t allow");
+        let notifications = [
+            id_button("permission_allow_button", "Allow", 0),
+            id_button(
+                "permission_deny_and_dont_ask_again_button",
+                "Don’t allow",
+                100,
+            ),
+        ];
+        assert_eq!(picked(&notifications, Answer::Accept), "Allow");
+        assert_eq!(picked(&notifications, Answer::Dismiss), "Don’t allow");
+    }
+
+    #[test]
+    fn a_framework_dialog_is_answered_by_its_button_ids_in_any_language() {
+        // Neutral first: refusing by position would tap "Plus tard".
+        let dialog = [
+            id_button("android:id/button3", "Plus tard", 0),
+            id_button("android:id/button2", "Annuler", 100),
+            id_button("android:id/button1", "Oui", 200),
+        ];
+        assert_eq!(picked(&dialog, Answer::Accept), "Oui");
+        assert_eq!(picked(&dialog, Answer::Dismiss), "Annuler");
+    }
+
+    #[test]
+    fn a_permission_prompt_with_unknown_buttons_fails_listing_them() {
+        let prompt = [
+            id_button("permission_new_kind_button", "Keep", 0),
+            id_button("permission_other_button", "Discard", 100),
+        ];
+        let err = pick_alert_button(&prompt, Answer::Accept).expect_err("SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowAlertInteraction)
+        );
+        assert!(
+            format!("{err:#}").contains(r#"Its buttons: "Keep", "Discard""#),
+            "{err:#}"
+        );
+    }
+
+    #[test]
+    fn a_dialog_without_ids_keeps_the_label_and_position_rule() {
+        let dialog = [
+            make_element_with_text("Button", "Cancel", Bounds::new(0, 0, 10, 10)),
+            make_element_with_text("Button", "OK", Bounds::new(20, 0, 10, 10)),
+        ];
+        assert_eq!(picked(&dialog, Answer::Accept), "OK");
+        assert_eq!(picked(&dialog, Answer::Dismiss), "Cancel");
+    }
+
+    // On Android the permission prompt is the active window, inset from the
+    // screen; accept_alert SHALL tap its grant, not its last button.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_grants_an_android_permission_prompt() {
+        let mut root = make_element("FrameLayout", Bounds::new(28, 733, 1024, 988));
+        root.children = vec![
+            id_button(
+                "permission_allow_foreground_only_button",
+                "While using the app",
+                133,
+            ),
+            id_button("permission_allow_one_time_button", "Only this time", 333),
+            id_button("permission_deny_button", "Don’t allow", 533),
+        ];
+        let driver = MockPlatformDriver::new(root);
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        handle_accept_alert(&step, &driver, &ctx)
+            .await
+            .expect("accept_alert SHALL succeed");
+        let taps: Vec<_> = driver
+            .get_calls()
+            .into_iter()
+            .filter(|c| c.0 == "tap")
+            .collect();
+        assert_eq!(taps.len(), 1);
+        assert_eq!(
+            taps[0].1,
+            vec!["183", "1550"],
+            "SHALL tap \"While using the app\""
+        );
     }
 
     #[test]

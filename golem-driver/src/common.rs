@@ -276,6 +276,20 @@ mod tests {
         }
     }
 
+    // 9d'. A dialog's framework buttons keep their whole id.
+    #[test]
+    fn normalize_keeps_dialog_button_ids_whole() {
+        for rid in [
+            "android:id/button1",
+            "android:id/button2",
+            "android:id/button3",
+        ] {
+            let mut v = json!({ "resourceId": rid });
+            normalize_json(&mut v);
+            assert_eq!(v["accessibility_id"], rid);
+        }
+    }
+
     // 9e. contentDescription stays the label beside a resourceId.
     #[test]
     fn normalize_keeps_content_description_beside_resource_id() {
@@ -849,13 +863,14 @@ mod tests {
         );
     }
 
-    // 43. find_alert detects the Android FrameLayout-with-Button dialog pattern.
+    // 43. An Android tree whose root (the active window) is inset from the
+    //     screen's origin and holds a button is a dialog.
     #[test]
-    fn find_alert_android_dialog_pattern() {
+    fn find_alert_android_dialog_window() {
         let tree = el(json!({
             "element_type": "FrameLayout", "text": null, "accessibility_label": null,
             "placeholder": null,
-            "bounds": { "x": 0, "y": 100, "width": 200, "height": 200 },
+            "bounds": { "x": 28, "y": 979, "width": 1024, "height": 497 },
             "children": [
                 leaf("TextView", Some("Permission")),
                 leaf("Button", Some("Allow"))
@@ -868,18 +883,24 @@ mod tests {
         );
     }
 
-    // 44. Android FrameLayout at y == 0 is NOT treated as an alert.
+    // 44. A full-screen Android window is the app's own screen, though it
+    //     holds inset frames with buttons (test-app-b's Compose screen did).
     #[test]
-    fn find_alert_skips_top_anchored_frame() {
+    fn find_alert_skips_a_full_screen_window() {
         let tree = el(json!({
             "element_type": "FrameLayout", "text": null, "accessibility_label": null,
             "placeholder": null,
-            "bounds": { "x": 0, "y": 0, "width": 200, "height": 200 },
-            "children": [ leaf("Button", Some("X")) ]
+            "bounds": { "x": 0, "y": 0, "width": 1080, "height": 2400 },
+            "children": [{
+                "element_type": "FrameLayout", "text": null, "accessibility_label": null,
+                "placeholder": null,
+                "bounds": { "x": 0, "y": 118, "width": 1080, "height": 2219 },
+                "children": [ leaf("Button", Some("Refresh")) ]
+            }]
         }));
         assert!(
             find_alert(&tree).is_none(),
-            "y==0 frame SHALL NOT be an alert"
+            "an app's screen SHALL NOT be an alert"
         );
     }
 
