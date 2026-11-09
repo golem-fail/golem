@@ -441,9 +441,13 @@ pub(crate) fn normalize_android_rect(rect: &mut serde_json::Map<String, serde_js
 
 /// The app-assigned part of an Android resource name: `pkg:id/name` → `name`.
 /// A Compose `testTag` arrives bare. Framework ids (`android:id/content`) name
-/// layout plumbing, not anything an app author assigned, so they are dropped.
+/// layout plumbing, not anything an app author assigned, so they are dropped,
+/// except a dialog's buttons: `android:id/button1`/`2`/`3` are its positive,
+/// negative and neutral answers, kept whole so they can't collide with an
+/// app's own ids.
 fn app_resource_id(raw: &str) -> Option<&str> {
     let name = match raw.split_once(":id/") {
+        Some(("android", "button1" | "button2" | "button3")) => return Some(raw),
         Some(("android", _)) => return None,
         Some((_, name)) => name,
         None => raw,

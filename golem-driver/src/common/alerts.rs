@@ -53,31 +53,33 @@ pub fn cover_with_alerts(root: &mut Element, alerts: Vec<Element>) {
     root.children.extend(alerts);
 }
 
-/// Walk an element tree looking for an alert-type element.
 /// Find an alert dialog in the hierarchy.
-/// iOS: element_type == "alert". Android: detects the dialog pattern
-/// (a top-level window containing a title + message + button).
-pub fn find_alert(el: &Element) -> Option<Element> {
-    // iOS: native alert element type
+/// iOS: an element of type `alert`. Android: the tree is the active
+/// window's, so the root is the dialog when that window does not start at
+/// the screen's origin and holds a button. An activity's window fills the
+/// screen; a dialog's (an `AlertDialog`, a Compose dialog, the permission
+/// prompt) is inset. Inner layouts are not checked: any screen has inset
+/// frames that hold buttons.
+pub fn find_alert(root: &Element) -> Option<Element> {
+    if let Some(alert) = find_typed_alert(root) {
+        return Some(alert);
+    }
+    if (root.bounds.x > 0 || root.bounds.y > 0) && has_button_descendant(root) {
+        let mut alert = root.clone();
+        alert.text = extract_alert_message(&alert);
+        return Some(alert);
+    }
+    None
+}
+
+fn find_typed_alert(el: &Element) -> Option<Element> {
     if el.element_type.eq_ignore_ascii_case("alert") {
         let mut alert = el.clone();
         // Always extract the message body — the alert's own text is the title
         alert.text = extract_alert_message(&alert).or(alert.text);
         return Some(alert);
     }
-    // Android: dialog window pattern — FrameLayout at non-zero y with
-    // a Button child (native alert dialogs have this structure)
-    if el.element_type == "FrameLayout" && el.bounds.y > 0 && has_button_descendant(el) {
-        let mut alert = el.clone();
-        alert.text = extract_alert_message(&alert);
-        return Some(alert);
-    }
-    for child in &el.children {
-        if let Some(alert) = find_alert(child) {
-            return Some(alert);
-        }
-    }
-    None
+    el.children.iter().find_map(find_typed_alert)
 }
 
 /// Extract the message text from an alert's descendants.
