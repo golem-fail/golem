@@ -8,3 +8,5 @@ Tap the positive button (OK, Yes, Allow) on the current alert. It also handles O
 ```
 
 The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a prompt that may not appear.
+
+On iOS, an OS prompt is accepted by the label of its button, not its position: "Allow Full Access", "Allow Access to All Photos", "Open", "Allow", "Allow Once" or "Allow While Using App", the first one the prompt has. If it has none of them, the step fails at once and the error lists the prompt's buttons.

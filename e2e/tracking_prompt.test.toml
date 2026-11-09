@@ -8,8 +8,10 @@ tags = ["ios", "alert", "permissions"]
 [[flow.apps]]
 name = "app-b"
 [[flow.apps.devices]]
-os = "ios:26"
+os = "ios:latest"
 type = "phone"
+# The `simctl` reset only reaches a simulator (#463 replaces it).
+hardware = "virtual"
 
 [[block]]
 name = "dismiss_refuses_tracking"

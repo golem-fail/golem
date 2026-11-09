@@ -547,8 +547,6 @@ Accept or dismiss a dialog from the app or the OS.
 
 An OS prompt, such as a permission request, is in the tree on Android and on iOS. It covers the app: while it shows, the app's elements are not in the visible tree, so a step cannot target them and `assert_visible` on them fails. `tree(full = true)` still lists them, as hints. `assert_alert` sees the prompt, and `accept_alert` or `dismiss_alert` answers it.
 
-On iOS, `accept_alert` and `dismiss_alert` answer an OS prompt by the label of its button, such as "Allow" or "Ask App Not to Track". If the prompt has no button that golem knows, the step fails at once and the error lists the prompt's buttons.
-
 ### `accept_alert` — Accept dialog
 
 Tap the positive button (OK, Yes, Allow) on the current alert. It also handles OS prompts, such as permission requests and "Open in …?" dialogs.
@@ -560,6 +558,8 @@ Tap the positive button (OK, Yes, Allow) on the current alert. It also handles O
 
 The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a prompt that may not appear.
 
+On iOS, an OS prompt is accepted by the label of its button, not its position: "Allow Full Access", "Allow Access to All Photos", "Open", "Allow", "Allow Once" or "Allow While Using App", the first one the prompt has. If it has none of them, the step fails at once and the error lists the prompt's buttons.
+
 ### `dismiss_alert` — Dismiss dialog
 
 Tap the negative button (Cancel, No, Don't Allow) on the current alert, in the app or from the OS (an iOS permission prompt, for example).
@@ -569,6 +569,8 @@ Tap the negative button (Cancel, No, Don't Allow) on the current alert, in the a
 ```
 
 The step fails if no alert appears before the timeout. Use `if_fail = "ignore"` for a dialog that may not appear.
+
+On iOS, an OS prompt is refused by the label of its button, not its position: "Don't Allow", "Ask App Not to Track" (the tracking prompt), "Cancel", "Not Now", "Deny" or "No", the first one the prompt has. If it has none of them, the step fails at once and the error lists the prompt's buttons.
 
 ## External
 
