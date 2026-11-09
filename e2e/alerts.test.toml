@@ -20,8 +20,11 @@ name = "alert_tests"
 steps = [
   { action = "assert_visible", on_text = "Submit" },
 
-  # Trigger a simple alert (button is off-screen, use auto_scroll)
-  { action = "tap", on_text = "Show Alert", auto_scroll = true },
+  # Jump to the alert triggers with the menu: scrolling there is not what
+  # this flow tests, and on Android it costs ~20 swipes.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-alert-triggers" },
+  { action = "tap", on_text = "Show Alert" },
 
   # Dismiss the alert via its positive button (OK).
   { action = "accept_alert" },
