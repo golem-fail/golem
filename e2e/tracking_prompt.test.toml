@@ -1,0 +1,32 @@
+[flow]
+name = "Tracking prompt answered by label"
+tags = ["ios", "alert", "permissions"]
+
+# The App Tracking Transparency prompt refuses with "Ask App Not to Track",
+# not "Don't Allow". dismiss_alert answers it on SpringBoard, never by a tap
+# through the app (#440).
+[[flow.apps]]
+name = "app-b"
+[[flow.apps.devices]]
+os = "ios:26"
+type = "phone"
+
+[[block]]
+name = "dismiss_refuses_tracking"
+steps = [
+  { action = "bash", run = "xcrun simctl terminate ${_udid} fail.golem.testb; xcrun simctl privacy ${_udid} reset all fail.golem.testb" },
+  { action = "launch", app = "app-b" },
+  { action = "tap", on_text = "Track" },
+  { action = "dismiss_alert", timeout = 5000 },
+  { action = "assert_visible", on_text = "Tracking: denied", timeout = 10000 },
+]
+
+[[block]]
+name = "accept_allows_tracking"
+steps = [
+  { action = "bash", run = "xcrun simctl terminate ${_udid} fail.golem.testb; xcrun simctl privacy ${_udid} reset all fail.golem.testb" },
+  { action = "launch", app = "app-b" },
+  { action = "tap", on_text = "Track" },
+  { action = "accept_alert", timeout = 5000 },
+  { action = "assert_visible", on_text = "Tracking: allowed", timeout = 10000 },
+]

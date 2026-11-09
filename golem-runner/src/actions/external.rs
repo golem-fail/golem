@@ -605,59 +605,60 @@ pub(crate) async fn handle_accept_alert(
     // under sweep load, while the surrounding step still had budget
     // left to find them.
     loop {
-        // OS-owned prompt (iOS SpringBoard) first: accept it deterministically
-        // by querying SpringBoard's alert and tapping the affirmative by its
-        // label. The tree lists a system alert too, but its last button is
-        // not always the affirmative (the photo prompt's is the middle one).
-        // Preferred over the poke below because the UI-interruption-monitor
-        // fires only at iOS's discretion (~40% misses on the photo prompt).
-        // No-op (Ok(false)) on platforms without a system-alert layer / when
-        // no prompt is up, so we fall through to the poke + re-loop. A companion
-        // DEATH here is NOT swallowed into `false` (which would spin until the
-        // step deadline → EF408); it propagates so recovery can engage.
-        match driver.accept_system_alert().await {
-            Ok(true) => return wait_for_alert_gone(driver).await,
-            Ok(false) => {}
-            Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
-            Err(_) => {}
-        }
+        // The tree first, then SpringBoard: a SpringBoard alert the tree holds
+        // is still up when SpringBoard is asked, so it is answered by label,
+        // not tapped from the tree. Asking SpringBoard twice (before and after
+        // the fetch) would close the same gap at ~2 s a query while an in-app
+        // alert is up.
+        //
         // A system prompt (iOS SpringBoard) blocks the app's own hierarchy
         // fetch, so this can error while the prompt is up. Tolerate a *transient*
         // error and keep poking rather than aborting the accept — bailing here
-        // (the old `?`) was why a slow-to-appear permission prompt intermittently
-        // went unhandled. But a companion DEATH won't answer a re-poll: propagate
+        // was why a slow-to-appear permission prompt intermittently went
+        // unhandled. But a companion DEATH won't answer a re-poll: propagate
         // it so the step surfaces the death code (not a swallowed EF408) and the
-        // step loop's commit-aware recovery can fire. An in-app alert is only
-        // reachable when the fetch succeeds.
-        match crate::resolution::get_hierarchy_bounded(driver).await {
+        // step loop's commit-aware recovery can fire.
+        let alert = match crate::resolution::get_hierarchy_bounded(driver).await {
             Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
-            Err(_) => {}
-            Ok((root, _meta)) => {
-                if let Some(alert) = golem_driver::common::find_alert(&root) {
-                    let buttons = golem_driver::common::find_alert_buttons(&alert);
-                    if buttons.is_empty() {
-                        crate::fail_code!(
-                            golem_events::FailureCode::FlowAlertInteraction,
-                            "accept_alert failed: no buttons found in alert"
-                        );
-                    }
-                    // Last button is the positive action (OK, Yes, Open).
-                    let btn = &buttons[buttons.len() - 1];
-                    let b = btn.effective_bounds();
-                    let (x, y) = (b.center_x(), b.center_y());
-                    ctx.substep(golem_events::SubstepEvent::Tap {
-                        point: golem_events::Point { x, y },
-                        element_bounds: Some(golem_events::Rect {
-                            x: b.x,
-                            y: b.y,
-                            width: b.width,
-                            height: b.height,
-                        }),
-                    });
-                    driver.tap(x, y).await?;
-                    return wait_for_alert_gone(driver).await;
-                }
+            Err(_) => None,
+            Ok((root, _meta)) => golem_driver::common::find_alert(&root),
+        };
+        // SpringBoard answers its alert by label: the tree's last button is
+        // not always the affirmative (the photo prompt's is the middle one).
+        // Preferred over the poke below because the UI-interruption-monitor
+        // fires only at iOS's discretion (~40% misses on the photo prompt).
+        // `CheckTree` on platforms without a system-alert layer.
+        match answer_system_alert(driver, Answer::Accept).await? {
+            SystemAlertStep::Done => return Ok(()),
+            SystemAlertStep::Poll => {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                continue;
             }
+            SystemAlertStep::CheckTree => {}
+        }
+        if let Some(alert) = alert {
+            let buttons = golem_driver::common::find_alert_buttons(&alert);
+            if buttons.is_empty() {
+                crate::fail_code!(
+                    golem_events::FailureCode::FlowAlertInteraction,
+                    "accept_alert failed: no buttons found in alert"
+                );
+            }
+            // Last button is the positive action (OK, Yes, Open).
+            let btn = &buttons[buttons.len() - 1];
+            let b = btn.effective_bounds();
+            let (x, y) = (b.center_x(), b.center_y());
+            ctx.substep(golem_events::SubstepEvent::Tap {
+                point: golem_events::Point { x, y },
+                element_bounds: Some(golem_events::Rect {
+                    x: b.x,
+                    y: b.y,
+                    width: b.width,
+                    height: b.height,
+                }),
+            });
+            driver.tap(x, y).await?;
+            return wait_for_alert_gone(driver).await;
         }
         // Re-poke every iteration: a system permission prompt (iOS) appears
         // asynchronously after the triggering action, so a single early poke
@@ -673,11 +674,80 @@ pub(crate) async fn handle_accept_alert(
     }
 }
 
+#[derive(Clone, Copy)]
+enum Answer {
+    Accept,
+    Dismiss,
+}
+
+/// What the answer to a system alert leaves the step to do.
+#[derive(Debug, PartialEq, Eq)]
+enum SystemAlertStep {
+    /// The system alert is answered and gone.
+    Done,
+    /// A system alert is up but not ready: ask again.
+    Poll,
+    /// SpringBoard has no alert up, or did not answer: tap the tree's alert.
+    CheckTree,
+}
+
+/// Answer an OS-owned alert (iOS SpringBoard) by its button's label.
+///
+/// The tree holds a SpringBoard alert too, but its button is not tapped by
+/// coordinates: a tap through the app while a system alert is up fires
+/// XCTest's interruption monitor, which allows the alert and can block the
+/// companion until the host restarts it. So an alert with no button golem
+/// knows fails at once, listing its buttons. A companion death propagates
+/// so recovery can engage.
+///
+/// Two cases still reach the tree: an alert hosted outside SpringBoard
+/// (`com.apple.springboard.SystemApp`, whose query blocks the companion's
+/// main thread while an in-app alert is up), and any other endpoint error.
+/// An error is not polled: an endpoint that keeps failing would then hold an
+/// in-app alert to the step timeout.
+async fn answer_system_alert(
+    driver: &dyn PlatformDriver,
+    answer: Answer,
+) -> Result<SystemAlertStep> {
+    let (action, verb, reply) = match answer {
+        Answer::Accept => ("accept_alert", "accept", driver.accept_system_alert().await),
+        Answer::Dismiss => (
+            "dismiss_alert",
+            "refuse",
+            driver.dismiss_system_alert().await,
+        ),
+    };
+    match reply {
+        Ok(golem_driver::SystemAlertAnswer::Tapped) => {
+            wait_for_alert_gone(driver).await?;
+            Ok(SystemAlertStep::Done)
+        }
+        Ok(golem_driver::SystemAlertAnswer::NoAlert) => Ok(SystemAlertStep::CheckTree),
+        Ok(golem_driver::SystemAlertAnswer::Unknown(buttons)) if buttons.is_empty() => {
+            Ok(SystemAlertStep::Poll)
+        }
+        Ok(golem_driver::SystemAlertAnswer::Unknown(buttons)) => {
+            let labels = buttons
+                .iter()
+                .map(|b| format!("\"{b}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            crate::fail_code!(
+                golem_events::FailureCode::FlowAlertInteraction,
+                "{action} failed: the system alert has no button golem knows to {verb} it with. Its buttons: {labels}"
+            )
+        }
+        Err(e) if crate::recovery::is_companion_death_err(&e) => Err(e),
+        Err(_) => Ok(SystemAlertStep::CheckTree),
+    }
+}
+
 /// A button that refuses: "Don't Allow", "Cancel", "No", "Not Now".
 fn is_negative(button: &golem_element::Element) -> bool {
     const NEGATIVE: &[&str] = &[
         "don't allow",
         "don’t allow",
+        "ask app not to track",
         "cancel",
         "no",
         "not now",
@@ -734,21 +804,24 @@ pub(crate) async fn handle_dismiss_alert(
     driver: &dyn PlatformDriver,
     ctx: &crate::context::ExecutionContext<'_>,
 ) -> Result<()> {
-    // An iOS system prompt is in the tree too, but a tap through the app
-    // fires XCTest's interruption monitor, which allows it. So a system
-    // prompt goes first, refused by its label on SpringBoard.
-    //
     // No internal deadline — the step's timeout governs (see
     // accept_alert for rationale).
     loop {
-        match driver.dismiss_system_alert().await {
-            Ok(true) => return wait_for_alert_gone(driver).await,
-            Ok(false) => {}
+        // The tree first, then SpringBoard (see accept_alert).
+        let alert = match crate::resolution::get_hierarchy_bounded(driver).await {
             Err(e) if crate::recovery::is_companion_death_err(&e) => return Err(e),
-            Err(_) => {}
+            Err(_) => None,
+            Ok((root, _meta)) => golem_driver::common::find_alert(&root),
+        };
+        match answer_system_alert(driver, Answer::Dismiss).await? {
+            SystemAlertStep::Done => return Ok(()),
+            SystemAlertStep::Poll => {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                continue;
+            }
+            SystemAlertStep::CheckTree => {}
         }
-        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
-        if let Some(alert) = golem_driver::common::find_alert(&root) {
+        if let Some(alert) = alert {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
                 crate::fail_code!(
@@ -1318,7 +1391,7 @@ mod tests {
     async fn accept_alert_uses_system_alert_when_no_in_app_alert() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
-        driver.set_system_alert_accept(true);
+        driver.set_system_alert(golem_driver::SystemAlertAnswer::Tapped);
 
         let step = make_step("accept_alert");
         let ctx = test_ctx(Path::new("."));
@@ -1335,6 +1408,124 @@ mod tests {
             !calls.iter().any(|c| c.0 == "tap"),
             "SHALL NOT coordinate-tap when the system alert accepts directly"
         );
+    }
+
+    // A system alert sits in the tree too; its buttons SHALL never be tapped
+    // through the app. One golem has no label for fails at once.
+    async fn unknown_system_alert_fails(action: &str) {
+        let driver = MockPlatformDriver::new(root_with_alert());
+        driver.set_system_alert(golem_driver::SystemAlertAnswer::Unknown(vec![
+            "Keep".into(),
+            "Discard".into(),
+        ]));
+        let step = make_step(action);
+        let ctx = test_ctx(Path::new("."));
+        let run = async {
+            match action {
+                "accept_alert" => handle_accept_alert(&step, &driver, &ctx).await,
+                _ => handle_dismiss_alert(&step, &driver, &ctx).await,
+            }
+        };
+        let err = tokio::time::timeout(std::time::Duration::from_secs(1), run)
+            .await
+            .expect("SHALL fail at once, not poll to the step timeout")
+            .expect_err("an unknown system alert SHALL fail the step");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowAlertInteraction)
+        );
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains(r#"Its buttons: "Keep", "Discard""#),
+            "SHALL list the alert's buttons, got: {msg}"
+        );
+        assert!(
+            !driver.get_calls().iter().any(|c| c.0 == "tap"),
+            "SHALL NOT tap the system alert through the app"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn dismiss_alert_fails_at_once_on_an_unknown_system_alert() {
+        unknown_system_alert_fails("dismiss_alert").await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_fails_at_once_on_an_unknown_system_alert() {
+        unknown_system_alert_fails("accept_alert").await;
+    }
+
+    // A system alert that is still animating has no button labels yet. It
+    // SHALL be asked again, never tapped through the app from the tree.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn dismiss_alert_waits_out_a_system_alert_without_labels() {
+        let driver = MockPlatformDriver::new(root_with_alert());
+        driver.set_system_alert(golem_driver::SystemAlertAnswer::Unknown(vec![]));
+        let step = make_step("dismiss_alert");
+        let ctx = test_ctx(Path::new("."));
+        let polled = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            handle_dismiss_alert(&step, &driver, &ctx),
+        )
+        .await;
+        assert!(polled.is_err(), "SHALL keep polling until the step timeout");
+        let calls = driver.get_calls();
+        assert!(!calls.iter().any(|c| c.0 == "tap"), "SHALL NOT tap");
+        assert!(
+            calls
+                .iter()
+                .filter(|c| c.0 == "dismiss_system_alert")
+                .count()
+                > 1,
+            "SHALL ask SpringBoard again"
+        );
+    }
+
+    // The tree's alert is tapped only when SpringBoard, asked after the
+    // tree fetch, has no alert: a system alert in that tree is still up then
+    // and is answered by label instead.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn dismiss_alert_asks_springboard_after_the_tree_fetch() {
+        let driver = MockPlatformDriver::new(root_with_alert());
+        let step = make_step("dismiss_alert");
+        let ctx = test_ctx(Path::new("."));
+        handle_dismiss_alert(&step, &driver, &ctx)
+            .await
+            .expect("an in-app alert SHALL be dismissed");
+        let calls: Vec<_> = driver
+            .get_calls()
+            .into_iter()
+            .map(|c| c.0)
+            .filter(|n| ["get_hierarchy", "dismiss_system_alert", "tap"].contains(&n.as_str()))
+            .take(3)
+            .collect();
+        assert_eq!(calls, vec!["get_hierarchy", "dismiss_system_alert", "tap"]);
+    }
+
+    // An endpoint that keeps failing (a gateway timeout) SHALL not hold an
+    // in-app alert to the step timeout.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn accept_alert_taps_an_in_app_alert_when_springboard_errors() {
+        let driver = MockPlatformDriver::new(root_with_alert());
+        driver.set_error("accept_system_alert", "504 accept-system-alert timed out");
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            handle_accept_alert(&step, &driver, &ctx),
+        )
+        .await
+        .expect("SHALL not poll to the step timeout")
+        .expect("the in-app alert SHALL be accepted");
+        assert!(driver.get_calls().iter().any(|c| c.0 == "tap"));
+    }
+
+    #[test]
+    fn the_tracking_prompt_refusal_is_negative() {
+        let btn = make_element_with_text("Button", "Ask App Not to Track", Bounds::new(0, 0, 1, 1));
+        assert!(is_negative(&btn));
+        let allow = make_element_with_text("Button", "Allow", Bounds::new(0, 0, 1, 1));
+        assert!(!is_negative(&allow));
     }
 
     // Bug 4: a companion death during the accept_alert poll loop's hierarchy

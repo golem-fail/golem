@@ -256,7 +256,7 @@ final class RequestRouter {
         return .json([
             "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.18.0",
+            "version": "0.18.2",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -413,7 +413,8 @@ final class RequestRouter {
     /// permission prompt, deep-link "Open in <App>?" confirm) by finding
     /// and tapping its affirmative button. Returns `{"accepted": bool}` —
     /// false when no system alert is on screen (a no-op, e.g. the prompt
-    /// was pre-granted), which the runner treats as "keep polling".
+    /// was pre-granted), which the runner treats as "keep polling" — plus
+    /// `buttons` when an alert is up but has no button golem knows.
     ///
     /// Why this exists alongside the UIInterruptionMonitor: the monitor
     /// fires only at iOS's discretion (Apple: "when a UI action is
@@ -425,51 +426,55 @@ final class RequestRouter {
     /// `statusBars.firstMatch`, `/debug/probe`'s `alerts`/`snapshot`) is
     /// already proven safe in this companion — it does NOT terminate the
     /// harness. The added risk here is the `.tap()` (an XCUI *action* on a
-    /// cross-app element, not just a query). Scoped to `.alerts.firstMatch`
-    /// so we never snapshot SpringBoard's full tree. Labels are matched by
+    /// cross-app element, not just a query). Scoped to the first alert or
+    /// sheet so we never snapshot SpringBoard's full tree. Labels are matched by
     /// text (the photo prompt's affirmative is the MIDDLE button, so a
     /// positional "last button" tap would hit "Don't Allow").
     private func handleAcceptSystemAlert(query: [String: String]) -> HTTPResponse {
-        // Affirmatives, most-permissive-first. Exact XCUI labels as reported
-        // by /debug/probe on iOS 26 (e.g. "Allow Full Access" for the photo
-        // full-library prompt).
-        let labels = [
-            "Allow Full Access", "Allow Access to All Photos",
-            "Open", "Allow", "Allow Once", "Allow While Using App",
-        ]
-        guard let accepted = tapSystemAlertButton(labels) else {
-            return gatewayTimeout("accept-system-alert")
-        }
-        return .json(["accepted": accepted])
+        return answerSystemAlert(SystemAlertButtons.accept, key: "accepted", route: "accept-system-alert")
     }
 
     /// The negative of `handleAcceptSystemAlert`. A tap on the app cannot
     /// do it: an XCUI action on the app while a system alert is up fires
     /// the UI-interruption monitor, which answers with the affirmative.
     private func handleDismissSystemAlert(query: [String: String]) -> HTTPResponse {
-        let labels = ["Don’t Allow", "Don't Allow", "Cancel", "Not Now", "Deny", "No"]
-        guard let dismissed = tapSystemAlertButton(labels) else {
-            return gatewayTimeout("dismiss-system-alert")
-        }
-        return .json(["dismissed": dismissed])
+        return answerSystemAlert(SystemAlertButtons.dismiss, key: "dismissed", route: "dismiss-system-alert")
     }
 
-    /// Tap the first of `labels` that SpringBoard's alert has. `nil` when
-    /// the main thread did not answer in time.
-    private func tapSystemAlertButton(_ labels: [String]) -> Bool? {
-        return runOnMain(timeout: Self.kTimeoutFast, { () -> Bool in
-            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-            let alert = springboard.alerts.firstMatch
-            guard alert.exists else { return false }
-            for label in labels {
-                let btn = alert.buttons[label]
-                if btn.exists {
-                    btn.tap()
-                    return true
-                }
+    /// Tap the first of `labels` that the system alert has, and answer
+    /// `{key: bool}`. While an alert is up and no tap happened, `buttons`
+    /// lists its labels (empty while it animates), so the host never falls
+    /// back to a tap through the app.
+    private func answerSystemAlert(_ labels: [String], key: String, route: String) -> HTTPResponse {
+        guard let outcome = runOnMain(timeout: Self.kTimeoutFast, { () -> SystemAlertButtons.Outcome in
+            guard let alert = Self.systemAlert() else { return .noAlert }
+            let buttons = alert.buttons.allElementsBoundByIndex.map { $0.label }
+            let outcome = SystemAlertButtons.pick(labels, from: buttons)
+            if case .tap(let label) = outcome {
+                alert.buttons[label].firstMatch.tap()
             }
-            return false
-        })
+            return outcome
+        }) else {
+            return gatewayTimeout(route)
+        }
+        switch outcome {
+        case .noAlert: return .json([key: false])
+        case .notReady: return .json([key: false, "buttons": [String]()])
+        case .tap: return .json([key: true])
+        case .unmatched(let buttons): return .json([key: false, "buttons": buttons])
+        }
+    }
+
+    /// SpringBoard's first alert or action sheet. Not
+    /// `com.apple.springboard.SystemApp` as well: a query on it blocks the
+    /// main thread past the timeout while an in-app alert is up.
+    private static func systemAlert() -> XCUIElement? {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for candidate in [springboard.alerts.firstMatch, springboard.sheets.firstMatch]
+        where candidate.exists {
+            return candidate
+        }
+        return nil
     }
 
     /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.
