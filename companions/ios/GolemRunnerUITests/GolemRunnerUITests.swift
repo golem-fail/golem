@@ -38,7 +38,7 @@ final class GolemRunnerUITests: XCTestCase {
             "platform": "ios",
             "device_id": deviceId,
             "device_name": device.name,
-            "version": "0.18.0"
+            "version": "0.18.2"
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body),
@@ -106,15 +106,7 @@ final class GolemRunnerUITests: XCTestCase {
         // For permission prompts that *only* expose "OK" or "Yes",
         // the test should use `accept_alert` explicitly.
         addUIInterruptionMonitor(withDescription: "golem-system-alert") { alert in
-            // Ordered most-permissive-first. "Allow Full Access" / "Allow
-            // Access to All Photos" are the affirmative on the iOS photo-library
-            // prompt (a 3-button alert whose positive option is NOT last, so a
-            // last-button tap would hit "Don't Allow"); the earlier labels cover
-            // camera/location/deep-link confirms.
-            for label in [
-                "Allow Full Access", "Allow Access to All Photos",
-                "Open", "Allow", "Allow Once", "Allow While Using App",
-            ] {
+            for label in SystemAlertButtons.accept {
                 let btn = alert.buttons[label]
                 if btn.exists {
                     btn.tap()

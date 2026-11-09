@@ -1,0 +1,32 @@
+[flow]
+name = "Tracking prompt answered by label"
+tags = ["ios", "alert", "permissions"]
+
+# The App Tracking Transparency prompt refuses with "Ask App Not to Track",
+# not "Don't Allow". dismiss_alert answers it on SpringBoard, never by a tap
+# through the app (#440).
+[[flow.apps]]
+name = "app-b"
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+# iOS permissions can only be set on a simulator.
+hardware = "virtual"
+
+[[block]]
+name = "dismiss_refuses_tracking"
+steps = [
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "tap", on_text = "Track" },
+  { action = "dismiss_alert", timeout = 5000 },
+  { action = "assert_visible", on_text = "Tracking: denied", timeout = 10000 },
+]
+
+[[block]]
+name = "accept_allows_tracking"
+steps = [
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "tap", on_text = "Track" },
+  { action = "accept_alert", timeout = 5000 },
+  { action = "assert_visible", on_text = "Tracking: allowed", timeout = 10000 },
+]

@@ -72,10 +72,10 @@ pub struct MockPlatformDriver {
     /// run the check); set to `Some(true)` to simulate an un-verified
     /// mutation (slow IME) or `Some(false)` a verified one.
     type_verify: Mutex<Option<bool>>,
-    /// Value `accept_system_alert` returns — whether a system alert was
-    /// found and accepted. `false` by default (matches the trait default:
-    /// no system-alert layer). Set via `set_system_alert_accept`.
-    system_alert_accept: Mutex<bool>,
+    /// What `accept_system_alert` and `dismiss_system_alert` answer.
+    /// `NoAlert` by default (matches the trait default: no system-alert
+    /// layer). Set via `set_system_alert`.
+    system_alert: Mutex<crate::SystemAlertAnswer>,
     /// Permissions whose setting `permission_restarts_companion` reports
     /// as killing the companion. Empty by default.
     companion_killing_permissions: Mutex<Vec<String>>,
@@ -116,7 +116,7 @@ impl MockPlatformDriver {
             foreground: Mutex::new(None),
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
             type_verify: Mutex::new(None),
-            system_alert_accept: Mutex::new(false),
+            system_alert: Mutex::new(crate::SystemAlertAnswer::NoAlert),
             hierarchy_delay: Mutex::new(std::time::Duration::ZERO),
             companion_killing_permissions: Mutex::new(Vec::new()),
         }
@@ -293,9 +293,9 @@ impl MockPlatformDriver {
         *self.type_verify.lock().expect("lock poisoned") = verify;
     }
 
-    /// Set whether `accept_system_alert` reports a system alert accepted.
-    pub fn set_system_alert_accept(&self, accepted: bool) {
-        *self.system_alert_accept.lock().expect("lock poisoned") = accepted;
+    /// Set what `accept_system_alert` and `dismiss_system_alert` answer.
+    pub fn set_system_alert(&self, answer: crate::SystemAlertAnswer) {
+        *self.system_alert.lock().expect("lock poisoned") = answer;
     }
 }
 
@@ -520,17 +520,16 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn accept_system_alert(&self) -> anyhow::Result<bool> {
+    async fn accept_system_alert(&self) -> anyhow::Result<crate::SystemAlertAnswer> {
         self.record_call("accept_system_alert", vec![]);
         self.check_error("accept_system_alert")?;
-        Ok(*self.system_alert_accept.lock().expect("lock poisoned"))
+        Ok(self.system_alert.lock().expect("lock poisoned").clone())
     }
 
-    /// Answers as `accept_system_alert` does: whether a system alert is up.
-    async fn dismiss_system_alert(&self) -> anyhow::Result<bool> {
+    async fn dismiss_system_alert(&self) -> anyhow::Result<crate::SystemAlertAnswer> {
         self.record_call("dismiss_system_alert", vec![]);
         self.check_error("dismiss_system_alert")?;
-        Ok(*self.system_alert_accept.lock().expect("lock poisoned"))
+        Ok(self.system_alert.lock().expect("lock poisoned").clone())
     }
 
     fn reconnect(&self, port: u16) {

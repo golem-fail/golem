@@ -21,6 +21,9 @@
 		C1000004 /* HTTPResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000001 /* HTTPResponseTests.swift */; };
 		C1000005 /* MockSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000002 /* MockSnapshot.swift */; };
 		C1000006 /* HierarchySerializerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000003 /* HierarchySerializerTests.swift */; };
+		A1000009 /* SystemAlertButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* SystemAlertButtons.swift */; };
+		C1000007 /* SystemAlertButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* SystemAlertButtons.swift */; };
+		C1000008 /* SystemAlertButtonsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000005 /* SystemAlertButtonsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +42,7 @@
 		A2000003 /* HTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPServer.swift; sourceTree = "<group>"; };
 		A2000004 /* HierarchySerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchySerializer.swift; sourceTree = "<group>"; };
 		A2000005 /* RequestRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestRouter.swift; sourceTree = "<group>"; };
+		A2000017 /* SystemAlertButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAlertButtons.swift; sourceTree = "<group>"; };
 		A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000010 /* GolemRunnerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolemRunnerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -52,6 +56,7 @@
 		C2000001 /* HTTPResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPResponseTests.swift; sourceTree = "<group>"; };
 		C2000002 /* MockSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSnapshot.swift; sourceTree = "<group>"; };
 		C2000003 /* HierarchySerializerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchySerializerTests.swift; sourceTree = "<group>"; };
+		C2000005 /* SystemAlertButtonsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAlertButtonsTests.swift; sourceTree = "<group>"; };
 		C2000004 /* GolemRunnerTests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GolemRunnerTests-Bridging-Header.h"; sourceTree = "<group>"; };
 		C2000010 /* GolemRunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolemRunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -119,6 +124,7 @@
 				A2000003 /* HTTPServer.swift */,
 				A2000004 /* HierarchySerializer.swift */,
 				A2000005 /* RequestRouter.swift */,
+				A2000017 /* SystemAlertButtons.swift */,
 				A2000012 /* SnapshotHelper.h */,
 				A2000013 /* SnapshotHelper.m */,
 				A2000015 /* GestureSynthesizer.h */,
@@ -135,6 +141,7 @@
 				C2000001 /* HTTPResponseTests.swift */,
 				C2000002 /* MockSnapshot.swift */,
 				C2000003 /* HierarchySerializerTests.swift */,
+				C2000005 /* SystemAlertButtonsTests.swift */,
 				C2000004 /* GolemRunnerTests-Bridging-Header.h */,
 			);
 			path = GolemRunnerTests;
@@ -262,6 +269,7 @@
 				A1000003 /* HTTPServer.swift in Sources */,
 				A1000004 /* HierarchySerializer.swift in Sources */,
 				A1000005 /* RequestRouter.swift in Sources */,
+				A1000009 /* SystemAlertButtons.swift in Sources */,
 				A1000007 /* SnapshotHelper.m in Sources */,
 				A1000008 /* GestureSynthesizer.m in Sources */,
 			);
@@ -276,6 +284,8 @@
 				C1000006 /* HierarchySerializerTests.swift in Sources */,
 				C1000001 /* HTTPServer.swift in Sources */,
 				C1000002 /* HierarchySerializer.swift in Sources */,
+				C1000007 /* SystemAlertButtons.swift in Sources */,
+				C1000008 /* SystemAlertButtonsTests.swift in Sources */,
 				C1000003 /* SnapshotHelper.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

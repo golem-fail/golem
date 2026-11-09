@@ -359,6 +359,25 @@ fn is_safe_container_path(path: &str) -> bool {
         && path.contains("/Containers/Data/Application/")
 }
 
+/// Read the companion's `{<key>: bool, "buttons"?: [label]}` answer to
+/// `/accept-system-alert` or `/dismiss-system-alert`. `buttons` comes only
+/// while an alert is up that the companion did not tap.
+fn system_alert_answer(resp: &str, key: &str) -> Result<crate::SystemAlertAnswer> {
+    let parsed: serde_json::Value = serde_json::from_str(resp)?;
+    if parsed.get(key).and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Ok(crate::SystemAlertAnswer::Tapped);
+    }
+    Ok(match parsed.get("buttons").and_then(|v| v.as_array()) {
+        Some(buttons) => crate::SystemAlertAnswer::Unknown(
+            buttons
+                .iter()
+                .filter_map(|b| b.as_str().map(str::to_string))
+                .collect(),
+        ),
+        None => crate::SystemAlertAnswer::NoAlert,
+    })
+}
+
 /// The SpringBoard alerts the companion reported with the hierarchy.
 fn system_alerts(wrapper: &serde_json::Value) -> Result<Vec<Element>> {
     let Some(alerts) = wrapper.get("system_alerts").and_then(|v| v.as_array()) else {
@@ -616,24 +635,14 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn accept_system_alert(&self) -> Result<bool> {
-        // The companion queries SpringBoard's alert and taps the affirmative
-        // directly (deterministic), returning {"accepted": bool}.
+    async fn accept_system_alert(&self) -> Result<crate::SystemAlertAnswer> {
         let resp = self.client.post_json("/accept-system-alert", "{}").await?;
-        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-        Ok(parsed
-            .get("accepted")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false))
+        system_alert_answer(&resp, "accepted")
     }
 
-    async fn dismiss_system_alert(&self) -> Result<bool> {
+    async fn dismiss_system_alert(&self) -> Result<crate::SystemAlertAnswer> {
         let resp = self.client.post_json("/dismiss-system-alert", "{}").await?;
-        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-        Ok(parsed
-            .get("dismissed")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false))
+        system_alert_answer(&resp, "dismissed")
     }
 
     async fn tap(&self, x: i32, y: i32) -> Result<()> {
@@ -1259,6 +1268,24 @@ mod tests {
         assert_eq!(ios_notifications_value("allow"), "YES");
         assert_eq!(ios_notifications_value("deny"), "NO");
         assert_eq!(ios_notifications_value("ask"), "unset");
+    }
+
+    #[test]
+    fn system_alert_answer_reads_the_companion_reply() {
+        use crate::SystemAlertAnswer as A;
+        let read = |r: &str| system_alert_answer(r, "dismissed").expect("valid JSON");
+        assert_eq!(read(r#"{"dismissed":true}"#), A::Tapped);
+        assert_eq!(read(r#"{"dismissed":false}"#), A::NoAlert);
+        assert_eq!(
+            read(r#"{"dismissed":false,"buttons":["Keep","Discard"]}"#),
+            A::Unknown(vec!["Keep".into(), "Discard".into()])
+        );
+        assert_eq!(
+            read(r#"{"dismissed":false,"buttons":[]}"#),
+            A::Unknown(vec![]),
+            "an alert still animating SHALL not read as no alert"
+        );
+        assert_eq!(read(r#"{"accepted":true}"#), A::NoAlert, "key SHALL match");
     }
 
     #[test]

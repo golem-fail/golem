@@ -36,6 +36,20 @@ pub mod webkit;
 pub use common::CompanionHealth;
 pub use mock::MockPlatformDriver;
 
+/// What `accept_system_alert` / `dismiss_system_alert` did with an OS-owned
+/// alert.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SystemAlertAnswer {
+    /// It tapped the alert's button.
+    Tapped,
+    /// No system alert is up.
+    NoAlert,
+    /// A system alert is up, but none of its buttons is one golem knows for
+    /// this answer. Lists the buttons' labels; empty while the alert is
+    /// still animating in or out.
+    Unknown(Vec<String>),
+}
+
 use async_trait::async_trait;
 use golem_element::Element;
 
@@ -220,21 +234,20 @@ pub trait PlatformDriver: Send + Sync {
     }
 
     /// Directly accept an OS-owned system alert (iOS SpringBoard permission
-    /// prompt / deep-link confirm) by tapping its affirmative button, and
-    /// report whether one was accepted. Deterministic alternative to
-    /// `poke_for_system_alert`, whose UI-interruption-monitor fires only at
-    /// iOS's discretion and misses the photo prompt often enough to be
-    /// flaky. Returns `Ok(false)` when no system alert is present (a no-op).
-    /// Default: `Ok(false)` (iOS-XCUITest-specific; other platforms surface
-    /// their permission prompts through the normal hierarchy or pre-grant).
-    async fn accept_system_alert(&self) -> anyhow::Result<bool> {
-        Ok(false)
+    /// prompt / deep-link confirm) by tapping its affirmative button.
+    /// Deterministic alternative to `poke_for_system_alert`, whose
+    /// UI-interruption-monitor fires only at iOS's discretion and misses the
+    /// photo prompt often enough to be flaky. Default: `NoAlert`
+    /// (iOS-XCUITest-specific; other platforms surface their permission
+    /// prompts through the normal hierarchy or pre-grant).
+    async fn accept_system_alert(&self) -> anyhow::Result<SystemAlertAnswer> {
+        Ok(SystemAlertAnswer::NoAlert)
     }
 
     /// The negative of `accept_system_alert`: tap the alert's refusing
-    /// button ("Don't Allow", "Cancel"). Default: `Ok(false)`.
-    async fn dismiss_system_alert(&self) -> anyhow::Result<bool> {
-        Ok(false)
+    /// button ("Don't Allow", "Cancel"). Default: `NoAlert`.
+    async fn dismiss_system_alert(&self) -> anyhow::Result<SystemAlertAnswer> {
+        Ok(SystemAlertAnswer::NoAlert)
     }
 
     /// Prepare to type `text` into the next-focused field. Called by the
@@ -1471,25 +1484,23 @@ mod tests {
         );
     }
 
-    // accept_system_alert reports whether a system alert was accepted:
-    // false until configured, true once `set_system_alert_accept(true)`.
     #[tokio::test]
-    async fn mock_accept_system_alert_reports_configured_result() {
+    async fn mock_system_alert_answers_no_alert_until_set() {
         let driver = MockPlatformDriver::new(default_hierarchy());
-        assert!(
-            !driver
-                .accept_system_alert()
-                .await
-                .expect("accept_system_alert SHALL be Ok"),
-            "SHALL default to false (no system alert)"
-        );
-        driver.set_system_alert_accept(true);
-        assert!(
+        assert_eq!(
             driver
                 .accept_system_alert()
                 .await
                 .expect("accept_system_alert SHALL be Ok"),
-            "SHALL report true once configured"
+            SystemAlertAnswer::NoAlert
+        );
+        driver.set_system_alert(SystemAlertAnswer::Tapped);
+        assert_eq!(
+            driver
+                .dismiss_system_alert()
+                .await
+                .expect("dismiss_system_alert SHALL be Ok"),
+            SystemAlertAnswer::Tapped
         );
     }
 
