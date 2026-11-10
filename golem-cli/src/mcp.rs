@@ -600,7 +600,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Open a session on one device and app. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s."
+        description = "Open a session on one device and app, and bring the app to the front. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s."
     )]
     async fn session_open(
         &self,

@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 477 |
-| Tool list (31 tools, as `tools/list` JSON) | 13030 |
-| Both, kept in context by most clients | 13507 |
+| Tool list (31 tools, as `tools/list` JSON) | 13062 |
+| Both, kept in context by most clients | 13539 |
 
 ## Instructions
 
@@ -385,7 +385,7 @@ Close session; release device.
 
 ### `session_open`
 
-Open a session on one device and app. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s.
+Open a session on one device and app, and bring the app to the front. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -405,10 +405,10 @@ Open a session on one device and app. Prefers a running device that fits; else b
 | `type` | string | "phone" or "tablet". |
 | `vars` | object | As golem run --var; act resolves ${name}. |
 
-<details><summary>As <code>tools/list</code> sends it · 1690 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 1722 chars</summary>
 
 ```json
-{"name":"session_open","description":"Open a session on one device and app. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s.","inputSchema":{"properties":{"app":{"description":"App name in golem.toml [[apps]].","type":"string"},"boot":{"description":"Boot a device if no running one fits. Default true.","type":"boolean"},"break_on_failure":{"description":"With flow: open at a failed step instead of ending.","type":"boolean"},"bundle":{"description":"App bundle id.","type":"string"},"device":{"description":"UDID, serial, name, or part of one.","type":"string"},"flow":{"description":"Run this .test.toml first, as golem run does; session opens where it stops. Its [[teardown]] runs at session_close.","type":"string"},"idle_timeout_s":{"description":"Idle seconds before the session ends. Default 1800.","minimum":0,"type":"integer"},"os":{"description":"\"ios\", \"android\", \"ios:26\", \"ios:26+\" or \"ios:latest\". Default: any.","type":"string"},"project":{"description":"Dir with golem.toml. Default: server's project.","type":"string"},"run":{"description":"With flow: false = setup only, no steps.","type":"boolean"},"seed":{"description":"Fake data seed, as golem run --seed: replays a run's data.","minimum":0,"type":"integer"},"stop_at":{"description":"With flow: stop before block or block:step.","type":"string"},"teardown":{"description":"With flow: false = never run its [[teardown]].","type":"boolean"},"type":{"description":"\"phone\" or \"tablet\".","type":"string"},"vars":{"additionalProperties":{"type":"string"},"description":"As golem run --var; act resolves ${name}.","type":"object"}},"type":"object"}}
+{"name":"session_open","description":"Open a session on one device and app, and bring the app to the front. Prefers a running device that fits; else boots one. Ends at session_close, server stop, or idle_timeout_s.","inputSchema":{"properties":{"app":{"description":"App name in golem.toml [[apps]].","type":"string"},"boot":{"description":"Boot a device if no running one fits. Default true.","type":"boolean"},"break_on_failure":{"description":"With flow: open at a failed step instead of ending.","type":"boolean"},"bundle":{"description":"App bundle id.","type":"string"},"device":{"description":"UDID, serial, name, or part of one.","type":"string"},"flow":{"description":"Run this .test.toml first, as golem run does; session opens where it stops. Its [[teardown]] runs at session_close.","type":"string"},"idle_timeout_s":{"description":"Idle seconds before the session ends. Default 1800.","minimum":0,"type":"integer"},"os":{"description":"\"ios\", \"android\", \"ios:26\", \"ios:26+\" or \"ios:latest\". Default: any.","type":"string"},"project":{"description":"Dir with golem.toml. Default: server's project.","type":"string"},"run":{"description":"With flow: false = setup only, no steps.","type":"boolean"},"seed":{"description":"Fake data seed, as golem run --seed: replays a run's data.","minimum":0,"type":"integer"},"stop_at":{"description":"With flow: stop before block or block:step.","type":"string"},"teardown":{"description":"With flow: false = never run its [[teardown]].","type":"boolean"},"type":{"description":"\"phone\" or \"tablet\".","type":"string"},"vars":{"additionalProperties":{"type":"string"},"description":"As golem run --var; act resolves ${name}.","type":"object"}},"type":"object"}}
 ```
 
 </details>
@@ -1093,7 +1093,7 @@ Items (help("act", item)):
 - clear_data: Clear app data
 ```
 
-<details><summary><code>help("act", "launch")</code> · launch — Launch or foreground an app · 898 chars</summary>
+<details><summary><code>help("act", "launch")</code> · launch — Launch or foreground an app · 939 chars</summary>
 
 Source: [src/actions-reference/40-app-lifecycle/10-launch.md](src/actions-reference/40-app-lifecycle/10-launch.md)
 
@@ -1111,7 +1111,7 @@ Bring an app to the foreground. Does not restart if already running. Use `restar
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `app` | — | App name (as defined in `[[flow.apps]]`) |
+| `app` | the flow's first app (a session's own app) | App name (as defined in `[[flow.apps]]`) |
 | `restart` | `false` | Stop app first, then launch fresh |
 | `permissions` | — | Per-launch permission map (see App permissions (help("act", "app-permissions"))) |
 
@@ -1169,14 +1169,14 @@ iOS `notifications` and `photos` need `applesimutils`. Without it `notifications
 
 </details>
 
-<details><summary><code>help("act", "stop")</code> · stop — Terminate an app · 141 chars</summary>
+<details><summary><code>help("act", "stop")</code> · stop — Terminate an app · 178 chars</summary>
 
 Source: [src/actions-reference/40-app-lifecycle/30-stop.md](src/actions-reference/40-app-lifecycle/30-stop.md)
 
 ````text
 ### `stop` — Terminate an app
 
-Terminate the app's process. The next `launch` starts it fresh.
+Terminate the app's process. The next `launch` starts it fresh. Without `app`, the flow's first app.
 
 ```toml
 { action = "stop", app = "app" }
@@ -1185,14 +1185,14 @@ Terminate the app's process. The next `launch` starts it fresh.
 
 </details>
 
-<details><summary><code>help("act", "clear_data")</code> · clear_data — Clear app data · 652 chars</summary>
+<details><summary><code>help("act", "clear_data")</code> · clear_data — Clear app data · 689 chars</summary>
 
 Source: [src/actions-reference/40-app-lifecycle/40-clear_data.md](src/actions-reference/40-app-lifecycle/40-clear_data.md)
 
 ````text
 ### `clear_data` — Clear app data
 
-Clear the app's storage and cache.
+Clear the app's storage and cache. Without `app`, the flow's first app.
 
 ```toml
 { action = "clear_data", app = "app" }

@@ -11,7 +11,7 @@ Bring an app to the foreground. Does not restart if already running. Use `restar
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `app` | — | App name (as defined in `[[flow.apps]]`) |
+| `app` | the flow's first app (a session's own app) | App name (as defined in `[[flow.apps]]`) |
 | `restart` | `false` | Stop app first, then launch fresh |
 | `permissions` | — | Per-launch permission map (see [App permissions](#app-permissions)) |
 

@@ -1,6 +1,6 @@
 ### `clear_data` — Clear app data
 
-Clear the app's storage and cache.
+Clear the app's storage and cache. Without `app`, the flow's first app.
 
 ```toml
 { action = "clear_data", app = "app" }
