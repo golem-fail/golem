@@ -376,7 +376,7 @@ Bring an app to the foreground. Does not restart if already running. Use `restar
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `app` | — | App name (as defined in `[[flow.apps]]`) |
+| `app` | the flow's first app (a session's own app) | App name (as defined in `[[flow.apps]]`) |
 | `restart` | `false` | Stop app first, then launch fresh |
 | `permissions` | — | Per-launch permission map (see [App permissions](#app-permissions)) |
 
@@ -431,7 +431,7 @@ Your app's `AndroidManifest.xml` must declare every permission you grant. For `p
 
 ### `stop` — Terminate an app
 
-Terminate the app's process. The next `launch` starts it fresh.
+Terminate the app's process. The next `launch` starts it fresh. Without `app`, the flow's first app.
 
 ```toml
 { action = "stop", app = "app" }
@@ -439,7 +439,7 @@ Terminate the app's process. The next `launch` starts it fresh.
 
 ### `clear_data` — Clear app data
 
-Clear the app's storage and cache.
+Clear the app's storage and cache. Without `app`, the flow's first app.
 
 ```toml
 { action = "clear_data", app = "app" }

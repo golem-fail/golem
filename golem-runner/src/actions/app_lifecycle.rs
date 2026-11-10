@@ -85,12 +85,20 @@ fn parse_launch_permissions(step: &Step) -> Result<HashMap<String, String>> {
 ///
 /// If `apps` is empty or the name doesn't match, the value is treated as a bundle ID.
 pub(super) fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&'a str> {
-    let app_ref = step.app.as_deref().ok_or_else(|| {
-        golem_events::coded(
-            golem_events::FailureCode::ParseMissingParam,
-            anyhow::anyhow!("No app specified for {} action", step.action),
-        )
-    })?;
+    // No `app`: the flow's first app, which a session puts first.
+    let app_ref = match step
+        .app
+        .as_deref()
+        .or(apps.first().map(|a| a.name.as_str()))
+    {
+        Some(app) => app,
+        None => {
+            return Err(golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("No app specified for {} action", step.action),
+            ))
+        }
+    };
 
     // Try to resolve as a friendly name first.
     if let Some(config) = apps.iter().find(|a| a.name == app_ref) {
@@ -594,8 +602,41 @@ mod tests {
         );
     }
 
-    // 5. A missing app value SHALL error and the message SHALL name the
-    //    offending action.
+    // A step without `app` SHALL take the flow's first app (a session's
+    // own app is first).
+    #[test]
+    fn resolve_app_bundle_defaults_to_the_first_app() {
+        let apps = vec![
+            AppConfig {
+                name: "app-b".into(),
+                bundle: Some("fail.golem.testb".into()),
+                devices: Vec::new(),
+                install_script: None,
+                install_timeout_ms: None,
+                install_env: None,
+                profile: None,
+                permissions: Default::default(),
+            },
+            AppConfig {
+                name: "app".into(),
+                bundle: Some("fail.golem.test".into()),
+                devices: Vec::new(),
+                install_script: None,
+                install_timeout_ms: None,
+                install_env: None,
+                profile: None,
+                permissions: Default::default(),
+            },
+        ];
+        let step = make_step("launch");
+        assert_eq!(
+            resolve_app_bundle(&step, &apps).expect("SHALL default"),
+            "fail.golem.testb"
+        );
+    }
+
+    // 5. A missing app value with no apps SHALL error and the message SHALL
+    //    name the offending action.
     #[test]
     fn resolve_app_bundle_error_names_action() {
         let step = make_step("clear_data");

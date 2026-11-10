@@ -1229,6 +1229,18 @@ async fn open_device(
         apps.insert(0, bundle_app(&target.bundle));
     }
     let driver: Arc<dyn PlatformDriver> = Arc::from(target.driver());
+    // Without this the session's first tree shows whichever app ran last:
+    // the iOS companion reads the app it last launched, and Android the
+    // foreground. `launch_app` activates a running app without a restart.
+    if !target.bundle.is_empty() {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            driver.launch_app(&target.bundle),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("bringing {} to the front timed out", target.bundle))?
+        .with_context(|| format!("could not bring {} to the front", target.bundle))?;
+    }
     Ok((
         Work::from_parts(Parts {
             device: target.device,

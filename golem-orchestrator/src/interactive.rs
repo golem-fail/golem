@@ -86,10 +86,10 @@ pub fn lease(
 /// A first line for the tree when `bundle` is not the app on screen: the
 /// tree then shows another app, so a step would act on that one.
 ///
-/// Only a driver that knows the foreground app (Android) can say. iOS
-/// reads the session's app and brings it to the front, so its tree shows
-/// that app or fails; asking `app_running` on every tree would cost a
-/// `simctl spawn` (about 300 ms) for nothing.
+/// Only a driver that knows the foreground app (Android) can say. On iOS
+/// the session brings its app to the front when it opens, and the tree
+/// reads the app the companion last launched; asking `app_running` on
+/// every tree would cost a `simctl spawn` (about 300 ms).
 pub async fn foreground_warning(
     driver: &dyn golem_driver::PlatformDriver,
     bundle: &str,
