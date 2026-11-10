@@ -1834,6 +1834,7 @@ text = "OK"
             "subject",
             "title",
             "button",
+            "buttons",
             "enabled",
             "latitude",
             "longitude",

@@ -98,7 +98,7 @@ fn extract_alert_message(el: &Element) -> Option<String> {
 fn collect_non_button_text(el: &Element, texts: &mut Vec<String>) {
     // Skip buttons and the alert root — collect leaf text elements
     let et = el.element_type.to_lowercase();
-    if et == "button" {
+    if et == "button" || is_compose_answer(el) {
         return;
     }
     if let Some(ref text) = el.text {
@@ -119,13 +119,45 @@ pub fn find_alert_buttons(alert: &Element) -> Vec<Element> {
 }
 
 fn collect_buttons(el: &Element, buttons: &mut Vec<Element>) {
-    let et = el.element_type.to_lowercase();
-    if et == "button" {
+    if let Some(answer) = compose_answer(el) {
+        buttons.push(answer);
+        return;
+    }
+    if el.element_type.eq_ignore_ascii_case("button") {
         buttons.push(el.clone());
     }
     for child in &el.children {
         collect_buttons(child, buttons);
     }
+}
+
+fn is_compose_answer(el: &Element) -> bool {
+    let unlabelled_button = |c: &Element| {
+        c.element_type.eq_ignore_ascii_case("button")
+            && [&c.text, &c.accessibility_label]
+                .into_iter()
+                .flatten()
+                .all(|t| t.trim().is_empty())
+    };
+    el.clickable && el.children.iter().any(unlabelled_button)
+}
+
+/// A Compose dialog button: a clickable node holding its label as a text
+/// node and an unlabelled `Button` node that only carries the role. It is
+/// one button, labelled with its text and tapped on the clickable node.
+fn compose_answer(el: &Element) -> Option<Element> {
+    if !is_compose_answer(el) {
+        return None;
+    }
+    let mut texts = Vec::new();
+    for child in &el.children {
+        collect_non_button_text(child, &mut texts);
+    }
+    let mut answer = el.clone();
+    answer.element_type = "Button".to_string();
+    answer.text = Some(texts.join(" "));
+    answer.children.clear();
+    Some(answer)
 }
 
 fn has_button_descendant(el: &Element) -> bool {

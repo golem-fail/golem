@@ -1,0 +1,50 @@
+[flow]
+name = "Alert buttons: by label, never by position"
+tags = ["alert", "dialog", "cross-platform"]
+
+# test-app-b's "Choose" alert offers OK, Later and Cancel. On iOS the three
+# stack and Cancel is last; on Android it is a Compose dialog, with no
+# resource ids. accept_alert takes OK and dismiss_alert Cancel by their
+# labels, and `buttons` names Later (#466).
+[[flow.apps]]
+name = "app-b"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "accept_takes_ok_not_the_last_button"
+steps = [
+  { action = "launch", app = "app-b" },
+  { action = "tap", on_text = "Choose" },
+  { action = "assert_alert" },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Choice: ok" },
+]
+
+[[block]]
+name = "dismiss_takes_cancel"
+steps = [
+  { action = "tap", on_text = "Choose" },
+  { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Choice: cancel" },
+]
+
+[[block]]
+name = "buttons_names_another_answer"
+steps = [
+  { action = "tap", on_text = "Choose" },
+  { action = "accept_alert", buttons = ["later"] },
+  { action = "assert_visible", on_text = "Choice: later" },
+]
+
+# A SpringBoard prompt gets `buttons` too, through the companion.
+[[block]]
+name = "buttons_reach_a_system_prompt"
+where = { os = "ios" }
+steps = [
+  { action = "launch", app = "app-b", permissions = { tracking = "ask" } },
+  { action = "tap", on_text = "Track" },
+  { action = "dismiss_alert", buttons = ["ask app not to track"] },
+  { action = "assert_visible", on_text = "Tracking: denied" },
+]

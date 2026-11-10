@@ -359,13 +359,15 @@ fn is_safe_container_path(path: &str) -> bool {
         && path.contains("/Containers/Data/Application/")
 }
 
-/// Read the companion's `{<key>: bool, "buttons"?: [label]}` answer to
-/// `/accept-system-alert` or `/dismiss-system-alert`. `buttons` comes only
-/// while an alert is up that the companion did not tap.
+/// Read the companion's `{<key>: bool, "button"?: label, "buttons"?: [label]}`
+/// answer to `/accept-system-alert` or `/dismiss-system-alert`. `button` is
+/// the label it tapped; `buttons` comes only while an alert is up that the
+/// companion did not tap.
 fn system_alert_answer(resp: &str, key: &str) -> Result<crate::SystemAlertAnswer> {
     let parsed: serde_json::Value = serde_json::from_str(resp)?;
     if parsed.get(key).and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Ok(crate::SystemAlertAnswer::Tapped);
+        let label = parsed.get("button").and_then(|v| v.as_str()).unwrap_or("");
+        return Ok(crate::SystemAlertAnswer::Tapped(label.to_string()));
     }
     Ok(match parsed.get("buttons").and_then(|v| v.as_array()) {
         Some(buttons) => crate::SystemAlertAnswer::Unknown(
@@ -635,13 +637,18 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn accept_system_alert(&self) -> Result<crate::SystemAlertAnswer> {
-        let resp = self.client.post_json("/accept-system-alert", "{}").await?;
+    async fn accept_system_alert(&self, labels: &[String]) -> Result<crate::SystemAlertAnswer> {
+        let body = serde_json::json!({ "labels": labels, "only_button": true }).to_string();
+        let resp = self.client.post_json("/accept-system-alert", &body).await?;
         system_alert_answer(&resp, "accepted")
     }
 
-    async fn dismiss_system_alert(&self) -> Result<crate::SystemAlertAnswer> {
-        let resp = self.client.post_json("/dismiss-system-alert", "{}").await?;
+    async fn dismiss_system_alert(&self, labels: &[String]) -> Result<crate::SystemAlertAnswer> {
+        let body = serde_json::json!({ "labels": labels, "only_button": false }).to_string();
+        let resp = self
+            .client
+            .post_json("/dismiss-system-alert", &body)
+            .await?;
         system_alert_answer(&resp, "dismissed")
     }
 
@@ -1274,7 +1281,10 @@ mod tests {
     fn system_alert_answer_reads_the_companion_reply() {
         use crate::SystemAlertAnswer as A;
         let read = |r: &str| system_alert_answer(r, "dismissed").expect("valid JSON");
-        assert_eq!(read(r#"{"dismissed":true}"#), A::Tapped);
+        assert_eq!(
+            read(r#"{"dismissed":true,"button":"Don’t Allow"}"#),
+            A::Tapped("Don’t Allow".into())
+        );
         assert_eq!(read(r#"{"dismissed":false}"#), A::NoAlert);
         assert_eq!(
             read(r#"{"dismissed":false,"buttons":["Keep","Discard"]}"#),

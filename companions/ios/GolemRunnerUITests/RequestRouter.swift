@@ -54,9 +54,9 @@ final class RequestRouter {
         case ("POST", "/poke-interruption-monitor"):
             return handlePokeInterruptionMonitor(query: query)
         case ("POST", "/accept-system-alert"):
-            return handleAcceptSystemAlert(query: query)
+            return handleAcceptSystemAlert(body: body)
         case ("POST", "/dismiss-system-alert"):
-            return handleDismissSystemAlert(query: query)
+            return handleDismissSystemAlert(body: body)
         case ("GET", "/debug/probe"):
             return handleDebugProbe(query: query)
         case ("POST", "/tap"):
@@ -256,7 +256,7 @@ final class RequestRouter {
         return .json([
             "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.18.2",
+            "version": "0.18.3",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -430,28 +430,34 @@ final class RequestRouter {
     /// sheet so we never snapshot SpringBoard's full tree. Labels are matched by
     /// text (the photo prompt's affirmative is the MIDDLE button, so a
     /// positional "last button" tap would hit "Don't Allow").
-    private func handleAcceptSystemAlert(query: [String: String]) -> HTTPResponse {
-        return answerSystemAlert(SystemAlertButtons.accept, key: "accepted", route: "accept-system-alert")
+    private func handleAcceptSystemAlert(body: Data?) -> HTTPResponse {
+        return answerSystemAlert(body: body, key: "accepted", route: "accept-system-alert")
     }
 
     /// The negative of `handleAcceptSystemAlert`. A tap on the app cannot
     /// do it: an XCUI action on the app while a system alert is up fires
     /// the UI-interruption monitor, which answers with the affirmative.
-    private func handleDismissSystemAlert(query: [String: String]) -> HTTPResponse {
-        return answerSystemAlert(SystemAlertButtons.dismiss, key: "dismissed", route: "dismiss-system-alert")
+    private func handleDismissSystemAlert(body: Data?) -> HTTPResponse {
+        return answerSystemAlert(body: body, key: "dismissed", route: "dismiss-system-alert")
     }
 
-    /// Tap the first of `labels` that the system alert has, and answer
-    /// `{key: bool}`. While an alert is up and no tap happened, `buttons`
-    /// lists its labels (empty while it animates), so the host never falls
-    /// back to a tap through the app.
-    private func answerSystemAlert(_ labels: [String], key: String, route: String) -> HTTPResponse {
+    /// Tap the button with the first of the body's `labels` that the system
+    /// alert has (else its only button, with `only_button`), and answer
+    /// `{key: bool, button: label}`. While an alert is up and no tap
+    /// happened, `buttons` lists its labels (empty while it animates), so the
+    /// host never falls back to a tap through the app. The button is tapped
+    /// by index: `alert.buttons[label]` is XCUI's exact match, and the host's
+    /// labels match case-insensitively.
+    private func answerSystemAlert(body: Data?, key: String, route: String) -> HTTPResponse {
+        let params = parseBody(body) ?? [:]
+        let labels = params["labels"] as? [String] ?? []
+        let onlyButton = params["only_button"] as? Bool ?? false
         guard let outcome = runOnMain(timeout: Self.kTimeoutFast, { () -> SystemAlertButtons.Outcome in
             guard let alert = Self.systemAlert() else { return .noAlert }
-            let buttons = alert.buttons.allElementsBoundByIndex.map { $0.label }
-            let outcome = SystemAlertButtons.pick(labels, from: buttons)
-            if case .tap(let label) = outcome {
-                alert.buttons[label].firstMatch.tap()
+            let buttons = alert.buttons.allElementsBoundByIndex
+            let outcome = SystemAlertButtons.pick(labels, from: buttons.map { $0.label }, onlyButton: onlyButton)
+            if case .tap(let index, _) = outcome {
+                buttons[index].tap()
             }
             return outcome
         }) else {
@@ -460,7 +466,7 @@ final class RequestRouter {
         switch outcome {
         case .noAlert: return .json([key: false])
         case .notReady: return .json([key: false, "buttons": [String]()])
-        case .tap: return .json([key: true])
+        case .tap(_, let label): return .json([key: true, "button": label])
         case .unmatched(let buttons): return .json([key: false, "buttons": buttons])
         }
     }
