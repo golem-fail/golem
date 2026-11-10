@@ -174,6 +174,10 @@ fn all_substeps() -> Vec<SubstepEvent> {
             max: 3,
             reconnect_ms: 4200,
         },
+        SubstepEvent::AlertButton {
+            label: "Don’t Allow".into(),
+            rule: "built-in label".into(),
+        },
         SubstepEvent::Screenshot {
             path: ".golem/results/tap/ios/screenshots/step-3.png".into(),
         },
@@ -684,6 +688,7 @@ fn _substep_exhaustiveness_guard(s: &SubstepEvent) {
         | SubstepEvent::AppStop { .. }
         | SubstepEvent::DriverWarning { .. }
         | SubstepEvent::CompanionRestarted { .. }
+        | SubstepEvent::AlertButton { .. }
         | SubstepEvent::Screenshot { .. }
         | SubstepEvent::BarrierAborted { .. } => {}
     }

@@ -305,6 +305,12 @@ pub(crate) fn print_substep_to(
         SubstepEvent::Screenshot { path } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} screenshot {path}{r}");
         }
+        SubstepEvent::AlertButton { label, rule } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} alert button \"{label}\" by {rule}{r}"
+            );
+        }
         SubstepEvent::CompanionRestarted {
             attempt,
             max,

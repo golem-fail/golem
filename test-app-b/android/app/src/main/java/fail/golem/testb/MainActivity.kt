@@ -96,6 +96,8 @@ fun TestScreen() {
     var galleryDims by remember { mutableStateOf("pending") }
     var camera by remember { mutableStateOf("pending") }
     var notify by remember { mutableStateOf("pending") }
+    var choice by remember { mutableStateOf("none") }
+    var choosing by remember { mutableStateOf(false) }
     val requestCamera = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> camera = if (granted) "granted" else "denied" }
@@ -173,11 +175,36 @@ fun TestScreen() {
             modifier = Modifier.semantics { contentDescription = "shared-data-display" }
         )
 
-        Button(
-            onClick = { status = "Refreshed" },
-            modifier = Modifier.semantics { contentDescription = "refresh-button" }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Refresh")
+            Button(
+                onClick = { status = "Refreshed" },
+                modifier = Modifier.semantics { contentDescription = "refresh-button" }
+            ) {
+                Text("Refresh")
+            }
+            Button(onClick = { choosing = true }) { Text("Choose") }
+            Text("Choice: $choice", fontSize = 12.sp)
+        }
+
+        // A Compose dialog carries no resource ids, so the alert e2e
+        // answers it by label.
+        if (choosing) {
+            AlertDialog(
+                onDismissRequest = { choosing = false },
+                title = { Text("Pick one") },
+                confirmButton = {
+                    Row {
+                        TextButton(onClick = { choice = "later"; choosing = false }) { Text("Later") }
+                        TextButton(onClick = { choice = "ok"; choosing = false }) { Text("OK") }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { choice = "cancel"; choosing = false }) { Text("Cancel") }
+                },
+            )
         }
 
         Divider()

@@ -193,6 +193,9 @@ fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
             } => parts.push(format!(
                 "restart:companion {attempt}/{max} {reconnect_ms}ms"
             )),
+            SubstepDetail::AlertButton { label, .. } => {
+                parts.push(format!("btn:\"{label}\""));
+            }
             _ => {}
         }
     }

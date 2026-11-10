@@ -40,8 +40,8 @@ pub use mock::MockPlatformDriver;
 /// alert.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SystemAlertAnswer {
-    /// It tapped the alert's button.
-    Tapped,
+    /// It tapped the alert's button with this label.
+    Tapped(String),
     /// No system alert is up.
     NoAlert,
     /// A system alert is up, but none of its buttons is one golem knows for
@@ -234,19 +234,20 @@ pub trait PlatformDriver: Send + Sync {
     }
 
     /// Directly accept an OS-owned system alert (iOS SpringBoard permission
-    /// prompt / deep-link confirm) by tapping its affirmative button.
+    /// prompt / deep-link confirm) by tapping the button with the first of
+    /// `labels` it has, else its only button.
     /// Deterministic alternative to `poke_for_system_alert`, whose
     /// UI-interruption-monitor fires only at iOS's discretion and misses the
     /// photo prompt often enough to be flaky. Default: `NoAlert`
     /// (iOS-XCUITest-specific; other platforms surface their permission
     /// prompts through the normal hierarchy or pre-grant).
-    async fn accept_system_alert(&self) -> anyhow::Result<SystemAlertAnswer> {
+    async fn accept_system_alert(&self, _labels: &[String]) -> anyhow::Result<SystemAlertAnswer> {
         Ok(SystemAlertAnswer::NoAlert)
     }
 
-    /// The negative of `accept_system_alert`: tap the alert's refusing
-    /// button ("Don't Allow", "Cancel"). Default: `NoAlert`.
-    async fn dismiss_system_alert(&self) -> anyhow::Result<SystemAlertAnswer> {
+    /// The negative of `accept_system_alert`: tap the button with the first
+    /// of `labels` the alert has. Default: `NoAlert`.
+    async fn dismiss_system_alert(&self, _labels: &[String]) -> anyhow::Result<SystemAlertAnswer> {
         Ok(SystemAlertAnswer::NoAlert)
     }
 
@@ -1489,18 +1490,18 @@ mod tests {
         let driver = MockPlatformDriver::new(default_hierarchy());
         assert_eq!(
             driver
-                .accept_system_alert()
+                .accept_system_alert(&[])
                 .await
                 .expect("accept_system_alert SHALL be Ok"),
             SystemAlertAnswer::NoAlert
         );
-        driver.set_system_alert(SystemAlertAnswer::Tapped);
+        driver.set_system_alert(SystemAlertAnswer::Tapped("OK".into()));
         assert_eq!(
             driver
-                .dismiss_system_alert()
+                .dismiss_system_alert(&[])
                 .await
                 .expect("dismiss_system_alert SHALL be Ok"),
-            SystemAlertAnswer::Tapped
+            SystemAlertAnswer::Tapped("OK".into())
         );
     }
 

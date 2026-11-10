@@ -18,6 +18,8 @@ struct ContentView: View {
     @State private var tracking = "pending"
     @State private var camera = "pending"
     @State private var notify = "pending"
+    @State private var choice = "none"
+    @State private var choosing = false
     @EnvironmentObject var notifications: NotificationStore
 
     var body: some View {
@@ -65,10 +67,23 @@ struct ContentView: View {
             Text("Shared Data")
                 .accessibilityIdentifier("shared-data-display")
 
-            Button("Refresh") {
-                status = "Refreshed"
+            HStack(spacing: 16) {
+                Button("Refresh") {
+                    status = "Refreshed"
+                }
+                .accessibilityIdentifier("refresh-button")
+
+                // Three actions stack vertically, and iOS puts the cancel
+                // action last: the alert e2e checks accept_alert does not
+                // take the last button for the positive one.
+                Button("Choose") { choosing = true }
+                    .alert("Pick one", isPresented: $choosing) {
+                        Button("OK") { choice = "ok" }
+                        Button("Later") { choice = "later" }
+                        Button("Cancel", role: .cancel) { choice = "cancel" }
+                    }
+                Text("Choice: \(choice)")
             }
-            .accessibilityIdentifier("refresh-button")
 
             Divider()
 

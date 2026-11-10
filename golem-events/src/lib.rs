@@ -789,6 +789,13 @@ pub enum SubstepEvent {
         max: u32,
         reconnect_ms: u64,
     },
+    /// `accept_alert` / `dismiss_alert` answered an alert with the button
+    /// `label`; `rule` names how it was picked (`buttons`, id, built-in
+    /// label, only button), for verbose output only.
+    AlertButton {
+        label: String,
+        rule: String,
+    },
 
     // Media
     Screenshot {

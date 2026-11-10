@@ -1,3 +1,4 @@
+mod alert_buttons;
 mod app_lifecycle;
 mod assertion;
 mod capture;

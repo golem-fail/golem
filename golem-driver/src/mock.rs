@@ -520,14 +520,20 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn accept_system_alert(&self) -> anyhow::Result<crate::SystemAlertAnswer> {
-        self.record_call("accept_system_alert", vec![]);
+    async fn accept_system_alert(
+        &self,
+        labels: &[String],
+    ) -> anyhow::Result<crate::SystemAlertAnswer> {
+        self.record_call("accept_system_alert", labels.to_vec());
         self.check_error("accept_system_alert")?;
         Ok(self.system_alert.lock().expect("lock poisoned").clone())
     }
 
-    async fn dismiss_system_alert(&self) -> anyhow::Result<crate::SystemAlertAnswer> {
-        self.record_call("dismiss_system_alert", vec![]);
+    async fn dismiss_system_alert(
+        &self,
+        labels: &[String],
+    ) -> anyhow::Result<crate::SystemAlertAnswer> {
+        self.record_call("dismiss_system_alert", labels.to_vec());
         self.check_error("dismiss_system_alert")?;
         Ok(self.system_alert.lock().expect("lock poisoned").clone())
     }

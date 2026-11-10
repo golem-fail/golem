@@ -904,6 +904,47 @@ mod tests {
         );
     }
 
+    // A Compose dialog: each answer is a clickable node with its label as
+    // text and an unlabelled Button for the role (measured on API 36).
+    #[test]
+    fn a_compose_dialogs_answers_are_its_buttons() {
+        let answer = |label: &str, x: i32| {
+            json!({
+                "element_type": "View", "text": "", "accessibility_label": null,
+                "placeholder": null, "clickable": true,
+                "bounds": { "x": x, "y": 1229, "width": 150, "height": 126 },
+                "children": [
+                    leaf("TextView", Some(label)),
+                    leaf("Button", Some(""))
+                ]
+            })
+        };
+        let tree = el(json!({
+            "element_type": "FrameLayout", "text": "", "accessibility_label": null,
+            "placeholder": null,
+            "bounds": { "x": 172, "y": 1038, "width": 735, "height": 379 },
+            "children": [
+                leaf("TextView", Some("Pick one")),
+                answer("Cancel", 342),
+                answer("Later", 540),
+                answer("OK", 692)
+            ]
+        }));
+        let alert = find_alert(&tree).expect("an inset Compose dialog SHALL be an alert");
+        assert_eq!(
+            alert.text.as_deref(),
+            Some("Pick one"),
+            "answers SHALL not be the message"
+        );
+        let buttons = find_alert_buttons(&alert);
+        let labels: Vec<_> = buttons
+            .iter()
+            .map(|b| b.text.clone().unwrap_or_default())
+            .collect();
+        assert_eq!(labels, ["Cancel", "Later", "OK"]);
+        assert_eq!(buttons[2].bounds.x, 692, "SHALL tap the clickable node");
+    }
+
     // 45. find_alert returns None when no alert is present.
     #[test]
     fn find_alert_none_when_absent() {

@@ -390,12 +390,18 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.poke_for_system_alert().await
     }
 
-    async fn accept_system_alert(&self) -> anyhow::Result<golem_driver::SystemAlertAnswer> {
-        self.inner.accept_system_alert().await
+    async fn accept_system_alert(
+        &self,
+        labels: &[String],
+    ) -> anyhow::Result<golem_driver::SystemAlertAnswer> {
+        self.inner.accept_system_alert(labels).await
     }
 
-    async fn dismiss_system_alert(&self) -> anyhow::Result<golem_driver::SystemAlertAnswer> {
-        self.inner.dismiss_system_alert().await
+    async fn dismiss_system_alert(
+        &self,
+        labels: &[String],
+    ) -> anyhow::Result<golem_driver::SystemAlertAnswer> {
+        self.inner.dismiss_system_alert(labels).await
     }
 
     async fn prepare_type(&self, text: &str) -> anyhow::Result<()> {
