@@ -136,6 +136,12 @@ pub trait PlatformDriver: Send + Sync {
     /// Stop/force-kill the app
     async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()>;
 
+    /// Whether the companion answers its health check. `None` when the
+    /// driver has no companion to ask (the stub).
+    async fn companion_alive(&self) -> Option<bool> {
+        None
+    }
+
     /// Whether the app's process runs. `None` when the driver cannot tell
     /// (a physical iOS device, the stub).
     async fn app_running(&self, _bundle_id: &str) -> anyhow::Result<Option<bool>> {

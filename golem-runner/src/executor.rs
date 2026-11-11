@@ -297,10 +297,18 @@ async fn launch_first_app(
             timeout.as_millis()
         ),
     };
-    if let Ok(Some(false)) = driver.app_running(bundle).await {
+    if app_crashed(driver, bundle).await {
         return Err(app_exited_error(bundle));
     }
     Err(err)
+}
+
+/// Whether `bundle` exited while golem's companion lives on: an app crash.
+/// A companion that does not answer died itself, and the app is not running
+/// only because the launch never reached it.
+async fn app_crashed(driver: &dyn PlatformDriver, bundle: &str) -> bool {
+    driver.companion_alive().await != Some(false)
+        && matches!(driver.app_running(bundle).await, Ok(Some(false)))
 }
 
 /// The app a companion death can blame: the step's `app`, by name or
@@ -325,10 +333,9 @@ async fn app_exited(
     apps: &[golem_parser::AppConfig],
 ) -> Option<anyhow::Error> {
     let bundle = step_bundle(step, apps)?;
-    match driver.app_running(bundle).await {
-        Ok(Some(false)) => Some(app_exited_error(bundle)),
-        _ => None,
-    }
+    app_crashed(driver, bundle)
+        .await
+        .then(|| app_exited_error(bundle))
 }
 
 fn app_exited_error(bundle: &str) -> anyhow::Error {
@@ -5830,7 +5837,16 @@ action = "screenshot"
     /// flow with an app; a launch in one without, since a flow's start
     /// launches its apps.
     async fn run_dying(step: Step, running: Option<bool>) -> (FlowResult, u32) {
+        run_dying_with(step, running, None).await
+    }
+
+    async fn run_dying_with(
+        step: Step,
+        running: Option<bool>,
+        companion_alive: Option<bool>,
+    ) -> (FlowResult, u32) {
         let driver = MockPlatformDriver::new(hierarchy_with_text(&["OK"]));
+        driver.set_companion_alive(companion_alive);
         let launch = step.action == "launch";
         driver.set_error_coded(
             if launch { "launch_app" } else { "tap" },
@@ -5882,6 +5898,30 @@ action = "screenshot"
             restarts, 0,
             "a crashed app SHALL not cost companion restarts"
         );
+    }
+
+    // The app is not running because the dead companion never launched it:
+    // a companion death, recovered like any other, not EA504 (#468).
+    #[tokio::test]
+    async fn a_launch_with_a_dead_companion_recovers_and_does_not_blame_the_app() {
+        let (result, restarts) = run_dying_with(launch_step(), Some(false), Some(false)).await;
+        assert_ne!(result.failed_code, Some(FailureCode::AppExited));
+        assert_eq!(
+            result.failed_code,
+            Some(FailureCode::DeviceCompanionUnrecoverable)
+        );
+        assert_eq!(
+            restarts, MAX_COMPANION_RESTARTS,
+            "SHALL restart the companion"
+        );
+    }
+
+    // A live companion and an app that is gone: the app crashed.
+    #[tokio::test]
+    async fn a_launch_with_a_live_companion_and_no_app_is_a504() {
+        let (result, restarts) = run_dying_with(launch_step(), Some(false), Some(true)).await;
+        assert_eq!(result.failed_code, Some(FailureCode::AppExited));
+        assert_eq!(restarts, 0);
     }
 
     #[tokio::test]

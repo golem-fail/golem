@@ -320,6 +320,10 @@ impl PlatformDriver for WitnessDriver<'_> {
         self.inner.stop_app(bundle_id).await
     }
 
+    async fn companion_alive(&self) -> Option<bool> {
+        self.inner.companion_alive().await
+    }
+
     async fn app_running(&self, bundle_id: &str) -> anyhow::Result<Option<bool>> {
         self.inner.app_running(bundle_id).await
     }

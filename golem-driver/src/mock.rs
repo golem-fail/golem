@@ -85,6 +85,8 @@ pub struct MockPlatformDriver {
     /// What `app_running` and `foreground_app` return. `None` (cannot
     /// tell) by default.
     app_running: Mutex<Option<bool>>,
+    /// What `companion_alive` returns. `None` (cannot tell) by default.
+    companion_alive: Mutex<Option<bool>>,
     foreground: Mutex<Option<String>>,
 }
 
@@ -113,6 +115,7 @@ impl MockPlatformDriver {
             hierarchy_queue: Mutex::new(VecDeque::new()),
             launch_warning: Mutex::new(None),
             app_running: Mutex::new(None),
+            companion_alive: Mutex::new(None),
             foreground: Mutex::new(None),
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
             type_verify: Mutex::new(None),
@@ -120,6 +123,11 @@ impl MockPlatformDriver {
             hierarchy_delay: Mutex::new(std::time::Duration::ZERO),
             companion_killing_permissions: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Set what `companion_alive` returns.
+    pub fn set_companion_alive(&self, alive: Option<bool>) {
+        *self.companion_alive.lock().expect("lock poisoned") = alive;
     }
 
     /// Make setting `permission` report that it kills the companion.
@@ -419,6 +427,10 @@ impl PlatformDriver for MockPlatformDriver {
         self.record_call("stop_app", vec![bundle_id.to_string()]);
         self.check_error("stop_app")?;
         Ok(())
+    }
+
+    async fn companion_alive(&self) -> Option<bool> {
+        *self.companion_alive.lock().expect("lock poisoned")
     }
 
     async fn app_running(&self, _bundle_id: &str) -> anyhow::Result<Option<bool>> {
