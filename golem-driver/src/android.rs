@@ -933,6 +933,10 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
+    async fn companion_alive(&self) -> Option<bool> {
+        Some(self.client.check_health().await.is_ok())
+    }
+
     async fn app_running(&self, bundle_id: &str) -> Result<Option<bool>> {
         // `pidof` exits 1 when nothing runs; `|| true` keeps that an answer.
         let out = self

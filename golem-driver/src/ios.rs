@@ -778,6 +778,10 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
+    async fn companion_alive(&self) -> Option<bool> {
+        Some(self.client.check_health().await.is_ok())
+    }
+
     async fn app_running(&self, bundle_id: &str) -> Result<Option<bool>> {
         if self.physical {
             return Ok(None);
