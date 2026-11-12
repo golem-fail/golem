@@ -180,6 +180,13 @@ fn is_disabled_control(node: &Element) -> bool {
     node.clickable && !node.enabled
 }
 
+/// An alert iOS draws: SpringBoard's (permission prompts, "Open in …?"),
+/// which the tree puts over the app's, or a `UIAlertController`. The app
+/// does not lay it out, so a finding in it is one the app cannot fix.
+fn is_os_alert(node: &Element) -> bool {
+    node.element_type.eq_ignore_ascii_case("alert")
+}
+
 fn walk(
     node: &Element,
     viewport: &Viewport,
@@ -187,6 +194,9 @@ fn walk(
     disabled_ancestor: bool,
     out: &mut Vec<A11yIssue>,
 ) {
+    if is_os_alert(node) {
+        return;
+    }
     let disabled = disabled_ancestor || is_disabled_control(node);
 
     // Per-node checks, skipped inside a disabled control. Touch-target/
@@ -826,6 +836,9 @@ fn visible_text_elements<'a>(
     disabled_ancestor: bool,
     out: &mut Vec<&'a Element>,
 ) {
+    if is_os_alert(node) {
+        return;
+    }
     let disabled = disabled_ancestor || is_disabled_control(node);
     if !disabled
         && is_visible(node, viewport)
@@ -1198,6 +1211,48 @@ mod tests {
         assert!(!A11yLevel::Critical.forces_screenshot());
         assert!(!A11yLevel::Relaxed.forces_screenshot());
         assert!(A11yLevel::Strict.forces_screenshot());
+    }
+
+    // ── alerts iOS draws ────────────────────────────────────────────
+    // A SpringBoard alert put over the app (#441): its texts and buttons
+    // are not the app's to fix. The same nodes outside an alert are found.
+    #[test]
+    fn an_os_alert_gives_no_findings() {
+        let alert_nodes = || {
+            vec![
+                with_text(
+                    el("text", 50, 300, 300, 42),
+                    "“App” would like full access to your Photo Library.",
+                ),
+                with_text(el("Button", 50, 400, 30, 20), "Allow"),
+            ]
+        };
+        let mut alert = el("alert", 40, 280, 320, 200);
+        alert.clickable = false;
+        alert.children = alert_nodes();
+        let mut root = root_with(vec![]);
+        golem_driver::common::cover_with_alerts(&mut root, vec![alert]);
+        assert!(audit_hierarchy(&root, &vp(), &relaxed()).is_empty());
+
+        let bare = root_with(alert_nodes());
+        assert!(
+            !audit_hierarchy(&bare, &vp(), &relaxed()).is_empty(),
+            "the same nodes outside an alert SHALL be found"
+        );
+    }
+
+    #[test]
+    fn contrast_reads_no_text_inside_an_os_alert() {
+        let mut alert = el("alert", 0, 0, 100, 100);
+        alert.children = vec![with_text(el("text", 0, 0, 100, 40), "Allow?")];
+        let root = root_with(vec![
+            alert,
+            with_text(el("text", 0, 200, 100, 40), "App text"),
+        ]);
+        let mut texts = Vec::new();
+        visible_text_elements(&root, &vp(), false, &mut texts);
+        let found: Vec<_> = texts.iter().filter_map(|e| e.text.as_deref()).collect();
+        assert_eq!(found, ["App text"]);
     }
 
     // ── touch target ────────────────────────────────────────────────
