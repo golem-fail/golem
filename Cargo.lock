@@ -1173,6 +1173,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "strsim",
  "tempfile",
  "tokio",
  "toml",
