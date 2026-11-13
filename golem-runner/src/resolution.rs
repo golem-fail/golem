@@ -397,31 +397,116 @@ pub async fn resolve_element(
         });
     }
 
-    // Check full tree for a better error message.
-    let full_results = find_elements(&last_root, &selector);
-    if !full_results.is_empty() {
-        let offscreen = &full_results[0].element;
-        let b = &offscreen.bounds;
-        crate::fail_code!(
+    Err(miss_error(
+        &selector,
+        &last_root,
+        &last_viewport,
+        elapsed_secs,
+    ))
+}
+
+/// Why `selector` matched nothing visible in the last tree: EF405 when the
+/// full tree has it off-screen, else EF404 with near-miss hints.
+fn miss_error(
+    selector: &golem_element::selector::Selector,
+    root: &golem_element::Element,
+    viewport: &Viewport,
+    elapsed_secs: f64,
+) -> anyhow::Error {
+    let full_results = find_elements(root, selector);
+    if let Some(found) = full_results.first() {
+        let b = &found.element.bounds;
+        return golem_events::coded(
             golem_events::FailureCode::FlowElementOffscreen,
-            "Element not in viewport after {elapsed_secs:.1}s (text={:?}, id={:?}): \
-             found off-screen at ({}, {}), viewport {}x{}. \
-             Use auto_scroll = true to scroll to off-screen elements.",
-            selector.text,
-            selector.accessibility_label,
-            b.x,
-            b.y,
-            last_viewport.width,
-            last_viewport.height,
+            anyhow::anyhow!(
+                "Element not in viewport after {elapsed_secs:.1}s (text={:?}, id={:?}): \
+                 found off-screen at ({}, {}), viewport {}x{}. \
+                 Use auto_scroll = true to scroll to off-screen elements.",
+                selector.text,
+                selector.accessibility_label,
+                b.x,
+                b.y,
+                viewport.width,
+                viewport.height,
+            ),
         );
     }
-
-    crate::fail_code!(
+    golem_events::coded(
         golem_events::FailureCode::FlowElementNotFound,
-        "No element found after {elapsed_secs:.1}s: text={:?}, id={:?}",
-        selector.text,
-        selector.accessibility_label,
-    );
+        anyhow::anyhow!(
+            "No element found after {elapsed_secs:.1}s: text={:?}, id={:?}{}",
+            selector.text,
+            selector.accessibility_label,
+            near_miss_hints(selector, root, viewport),
+        ),
+    )
+}
+
+/// The miss a step's resolver would have reported, for a step whose own
+/// timeout cut it off first (the resolver waits as long as the step): one
+/// more tree fetch, only on a failure. `None` when the step has no text or
+/// label selector, or its element is visible (the timeout had another
+/// cause).
+pub(crate) async fn timeout_miss(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    timeout_ms: u64,
+) -> Option<anyhow::Error> {
+    let selector = build_selector(step);
+    if selector.text.is_none() && selector.accessibility_label.is_none() {
+        return None;
+    }
+    let (root, meta) = get_hierarchy_bounded(driver).await.ok()?;
+    let (viewport, _, matches) = visible_matches(&root, meta.keyboard_height, &selector);
+    matches
+        .is_empty()
+        .then(|| miss_error(&selector, &root, &viewport, timeout_ms as f64 / 1000.0))
+}
+
+/// "\nhint: …" lines naming the visible texts (or labels) the selector
+/// nearly matched; empty when none is close.
+fn near_miss_hints(
+    selector: &golem_element::selector::Selector,
+    root: &golem_element::Element,
+    viewport: &Viewport,
+) -> String {
+    fn collect<'a>(
+        e: &'a golem_element::Element,
+        field: fn(&golem_element::Element) -> Vec<&str>,
+        out: &mut Vec<&'a str>,
+    ) {
+        out.extend(field(e));
+        for c in &e.children {
+            collect(c, field, out);
+        }
+    }
+    let visible = filter_viewport(root, viewport);
+    let mut lines = Vec::new();
+    if let Some(wanted) = &selector.text {
+        let mut texts = Vec::new();
+        collect(
+            &visible,
+            |e| e.text.as_deref().into_iter().collect(),
+            &mut texts,
+        );
+        lines.extend(crate::near_miss::hints(wanted, &texts));
+    }
+    if let Some(wanted) = &selector.accessibility_label {
+        let mut labels = Vec::new();
+        collect(
+            &visible,
+            |e| {
+                [&e.accessibility_label, &e.accessibility_id]
+                    .into_iter()
+                    .flatten()
+                    .map(String::as_str)
+                    .collect()
+            },
+            &mut labels,
+        );
+        lines.extend(crate::near_miss::hints(wanted, &labels));
+    }
+    lines.iter().map(|l| format!("\nhint: {l}")).collect()
 }
 
 /// The viewport a step judges against, the visible tree inside it, and the
@@ -639,6 +724,64 @@ mod tests {
             .expect("should find button with text Save and id btn-save");
         assert_eq!(elem.accessibility_label.as_deref(), Some("btn-save"));
         assert_eq!(elem.text.as_deref(), Some("Save"));
+    }
+
+    // A selector that misses a visible text by its tail SHALL fail with a
+    // hint naming that text and a pattern to try (#445).
+    #[tokio::test]
+    async fn resolve_element_no_match_hints_at_the_nearest_visible_text() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Button",
+            "依頼, tab, 2 of 3",
+            Bounds::new(10, 700, 100, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on_text = Some("依頼".to_string());
+        step.timeout = Some(50);
+        let err = format!(
+            "{}",
+            resolve_element(&step, &driver, None)
+                .await
+                .expect_err("SHALL fail")
+        );
+        assert!(
+            err.contains(r#"hint: visible text "依頼, tab, 2 of 3" contains it → try "依頼*""#),
+            "{err}"
+        );
+    }
+
+    // A step cut off by its own timeout SHALL still get the hint, unless
+    // its element is visible (the timeout had another cause).
+    #[tokio::test]
+    async fn a_timed_out_miss_is_not_found_with_hints_but_a_visible_match_is_not() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Button",
+            "Choose",
+            Bounds::new(10, 700, 100, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on_text = Some("Choos".to_string());
+        let err = timeout_miss(&step, &driver, 2000)
+            .await
+            .expect("SHALL be a miss");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowElementNotFound)
+        );
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(r#"hint: visible text "Choose" contains it → try "Choos*""#),
+            "{msg}"
+        );
+        step.on_text = Some("Choose".to_string());
+        assert!(timeout_miss(&step, &driver, 2000).await.is_none());
+        assert!(timeout_miss(&make_step("launch"), &driver, 2000)
+            .await
+            .is_none());
     }
 
     // ── 4. resolve_element returns error when no elements match ──────

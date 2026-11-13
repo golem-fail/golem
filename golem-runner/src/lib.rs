@@ -78,6 +78,7 @@ pub mod http_transport;
 pub mod installed_state;
 pub mod installer;
 pub mod interp;
+mod near_miss;
 pub mod parallel;
 pub mod perf;
 pub mod policy;

@@ -395,10 +395,15 @@ async fn run_with_policy(
                 continue;
             }
             Err(_elapsed) => {
-                last_error = Some(coded(
-                    FailureCode::FlowStepTimeout,
-                    anyhow::anyhow!("Step timed out after {}ms", timeout_ms),
-                ));
+                last_error = Some(
+                    match crate::resolution::timeout_miss(step, driver, timeout_ms).await {
+                        Some(miss) => miss,
+                        None => coded(
+                            FailureCode::FlowStepTimeout,
+                            anyhow::anyhow!("Step timed out after {}ms", timeout_ms),
+                        ),
+                    },
+                );
                 continue;
             }
         }
