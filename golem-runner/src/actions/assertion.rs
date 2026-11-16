@@ -12,7 +12,7 @@ pub(crate) async fn handle_assert_visible(
     driver: &dyn PlatformDriver,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
-    resolve_element(step, driver, ctx.emitter).await?;
+    resolve_element(step, driver, Some(ctx)).await?;
     Ok(())
 }
 

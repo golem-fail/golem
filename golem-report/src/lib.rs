@@ -146,6 +146,11 @@ pub enum SubstepDetail {
         label: String,
         rule: String,
     },
+    AmbiguousMatch {
+        count: usize,
+        picked: String,
+        others: Vec<String>,
+    },
     Screenshot {
         path: String,
     },
@@ -337,6 +342,15 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
                 attempt: *attempt,
                 max: *max,
                 reconnect_ms: *reconnect_ms,
+            },
+            golem_events::SubstepEvent::AmbiguousMatch {
+                count,
+                picked,
+                others,
+            } => SubstepDetail::AmbiguousMatch {
+                count: *count,
+                picked: picked.clone(),
+                others: others.clone(),
             },
             golem_events::SubstepEvent::AlertButton { label, rule } => SubstepDetail::AlertButton {
                 label: label.clone(),

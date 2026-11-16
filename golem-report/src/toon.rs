@@ -55,6 +55,7 @@ pub fn format_step_toon(step: &StepReport) -> String {
     };
 
     let substep_suffix = format_substeps_toon(&step.substeps);
+    let note = ambiguity_note(&step.substeps);
     let tree_suffix = if step.tree_stats.fetches > 0 {
         format!(
             " t:{}/{}",
@@ -67,7 +68,7 @@ pub fn format_step_toon(step: &StepReport) -> String {
     match &step.outcome {
         StepOutcome::Success => {
             format!(
-                " +{label} d:{}{substep_suffix}{tree_suffix}",
+                " +{label} d:{}{substep_suffix}{tree_suffix}{note}",
                 step.duration_ms
             )
         }
@@ -94,6 +95,29 @@ pub fn format_step_toon(step: &StepReport) -> String {
             None => format!(" -{label}{substep_suffix}"),
         },
     }
+}
+
+/// "\nnote: …" when the step's selector matched several visible elements:
+/// the one it used, up to three others, and how to pick one.
+fn ambiguity_note(substeps: &[crate::SubstepDetail]) -> String {
+    substeps
+        .iter()
+        .find_map(|s| match s {
+            crate::SubstepDetail::AmbiguousMatch {
+                count,
+                picked,
+                others,
+            } => {
+                let more = if *count > others.len() + 1 { ", …" } else { "" };
+                Some(format!(
+                    "\nnote: {count} matches; used the first: {picked}. Others: {}{more}. \
+                     To pick one, add on_below/on_right_of or narrow the text; on_index as a last resort.",
+                    others.join(", ")
+                ))
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 /// Compact substep notation for TOON: @x,y for tap/found position, s:N for scroll attempts, b:x,y,w,h for bounds.
@@ -1032,6 +1056,20 @@ mod tests {
             out, " @50,60",
             "SHALL produce @x,y without bounds for Tap without element_bounds"
         );
+    }
+
+    #[test]
+    fn an_ambiguous_match_is_a_note_with_the_pick_and_the_others() {
+        let out = ambiguity_note(&[crate::SubstepDetail::AmbiguousMatch {
+            count: 5,
+            picked: r#""Log in" @120,640 (button)"#.into(),
+            others: vec![r#""Log in" @200,90 (text)"#.into()],
+        }]);
+        assert!(
+            out.contains(r#"note: 5 matches; used the first: "Log in" @120,640 (button). Others: "Log in" @200,90 (text), …"#),
+            "{out}"
+        );
+        assert!(out.contains("on_index as a last resort"), "{out}");
     }
 
     #[test]

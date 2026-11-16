@@ -178,6 +178,11 @@ fn all_substeps() -> Vec<SubstepEvent> {
             label: "Don’t Allow".into(),
             rule: "built-in label".into(),
         },
+        SubstepEvent::AmbiguousMatch {
+            count: 2,
+            picked: "\"Log in\" @120,640 (button)".into(),
+            others: vec!["\"Log in\" @200,90 (text)".into()],
+        },
         SubstepEvent::Screenshot {
             path: ".golem/results/tap/ios/screenshots/step-3.png".into(),
         },
@@ -689,6 +694,7 @@ fn _substep_exhaustiveness_guard(s: &SubstepEvent) {
         | SubstepEvent::DriverWarning { .. }
         | SubstepEvent::CompanionRestarted { .. }
         | SubstepEvent::AlertButton { .. }
+        | SubstepEvent::AmbiguousMatch { .. }
         | SubstepEvent::Screenshot { .. }
         | SubstepEvent::BarrierAborted { .. } => {}
     }

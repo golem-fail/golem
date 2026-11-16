@@ -14,7 +14,7 @@ pub(crate) async fn handle_read(
     vars: &mut VariableStore,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
-    let (elem, _coords) = resolve_element(step, driver, ctx.emitter).await?;
+    let (elem, _coords) = resolve_element(step, driver, Some(ctx)).await?;
 
     let text = elem.text.unwrap_or_default();
 
