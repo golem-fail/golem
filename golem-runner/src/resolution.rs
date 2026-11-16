@@ -47,8 +47,9 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub async fn resolve_element(
     step: &Step,
     driver: &dyn PlatformDriver,
-    emitter: Option<&golem_events::emitter::DeviceEmitter>,
+    sink: Option<&dyn SubstepSink>,
 ) -> Result<(Element, (i32, i32))> {
+    let emitter = sink.and_then(|s| s.emitter());
     let selector = build_selector(step);
     let timeout_ms = step.timeout.unwrap_or(DEFAULT_POLL_TIMEOUT_MS);
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
@@ -189,6 +190,19 @@ pub async fn resolve_element(
                         y: coords.1,
                     },
                 });
+            }
+            if results.len() > 1 {
+                if let Some(sink) = sink {
+                    sink.substep(golem_events::SubstepEvent::AmbiguousMatch {
+                        count: results.len(),
+                        picked: describe_match(&first.element),
+                        others: results[1..]
+                            .iter()
+                            .take(3)
+                            .map(|r| describe_match(&r.element))
+                            .collect(),
+                    });
+                }
             }
             return Ok((first.element.clone(), coords));
         }
@@ -439,6 +453,48 @@ fn miss_error(
             selector.accessibility_label,
             near_miss_hints(selector, root, viewport),
         ),
+    )
+}
+
+/// Where `resolve_element` sends its substeps. The ambiguity note goes to
+/// `substep`, which an [`ExecutionContext`] also records for the step's
+/// result (what `act` shows); the other events go to the device emitter only.
+pub trait SubstepSink: Sync {
+    fn substep(&self, event: golem_events::SubstepEvent);
+    fn emitter(&self) -> Option<&golem_events::emitter::DeviceEmitter>;
+}
+
+impl SubstepSink for golem_events::emitter::DeviceEmitter {
+    fn substep(&self, event: golem_events::SubstepEvent) {
+        golem_events::emitter::DeviceEmitter::substep(self, event);
+    }
+    fn emitter(&self) -> Option<&golem_events::emitter::DeviceEmitter> {
+        Some(self)
+    }
+}
+
+impl SubstepSink for crate::context::ExecutionContext<'_> {
+    fn substep(&self, event: golem_events::SubstepEvent) {
+        crate::context::ExecutionContext::substep(self, event);
+    }
+    fn emitter(&self) -> Option<&golem_events::emitter::DeviceEmitter> {
+        self.emitter
+    }
+}
+
+/// A match as an ambiguity note names it: `"label" @x,y (type)`.
+fn describe_match(e: &golem_element::Element) -> String {
+    let label = [&e.text, &e.accessibility_label, &e.accessibility_id]
+        .into_iter()
+        .flatten()
+        .find(|s| !s.trim().is_empty())
+        .map_or(String::new(), |s| format!("{s:?} "));
+    let b = e.effective_bounds();
+    format!(
+        "{label}@{},{} ({})",
+        b.center_x(),
+        b.center_y(),
+        e.element_type.to_lowercase()
     )
 }
 
@@ -782,6 +838,89 @@ mod tests {
         assert!(timeout_miss(&make_step("launch"), &driver, 2000)
             .await
             .is_none());
+    }
+
+    async fn ambiguity_notes(
+        children: Vec<Element>,
+        on_index: Option<usize>,
+    ) -> Vec<(usize, String, Vec<String>)> {
+        use golem_events::channel::event_channel;
+        use golem_events::{DeviceId, EventKind, SubstepEvent};
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children = children;
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on_text = Some("Log in".to_string());
+        step.on_index = on_index;
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let emitter = golem_events::emitter::DeviceEmitter::new(sender, DeviceId("d".into()));
+        resolve_element(&step, &driver, Some(&emitter as &dyn SubstepSink))
+            .await
+            .expect("SHALL resolve");
+        let mut notes = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if let EventKind::Substep(SubstepEvent::AmbiguousMatch {
+                count,
+                picked,
+                others,
+            }) = ev.kind
+            {
+                notes.push((count, picked, others));
+            }
+        }
+        notes
+    }
+
+    // Several visible matches SHALL name the one acted on and the others;
+    // one match, or an `on_index`, SHALL add nothing (#446).
+    #[tokio::test]
+    async fn several_matches_name_the_pick_one_match_says_nothing() {
+        let button = make_element_with_text("Button", "Log in", Bounds::new(100, 620, 40, 40));
+        let heading = make_element_with_text("Text", "Log in", Bounds::new(180, 70, 40, 40));
+        assert!(ambiguity_notes(vec![button.clone()], None).await.is_empty());
+        assert_eq!(
+            ambiguity_notes(vec![button.clone(), heading.clone()], None).await,
+            [(
+                2,
+                r#""Log in" @120,640 (button)"#.to_string(),
+                vec![r#""Log in" @200,90 (text)"#.to_string()]
+            )]
+        );
+        assert!(ambiguity_notes(vec![button, heading], Some(1))
+            .await
+            .is_empty());
+    }
+
+    // The note SHALL reach the step's log, which `act` renders.
+    #[tokio::test]
+    async fn the_note_is_in_the_step_log_act_shows() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children = vec![
+            make_element_with_text("Button", "Log in", Bounds::new(100, 620, 40, 40)),
+            make_element_with_text("Text", "Log in", Bounds::new(180, 70, 40, 40)),
+        ];
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on_text = Some("Log in".to_string());
+        let ctx = crate::context::test_ctx(std::path::Path::new("."));
+        *ctx.substep_log.lock().expect("lock") = Some(Vec::new());
+        resolve_element(&step, &driver, Some(&ctx))
+            .await
+            .expect("SHALL resolve");
+        let log = ctx
+            .substep_log
+            .lock()
+            .expect("lock")
+            .take()
+            .unwrap_or_default();
+        assert!(
+            log.iter().any(|e| matches!(
+                e,
+                golem_events::SubstepEvent::AmbiguousMatch { count: 2, .. }
+            )),
+            "{log:?}"
+        );
     }
 
     // ── 4. resolve_element returns error when no elements match ──────

@@ -789,6 +789,14 @@ pub enum SubstepEvent {
         max: u32,
         reconnect_ms: u64,
     },
+    /// The selector matched `count` visible elements and the step acted on
+    /// the first, `picked`; `others` describes up to three more, as
+    /// `"label" @x,y (type)`. Shown in `act` results, not in `golem run`.
+    AmbiguousMatch {
+        count: usize,
+        picked: String,
+        others: Vec<String>,
+    },
     /// `accept_alert` / `dismiss_alert` answered an alert with the button
     /// `label`; `rule` names how it was picked (`buttons`, id, built-in
     /// label, only button), for verbose output only.

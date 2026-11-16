@@ -158,7 +158,7 @@ pub(crate) async fn handle_tap(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     dismiss_keyboard_before_tap(driver, !step.keep_keyboard.unwrap_or(false)).await?;
-    let (elem, coords) = resolve_element(step, driver, ctx.emitter).await?;
+    let (elem, coords) = resolve_element(step, driver, Some(ctx)).await?;
 
     // Workaround: iOS SwiftUI Toggles render as a full-width row with the
     // tappable switch control on the right. Tapping the row center hits the
@@ -200,7 +200,7 @@ pub(crate) async fn handle_double_tap(
     driver: &dyn PlatformDriver,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+    let (_elem, (x, y)) = resolve_element(step, driver, Some(ctx)).await?;
     ctx.substep(golem_events::SubstepEvent::DoubleTap {
         point: golem_events::Point { x, y },
         element_bounds: None,
@@ -250,7 +250,7 @@ pub(crate) async fn handle_type(
         let selector = build_selector(step);
         let mut attempts = 0;
         loop {
-            let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+            let (_elem, (x, y)) = resolve_element(step, driver, Some(ctx)).await?;
             driver.tap(x, y).await?;
 
             // Give the keyboard a moment to finish opening before checking
@@ -435,7 +435,7 @@ pub(crate) async fn handle_long_press(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     dismiss_keyboard_before_tap(driver, !step.keep_keyboard.unwrap_or(false)).await?;
-    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+    let (_elem, (x, y)) = resolve_element(step, driver, Some(ctx)).await?;
 
     let duration = step.duration.unwrap_or(1000);
 
