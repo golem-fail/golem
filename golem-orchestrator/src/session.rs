@@ -1016,11 +1016,16 @@ impl Work {
 }
 
 /// A new draft for a session on `device`, with the session's first app.
+/// A draft for the session's app. Its bundle is written only for an app
+/// `golem.toml` does not register (`bundle_app` names such an app by its
+/// bundle): a copy of a registered bundle is a second place to update.
 fn new_draft(device: &DeviceInfo, apps: &[golem_parser::AppConfig]) -> crate::draft::Draft {
     let os = format!("{}:latest", device.platform);
-    let app = apps
-        .first()
-        .and_then(|a| a.bundle.as_deref().map(|b| (a.name.as_str(), b)));
+    let app = apps.first().and_then(|a| {
+        let bundle = a.bundle.as_deref()?;
+        let unregistered = (a.name == bundle).then_some(bundle);
+        Some((a.name.as_str(), unregistered))
+    });
     crate::draft::Draft::new("New flow", app.map(|(n, b)| (n, b, os.as_str())))
 }
 
@@ -2646,6 +2651,22 @@ mod tests {
 
     /// An empty project directory, shared by the tests that need no
     /// project files: the system temp root holds other tests' files.
+    // A registered app's draft names it only; its bundle stays in
+    // golem.toml. A session opened with only a bundle keeps it (#444).
+    #[test]
+    fn a_draft_copies_a_bundle_only_golem_toml_does_not_set() {
+        let registered = toml::from_str::<golem_parser::AppConfig>(
+            "name = \"app-b\"\nbundle = \"fail.golem.testb\"",
+        )
+        .expect("app");
+        let text = new_draft(&device(), &[registered]).text();
+        assert!(text.contains("name = \"app-b\""), "{text}");
+        assert!(!text.contains("bundle"), "{text}");
+
+        let text = new_draft(&device(), &[bundle_app("com.example.only")]).text();
+        assert!(text.contains("bundle = \"com.example.only\""), "{text}");
+    }
+
     fn empty_project() -> PathBuf {
         let dir = std::env::temp_dir().join("golem-session-tests-empty-project");
         std::fs::create_dir_all(&dir).expect("empty project");

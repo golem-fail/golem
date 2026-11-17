@@ -63,13 +63,20 @@ pub struct Exported {
 impl Draft {
     /// An empty draft: `[flow]` with `name`, and one `[[flow.apps]]` entry
     /// for the app the session drives when there is one.
-    pub fn new(name: &str, app: Option<(&str, &str, &str)>) -> Draft {
+    /// `app` is the app's name, its bundle when `golem.toml` does not set
+    /// it, and the devices' `os`.
+    pub fn new(name: &str, app: Option<(&str, Option<&str>, &str)>) -> Draft {
         let mut text = format!("[flow]\nname = {}\n", toml_string(name));
         if let Some((app_name, bundle, os)) = app {
             text.push_str(&format!(
-                "\n[[flow.apps]]\nname = {}\nbundle = {}\n[[flow.apps.devices]]\nos = {}\n",
-                toml_string(app_name),
-                toml_string(bundle),
+                "\n[[flow.apps]]\nname = {}\n",
+                toml_string(app_name)
+            ));
+            if let Some(bundle) = bundle {
+                text.push_str(&format!("bundle = {}\n", toml_string(bundle)));
+            }
+            text.push_str(&format!(
+                "[[flow.apps.devices]]\nos = {}\n",
                 toml_string(os)
             ));
         }
@@ -1133,7 +1140,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
 
     #[test]
     fn a_new_draft_gets_a_main_block_in_the_house_form() {
-        let mut d = Draft::new("Checkout", Some(("app", "com.acme", "ios:latest")));
+        let mut d = Draft::new("Checkout", Some(("app", Some("com.acme"), "ios:latest")));
         d.record(r#"{ action = "launch", app = "app" }"#, Some("Start clean"))
             .expect("record");
         d.record(r#"{ action = "tap", on_text = "Buy" }"#, None)
@@ -1150,7 +1157,10 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     #[test]
     fn export_round_trips_the_steps() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let mut d = Draft::new("Round trip", Some(("app", "com.acme", "android:latest")));
+        let mut d = Draft::new(
+            "Round trip",
+            Some(("app", Some("com.acme"), "android:latest")),
+        );
         let lines = [
             r#"{ action = "launch", app = "app" }"#,
             r#"{ action = "type", on_label = "Email", input = "x" }"#,
@@ -1182,7 +1192,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     #[test]
     fn export_refuses_a_draft_that_does_not_validate() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let mut d = Draft::new("Bad", Some(("app", "com.acme", "android:latest")));
+        let mut d = Draft::new("Bad", Some(("app", Some("com.acme"), "android:latest")));
         d.record(r#"{ action = "open_link" }"#, None)
             .expect("record");
         let err = d
@@ -1234,7 +1244,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     #[test]
     fn an_unverified_step_carries_its_marker_and_is_reported() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let mut d = Draft::new("U", Some(("app", "com.acme", "android:latest")));
+        let mut d = Draft::new("U", Some(("app", Some("com.acme"), "android:latest")));
         d.record_unverified(
             r#"{ action = "tap", on_text = "Retry" }"#,
             Some("error path"),
@@ -1493,7 +1503,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
     #[test]
     fn a_draft_built_with_every_tool_validates_and_parses() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let mut d = Draft::new("All", Some(("app", "com.acme", "android:latest")));
+        let mut d = Draft::new("All", Some(("app", Some("com.acme"), "android:latest")));
         d.flow_set(&FlowSet {
             tags: Some(vec!["smoke".into()]),
             vars: Some(obj(serde_json::json!({ "who": "Ada" }))),
