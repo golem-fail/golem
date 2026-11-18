@@ -643,19 +643,21 @@ impl Draft {
             self.new_block(name)?;
         }
         if next.is_some() {
-            self.block_link(name, next, &[])?;
+            self.block_link(name, next, None)?;
         }
         Ok(())
     }
 
-    /// Set `next` on block `name`, and add `branches`: each a table with a
-    /// condition (`if_visible`, `if_not_visible`, or `if_var` with
-    /// `equals`, `matches` or `gte`) and a `goto`.
+    /// Set `next` on block `name`, and replace its branches with
+    /// `branches`: each a table with a condition (`if_visible`,
+    /// `if_not_visible`, `if_alert`, or `if_var` with `equals`, `matches` or
+    /// `gte`) and a `goto`; a last arm with no condition is the else. An
+    /// empty list removes them; `None` keeps them.
     pub fn block_link(
         &mut self,
         name: &str,
         next: Option<&str>,
-        branches: &[serde_json::Value],
+        branches: Option<&[serde_json::Value]>,
     ) -> Result<()> {
         let index = self
             .block_index(name)
@@ -669,7 +671,7 @@ impl Draft {
         index: usize,
         name: &str,
         next: Option<&str>,
-        branches: &[serde_json::Value],
+        branches: Option<&[serde_json::Value]>,
     ) -> Result<()> {
         let block = self
             .doc
@@ -680,40 +682,28 @@ impl Draft {
         if let Some(next) = next {
             block.insert("next", toml_edit::value(next));
         }
-        if !branches.is_empty() {
-            let mut values = Vec::new();
-            for b in branches {
-                let Value::InlineTable(t) = json_to_value(b)? else {
-                    bail!("a branch is a table: {{ if_visible = \"…\", goto = \"…\" }}");
-                };
-                values.push(t);
-            }
-            match block.get_mut("branch") {
-                Some(Item::ArrayOfTables(_)) => {
-                    bail!("block {name:?} writes its branches as [[block.branch]] tables; edit them in the file")
-                }
-                Some(Item::Value(Value::Array(array))) => {
-                    for t in values {
-                        let mut v = Value::InlineTable(t);
-                        v.decor_mut().set_prefix("\n  ");
-                        array.push_formatted(v);
-                    }
-                    array.set_trailing("\n");
-                    array.set_trailing_comma(true);
-                }
-                _ => {
-                    let mut array = toml_edit::Array::new();
-                    for t in values {
-                        let mut v = Value::InlineTable(t);
-                        v.decor_mut().set_prefix("\n  ");
-                        array.push_formatted(v);
-                    }
-                    array.set_trailing("\n");
-                    array.set_trailing_comma(true);
-                    block.insert("branch", Item::Value(Value::Array(array)));
-                }
-            }
+        let Some(branches) = branches else {
+            return Ok(());
+        };
+        if matches!(block.get("branch"), Some(Item::ArrayOfTables(_))) {
+            bail!("block {name:?} writes its branches as [[block.branch]] tables; edit them in the file");
         }
+        if branches.is_empty() {
+            block.remove("branch");
+            return Ok(());
+        }
+        let mut array = toml_edit::Array::new();
+        for b in branches {
+            let Value::InlineTable(t) = json_to_value(b)? else {
+                bail!("a branch is a table: {{ if_visible = \"…\", goto = \"…\" }}");
+            };
+            let mut v = Value::InlineTable(t);
+            v.decor_mut().set_prefix("\n  ");
+            array.push_formatted(v);
+        }
+        array.set_trailing("\n");
+        array.set_trailing_comma(true);
+        block.insert("branch", Item::Value(Value::Array(array)));
         Ok(())
     }
 
@@ -1328,7 +1318,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         d.block_link(
             "main",
             None,
-            &[serde_json::json!({ "if_visible": "Error", "goto": "retry" })],
+            Some(&[serde_json::json!({ "if_visible": "Error", "goto": "retry" })]),
         )
         .expect("link");
         let flow = golem_parser::parse_flow(&d.text()).expect("parse");
@@ -1349,6 +1339,114 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         );
     }
 
+    // `branches` replaces the arms, `[]` removes them, leaving it out
+    // keeps them (#443).
+    #[test]
+    fn block_link_replaces_clears_or_keeps_the_branches() {
+        let (_dir, mut d) = draft_of(INLINE);
+        let arms = |d: &Draft| -> Vec<String> {
+            golem_parser::parse_flow(&d.text()).expect("parse").block[0]
+                .branch
+                .iter()
+                .map(|b| b.goto.clone())
+                .collect()
+        };
+        let one = [serde_json::json!({ "if_visible": "Error", "goto": "after" })];
+        d.block_link("main", None, Some(&one)).expect("link");
+        d.block_link("main", None, Some(&one)).expect("link again");
+        assert_eq!(arms(&d), ["after"], "a second link SHALL replace, not add");
+        d.block_link("main", Some("after"), None).expect("keep");
+        assert_eq!(arms(&d), ["after"], "no branches SHALL keep them");
+        d.block_link("main", None, Some(&[])).expect("clear");
+        assert!(arms(&d).is_empty(), "[] SHALL remove them: {}", d.text());
+        assert!(!d.text().contains("branch"), "{}", d.text());
+    }
+
+    fn split(text: &str, at: &str) -> golem_parser::FlowFile {
+        let (_dir, mut d) = draft_of(text);
+        d.block_split_at(at, "tail").expect("split");
+        let flow = golem_parser::parse_flow(&d.text()).expect("parse");
+        assert!(
+            golem_parser::validation::validate_flow(&flow).is_empty(),
+            "{}",
+            d.text()
+        );
+        flow
+    }
+
+    fn texts(b: &golem_parser::Block) -> Vec<String> {
+        b.steps
+            .iter()
+            .map(|s| {
+                s.on_text
+                    .clone()
+                    .or_else(|| s.app.clone())
+                    .unwrap_or_default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn block_split_moves_the_rest_to_a_new_block_right_after_it() {
+        for (text, other) in [(INLINE, "after"), (TABLES, "end")] {
+            // Middle.
+            let flow = split(text, "main:2");
+            let names: Vec<_> = flow
+                .block
+                .iter()
+                .map(|b| b.name.clone().unwrap_or_default())
+                .collect();
+            assert_eq!(names, ["main", "tail", other]);
+            assert_eq!(texts(&flow.block[0]), ["app"]);
+            assert_eq!(flow.block[0].next.as_deref(), Some("tail"));
+            assert_eq!(texts(&flow.block[1]).len(), 1);
+            assert_eq!(
+                flow.block[1].next, None,
+                "the tail SHALL fall through as main did"
+            );
+            // Start: every step moves.
+            let flow = split(text, "main:1");
+            assert!(flow.block[0].steps.is_empty());
+            assert_eq!(flow.block[1].steps.len(), 2);
+            // End: an empty tail.
+            let flow = split(text, "main:3");
+            assert_eq!(flow.block[0].steps.len(), 2);
+            assert!(flow.block[1].steps.is_empty());
+        }
+    }
+
+    #[test]
+    fn block_split_hands_next_and_branches_to_the_tail_and_copies_where() {
+        let text = INLINE.replace(
+            "name = \"main\"\nsteps",
+            "name = \"main\"\nwhere = { os = \"android\" }\nnext = \"after\"\nbranch = [{ if_visible = \"Error\", goto = \"after\" }]\nsteps",
+        );
+        let flow = split(&text, "main:2");
+        let (head, tail) = (&flow.block[0], &flow.block[1]);
+        assert_eq!(head.next.as_deref(), Some("tail"));
+        assert!(head.branch.is_empty());
+        assert_eq!(tail.next.as_deref(), Some("after"));
+        assert_eq!(tail.branch[0].goto, "after");
+        assert_eq!(
+            tail.r#where.as_ref().and_then(|w| w.os.as_deref()),
+            Some("android")
+        );
+    }
+
+    #[test]
+    fn block_split_refuses_a_loop_a_name_in_use_and_a_step_past_the_end() {
+        let (_dir, mut d) = draft_of(INLINE);
+        assert!(d.block_split_at("main:2", "after").is_err(), "name in use");
+        assert!(d.block_split_at("main:4", "tail").is_err(), "past the end");
+        let looped = INLINE.replace(
+            "name = \"main\"\nsteps",
+            "name = \"main\"\nfor_each = \"users\"\nsteps",
+        );
+        let (_dir, mut d) = draft_of(&looped);
+        let err = d.block_split_at("main:2", "tail").expect_err("for_each");
+        assert!(format!("{err:#}").contains("for_each"), "{err:#}");
+    }
+
     #[test]
     fn block_link_refuses_a_bad_branch_but_not_a_goto_to_a_later_block() {
         let (_dir, mut d) = draft_of(INLINE);
@@ -1366,14 +1464,14 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
                 "would not parse",
             ),
         ] {
-            let err = d.block_link("main", None, &[branch]).expect_err(says);
+            let err = d.block_link("main", None, Some(&[branch])).expect_err(says);
             assert!(format!("{err:#}").contains(says), "{err:#}");
             assert_eq!(d.text(), INLINE);
         }
         d.block_link(
             "main",
             None,
-            &[serde_json::json!({ "if_visible": "Error", "goto": "retry" })],
+            Some(&[serde_json::json!({ "if_visible": "Error", "goto": "retry" })]),
         )
         .expect("retry comes later");
     }
@@ -1530,7 +1628,7 @@ steps = [{ action = "assert_visible", on_text = "Done" }]
         d.block_link(
             "main",
             None,
-            &[serde_json::json!({ "if_not_visible": "Home", "goto": "done" })],
+            Some(&[serde_json::json!({ "if_not_visible": "Home", "goto": "done" })]),
         )
         .expect("link");
         d.teardown_add(r#"{ action = "stop", app = "app" }"#, None)

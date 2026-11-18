@@ -320,6 +320,121 @@ impl Draft {
         Ok((tb, at))
     }
 
+    /// `block_split` at an address, `block:step` with the step 1-based: the
+    /// new block starts at that step; one past the last step splits after it.
+    pub fn block_split_at(&mut self, at: &str, to: &str) -> Result<usize> {
+        let (name, i) = parse_address(at)?;
+        self.block_split(&name, i, to)
+    }
+
+    /// Split block `name` before its 0-based step `at` (its length splits
+    /// after the last step): the steps from `at` on go to a new block `to`,
+    /// placed right after it. The new block takes over `next` and `branch`,
+    /// which ran after those steps, and copies `app`, `where`, `vars` and
+    /// `record`, so its steps run as before; the old block gets `next = to`
+    /// and keeps `max_iterations`. Returns the new block's index.
+    pub fn block_split(&mut self, name: &str, at: usize, to: &str) -> Result<usize> {
+        let b = self
+            .block_index(name)
+            .with_context(|| format!("the draft has no block named {name:?}"))?;
+        if to.is_empty() {
+            bail!("a block needs a name");
+        }
+        if self.block_index(to).is_some() {
+            bail!("the draft already has a block named {to:?}");
+        }
+        let len = self.steps_len(b);
+        if at > len {
+            bail!(
+                "block {name:?} has {len} steps; split at step 1 to {}",
+                len + 1
+            );
+        }
+        let old = self.block_table(b).context("no such block")?;
+        for key in ["for_each", "run_flow", "save_to"] {
+            if old.contains_key(key) {
+                bail!(
+                    "block {name:?} has `{key}`, which a split would change; edit it in the file"
+                );
+            }
+        }
+        if matches!(old.get("branch"), Some(Item::ArrayOfTables(_))) {
+            bail!("block {name:?} writes its branches as [[block.branch]] tables; edit them in the file");
+        }
+
+        // The new block, right after everything the old one prints.
+        let mut table = Table::new();
+        table.insert("name", toml_edit::value(to));
+        for key in ["app", "where", "vars", "record"] {
+            if let Some(item) = old.get(key) {
+                let value = match item {
+                    Item::Table(t) => Value::InlineTable(t.clone().into_inline_table()),
+                    Item::Value(v) => v.clone(),
+                    _ => continue,
+                };
+                table.insert(key, Item::Value(value));
+            }
+        }
+        let mut steps = toml_edit::Array::new();
+        steps.set_trailing("\n");
+        steps.set_trailing_comma(true);
+        table.insert("steps", Item::Value(Value::Array(steps)));
+        let end = super::max_position(&Item::Table(old.clone())).unwrap_or(0);
+        let position = end + 1;
+        super::bump_positions(self.doc.as_item_mut(), position);
+        table.set_position(position);
+        table.decor_mut().set_prefix("\n");
+        let old = self.block_table_mut(b).context("no such block")?;
+        let next = old.remove("next");
+        let branch = old.remove("branch");
+        old.insert("next", toml_edit::value(to));
+        if let Some(next) = next {
+            table.insert("next", next);
+        }
+        if let Some(branch) = branch {
+            table.insert("branch", branch);
+        }
+        self.doc
+            .get_mut("block")
+            .and_then(Item::as_array_of_tables_mut)
+            .context("`block` is not an array of tables")?
+            .push(table);
+        self.reparse()?;
+        let nb = b + 1;
+        self.status.insert(nb.min(self.status.len()), Vec::new());
+        if let Some(ins) = self.insertion.as_mut().filter(|ins| ins.block >= nb) {
+            ins.block += 1;
+        }
+
+        // The steps from `at` on, in order, with their comments and status.
+        for k in 0..len - at {
+            let status = self
+                .status
+                .get(b)
+                .and_then(|s| s.get(at))
+                .copied()
+                .unwrap_or(StepStatus::NotRun);
+            let (step, comments) = self.remove_step(b, at)?;
+            self.reparse()?;
+            let i = self.insert_step(
+                &Insertion {
+                    block: nb,
+                    at: None,
+                },
+                step,
+                None,
+            )?;
+            self.reparse()?;
+            if let Some(s) = self.status.get_mut(nb) {
+                s.insert(i.min(s.len()), StepStatus::NotRun);
+            }
+            self.set_comments(nb, i, &comments)?;
+            self.set_status(nb, i, status)?;
+            debug_assert_eq!(i, k);
+        }
+        Ok(nb)
+    }
+
     /// Rename a block, and each `next`, `goto` and `[flow] start` that
     /// names it.
     pub fn block_rename(&mut self, name: &str, to: &str) -> Result<usize> {
