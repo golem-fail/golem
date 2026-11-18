@@ -253,7 +253,11 @@ pub enum DraftEdit {
     BlockLink {
         block: String,
         next: Option<String>,
-        branches: Vec<serde_json::Value>,
+        branches: Option<Vec<serde_json::Value>>,
+    },
+    BlockSplit {
+        at: String,
+        name: String,
     },
     TeardownAdd {
         step: String,
@@ -306,6 +310,7 @@ impl DraftEdit {
             DraftEdit::AppSet(_) => "apps_set",
             DraftEdit::BlockBegin { .. } => "block_begin",
             DraftEdit::BlockLink { .. } => "block_link",
+            DraftEdit::BlockSplit { .. } => "block_split",
             DraftEdit::TeardownAdd { .. } => "teardown_add",
             DraftEdit::DataAdd(_) => "data_add",
             DraftEdit::RecordOnly { .. } => "record_only",
@@ -365,7 +370,8 @@ impl DraftEdit {
                 block,
                 next,
                 branches,
-            } => draft.block_link(block, next.as_deref(), branches),
+            } => draft.block_link(block, next.as_deref(), branches.as_deref()),
+            DraftEdit::BlockSplit { at, name } => draft.block_split_at(at, name).map(|_| ()),
             DraftEdit::TeardownAdd { step, comment } => {
                 draft.teardown_add(&line(step)?, comment.as_deref())
             }

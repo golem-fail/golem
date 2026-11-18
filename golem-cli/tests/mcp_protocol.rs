@@ -90,6 +90,7 @@ async fn every_tool_works_against_a_stub_session() {
         "apps_set",
         "block_begin",
         "block_link",
+        "block_split",
         "teardown_add",
         "data_add",
         "step_edit",
@@ -277,6 +278,10 @@ async fn every_tool_works_against_a_stub_session() {
             serde_json::json!({ "block": "main", "next": "second" }),
         ),
         (
+            "block_split",
+            serde_json::json!({ "at": "second:2", "name": "tail" }),
+        ),
+        (
             "teardown_add",
             serde_json::json!({ "step": r#"{ action = "screenshot" }"# }),
         ),
@@ -313,8 +318,10 @@ async fn every_tool_works_against_a_stub_session() {
     let flow =
         golem_parser::parse_flow(&std::fs::read_to_string(&all).expect("read")).expect("parse");
     assert_eq!(flow.flow.name, "Drafted");
-    assert_eq!(flow.block.len(), 2);
+    assert_eq!(flow.block.len(), 3);
     assert_eq!(flow.block[0].next.as_deref(), Some("second"));
+    assert_eq!(flow.block[1].next.as_deref(), Some("tail"));
+    assert_eq!(flow.block[2].name.as_deref(), Some("tail"));
     assert_eq!(flow.teardown[0].steps.len(), 1);
     assert_eq!(flow.data.len(), 1);
 

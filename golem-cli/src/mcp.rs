@@ -265,8 +265,16 @@ pub struct BlockBeginParams {
 pub struct BlockLinkParams {
     pub block: String,
     pub next: Option<String>,
-    /// [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, or if_var with equals, matches or gte.
+    /// Replaces them; [] removes, omit keeps. [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, if_alert, if_var with equals/matches/gte; no condition: else.
     pub branches: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BlockSplitParams {
+    /// block:step, 1-based: the new block starts at that step. One past the last step splits after it.
+    pub at: String,
+    /// The new block's name.
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -923,7 +931,7 @@ impl GolemMcp {
     }
 
     #[tool(
-        description = "Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block."
+        description = "Set a block's next; replace its branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block."
     )]
     async fn block_link(
         &self,
@@ -933,6 +941,17 @@ impl GolemMcp {
             "edit": "block_link", "block": p.block, "next": p.next, "branches": p.branches,
         }))
         .await
+    }
+
+    #[tool(
+        description = "Split a block: the steps from `at` on go to a new block `name` right after it, which takes over next and branches; the old block's next becomes `name`."
+    )]
+    async fn block_split(
+        &self,
+        Parameters(p): Parameters<BlockSplitParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.edit(serde_json::json!({ "edit": "block_split", "at": p.at, "name": p.name }))
+            .await
     }
 
     #[tool(description = "Add a step to draft [[teardown]]. Not run.")]

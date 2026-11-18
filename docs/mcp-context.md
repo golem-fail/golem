@@ -6,8 +6,8 @@ What an MCP client receives from `golem mcp`, on one page: the instructions, the
 | Text | Characters |
 |------|-----------:|
 | Instructions | 477 |
-| Tool list (31 tools, as `tools/list` JSON) | 13062 |
-| Both, kept in context by most clients | 13539 |
+| Tool list (32 tools, as `tools/list` JSON) | 13593 |
+| Both, kept in context by most clients | 14070 |
 
 ## Instructions
 
@@ -107,18 +107,18 @@ Remove a block and its steps. Refused while a next, goto or start names it.
 
 ### `block_link`
 
-Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.
+Set a block's next; replace its branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `block` (required) | string |  |
-| `branches` | array | [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, or if_var with equals, matches or gte. |
+| `branches` | array | Replaces them; [] removes, omit keeps. [{ "if_visible": "Error", "goto": "retry" }]; or if_not_visible, if_alert, if_var with equals/matches/gte; no condition: else. |
 | `next` | string |  |
 
-<details><summary>As <code>tools/list</code> sends it · 567 chars</summary>
+<details><summary>As <code>tools/list</code> sends it · 637 chars</summary>
 
 ```json
-{"name":"block_link","description":"Set a block's next; add branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.","inputSchema":{"properties":{"block":{"type":"string"},"branches":{"description":"[{ \"if_visible\": \"Error\", \"goto\": \"retry\" }]; or if_not_visible, or if_var with equals, matches or gte.","type":"array"},"next":{"type":"string"}},"required":["block"],"type":"object"}}
+{"name":"block_link","description":"Set a block's next; replace its branches. After its steps the arms race: screen arms wait (timeout ms; 0 checks once), the first that holds wins. No match: the else (a last arm with no condition, or next), else EF406. Without branches: next, else the next block.","inputSchema":{"properties":{"block":{"type":"string"},"branches":{"description":"Replaces them; [] removes, omit keeps. [{ \"if_visible\": \"Error\", \"goto\": \"retry\" }]; or if_not_visible, if_alert, if_var with equals/matches/gte; no condition: else.","type":"array"},"next":{"type":"string"}},"required":["block"],"type":"object"}}
 ```
 
 </details>
@@ -153,6 +153,23 @@ Set a block's own fields: for_each, where (device filter), record, max_iteration
 
 ```json
 {"name":"block_set","description":"Set a block's own fields: for_each, where (device filter), record, max_iterations, run_flow and its vars and save_to. Its steps then become ? and ~.","inputSchema":{"properties":{"fields":{"additionalProperties":true,"description":"{ \"for_each\": \"data\", \"where\": { \"os\": \"ios\" } }; null removes a key.","type":"object"},"name":{"type":"string"}},"required":["name","fields"],"type":"object"}}
+```
+
+</details>
+
+### `block_split`
+
+Split a block: the steps from `at` on go to a new block `name` right after it, which takes over next and branches; the old block's next becomes `name`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `at` (required) | string | block:step, 1-based: the new block starts at that step. One past the last step splits after it. |
+| `name` (required) | string | The new block's name. |
+
+<details><summary>As <code>tools/list</code> sends it · 460 chars</summary>
+
+```json
+{"name":"block_split","description":"Split a block: the steps from `at` on go to a new block `name` right after it, which takes over next and branches; the old block's next becomes `name`.","inputSchema":{"properties":{"at":{"description":"block:step, 1-based: the new block starts at that step. One past the last step splits after it.","type":"string"},"name":{"description":"The new block's name.","type":"string"}},"required":["at","name"],"type":"object"}}
 ```
 
 </details>

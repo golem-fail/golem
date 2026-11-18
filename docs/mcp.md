@@ -574,7 +574,8 @@ A flow is a list of blocks. After a block's last step, its `branch` arms race: e
 | Tool | What it does |
 |------|--------------|
 | `block_begin(name, next?)` | Moves the cursor to the end of block `name`. If the draft has no block with that name, the tool creates it at the end of the draft. |
-| `block_link(block, next?, branches?)` | Sets the block's `next`, and adds branches. A branch has one condition (`if_visible`, `if_not_visible`, or `if_var` with `equals`, `matches` or `gte`), an optional `timeout` for a screen arm, and a `goto`. The tool refuses a branch with two conditions, or with `if_var` and no comparison. |
+| `block_link(block, next?, branches?)` | Sets the block's `next`, and replaces its branches with `branches`: an empty list removes them, and leaving it out keeps them. A branch has one condition (`if_visible`, `if_not_visible`, `if_alert`, or `if_var` with `equals`, `matches` or `gte`), an optional `timeout` for a screen arm, and a `goto`; a last arm with no condition is the else. The tool refuses a branch with two conditions, or with `if_var` and no comparison. |
+| `block_split(at, name)` | Splits a block at `at` (`block:step`, 1-based; one past the last step splits after it). The steps from there go to a new block `name` placed right after it, which takes over the block's `next` and branches and copies its `app`, `where`, `vars` and `record`. The old block's `next` becomes `name`. The tool refuses a block with `for_each`, `run_flow` or `save_to`. |
 | `block_rename(name, to)` | Renames the block, and each `next`, `goto` and `[flow] start` that names it. |
 | `block_delete(name)` | Removes the block and its steps. The tool refuses while a `next`, a `goto` or `[flow] start` names the block, and it lists those names. |
 

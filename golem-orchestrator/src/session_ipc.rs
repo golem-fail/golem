@@ -504,7 +504,11 @@ fn parse_edit(msg: &serde_json::Value) -> anyhow::Result<crate::session::DraftEd
         "block_link" => DraftEdit::BlockLink {
             block: need("block")?,
             next: text("next"),
-            branches: msg["branches"].as_array().cloned().unwrap_or_default(),
+            branches: msg["branches"].as_array().cloned(),
+        },
+        "block_split" => DraftEdit::BlockSplit {
+            at: need("at")?,
+            name: need("name")?,
         },
         "teardown_add" => DraftEdit::TeardownAdd {
             step: need("step")?,
