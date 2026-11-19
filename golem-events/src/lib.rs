@@ -166,6 +166,29 @@ pub struct DeviceId(pub String);
 /// is 0-based; `total` is the value passed to `--repeat` (1..=100).
 /// `Option<RepeatContext>` is `None` at the default `--repeat 1` so
 /// existing logs/events are unchanged.
+/// Which part of a block's branch decided where the flow went.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "by", rename_all = "snake_case")]
+pub enum BranchTaken {
+    /// The arm at `index` (0-based, in `[[block.branch]]` order) matched.
+    Arm { index: usize, condition: String },
+    /// No arm matched; the else arm decided.
+    Else,
+    /// No arm matched and there is no else; the block's `next` decided.
+    Next,
+}
+
+impl BranchTaken {
+    /// `arm 1 if_visible "Home"`, `else` or `next`.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Arm { index, condition } => format!("arm {index} {condition}"),
+            Self::Else => "else".into(),
+            Self::Next => "next".into(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RepeatContext {
     pub index: u32,
@@ -394,6 +417,16 @@ pub enum EventKind {
         /// wiring still bails). Absolute or output-dir-relative — the
         /// renderer decides how to display.
         recording_path: Option<String>,
+    },
+    /// Where a block with branches went, after its `BlockFinished`. A
+    /// `run_flow` block reports iteration 0.
+    BranchTaken {
+        block_name: String,
+        iteration: u32,
+        taken: BranchTaken,
+        goto: String,
+        /// From the first poll to the decision.
+        waited_ms: u64,
     },
     /// Accessibility audit results for a completed block — emitted after
     /// `BlockFinished` so the live renderer can surface findings inline.
@@ -1198,6 +1231,37 @@ mod tests {
             }
             other => panic!("expected ScrollAttempt, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn branch_taken_names_the_arm_by_index_and_condition() {
+        let kind = EventKind::BranchTaken {
+            block_name: "login".into(),
+            iteration: 1,
+            taken: BranchTaken::Arm {
+                index: 1,
+                condition: "if_visible \"Home\"".into(),
+            },
+            goto: "home".into(),
+            waited_ms: 420,
+        };
+        let json = serde_json::to_string(&kind).expect("serialize");
+        assert_eq!(
+            json,
+            r#"{"BranchTaken":{"block_name":"login","iteration":1,"taken":{"by":"arm","index":1,"condition":"if_visible \"Home\""},"goto":"home","waited_ms":420}}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&BranchTaken::Else).expect("serialize"),
+            r#"{"by":"else"}"#
+        );
+        let back: EventKind = serde_json::from_str(&json).expect("deserialize");
+        assert!(matches!(
+            back,
+            EventKind::BranchTaken {
+                taken: BranchTaken::Arm { index: 1, .. },
+                ..
+            }
+        ));
     }
 
     // 20. Device-recovery events serialize to the externally-tagged wire

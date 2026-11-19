@@ -12,6 +12,7 @@
 //!  ~action:target d:duration message
 //!  !action:target d:duration error
 //!  -action:target
+//!  >goto arm:N|else|next d:wait_ms [condition]
 //! R:PASS|FAIL|SKIP passed/warned/failed [skip_reason]
 //!
 //! total:N×pass,N×fail,N×skip[,N×blocked] d:duration
@@ -268,7 +269,11 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
     // whenever the (block_name, block_iteration) pair changes — so
     // iterating blocks show one header per iteration.
     let mut current_block: Option<(String, u32)> = None;
-    for step in &report.step_results {
+    let mut branches = report.branches.iter().peekable();
+    for (i, step) in report.step_results.iter().enumerate() {
+        while let Some(b) = branches.next_if(|b| b.after_steps <= i) {
+            let _ = writeln!(out, "{}", format_branch_toon(b));
+        }
         let key = (step.block_name.clone(), step.block_iteration);
         if current_block.as_ref() != Some(&key) {
             if !step.block_name.is_empty() {
@@ -281,6 +286,9 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
             current_block = Some(key);
         }
         let _ = writeln!(out, "{}", format_step_toon(step));
+    }
+    for b in branches {
+        let _ = writeln!(out, "{}", format_branch_toon(b));
     }
 
     // Counts
@@ -384,6 +392,17 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
     out.push('\n');
 
     out
+}
+
+/// ` >home arm:1 d:420 if_visible "Home"`: where a block's branch went.
+fn format_branch_toon(b: &crate::BranchEntry) -> String {
+    match &b.taken {
+        golem_events::BranchTaken::Arm { index, condition } => {
+            format!(" >{} arm:{index} d:{} {condition}", b.goto, b.waited_ms)
+        }
+        golem_events::BranchTaken::Else => format!(" >{} else d:{}", b.goto, b.waited_ms),
+        golem_events::BranchTaken::Next => format!(" >{} next d:{}", b.goto, b.waited_ms),
+    }
 }
 
 /// Format an entire suite report in TOON notation.
@@ -612,6 +631,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -741,6 +761,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -784,6 +805,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -807,6 +829,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -885,6 +908,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -905,6 +929,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -925,6 +950,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -1156,6 +1182,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1199,6 +1226,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1352,6 +1380,53 @@ mod tests {
             out.contains(" B:checkout\n"),
             "SHALL emit B:checkout header; got: {out}"
         );
+    }
+
+    #[test]
+    fn a_branch_line_follows_its_blocks_steps_and_names_what_decided() {
+        let mut report = sample_flow(true, None);
+        let step = |block: &str| {
+            let mut s = success_step("tap", "OK", 10);
+            s.block_name = block.into();
+            s
+        };
+        report.step_results = vec![step("login"), step("home")];
+        let entry = |block: &str, taken, goto: &str, after_steps| crate::BranchEntry {
+            block: block.into(),
+            iteration: 0,
+            taken,
+            goto: goto.into(),
+            waited_ms: 420,
+            after_steps,
+        };
+        report.branches = vec![
+            entry(
+                "login",
+                golem_events::BranchTaken::Arm {
+                    index: 1,
+                    condition: "if_visible \"Home\"".into(),
+                },
+                "home",
+                1,
+            ),
+            entry("home", golem_events::BranchTaken::Else, "out", 2),
+            entry("out", golem_events::BranchTaken::Next, "end", 2),
+        ];
+        let out = format_flow_toon(&report);
+        let lines: Vec<&str> = out.lines().skip(1).take(6).collect();
+        assert_eq!(
+            lines,
+            [
+                " B:login",
+                " +tap:OK d:10",
+                " >home arm:1 d:420 if_visible \"Home\"",
+                " B:home",
+                " +tap:OK d:10",
+                " >out else d:420",
+            ],
+            "{out}"
+        );
+        assert!(out.contains("\n >end next d:420\n"), "{out}");
     }
 
     // 12. Block iteration > 0 emits ` B:<block> i:<n>` header.

@@ -59,6 +59,7 @@ struct AccumulatedFlow {
     started_at: Option<SystemTime>,
     finished_at: Option<SystemTime>,
     recordings: Vec<crate::RecordingEntry>,
+    branches: Vec<crate::BranchEntry>,
     repeat: Option<golem_events::RepeatContext>,
     /// Set directly for flows that never ran a step (FlowCouldNotRun);
     /// otherwise derived from the first failed step in `into_suite_report`.
@@ -123,6 +124,7 @@ impl ReportAccumulator {
                     started_at: Some(event.wall_time),
                     finished_at: None,
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: *repeat,
                     first_failure_code: None,
                 });
@@ -163,6 +165,7 @@ impl ReportAccumulator {
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     first_failure_code: None,
                 });
@@ -188,6 +191,7 @@ impl ReportAccumulator {
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                 });
             }
@@ -220,6 +224,7 @@ impl ReportAccumulator {
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                 });
             }
@@ -238,6 +243,27 @@ impl ReportAccumulator {
                             block: block_name.clone(),
                             iteration: *iteration,
                             path: path.clone(),
+                        });
+                    }
+                }
+            }
+            EventKind::BranchTaken {
+                block_name,
+                iteration,
+                taken,
+                goto,
+                waited_ms,
+            } => {
+                self.finish_current_step(&dev_key);
+                if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
+                    if let Some(flow) = self.flows.get_mut(idx) {
+                        flow.branches.push(crate::BranchEntry {
+                            block: block_name.clone(),
+                            iteration: *iteration,
+                            taken: taken.clone(),
+                            goto: goto.clone(),
+                            waited_ms: *waited_ms,
+                            after_steps: flow.steps.len(),
                         });
                     }
                 }
@@ -450,6 +476,7 @@ impl ReportAccumulator {
                     perf_snapshots: Vec::new(),
                     covered_axes: Vec::new(),
                     recordings: flow.recordings,
+                    branches: flow.branches,
                     started_at: flow.started_at.map(iso8601_utc),
                     finished_at: flow.finished_at.map(iso8601_utc),
                     repeat: flow.repeat,
@@ -1498,6 +1525,60 @@ mod tests {
         assert_eq!(recs[0].block, "rec", "SHALL preserve block name");
         assert_eq!(recs[0].iteration, 2, "SHALL preserve iteration");
         assert_eq!(recs[0].path, "/tmp/rec.mp4", "SHALL preserve path");
+    }
+
+    #[test]
+    fn a_branch_decision_is_kept_with_the_steps_that_ran_before_it() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        let step = |i: u64| {
+            [
+                EventKind::StepStarted {
+                    global_step_index: i,
+                    block_name: "login".into(),
+                    step_index_in_block: 0,
+                    action: "tap".into(),
+                    selector_label: "OK".into(),
+                },
+                EventKind::StepFinished {
+                    global_step_index: i,
+                    outcome: golem_events::StepOutcome::Success,
+                    duration_ms: 1,
+                    retry_count: 0,
+                    screenshot_path: None,
+                    tree_stats: golem_events::TreeStats::default(),
+                },
+            ]
+        };
+        let mut events = vec![EventKind::FlowStarted {
+            flow_name: "f".into(),
+            os_major: 0,
+            repeat: None,
+        }];
+        events.extend(step(0));
+        events.push(EventKind::BranchTaken {
+            block_name: "login".into(),
+            iteration: 1,
+            taken: golem_events::BranchTaken::Else,
+            goto: "home".into(),
+            waited_ms: 3000,
+        });
+        events.extend(step(1));
+        for (t, kind) in events.into_iter().enumerate() {
+            acc.process(&make_event(t as u64, dev, kind));
+        }
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].branches,
+            [crate::BranchEntry {
+                block: "login".into(),
+                iteration: 1,
+                taken: golem_events::BranchTaken::Else,
+                goto: "home".into(),
+                waited_ms: 3000,
+                after_steps: 1,
+            }]
+        );
     }
 
     // 6. BlockFinished with recording_path=None adds no recording.

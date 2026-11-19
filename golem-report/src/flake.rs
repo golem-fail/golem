@@ -81,6 +81,7 @@ mod tests {
             finished_at: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat,
             first_failure_code: None,
             a11y_audits: vec![],

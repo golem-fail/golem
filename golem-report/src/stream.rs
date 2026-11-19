@@ -447,6 +447,22 @@ pub async fn stream_human(
                 }
             }
             EventKind::BlockFinished { .. } => {}
+            EventKind::BranchTaken {
+                taken,
+                goto,
+                waited_ms,
+                ..
+            } => {
+                let line = format!(
+                    "\u{2570}\u{2500} \u{2192} {goto} ({}, {waited_ms}ms)",
+                    taken.describe()
+                );
+                if use_color {
+                    eprintln!("{ts}  {dp}   {DIM}{line}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}   {line}");
+                }
+            }
             EventKind::A11yAudit { audit } => {
                 // Only surface blocks with findings; clean audits stay quiet.
                 if !audit.issues.is_empty() {

@@ -540,6 +540,19 @@ fn gallery() -> Vec<(DeviceId, EventKind)> {
             recording_path: Some(".golem/results/tap/ios/recordings/block-0.mp4".into()),
         },
     ));
+    ev.push((
+        dev(),
+        EventKind::BranchTaken {
+            block_name: "tap_interactions".into(),
+            iteration: 0,
+            taken: golem_events::BranchTaken::Arm {
+                index: 1,
+                condition: "if_visible \"Home\"".into(),
+            },
+            goto: "home".into(),
+            waited_ms: 420,
+        },
+    ));
 
     // ── Per-outcome steps ──
     ev.extend(outcome_steps());
@@ -632,6 +645,7 @@ fn _eventkind_exhaustiveness_guard(k: &EventKind) {
         | EventKind::FlowFinished { .. }
         | EventKind::BlockStarted { .. }
         | EventKind::BlockFinished { .. }
+        | EventKind::BranchTaken { .. }
         | EventKind::A11yAudit { .. }
         | EventKind::StepStarted { .. }
         | EventKind::StepFinished { .. }

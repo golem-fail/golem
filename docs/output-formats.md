@@ -65,6 +65,8 @@ Structured JSON with suite summary, per-flow results, step details, substeps, an
 
 A skipped step carries `skip_reason` beside its unchanged `"outcome": "skipped"`; the key is omitted when there is no reason to give.
 
+A flow carries `branches`, one entry per decision of a block with branches, in run order: `{"block", "iteration", "by": "arm"|"else"|"next", "index", "condition", "goto", "waited_ms"}`. `index` (0-based) and `condition` come with `"arm"` only; `waited_ms` counts from the first check. Omitted when no block branched.
+
 The suite summary carries `install_blocked` alongside `total` / `passed` / `failed` / `skipped`: the subset of `failed` whose app never installed. One broken install fails every flow that references it, so CI can tell a batch of blocked flows from a batch of real regressions.
 
 ## `junit`
@@ -85,6 +87,8 @@ R:PASS 2/0/0
 ```
 
 A skipped step is `-action:target`, gaining the failure code of whatever was ignored when there is one — ` -accept_alert F408`. The code only: TOON is a scan format, and the prose is in the other outputs.
+
+After a block's steps, ` >goto arm:N d:waited condition` (or ` >goto else d:…`, ` >goto next d:…`) says where its branch went and what decided it.
 
 The closing `total:` line reads `total:N×pass,N×fail,N×skip d:duration`, gaining a `,N×blocked` token — a subset of `fail` — when flows failed because their app never installed.
 

@@ -68,6 +68,8 @@ struct JsonFlow {
     covered_axes: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     recordings: Vec<JsonRecording>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    branches: Vec<JsonBranch>,
 }
 
 #[derive(Serialize)]
@@ -100,6 +102,16 @@ struct JsonRecording {
     block: String,
     iteration: u32,
     path: String,
+}
+
+#[derive(Serialize)]
+struct JsonBranch {
+    block: String,
+    iteration: u32,
+    #[serde(flatten)]
+    taken: golem_events::BranchTaken,
+    goto: String,
+    waited_ms: u64,
 }
 
 #[derive(Serialize)]
@@ -297,6 +309,17 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
                 path: r.path.clone(),
             })
             .collect(),
+        branches: report
+            .branches
+            .iter()
+            .map(|b| JsonBranch {
+                block: b.block.clone(),
+                iteration: b.iteration,
+                taken: b.taken.clone(),
+                goto: b.goto.clone(),
+                waited_ms: b.waited_ms,
+            })
+            .collect(),
     }
 }
 
@@ -491,6 +514,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -519,6 +543,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -539,6 +564,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -559,6 +585,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -582,6 +609,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -679,6 +707,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -718,6 +747,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -813,6 +843,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -901,6 +932,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -962,6 +994,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1005,6 +1038,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1038,6 +1072,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1212,6 +1247,47 @@ mod tests {
         assert!(
             v.get("recordings").is_none(),
             "empty recordings SHALL be omitted"
+        );
+    }
+
+    #[test]
+    fn branches_name_the_arm_the_else_or_next_and_are_omitted_when_empty() {
+        let mut report = sample_flow();
+        assert!(
+            serde_json::from_str::<Value>(&format_flow_json(&report).expect("json"))
+                .expect("valid JSON")
+                .get("branches")
+                .is_none()
+        );
+        let entry = |taken, goto: &str| crate::BranchEntry {
+            block: "login".into(),
+            iteration: 0,
+            taken,
+            goto: goto.into(),
+            waited_ms: 420,
+            after_steps: 1,
+        };
+        report.branches = vec![
+            entry(
+                golem_events::BranchTaken::Arm {
+                    index: 1,
+                    condition: "if_visible \"Home\"".into(),
+                },
+                "home",
+            ),
+            entry(golem_events::BranchTaken::Else, "fallback"),
+            entry(golem_events::BranchTaken::Next, "after"),
+        ];
+        let v: Value =
+            serde_json::from_str(&format_flow_json(&report).expect("json")).expect("valid JSON");
+        assert_eq!(
+            v["branches"],
+            serde_json::json!([
+                {"block": "login", "iteration": 0, "by": "arm", "index": 1,
+                 "condition": "if_visible \"Home\"", "goto": "home", "waited_ms": 420},
+                {"block": "login", "iteration": 0, "by": "else", "goto": "fallback", "waited_ms": 420},
+                {"block": "login", "iteration": 0, "by": "next", "goto": "after", "waited_ms": 420},
+            ])
         );
     }
 
@@ -1401,6 +1477,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1437,6 +1514,7 @@ mod tests {
             skipped_reason: Some("peer run satisfied coverage".to_string()),
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -1479,6 +1557,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: Some(golem_events::RepeatContext {
                 index: idx,
                 total: 2,
@@ -1580,6 +1659,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
