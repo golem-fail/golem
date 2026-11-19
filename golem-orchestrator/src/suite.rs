@@ -798,6 +798,7 @@ impl SuiteRunner {
                 skipped_reason: None,
                 covered_axes: Vec::new(),
                 recordings: Vec::new(),
+                branches: Vec::new(),
                 repeat: None,
                 started_at: None,
                 finished_at: None,
@@ -1023,6 +1024,7 @@ impl SuiteRunner {
                             skipped_reason: None,
                             covered_axes: Vec::new(),
                             recordings: Vec::new(),
+                            branches: Vec::new(),
                             repeat: None,
                             started_at: None,
                             finished_at: None,
@@ -1156,6 +1158,9 @@ impl SuiteRunner {
                 }
                 if report.os_major.is_none() {
                     report.os_major = acc_flow.os_major;
+                }
+                if report.branches.is_empty() {
+                    report.branches = acc_flow.branches.clone();
                 }
                 if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
                     report.step_results = acc_flow
@@ -1304,6 +1309,7 @@ fn coverage_skip_report(
         first_failure_code: None,
         a11y_audits: vec![],
         recordings: Vec::new(),
+        branches: Vec::new(),
         repeat: None,
     }
 }
@@ -1573,6 +1579,7 @@ async fn execute_flow_run(
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             first_failure_code: Some(golem_events::FailureCode::DeviceNotFound),
             a11y_audits: vec![],
@@ -1711,6 +1718,7 @@ async fn execute_flow_run(
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -3889,6 +3897,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -3924,6 +3933,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -3956,6 +3966,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -4050,6 +4061,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    branches: Vec::new(),
                     repeat: None,
                     started_at: None,
                     finished_at: None,
@@ -4195,6 +4207,7 @@ async fn run_flow_on_device(
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
                 recordings: result.recordings,
+                branches: Vec::new(),
                 repeat: repeat_ctx,
                 started_at: None,
                 finished_at: None,
@@ -4233,6 +4246,7 @@ async fn run_flow_on_device(
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
                 recordings: Vec::new(),
+                branches: Vec::new(),
                 repeat: None,
                 started_at: None,
                 finished_at: None,
@@ -5254,6 +5268,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,
@@ -5278,6 +5293,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,

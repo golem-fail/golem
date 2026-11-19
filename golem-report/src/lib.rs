@@ -502,6 +502,8 @@ pub struct FlowReport {
     /// Screen recordings saved during this flow, one entry per
     /// recorded block iteration.
     pub recordings: Vec<RecordingEntry>,
+    /// Where each block with branches went, in run order.
+    pub branches: Vec<BranchEntry>,
     /// `--repeat` context. `None` for single-run suites; `Some(...)`
     /// when the suite was fanned out across multiple runs. Renderers
     /// and the flake-summary tally use this to partition flows by run.
@@ -520,6 +522,19 @@ pub struct RecordingEntry {
     pub block: String,
     pub iteration: u32,
     pub path: String,
+}
+
+/// Where a block's branch sent the flow.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BranchEntry {
+    pub block: String,
+    pub iteration: u32,
+    pub taken: golem_events::BranchTaken,
+    pub goto: String,
+    pub waited_ms: u64,
+    /// How many of the flow's steps ran before the decision, so a report
+    /// can place it after the block's steps.
+    pub after_steps: usize,
 }
 
 impl FlowReport {
@@ -770,6 +785,7 @@ mod tests {
             skipped_reason,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            branches: Vec::new(),
             repeat: None,
             started_at: None,
             finished_at: None,

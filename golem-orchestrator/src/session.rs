@@ -1366,6 +1366,7 @@ async fn open_flow(
         subs.subscribe(),
         status.clone(),
         passed.clone(),
+        Arc::default(),
     ));
     drop(subs);
     let report = runner.run_suite(std::slice::from_ref(&path)).await;
@@ -1529,12 +1530,16 @@ async fn check_flow(
 /// The steps a flow run passed, as (block label, 0-based step).
 type Passed = Arc<std::sync::Mutex<Vec<(String, usize)>>>;
 
+/// Where each block's branch went, one line per decision.
+type Branches = Arc<std::sync::Mutex<Vec<String>>>;
+
 /// Keep the open's phase current from the flow run's events, and collect
-/// the steps that pass.
+/// the steps that pass and the branches taken.
 async fn follow_phase(
     mut events: tokio::sync::broadcast::Receiver<golem_events::Event>,
     status: Arc<Mutex<Status>>,
     passed: Passed,
+    branches: Branches,
 ) {
     let mut running: Option<(String, usize)> = None;
     loop {
@@ -1551,6 +1556,23 @@ async fn follow_phase(
             if let (true, Some(step)) = (ok, running.take()) {
                 passed.lock().unwrap_or_else(|e| e.into_inner()).push(step);
             }
+            continue;
+        }
+        if let golem_events::EventKind::BranchTaken {
+            block_name,
+            taken,
+            goto,
+            waited_ms,
+            ..
+        } = &event.kind
+        {
+            branches
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(format!(
+                    "branch: {block_name} → {goto} ({}, {waited_ms}ms)",
+                    taken.describe()
+                ));
             continue;
         }
         if let golem_events::EventKind::StepStarted {
@@ -2414,10 +2436,12 @@ async fn draft_run(
 
     let (events, subs) = golem_events::channel::event_channel();
     let passed: Passed = Arc::default();
+    let branches: Branches = Arc::default();
     let mut follow = tokio::spawn(follow_phase(
         subs.subscribe(),
         status.clone(),
         passed.clone(),
+        branches.clone(),
     ));
     drop(subs);
     let emitter = golem_events::emitter::DeviceEmitter::new(
@@ -2502,10 +2526,13 @@ async fn draft_run(
         context: Some(3),
         ..crate::draft::StepsQuery::default()
     })?;
+    let mut taken = std::mem::take(&mut *branches.lock().unwrap_or_else(|e| e.into_inner()));
+    taken.push(listing);
     Ok(OpResult::Edited(format!(
-        "draft_run · {} step{} passed · {outcome}\n{listing}",
+        "draft_run · {} step{} passed · {outcome}\n{}",
         passed.len(),
-        if passed.len() == 1 { "" } else { "s" }
+        if passed.len() == 1 { "" } else { "s" },
+        taken.join("\n")
     )))
 }
 
@@ -3817,6 +3844,10 @@ type = "phone"
 [[block]]
 name = "one"
 steps = [ {{ action = "assert_visible", on_text = "${{target}}" }} ]
+[[block.branch]]
+if_var = "target"
+equals = "Submit"
+goto = "two"
 
 [[block]]
 name = "two"
@@ -4313,6 +4344,10 @@ steps = [ {{ action = "bash", run = "touch {marker}" }} ]
             "{restarted}"
         );
         assert!(restarted.contains("▸ cursor\n  two:2 ·"), "{restarted}");
+        assert!(
+            restarted.contains("\nbranch: one → two (arm 0 if_var target equals \"Submit\", "),
+            "{restarted}"
+        );
         s.close("closed", false).await;
     }
 

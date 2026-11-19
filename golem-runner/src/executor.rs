@@ -712,8 +712,20 @@ pub async fn execute_flow<'a>(
 
             // Determine next block (same logic as normal blocks)
             if !block.branch.is_empty() {
-                let target = evaluate_branch(block, driver, vars, default_timeout_ms).await?;
-                current_idx = find_block_index(blocks, &target)?;
+                let label = block
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("block_{current_idx}"));
+                current_idx = take_branch(
+                    blocks,
+                    block,
+                    (label, 0),
+                    driver,
+                    vars,
+                    default_timeout_ms,
+                    ctx,
+                )
+                .await?;
             } else if let Some(ref next) = block.next {
                 current_idx = find_block_index(blocks, next)?;
             } else {
@@ -1480,8 +1492,16 @@ pub async fn execute_flow<'a>(
 
         // Determine next block
         if !block.branch.is_empty() {
-            let target = evaluate_branch(block, driver, vars, default_timeout_ms).await?;
-            current_idx = find_block_index(blocks, &target)?;
+            current_idx = take_branch(
+                blocks,
+                block,
+                (block_label, block_iter_for_recording),
+                driver,
+                vars,
+                default_timeout_ms,
+                ctx,
+            )
+            .await?;
         } else if let Some(ref next) = block.next {
             current_idx = find_block_index(blocks, next)?;
         } else {
@@ -1502,6 +1522,29 @@ pub async fn execute_flow<'a>(
         recordings,
         a11y_audits,
     })
+}
+
+/// The index of the block `block`'s branch sends the flow to, after
+/// reporting the decision.
+async fn take_branch(
+    blocks: &[Block],
+    block: &Block,
+    (block_name, iteration): (String, u32),
+    driver: &dyn PlatformDriver,
+    vars: &VariableStore,
+    default_timeout_ms: u64,
+    ctx: &ExecutionContext<'_>,
+) -> Result<usize> {
+    let d = evaluate_branch(block, driver, vars, default_timeout_ms).await?;
+    let idx = find_block_index(blocks, &d.goto)?;
+    ctx.emit(golem_events::EventKind::BranchTaken {
+        block_name,
+        iteration,
+        taken: d.taken,
+        goto: d.goto,
+        waited_ms: d.waited_ms,
+    });
+    Ok(idx)
 }
 
 /// Apply an app's launch-time `permissions` map before it's launched.

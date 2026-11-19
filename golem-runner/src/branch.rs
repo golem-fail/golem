@@ -18,6 +18,14 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// How many texts of the last screen a no-match failure quotes.
 const SCREEN_TEXTS: usize = 12;
 
+/// Where a block's branch sent the flow, and what decided it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Decision {
+    pub taken: golem_events::BranchTaken,
+    pub goto: String,
+    pub waited_ms: u64,
+}
+
 /// Where the flow goes after `block`'s steps: the goto of the first arm that
 /// matches, else the else arm's goto, else the block's `next`.
 ///
@@ -34,7 +42,7 @@ pub async fn evaluate_branch(
     driver: &dyn PlatformDriver,
     vars: &VariableStore,
     base_timeout_ms: u64,
-) -> Result<String> {
+) -> Result<Decision> {
     let (arms, else_arm) = match block.branch.split_last() {
         Some((last, rest)) if last.is_else() => (rest, Some(last)),
         _ => (block.branch.as_slice(), None),
@@ -47,6 +55,11 @@ pub async fn evaluate_branch(
         base_timeout_ms,
     );
     let start = Instant::now();
+    let decide = |taken, goto: &String| Decision {
+        taken,
+        goto: goto.clone(),
+        waited_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+    };
     let deadlines: Vec<Option<Instant>> = arms
         .iter()
         .map(|a| {
@@ -83,7 +96,11 @@ pub async fn evaluate_branch(
                 var_matches(arm, vars)
             };
             if hit {
-                return Ok(arm.goto.clone());
+                let taken = golem_events::BranchTaken::Arm {
+                    index: i,
+                    condition: arm.describe(),
+                };
+                return Ok(decide(taken, &arm.goto));
             }
         }
         if let Some((root, _)) = tree {
@@ -102,10 +119,10 @@ pub async fn evaluate_branch(
         tokio::time::sleep(POLL_INTERVAL).await;
     }
     if let Some(arm) = else_arm {
-        return Ok(arm.goto.clone());
+        return Ok(decide(golem_events::BranchTaken::Else, &arm.goto));
     }
     if let Some(next) = &block.next {
-        return Ok(next.clone());
+        return Ok(decide(golem_events::BranchTaken::Next, next));
     }
     Err(golem_events::coded(
         golem_events::FailureCode::FlowNoBranchMatched,
@@ -245,7 +262,7 @@ mod tests {
             })
             .collect();
         match evaluate_branch(&block, driver, vars, 1000).await {
-            Ok(target) => Ok(Some(target)),
+            Ok(d) => Ok(Some(d.goto)),
             Err(e)
                 if golem_events::extract_code(&e)
                     == Some(golem_events::FailureCode::FlowNoBranchMatched) =>
@@ -434,7 +451,8 @@ mod tests {
         assert_eq!(
             evaluate_branch(&block_of(vec![arm("Allow*")]), &driver, &vars, 10_000)
                 .await
-                .expect("the alert shows"),
+                .expect("the alert shows")
+                .goto,
             "answer"
         );
         let mut other = arm("Delete*");
@@ -463,7 +481,15 @@ mod tests {
         let target = evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
             .await
             .expect("an arm matches");
-        assert_eq!(target, "home");
+        assert_eq!(
+            target.taken,
+            golem_events::BranchTaken::Arm {
+                index: 1,
+                condition: "if_visible \"Home\"".into()
+            }
+        );
+        assert_eq!(target.goto, "home");
+        assert!(target.waited_ms > 0, "SHALL count the wait for Home");
         assert!(
             start.elapsed() < Duration::from_secs(5),
             "SHALL win when the screen appears, not at the timeout: {:?}",
@@ -519,7 +545,8 @@ mod tests {
         assert_eq!(
             evaluate_branch(&block, &driver, &vars, 10_000)
                 .await
-                .expect("Home shows"),
+                .expect("Home shows")
+                .goto,
             "home"
         );
     }
@@ -530,12 +557,47 @@ mod tests {
         let mut arm = cond_if_visible("Home", "home");
         arm.timeout = Some(0);
         let block = block_of(vec![arm, cond_default("fallback")]);
+        let d = evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
+            .await
+            .expect("the else");
         assert_eq!(
-            evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
-                .await
-                .expect("the else"),
-            "fallback"
+            (d.taken, d.goto.as_str()),
+            (golem_events::BranchTaken::Else, "fallback")
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn with_no_match_and_no_else_the_blocks_next_decides() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut arm = cond_if_visible("Home", "home");
+        arm.timeout = Some(0);
+        let mut block = block_of(vec![arm]);
+        block.next = Some("after".into());
+        let d = evaluate_branch(&block, &driver, &make_vars(&[]), 10_000)
+            .await
+            .expect("next");
+        assert_eq!(
+            (d.taken, d.goto.as_str()),
+            (golem_events::BranchTaken::Next, "after")
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_if_var_arm_that_matches_decides_without_waiting() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let vars = make_vars(&[("plan", "pro")]);
+        let block = block_of(vec![cond_if_var_equals("plan", "pro", "pro")]);
+        let d = evaluate_branch(&block, &driver, &vars, 10_000)
+            .await
+            .expect("plan is pro");
+        assert_eq!(
+            d.taken,
+            golem_events::BranchTaken::Arm {
+                index: 0,
+                condition: "if_var plan equals \"pro\"".into()
+            }
+        );
+        assert_eq!(d.waited_ms, 0);
     }
 
     #[tokio::test]
