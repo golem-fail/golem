@@ -82,14 +82,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // Android rather than planning iOS legs that can't run. An explicit
             // --platform is always respected (an explicit --platform ios then
             // fails loudly, which is the right signal on Linux).
-            let (effective_platform, platform_defaulted) =
+            let (mut effective_platform, platform_defaulted) =
                 resolve_platform_default(args.platform.as_deref(), cfg!(target_os = "macos"));
             if platform_defaulted {
                 eprintln!(
                     "note: non-macOS host — defaulting to `--platform android` (iOS is unsupported here; pass --platform to override)."
                 );
             }
-            let platform_override = match parse_platform_override(effective_platform.as_deref()) {
+            let mut platform_override = match parse_platform_override(effective_platform.as_deref())
+            {
                 Ok(p) => p,
                 Err(msg) => {
                     eprintln!("{msg}");
@@ -176,6 +177,36 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // stub driver is compiled out) and when the flag is absent.
             let stub_fail_on_runs = resolve_stub(args.stub.as_deref())?;
 
+            // `--device`, `--os`, `--type`: the devices the run may use,
+            // resolved here so a query that matches nothing fails before
+            // the run starts.
+            let mut pin_udids = None;
+            if stub_fail_on_runs.is_none()
+                && (args.device.is_some() || args.os.is_some() || args.device_type.is_some())
+            {
+                let picked = match run_target_query(
+                    args.device.as_deref(),
+                    args.os.as_deref(),
+                    args.device_type.as_deref(),
+                ) {
+                    Ok(q) => golem_orchestrator::target::pin_for_run(q, platform_override).await,
+                    Err(e) => Err(e),
+                };
+                match picked {
+                    Ok((udids, shared)) => {
+                        if platform_override.is_none() {
+                            platform_override = shared;
+                            effective_platform = shared.map(|p| p.to_string());
+                        }
+                        pin_udids = Some(udids);
+                    }
+                    Err(e) => {
+                        eprintln!("{e:#}");
+                        return Ok(1);
+                    }
+                }
+            }
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
@@ -216,6 +247,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 // The daemon rebuilds this from the wire (`client_env`).
                 child_env: None,
                 handoff: None,
+                pin_udids,
             };
 
             // Parse `--max-device-wait` into milliseconds for the wire. An
@@ -660,6 +692,21 @@ fn record_no_record_conflict_warning(record: bool, no_record: bool) -> Option<&'
 /// raw `--platform` / `--coverage` strings (carried verbatim for the
 /// server to re-derive), the already-parsed `--max-wait` milliseconds,
 /// and whether JUnit output is requested.
+/// The target query of `golem run --device/--os/--type`.
+fn run_target_query(
+    device: Option<&str>,
+    os: Option<&str>,
+    device_type: Option<&str>,
+) -> anyhow::Result<golem_orchestrator::target::TargetQuery> {
+    use golem_orchestrator::target::{parse_device_type, OsQuery};
+    Ok(golem_orchestrator::target::TargetQuery {
+        os: os.map(OsQuery::parse).transpose()?,
+        device_type: device_type.map(parse_device_type).transpose()?,
+        device: device.map(str::to_string),
+        ..Default::default()
+    })
+}
+
 fn build_config_json(
     config: &SuiteConfig,
     platform: Option<&str>,
@@ -697,6 +744,7 @@ fn build_config_json(
         "max_concurrency": config.max_concurrency,
         "max_device_wait_ms": max_device_wait_ms,
         "profile": config.profile,
+        "pin_udids": config.pin_udids,
         "include_junit": include_junit,
         // Stub mode (in-process integration tests): an array (possibly
         // empty) activates it; null/absent = real devices. Always null in a
@@ -1493,6 +1541,30 @@ mod tests {
         let off = build_config_json(&SuiteConfig::default(), None, None, None, None, false);
         assert_eq!(off["dev"], serde_json::json!(false));
         assert_eq!(off["dev_port"], serde_json::json!(8081));
+    }
+
+    #[test]
+    fn the_run_target_query_reads_device_os_and_type() {
+        let q = run_target_query(Some("iPhone 17"), Some("ios:26"), Some("phone")).expect("valid");
+        assert_eq!(q.device.as_deref(), Some("iPhone 17"));
+        assert_eq!(q.os.map(|o| o.text), Some("ios:26".to_string()));
+        assert_eq!(q.device_type, Some(golem_devices::DeviceType::Phone));
+        let err = run_target_query(None, Some("web"), None).expect_err("bad os");
+        assert!(err.to_string().starts_with("unknown os: web"), "{err}");
+        let err = run_target_query(None, None, Some("watch")).expect_err("bad type");
+        assert_eq!(err.to_string(), "unknown type: watch. Use phone or tablet");
+    }
+
+    #[test]
+    fn build_config_json_carries_the_pinned_devices() {
+        let config = SuiteConfig {
+            pin_udids: Some(vec!["B9100F0F".into()]),
+            ..SuiteConfig::default()
+        };
+        let json = build_config_json(&config, None, None, None, None, false);
+        assert_eq!(json["pin_udids"], serde_json::json!(["B9100F0F"]));
+        let off = build_config_json(&SuiteConfig::default(), None, None, None, None, false);
+        assert!(off["pin_udids"].is_null());
     }
 
     // 11. build_config_json: every wire key carries the resolved value;

@@ -549,6 +549,20 @@ pub struct RunArgs {
     #[arg(long)]
     pub platform: Option<String>,
 
+    /// Run only on this device: a UDID, serial or name (exact, then a
+    /// substring). With two devices of that name, add --os or use the id.
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// Run only on devices with this OS, as a flow's `os`: `ios`,
+    /// `android:35`, `ios:26+`, `ios:latest`.
+    #[arg(long)]
+    pub os: Option<String>,
+
+    /// Run only on devices of this type: `phone` or `tablet`.
+    #[arg(long = "type")]
+    pub device_type: Option<String>,
+
     /// Select profile-scoped app definitions. Apps may declare the same
     /// `name` more than once, disambiguated by a `profile` field; this picks
     /// the matching entry per app (falling back to the profile-less default).

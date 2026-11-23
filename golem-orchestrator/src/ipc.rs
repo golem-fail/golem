@@ -752,6 +752,7 @@ struct SubmitConfigFields {
     max_device_wait: Option<std::time::Duration>,
     stub_fail_on_runs: Option<Vec<u32>>,
     profile: Option<String>,
+    pin_udids: Option<Vec<String>>,
 }
 
 /// Parse the submit message's `config` JSON object into the
@@ -833,6 +834,11 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     });
     let max_concurrency = cfg["max_concurrency"].as_u64().map(|n| n as usize);
     let profile = cfg["profile"].as_str().map(str::to_string);
+    let pin_udids = cfg["pin_udids"].as_array().map(|arr| {
+        arr.iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect()
+    });
 
     SubmitConfigFields {
         platform_override,
@@ -864,6 +870,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         max_device_wait,
         stub_fail_on_runs,
         profile,
+        pin_udids,
     }
 }
 
@@ -942,6 +949,7 @@ async fn handle_submit(
         max_device_wait,
         stub_fail_on_runs,
         profile,
+        pin_udids,
     } = parse_submit_config(cfg);
     if keep_devices {
         shared
@@ -1024,6 +1032,7 @@ async fn handle_submit(
         stream_human: false,
         child_env: parse_child_env(cfg).map(std::sync::Arc::new),
         handoff: None,
+        pin_udids,
     };
 
     let mut runner = SuiteRunner::with_resource_manager(
@@ -1609,6 +1618,13 @@ mod tests {
     }
 
     // 11. max_device_wait_ms becomes a Duration of that many milliseconds.
+    #[test]
+    fn pin_udids_are_read_and_absent_means_any_device() {
+        let f = parse_submit_config(&serde_json::json!({"pin_udids": ["A", "B"]}));
+        assert_eq!(f.pin_udids, Some(vec!["A".to_string(), "B".to_string()]));
+        assert_eq!(parse_submit_config(&serde_json::json!({})).pin_udids, None);
+    }
+
     #[test]
     fn parse_submit_config_max_device_wait_is_millis() {
         let f = parse_submit_config(&serde_json::json!({"max_device_wait_ms": 2500}));

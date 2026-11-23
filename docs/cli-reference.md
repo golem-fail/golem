@@ -39,6 +39,10 @@ golem run [FILES...] [OPTIONS]
 | Flag | Description |
 |------|-------------|
 | `--platform <ios\|android>` | Force a single platform (overrides flow device config) |
+| `--device <id\|name>` | Run only on this device: UDID, serial or name (exact, then a substring). Shut-down devices boot. Two devices of the name: add `--os` or use the id |
+| `--os <query>` | Run only on devices with this OS, as a flow's `os`: `ios`, `android:35`, `ios:26+`, `ios:latest` |
+| `--type <phone\|tablet>` | Run only on devices of this type |
+| | With `--device`, `--os` or `--type`, a query no device matches fails before the run and lists the devices. A flow whose device constraints no picked device fits fails |
 | `--tag <TAG>` | Filter flows by tag. Repeatable. Use `\|` within a value for OR. |
 | `--var <KEY=VALUE>` | Set a variable (highest priority, overrides flow vars). Repeatable. |
 | `--output <FORMAT>` | Stdout format: `human` (default), `json`, `junit`, `toon`. Repeatable. |
@@ -72,6 +76,9 @@ golem run [FILES...] [OPTIONS]
 ```bash
 # Run on Android only
 golem run flows/ --platform android
+
+# Run on one simulator when several are booted
+golem run flows/ --device "iPhone 17"
 
 # Run with variables
 golem run flows/login.test.toml --var EMAIL=test@example.com --var PASSWORD=secret

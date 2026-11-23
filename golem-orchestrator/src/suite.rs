@@ -377,6 +377,9 @@ pub struct SuiteConfig {
     pub child_env: Option<Arc<golem_common::command::ChildEnv>>,
     /// Hand the device of a one-flow run to a session (see [`HandoffRequest`]).
     pub handoff: Option<HandoffRequest>,
+    /// The only devices the run may use (`--device`, `--os`, `--type`).
+    /// `None`: any device that fits the flow.
+    pub pin_udids: Option<Vec<String>>,
 }
 
 impl Default for SuiteConfig {
@@ -417,6 +420,7 @@ impl Default for SuiteConfig {
             profile: None,
             child_env: None,
             handoff: None,
+            pin_udids: None,
         }
     }
 }
@@ -884,6 +888,10 @@ impl SuiteRunner {
             let browser_headed = self.config.browser_headed;
             let child_env = self.config.child_env.clone();
             let handoff = self.config.handoff.clone();
+            let pin_udids = match handoff.as_ref().and_then(|h| h.pin_udid.clone()) {
+                Some(udid) => Some(vec![udid]),
+                None => self.config.pin_udids.clone(),
+            };
             let a11y_override = self.config.a11y_override;
             let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
@@ -972,6 +980,7 @@ impl SuiteRunner {
                         browser_headed,
                         child_env,
                         handoff,
+                        pin_udids,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -1268,6 +1277,8 @@ struct FlowRunConfig {
     child_env: Option<Arc<golem_common::command::ChildEnv>>,
     /// See [`SuiteConfig::handoff`].
     handoff: Option<HandoffRequest>,
+    /// See [`SuiteConfig::pin_udids`]; a handoff's device when there is one.
+    pin_udids: Option<Vec<String>>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1538,7 +1549,7 @@ async fn execute_flow_run(
                 max_device_wait: cfg.max_device_wait,
                 cli_vars: &cfg.cli_vars,
                 child_env: cfg.child_env.as_deref(),
-                pin_udid: cfg.handoff.as_ref().and_then(|h| h.pin_udid.as_deref()),
+                pin_udids: cfg.pin_udids.as_deref(),
             },
             cfg.stub_fail_on_runs.is_some(),
             cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
@@ -1966,8 +1977,8 @@ struct SlotBuildConfig<'a> {
     /// device site (where `_platform`/`_udid`/`_app` builtins are known).
     cli_vars: &'a [(String, String)],
     child_env: Option<&'a golem_common::command::ChildEnv>,
-    /// The only device this slot may use.
-    pin_udid: Option<&'a str>,
+    /// The only devices this slot may use.
+    pin_udids: Option<&'a [String]>,
 }
 
 /// Prepare one slot for flow execution:
@@ -2013,7 +2024,7 @@ async fn setup_slot(
         max_device_wait,
         cli_vars,
         child_env,
-        pin_udid,
+        pin_udids,
     } = *build;
     // Stub mode: no real device exists. Return a synthetic device and a
     // placeholder port, skipping discovery, allocation, boot, install, and
@@ -2046,7 +2057,7 @@ async fn setup_slot(
         let candidate = find_available_device(
             slot.platform,
             Some(slot),
-            pin_udid,
+            pin_udids,
             create_if_missing,
             event_tx,
             &DeviceLookupCtx {
@@ -4284,8 +4295,12 @@ async fn run_flow_on_device(
     report
 }
 
+fn is_pinned(device: &DeviceInfo, pin_udids: Option<&[String]>) -> bool {
+    pin_udids.is_none_or(|p| p.contains(&device.udid))
+}
+
 /// Discover ALL devices for the given platform (booted and shutdown).
-async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceInfo>> {
+pub(crate) async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceInfo>> {
     let want_ios = matches!(platform, None | Some(Platform::Ios));
     let want_android = matches!(platform, None | Some(Platform::Android));
 
@@ -4399,7 +4414,7 @@ fn prefer_virtual<'a>(free: &[&'a DeviceInfo]) -> Vec<&'a DeviceInfo> {
 async fn find_available_device(
     platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
-    pin_udid: Option<&str>,
+    pin_udids: Option<&[String]>,
     create_if_missing: bool,
     event_tx: &golem_events::channel::EventSender,
     lookup: &DeviceLookupCtx<'_>,
@@ -4419,7 +4434,7 @@ async fn find_available_device(
             Some(s) => device_matches_slot(d, s),
             None => true,
         })
-        .filter(|d| pin_udid.is_none_or(|u| d.udid == u))
+        .filter(|d| is_pinned(d, pin_udids))
         .collect();
 
     // Separate booted from shutdown
@@ -4500,6 +4515,14 @@ async fn find_available_device(
     // (specific iOS major / Android API) so a flow needing an iPad on
     // iOS 18 doesn't get a phone on latest.
     if compatible.is_empty() {
+        if let Some(pins) = pin_udids {
+            anyhow::bail!(
+                "the run may use only {}, and none fits {}",
+                pins.join(", "),
+                slot.map(crate::describe_slot)
+                    .unwrap_or_else(|| "the flow".to_string())
+            );
+        }
         if create_if_missing {
             // Guard: constraints auto-create can't satisfy. Bail fast with
             // actionable errors rather than silently creating a sim that
@@ -4636,6 +4659,7 @@ async fn find_available_device(
                     .into_iter()
                     .filter(|d| platform.map(|p| d.platform == p).unwrap_or(true))
                     .filter(|d| slot.map(|s| device_matches_slot(d, s)).unwrap_or(true))
+                    .filter(|d| is_pinned(d, pin_udids))
                     .filter(|d| d.state == DeviceState::Booted)
                     .collect();
             }
