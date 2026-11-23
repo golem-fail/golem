@@ -345,6 +345,74 @@ pub fn select_device<'a>(devices: &'a [DeviceInfo], query: &TargetQuery) -> Resu
     )
 }
 
+/// The devices `golem run` may use: those that fit the query's `os` and
+/// `type`, in any state (the run boots a shut-down one), narrowed to the
+/// one `device` names. Fails, with the devices listed, when nothing fits
+/// or when `device` names more than one.
+pub fn narrow_for_run<'a>(
+    devices: &'a [DeviceInfo],
+    query: &TargetQuery,
+) -> Result<Vec<&'a DeviceInfo>> {
+    let known: Vec<&DeviceInfo> = devices
+        .iter()
+        .filter(|d| d.state != DeviceState::NeedsCreation)
+        .collect();
+    let fitting: Vec<&DeviceInfo> = known
+        .iter()
+        .copied()
+        .filter(|d| query.fits(d, devices))
+        .collect();
+    let shape = query.shape();
+    let Some(wanted) = query.device.as_deref() else {
+        if fitting.is_empty() {
+            bail!("no {shape}device. Devices:\n\n{}", table(&known));
+        }
+        return Ok(fitting);
+    };
+    match query.named_hits(&fitting).as_slice() {
+        [] => bail!(
+            "no {shape}device matches \"{wanted}\". Devices:\n\n{}",
+            table(&known)
+        ),
+        [only] => Ok(vec![*only]),
+        many => {
+            let narrow = if query.os.is_none() {
+                "--device <id>, or narrow them with --os"
+            } else {
+                "--device <id>"
+            };
+            bail!(
+                "{} devices match \"{wanted}\"; pick one with {narrow}:\n\n{}",
+                many.len(),
+                table(many)
+            )
+        }
+    }
+}
+
+/// The devices a `golem run` with `--device`, `--os` or `--type` may use,
+/// and the platform they share, if they share one. `platform` is
+/// `--platform`; it must agree with `--os`.
+pub async fn pin_for_run(
+    mut query: TargetQuery,
+    platform: Option<Platform>,
+) -> Result<(Vec<String>, Option<Platform>)> {
+    match (&query.os, platform) {
+        (Some(os), Some(p)) if os.platform != p => {
+            bail!("--platform {p} and --os {} disagree", os.text)
+        }
+        (None, Some(p)) => query.os = Some(OsQuery::of(p, None)),
+        _ => {}
+    }
+    let devices = crate::suite::discover_all_devices(query.platform()).await?;
+    let picked = narrow_for_run(&devices, &query)?;
+    let shared = picked
+        .first()
+        .map(|d| d.platform)
+        .filter(|p| picked.iter().all(|d| d.platform == *p));
+    Ok((picked.iter().map(|d| d.udid.clone()).collect(), shared))
+}
+
 /// The pointer to the full device list, at the end of a device error.
 const SEE_ALL: &str = "All devices, shut-down ones too: golem devices";
 
@@ -687,6 +755,69 @@ mod tests {
                 DeviceState::Booted,
             ),
         ]
+    }
+
+    fn run_pick(q: &TargetQuery) -> Result<Vec<String>> {
+        Ok(narrow_for_run(&fleet(), q)?
+            .into_iter()
+            .map(|d| d.udid.clone())
+            .collect())
+    }
+
+    #[test]
+    fn a_run_uses_the_device_named_in_any_state() {
+        let q = session_query(None, None, Some("iPhone 17"));
+        assert_eq!(run_pick(&q).expect("one"), ["B9100F0F"]);
+        let q = session_query(None, None, Some("ipad"));
+        assert_eq!(run_pick(&q).expect("shut down is fine"), ["C0FFEE00"]);
+    }
+
+    #[test]
+    fn a_run_narrows_to_every_device_that_fits_os_and_type() {
+        let q = session_query(Some("ios:18"), None, None);
+        assert_eq!(run_pick(&q).expect("fits"), ["A1B2C3D4", "C0FFEE00"]);
+        let q = session_query(Some("ios"), Some("tablet"), None);
+        let mut fleet = fleet();
+        fleet[3].device_type = DeviceType::Tablet;
+        let picked: Vec<&str> = narrow_for_run(&fleet, &q)
+            .expect("the iPad")
+            .iter()
+            .map(|d| d.udid.as_str())
+            .collect();
+        assert_eq!(picked, ["C0FFEE00"]);
+    }
+
+    #[test]
+    fn a_name_on_two_runtimes_is_ambiguous_until_os_narrows_it() {
+        let q = session_query(None, None, Some("iPhone 16"));
+        let err = format!("{:#}", run_pick(&q).expect_err("two"));
+        assert!(
+            err.starts_with("2 devices match \"iPhone 16\"; pick one with --device <id>, or narrow them with --os:"),
+            "{err}"
+        );
+        assert!(
+            err.contains("A1B2C3D4") && err.contains("E5F6A7B8"),
+            "{err}"
+        );
+        let q = session_query(Some("ios:26"), None, Some("iPhone 16"));
+        assert_eq!(run_pick(&q).expect("one"), ["E5F6A7B8"]);
+    }
+
+    #[test]
+    fn a_run_query_that_matches_nothing_lists_the_devices() {
+        let q = session_query(Some("android"), None, Some("iPhone 17"));
+        let err = format!("{:#}", run_pick(&q).expect_err("none"));
+        assert!(
+            err.starts_with("no android device matches \"iPhone 17\". Devices:"),
+            "{err}"
+        );
+        assert!(
+            err.contains("Pixel_8_Pro") && err.contains("iPad mini"),
+            "{err}"
+        );
+        let q = session_query(Some("ios"), Some("tablet"), None);
+        let err = format!("{:#}", run_pick(&q).expect_err("no tablet"));
+        assert!(err.starts_with("no ios tablet device. Devices:"), "{err}");
     }
 
     fn session_query(
